@@ -389,6 +389,7 @@ public sealed class ContentHandler(
         [5] = ContentType.Concern, [6] = ContentType.Concern, [7] = ContentType.Concern,
         [8] = ContentType.Clinic, [9] = ContentType.Clinic, [10] = ContentType.Clinic,
         [11] = ContentType.Article,
+        [13] = ContentType.Doctor,
     };
 
     public async Task<IActionResult> UpdateRelationsAsync(HttpRequest req, string unit, string id)

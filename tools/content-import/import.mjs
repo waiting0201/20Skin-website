@@ -470,7 +470,8 @@ async function ensureTerm(type, slug, title) {
 {
   const R = { treatmentToDoctor: 1, treatmentToConcern: 2, treatmentToArticle: 3, treatmentToFaq: 4,
               concernToTreatment: 5, concernToFaq: 6, concernToArticle: 7,
-              clinicToDoctor: 8, clinicToTreatment: 9, clinicToFaq: 10, articleToTag: 11 }
+              clinicToDoctor: 8, clinicToTreatment: 9, clinicToFaq: 10, articleToTag: 11,
+              doctorToConcern: 13 }
   let written = 0
 
   const save = async (unit, id, items) => {
@@ -528,6 +529,39 @@ async function ensureTerm(type, slug, title) {
     await save('concern', id, items)
   }
 
+  // 醫師 → 困擾（擅長處理的困擾，2026-09-11 新增的關聯型別 13）
+  for (const d of data.doctors.DOCTORS) {
+    const id = ids.doctor.get(d.slug)
+    if (!id) continue
+    const items = (d.concerns ?? []).map((c, i) => ({
+      relationType: R.doctorToConcern, toContentItemId: ids.concern.get(c.slug), sortOrder: i,
+    }))
+    await save('doctor', id, items)
+  }
+
+  // 醫師的相關療程 → 寫在**療程那一端**（型別 1）。
+  // ⚠️ 雙向關聯一律單向存（docs/08 §D）：個人頁的「相關療程」與療程頁的「主治醫師」
+  //    是同一筆資料的兩面，存兩份會出現兩份各自為政的排序。
+  {
+    const byTreatment = new Map()
+    for (const d of data.doctors.DOCTORS) {
+      for (const t of d.treatments ?? []) {
+        if (!byTreatment.has(t.slug)) byTreatment.set(t.slug, [])
+        byTreatment.get(t.slug).push(d.slug)
+      }
+    }
+    for (const [slug, doctorSlugs] of byTreatment) {
+      const id = ids.treatment.get(slug)
+      if (!id) continue
+      const current = (await api.detail('treatment', id)).relations
+        .map((r) => ({ relationType: r.relationType, toContentItemId: r.toContentItemId, sortOrder: r.sortOrder, note: r.note }))
+      const add = doctorSlugs.map((ds, i) => ({
+        relationType: R.treatmentToDoctor, toContentItemId: ids.doctor.get(ds), sortOrder: i,
+      }))
+      await save('treatment', id, [...current, ...add])
+    }
+  }
+
   // 文章 → 標籤
   for (const a of data.articles.ARTICLES) {
     const id = ids.article.get(a.slug)
@@ -540,17 +574,42 @@ async function ensureTerm(type, slug, title) {
     await save('article', id, items)
   }
 
-  // 據點 → 醫師
+  // 據點 → 醫師。⚠️ 駐診時段備註（「一 上午／四 下午」）放進關聯的 Note ——
+  //    DoctorSchedules 是「星期＋起訖時間」的結構，而前台資料只有一句自由文字，
+  //    塞不進去也不該為了塞進去而編出假的時間。
   for (const c of data.clinics.CLINICS) {
     const id = ids.clinic.get(c.slug)
     if (!id) continue
     const items = []
     data.doctors.DOCTORS.forEach((d, i) => {
-      if ((d.clinics ?? []).some((x) => x.clinicSlug === c.slug)) {
-        items.push({ relationType: R.clinicToDoctor, toContentItemId: ids.doctor.get(d.slug), sortOrder: i })
-      }
+      const assignment = (d.clinics ?? []).find((x) => x.clinicSlug === c.slug)
+      if (!assignment) return
+      items.push({
+        relationType: R.clinicToDoctor,
+        toContentItemId: ids.doctor.get(d.slug),
+        sortOrder: i,
+        note: assignment.scheduleNote ?? null,
+      })
     })
     await save('clinic', id, items)
+  }
+
+  // 療程 → 文章／FAQ。前台的療程細節頁有這兩區，且排序屬於療程頁。
+  for (const t of data.treatments.treatments) {
+    const id = ids.treatment.get(t.slug)
+    if (!id) continue
+    const items = []
+    ;(t.articles ?? []).forEach((a, i) => {
+      const slug = a.href?.split('/').filter(Boolean).pop()
+      if (ids.article.has(slug)) items.push({ relationType: R.treatmentToArticle, toContentItemId: ids.article.get(slug), sortOrder: i })
+    })
+    if (items.length) {
+      // ⚠️ 與上面那輪是同一筆內容的關聯，必須合併送出 —— relations 端點是整組覆寫，
+      //    分兩次送第二次會把第一次的洗掉。
+      const current = (await api.detail('treatment', id)).relations
+        .map((r) => ({ relationType: r.relationType, toContentItemId: r.toContentItemId, sortOrder: r.sortOrder, note: r.note }))
+      await save('treatment', id, [...current, ...items])
+    }
   }
 
   console.log(`  relation   寫入 ${written} 筆`)

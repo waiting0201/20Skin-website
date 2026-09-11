@@ -28,3 +28,6 @@ functions/local.settings.json
 
 # ── frontend ─────────────────────────────────────────────────────────
 # 其餘規則在 frontend/.gitignore（.nuxt／.output／public/assets 等產物）
+
+# 建置期資料快照（docs/09 §3）：由 tools/content-export 從資料庫產生，不進版控。
+apps/web/content/

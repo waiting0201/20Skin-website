@@ -132,6 +132,13 @@ public enum RelationType : byte
     ClinicToFaq = 10,
     ArticleToTag = 11,
     PageToFeatured = 12,
+
+    /// <summary>
+    /// 醫師 → 困擾（「這位醫師擅長處理的困擾」）。
+    /// ⚠️ 2026-09-11 補：個人頁本來就有這一區，但原本沒有對應的關聯型別，
+    /// 導致這份內容在後台既編不到、也存不下來。
+    /// </summary>
+    DoctorToConcern = 13,
 }
 
 /// <summary>未命中題目的來源（docs/08 §F）。</summary>

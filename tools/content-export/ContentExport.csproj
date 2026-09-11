@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    建置期資料匯出（docs/09-frontend.md §3）：SQL → apps/web/content/*.json。
+
+    ⚠️ 刻意是獨立的小專案，不掛在 functions/ 底下：
+       ① 它只讀不寫，用的是唯讀連線與唯讀身分（docs/08 §J-3 的三組身分之一）
+       ② 前端建置不該相依於 Functions 專案，也不該把 SQL 驅動拉進 apps/web
+          （docs/09 §3：「資料庫驅動不進前端相依」）
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Skin20.ContentExport</RootNamespace>
+    <AssemblyName>content-export</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
+  </ItemGroup>
+
+</Project>
