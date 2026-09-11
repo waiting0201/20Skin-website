@@ -21,5 +21,8 @@ export const EYEBROW: Record<string, string> = {
   lectures: 'LECTURES',
 }
 
+/** 八個困擾頁共用同一個小標 —— 它標示的是「這是困擾頁」，不是哪一個困擾。 */
+export const CONCERN_EYEBROW = 'SKIN CONCERN'
+
 /** 找不到對應小標時的預設值：用 slug 大寫（既有資料檔原本就是這個規則）。 */
 export const eyebrowFor = (slug: string): string => EYEBROW[slug] ?? slug.toUpperCase()

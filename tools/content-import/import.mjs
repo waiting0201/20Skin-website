@@ -91,9 +91,20 @@ async function ensureTerm(type, slug, title) {
 
 {
   const before = termIndex.size
-  for (const tag of data.articles.POPULAR_TAGS) {
+  // ⚠️ 不能只建 POPULAR_TAGS ——「熱門標籤」是首頁側欄的一份子集，
+  //    文章實際用到的標籤更多（fine-lines、eye-area 就不在那 8 個裡）。
+  //    只建子集的後果是那些標籤頁整頁消失，而且不會有任何錯誤訊息。
+  const allTags = new Map(data.articles.POPULAR_TAGS.map((t) => [t.slug, t.label]))
+  for (const a of data.articles.ARTICLES) {
+    for (const t of a.tags ?? []) {
+      const slug = typeof t === 'string' ? t : t.slug
+      if (!allTags.has(slug)) allTags.set(slug, typeof t === 'string' ? slug : t.label)
+    }
+  }
+
+  for (const [slug, label] of allTags) {
     // ⚠️ 標籤預設 IncludeInSitemap=0 ＋ NoIndex=1（docs/08 §C-9），由 API 依 termType 處理，這裡不覆寫。
-    ids.term.set(termKey(TERM_TYPE.articleTag, tag.slug), await ensureTerm(TERM_TYPE.articleTag, tag.slug, tag.label))
+    ids.term.set(termKey(TERM_TYPE.articleTag, slug), await ensureTerm(TERM_TYPE.articleTag, slug, label))
   }
   // 療程分類的導言與代表圖：種子只建了名稱與路徑，內容在前台資料裡。
   for (const c of data.treatments.treatmentCategories) {
@@ -377,7 +388,38 @@ async function ensureTerm(type, slug, title) {
   const existing = await api.indexBySlug('faq')
   let created = 0, updated = 0
 
-  for (const [i, f] of data.faq.FAQ_ITEMS.entries()) {
+  // ⚠️ 療程頁與困擾頁的「常見問題」**不是**引用題庫，是各頁自己寫的問答
+  //    （實測 0 筆對得上 FAQ_ITEMS）。但 docs/02 §6 與關聯型別 4／6 的設計就是
+  //    「頁面引用題庫的子集」—— 所以把它們收進題庫再引用，而不是讓同一則問答
+  //    在兩個地方各存一份。連帶後果：/faq/ 的題數會從 24 變多。
+  const pageFaqs = []
+  for (const t of data.treatments.treatments) {
+    for (const q of t.faqs ?? []) pageFaqs.push({ ...q, categorySlug: 'treatment', from: `treatment:${t.slug}` })
+  }
+  for (const c of data.concerns.CONCERNS) {
+    for (const q of c.detail?.faqs ?? []) pageFaqs.push({ ...q, categorySlug: 'treatment', from: `concern:${c.slug}` })
+  }
+
+  const seenQuestions = new Set(data.faq.FAQ_ITEMS.map((f) => f.question))
+  const extraFaqs = []
+  for (const q of pageFaqs) {
+    if (seenQuestions.has(q.q)) continue
+    seenQuestions.add(q.q)
+    extraFaqs.push({
+      question: q.q,
+      categorySlug: q.categorySlug,
+      webAnswer: q.a,
+      // AiAnswer 有 60–100 字的下限（docs/08 §C-6 的 CHECK）——頁面問答多半夠長，
+      // 不夠的用同一段補到下限，不另外編一段內容。
+      aiAnswer: q.a.length >= 60 ? q.a.slice(0, 500) : (q.a + q.a).slice(0, 500),
+      lastReviewedOn: null,
+      reviewedBy: null,
+    })
+  }
+
+  const allFaqItems = [...data.faq.FAQ_ITEMS, ...extraFaqs]
+
+  for (const [i, f] of allFaqItems.entries()) {
     const slug = f.slug ?? `faq-${String(i + 1).padStart(2, '0')}`
     const body = {
       title: f.question,
@@ -396,6 +438,8 @@ async function ensureTerm(type, slug, title) {
     ids.faq.set(slug, item.id)
   }
   report('faq', created, updated)
+  if (extraFaqs.length) console.log(`             （其中 ${extraFaqs.length} 則來自療程頁與困擾頁的常見問題）`)
+  globalThis.__allFaqItems = allFaqItems
 }
 
 // ── 8. 案例 ──────────────────────────────────────────────────────────
@@ -450,6 +494,10 @@ async function ensureTerm(type, slug, title) {
   const existing = await api.indexBySlug('page')
   let updated = 0
 
+  // ⚠️ **bodyBlocks 要送物件，不是 JSON 字串。**
+  //    ApplyPageFields／ApplyArticleFields 用的是 `bodyEl.GetRawText()` —— 送字串進去會被
+  //    原樣存成 `"{\"pillars\":…}"`（多包一層引號與跳脫），讀出來 JSON.parse 得到的是字串不是物件，
+  //    前台那一整區就靜默消失。其餘區塊欄位走 JStr(string)，那些才該用 blocks()。
   const put = async (slug, body) => {
     const row = existing.get(slug)
     if (!row) { console.log(`             ⚠️ 找不到頁面 ${slug}，略過`); return null }
@@ -463,12 +511,12 @@ async function ensureTerm(type, slug, title) {
   // 品牌理念 /about/
   await put('about', {
     lead: null,
-    bodyBlocks: blocks({
+    bodyBlocks: {
       pillars: data.pages.ABOUT_PILLARS,
       timeline: data.pages.ABOUT_TIMELINE,
       teamPreview: data.pages.ABOUT_TEAM_PREVIEW,
       clinics: data.pages.ABOUT_CLINICS,
-    }),
+    },
   })
 
   // 長版故事頁 ×2
@@ -477,7 +525,7 @@ async function ensureTerm(type, slug, title) {
       title: p.title,
       summary: p.lede ?? null,
       lead: p.lede ?? null,
-      bodyBlocks: blocks({
+      bodyBlocks: {
         meta: p.meta ?? null,
         heroImage: p.heroImage ? imageField(`page/${slug}/hero`, p.heroImage.src, {
           alt: p.heroImage.alt, width: p.heroImage.w ?? null, height: p.heroImage.h ?? null,
@@ -487,7 +535,7 @@ async function ensureTerm(type, slug, title) {
         body: p.body ?? null,
         faqs: p.faqs ?? null,
         sister: p.sisterSlug ? { slug: p.sisterSlug, label: p.sisterLabel } : null,
-      }),
+      },
     })
   }
 
@@ -495,7 +543,7 @@ async function ensureTerm(type, slug, title) {
   for (const doc of data.pages.LEGAL_DOCS) {
     await put(doc.slug, {
       title: doc.title,
-      bodyBlocks: blocks({ updatedOn: doc.updatedOn ?? null, sections: doc.sections ?? [] }),
+      bodyBlocks: { updatedOn: doc.updatedOn ?? null, sections: doc.sections ?? [] },
     })
   }
 
@@ -510,8 +558,13 @@ async function ensureTerm(type, slug, title) {
   const R = { treatmentToDoctor: 1, treatmentToConcern: 2, treatmentToArticle: 3, treatmentToFaq: 4,
               concernToTreatment: 5, concernToFaq: 6, concernToArticle: 7,
               clinicToDoctor: 8, clinicToTreatment: 9, clinicToFaq: 10, articleToTag: 11,
-              doctorToConcern: 13 }
+              doctorToConcern: 13, concernToConcern: 14 }
   let written = 0
+
+  const allFaqItems = globalThis.__allFaqItems ?? data.faq.FAQ_ITEMS
+  const faqSlugByQuestion = new Map(
+    allFaqItems.map((f, i) => [f.question, f.slug ?? `faq-${String(i + 1).padStart(2, '0')}`]),
+  )
 
   const save = async (unit, id, items) => {
     // ⚠️ 去重：(relationType, toContentItemId) 在資料庫上是唯一鍵（docs/08 §D）。
@@ -560,6 +613,19 @@ async function ensureTerm(type, slug, title) {
         // ⚠️ Note 是逐筆的推薦理由（docs/08 §D），不是整段引言 —— 後者在 RecommendationIntro。
         note: t.excerpt ?? null,
       })
+    })
+    // 困擾頁的常見問題：以問題文字對到 FAQ 題目。
+    ;(c.detail?.faqs ?? []).forEach((q, i) => {
+      const slug = faqSlugByQuestion.get(q.q)
+      if (slug && ids.faq.has(slug)) {
+        items.push({ relationType: R.concernToFaq, toContentItemId: ids.faq.get(slug), sortOrder: i })
+      }
+    })
+    // 「此困擾相關」是編輯判斷，推導不出來（8 個困擾裡 7 個沒有任何建議療程）。
+    ;(c.relatedConcernSlugs ?? []).forEach((slug, i) => {
+      if (ids.concern.has(slug)) {
+        items.push({ relationType: R.concernToConcern, toContentItemId: ids.concern.get(slug), sortOrder: i })
+      }
     })
     ;(c.detail?.articles ?? []).forEach((a, i) => {
       const slug = a.href?.split('/').filter(Boolean).pop()
@@ -633,6 +699,8 @@ async function ensureTerm(type, slug, title) {
     await save('clinic', id, items)
   }
 
+  // FAQ 的 slug 在匯入時是由順序產生的（FAQ 不產生獨立網址，docs/08 §C-6），
+  // 這裡用同一條規則回推，才對得回去。
   // 療程 → 文章／FAQ。前台的療程細節頁有這兩區，且排序屬於療程頁。
   for (const t of data.treatments.treatments) {
     const id = ids.treatment.get(t.slug)
@@ -641,6 +709,10 @@ async function ensureTerm(type, slug, title) {
     ;(t.articles ?? []).forEach((a, i) => {
       const slug = a.href?.split('/').filter(Boolean).pop()
       if (ids.article.has(slug)) items.push({ relationType: R.treatmentToArticle, toContentItemId: ids.article.get(slug), sortOrder: i })
+    })
+    ;(t.faqs ?? []).forEach((q, i) => {
+      const slug = faqSlugByQuestion.get(q.q)
+      if (slug && ids.faq.has(slug)) items.push({ relationType: R.treatmentToFaq, toContentItemId: ids.faq.get(slug), sortOrder: i })
     })
     if (items.length) {
       // ⚠️ 與上面那輪是同一筆內容的關聯，必須合併送出 —— relations 端點是整組覆寫，
@@ -696,6 +768,104 @@ async function ensureTerm(type, slug, title) {
     }
   }
   console.log(`  publish    發布 ${published} 筆（佇列 ${publishQueue.length}）＋ 補快照 ${backfilled} 筆（種子資料）`)
+}
+
+// ── 13. 首頁版位 ─────────────────────────────────────────────────────
+// ⚠️ 七個版位是種子資料，可停用、可排序，**不可新增刪除**（docs/08 §G-2）。
+// ⚠️ 版位「只能引用既有內容，不能另打文案」（docs/02 §3）——所以精選療程／最新文章／
+//    醫師／據點走 Items（ContentItemId），而主視覺輪播與八大專科入口沒有可引用的內容，
+//    走 Settings 的 JSON（docs/02 §3 明文：hero 是唯一沒有 ContentItemId 可引用的版位）。
+{
+  const home = data.home
+  const byKey = (key, patch) => ({ sectionKey: key, isEnabled: true, sortOrder: 0, settings: null, items: [], ...patch })
+
+  const idsOf = (list, map) => list.map((x, i) => ({ contentItemId: map.get(x), sortOrder: i })).filter((x) => x.contentItemId)
+
+  // ⚠️ 首頁版位的資料只有 urlPath，沒有 slug（文章、醫師、據點三個版位都是）。
+  //    用 urlPath 的最後一段回推 slug —— 這是唯一的對應線索，
+  //    而 urlPath 由後端算好寫入、全站唯一（docs/08 §B-1），可靠。
+  const slugOfPath = (urlPath) => (urlPath ?? '').split('/').filter(Boolean).pop() ?? ''
+
+  // ⚠️ 最新文章與醫師版位在 mockup 裡是 href="#" 的佔位連結（STATUS §二 的 237 個之一），
+  //    回推不出 slug —— 改用標題比對。這是遷移期才需要的權宜，正式站由後台勾選內容。
+  const byTitle = (rows, key = 'title') => new Map(rows.map((r) => [r[key], r.id]))
+  const articleByTitle = byTitle(await api.list('article'))
+  const doctorByTitle = byTitle(await api.list('doctor'))
+  const pick = (map, names) => names.map((n, i) => ({ contentItemId: map.get(n), sortOrder: i })).filter((x) => x.contentItemId)
+
+  const sections = [
+    byKey('hero', {
+      sortOrder: 1,
+      settings: blocks(home.HERO_SLIDES.map((s, i) => ({
+        image: imageField(`home/hero/${i}`, s.imagePath, {
+          alt: s.alt, width: s.imageWidth, height: s.imageHeight,
+        }),
+        caption: s.caption,
+      }))),
+    }),
+    byKey('specialties', {
+      sortOrder: 2,
+      // 八大專科入口指向困擾頁，但帶著自己的圖示 —— 圖示屬於版位設定，不是困擾的內容。
+      settings: blocks(home.SPECIALTIES.map((s, i) => ({
+        title: s.title,
+        slug: s.slug,
+        urlPath: s.urlPath,
+        icon: imageField(`home/specialty/${s.slug}`, s.imagePath, {
+          alt: s.title, width: s.iconWidth, height: s.iconHeight,
+        }),
+      }))),
+    }),
+    byKey('featured-treatments', { sortOrder: 3, items: idsOf(home.FEATURED_TREATMENTS.map((t) => t.slug), ids.treatment) }),
+    byKey('latest-articles', { sortOrder: 4, items: pick(articleByTitle, home.LATEST_ARTICLES.map((a) => a.title)) }),
+    byKey('doctors', { sortOrder: 5, items: pick(doctorByTitle, home.FEATURED_DOCTORS.map((d) => d.name)) }),
+    byKey('clinics', { sortOrder: 6, items: idsOf(home.HOME_CLINICS.map((c) => slugOfPath(c.urlPath)), ids.clinic) }),
+    byKey('brand-story', { sortOrder: 7, items: idsOf(['about'], ids.page) }),
+  ]
+
+  await api.put('/admin/home-section', { sections })
+  const withItems = sections.filter((s) => s.items.length).length
+  console.log(`  home       7 個版位（${withItems} 個有引用內容，2 個走版位設定）`)
+}
+
+// ── 14. 導覽選單與頁尾 ───────────────────────────────────────────────
+// ⚠️ linkKind：1 指向內容、2 站內路徑、3 外部網址（docs/08 §G-3）。
+//    這裡一律用 2／3 —— 前台的選單原本就是寫死的路徑，而站內路徑指到的
+//    /about/、/treatments/ 這些都是系統頁，改 slug 本來就不被允許（IsSystemLocked）。
+{
+  const node = (item) => ({
+    label: item.label,
+    linkKind: item.external ? 3 : 2,
+    contentItemId: null,
+    url: item.href,
+    relAttr: item.external ? 'noopener external' : null,
+    openInNewTab: Boolean(item.external),
+    children: (item.children ?? []).map(node),
+  })
+
+  const main = data.navigation.MAIN_NAV.map(node)
+  // 頁尾在前台是分欄的，資料庫是一棵樹 —— 欄標題當成一層節點。
+  // ⚠️ 選單節點一律要有連結目標（MenuLinkKind 的三種都指向某處），但欄標題在前台是純文字。
+  //    取該欄子項的共同路徑當落點：/concerns/acne/ 與 /concerns/sensitive-skin/ → /concerns/。
+  //    這樣資料是合法的，而前台要不要把標題渲染成連結仍由版面決定。
+  const commonPath = (items) => {
+    const first = items.find((i) => i.href?.startsWith('/'))?.href
+    if (!first) return '/'
+    const seg = first.split('/').filter(Boolean)[0]
+    return seg ? `/${seg}/` : '/'
+  }
+
+  const footer = data.navigation.FOOTER_COLUMNS.map((col) => ({
+    label: col.title,
+    linkKind: 2,
+    contentItemId: null,
+    url: commonPath(col.items),
+    relAttr: null,
+    openInNewTab: false,
+    children: col.items.map(node),
+  }))
+
+  await api.put('/admin/menu', { main, footer })
+  console.log(`  menu       主選單 ${main.length} 項、頁尾 ${footer.length} 欄`)
 }
 
 console.log('\n完成。')

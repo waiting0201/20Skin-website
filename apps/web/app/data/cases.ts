@@ -79,79 +79,47 @@ export interface CaseDetail {
   moreCaseSlugs: string[]
 }
 
-export const CASE_LIST: CaseListItem[] = [
-  {
-    slug: 'acne-scar-staged-care',
-    title: '痘疤紋理的分次調理',
-    ageGender: '30–35 歲・女性',
-    sessions: '共 4 次・歷時 6 個月',
-    tags: ['痘痘・粉刺', '蜂巢皮秒雷射'],
-    concernSlug: 'acne',
-  },
-  {
-    slug: null,
-    title: '顴骨斑點的階段性處理',
-    ageGender: '40–45 歲・女性',
-    sessions: '共 3 次・歷時 4 個月',
-    tags: ['斑點・色素沉澱', '光療美顏'],
-    concernSlug: 'pigmentation',
-  },
-  {
-    slug: null,
-    title: '下顎線條與輪廓支撐',
-    ageGender: '45–50 歲・女性',
-    sessions: '共 2 次・歷時 8 個月',
-    tags: ['抗老・緊緻', '電波'],
-    concernSlug: 'anti-aging',
-  },
-  {
-    slug: null,
-    title: '泛紅與敏感肌的穩定',
-    ageGender: '25–30 歲・女性',
-    sessions: '共 6 次・歷時 5 個月',
-    tags: ['敏感肌', '醫美保養'],
-    concernSlug: 'sensitive-skin',
-  },
-  {
-    slug: null,
-    title: '腋下多汗的門診處理',
-    ageGender: '30–35 歲・男性',
-    sessions: '共 1 次・追蹤 6 個月',
-    tags: ['多汗・狐臭'],
-    concernSlug: 'hyperhidrosis',
-  },
-  {
-    slug: null,
-    title: '髮線稀疏的療程規劃',
-    ageGender: '35–40 歲・男性',
-    sessions: '共 3 次・歷時 9 個月',
-    tags: ['生髮・落髮'],
-    concernSlug: 'hair-loss',
-  },
-  {
-    slug: null,
-    title: '毛孔與膚質的整體調理',
-    ageGender: '25–30 歲・女性',
-    sessions: '共 5 次・歷時 7 個月',
-    tags: ['毛孔粗大', '光繞雷射'],
-  },
-  {
-    slug: null,
-    title: '上臉細紋的分次規劃',
-    ageGender: '40–45 歲・女性',
-    sessions: '共 2 次・歷時 6 個月',
-    tags: ['抗老・緊緻', '注射微整'],
-    concernSlug: 'anti-aging',
-  },
-  {
-    slug: null,
-    title: '四肢除毛的完整療程',
-    ageGender: '20–25 歲・女性',
-    sessions: '共 6 次・歷時 12 個月',
-    tags: ['除毛'],
-    concernSlug: 'hair-removal',
-  },
-]
+// ── 資料來源：content/cases.json（docs/09 §3）────────────────────────────
+//
+// 🔴 **案例只會有「資料庫裡有的那些」。**
+//    mockup 列表上的 9 則裡，只有 1 則有內頁。另外 8 則缺四個法規揭露必填欄位
+//    （個案差異聲明、拍攝條件、書面同意、同意書索引，docs/08 §C-5 全部 NOT NULL）。
+//    **捏造那些欄位是法規紅線**，所以它們沒有進資料庫，也就不會出現在這裡。
+//    要恢復列表，必須由院方補齊那四個欄位 —— 這是內容問題，不是程式問題。
+
+import { CONTENT, REL, img, parseBlocks, relationsOf, type ContentRecord } from './_content'
+
+const toImage = (value: unknown, fallbackAlt = ''): Image => {
+  const i = img(value)
+  return { src: i?.src ?? '', alt: i?.alt || fallbackAlt, width: i?.width ?? 0, height: i?.height ?? 0 }
+}
+
+interface NarrativeDocument {
+  facts: CaseDetail['facts'] | null
+  sections: CaseDetail['sections'] | null
+  timeline: CaseTimelineItem[] | null
+  testimonial: string | null
+  doctorQuote: CaseDetail['doctorQuote'] | null
+}
+
+const narrativeOf = (record: ContentRecord) =>
+  parseBlocks<NarrativeDocument>(record.fields.narrative, {
+    facts: null, sections: null, timeline: null, testimonial: null, doctorQuote: null,
+  })
+
+export const CASE_LIST: CaseListItem[] = CONTENT.cases
+  .slice()
+  .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+  .map((record) => {
+    const n = narrativeOf(record)
+    return {
+      slug: record.slug,
+      title: record.title,
+      ageGender: n.facts?.condition ?? '',
+      sessions: (record.fields.sessionsText as string) ?? '',
+      tags: relationsOf(record, REL.treatmentToConcern).map((r) => r.toTitle as string),
+    }
+  })
 
 export const CASE_FILTER_CONCERNS = [
   { label: '痘痘・粉刺', href: null },
@@ -172,100 +140,39 @@ export const CASE_HOW_TO_READ = [
   { title: '三、拍攝條件', text: '光線、角度與妝容會影響觀感。院內案例照以固定條件拍攝。' },
 ]
 
-export const CASE_DETAILS: CaseDetail[] = [
-  {
-    slug: 'acne-scar-staged-care',
-    title: '痘疤紋理的分次調理',
-    concernLabel: '痘痘・粉刺',
-    concernHref: '/concerns/acne/',
-    lede: '30–35 歲女性，兩頰多年痘疤凹陷合併局部色素沉澱。6 個月、共 4 次療程的規劃紀錄。',
-    shootingConditions: '同一相機與鏡頭、固定光源與距離、未上妝、正面角度。兩張照片間隔 6 個月。',
-    facts: {
-      condition: '30–35 歲・女性',
-      mainConcern: '痘疤凹陷、膚質紋理不均、局部色素沉澱',
-      treatmentName: 'Picosure® Pro 鉑金版蜂巢皮秒雷射',
-      treatmentHref: '/treatments/laser/picosure-pro/',
-      sessions: '共 4 次',
-      period: '2025.11 – 2026.05（約 6 個月）',
-      doctorName: '黃勇學 醫師',
-      doctorHref: '/team/huang/',
-      recovery: '每次術後約 2–3 天輕微泛紅，未影響日常作息',
-    },
-    sections: [
-      {
-        heading: '面診時的狀況',
-        paragraphs: [
-          '個案自述高中時期痘痘反覆發作，發炎消退後在兩頰留下凹陷與明顯的膚質紋理，上妝後容易卡粉。曾自行使用市售酸類產品，但因刺激而中斷。',
-          '面診時醫師檢視膚況，判斷主要為多年前發炎後留下的凹陷型疤痕，合併局部發炎後色素沉澱；皮膚屏障狀態尚可，無正在發炎的痘痘。',
-        ],
-      },
-      {
-        heading: '規劃的思路',
-        paragraphs: [
-          '凹陷型疤痕的處理需要時間，一次做強不會比較快，反而可能拉長恢復期並增加色素沉澱的風險。因此規劃採分次進行，每次間隔約 6–8 週，讓皮膚有完整的修復時間，並在每次回診依實際反應調整能量設定。',
-          '色素沉澱的部分則優先處理，因為它對整體觀感的影響往往比紋理更直接，而且改善所需的時間相對短。',
-        ],
-      },
-    ],
-    timeline: [
-      {
-        when: '2025.11',
-        title: '第 1 次・面診與首次療程',
-        text: '完成膚況評估與病史確認，第一次以較保守的能量設定進行，觀察皮膚反應。術後 2 天輕微泛紅。',
-      },
-      {
-        when: '2026.01',
-        title: '第 2 次・調整設定',
-        text: '回診確認前次恢復狀況良好，色素沉澱區域略淡。依醫師評估調整能量與施打範圍。',
-      },
-      {
-        when: '2026.03',
-        title: '第 3 次・加強紋理區域',
-        text: '色素部分穩定後，重心轉向兩頰凹陷與紋理較明顯的區域，並同步討論居家保養的調整。',
-      },
-      {
-        when: '2026.05',
-        title: '第 4 次・階段收尾與追蹤',
-        text: '完成本階段規劃，改為每 3 個月回診追蹤，依當時膚況決定是否需要後續維持。',
-      },
-    ],
-    testimonial:
-      '「最有感的其實不是某一次做完之後，而是三月拍照時發現不太需要修圖了。上妝比以前服貼，卡粉的狀況少很多。」',
-    individualVarianceStatement:
-      '本案例為個別紀錄，反應因個人體質、膚況、療程規劃與生活習慣而異，不代表所有人都會有相同結果，亦非療程效果之保證。實際適用性、次數與間隔，需由醫師依個人狀況面診評估後決定。',
-    hasWrittenConsent: true,
-    consentReference: '個案同意書已存放於院內病歷系統，索引碼由後台管理，不對外公開。',
-    doctorQuote: {
-      name: '黃勇學 醫師',
-      role: '院長・皮膚科專科醫師',
-      href: '/team/huang/',
-      avatar: { src: '/assets/img/doctor-huang.jpg', alt: '黃勇學 醫師', width: 72, height: 72 },
-      quote:
-        '「凹陷型痘疤沒有捷徑。分次做、每次觀察反應再調整，比一次拉高能量安全，長期下來的結果也比較穩定。個案的配合度——防曬與回診——其實是影響最大的變因。」',
-    },
-    treatmentsUsed: [
-      {
-        name: 'Picosure® Pro 鉑金版蜂巢皮秒雷射',
-        href: '/treatments/laser/picosure-pro/',
-        image: { src: '/assets/img/product-p01.png', alt: 'Picosure Pro 鉑金版蜂巢皮秒雷射機台', width: 550, height: 550 },
-        excerpt: '蜂巢透鏡導入皮秒雷射，作用於淺層色素與痘疤紋理。',
-      },
-      {
-        name: 'HydraFacial 海菲秀',
-        href: '/treatments/skincare/hydrafacial/',
-        image: { src: '/assets/img/product-p09.png', alt: 'HydraFacial 海菲秀保養導入設備', width: 550, height: 550 },
-        excerpt: '療程間隔期間的清潔與導入，作為維持方案。',
-      },
-      {
-        name: '光繞雷射',
-        href: '/treatments/laser/helios-iii/',
-        image: { src: '/assets/img/product-p12.png', alt: 'D.O.E HELIOS III 光繞雷射機台', width: 550, height: 550 },
-        excerpt: '分段式光纖雷射，訴求毛孔與膚質紋理調理。',
-      },
-    ],
-    moreCaseSlugs: [],
-  },
-]
+export const CASE_DETAILS: CaseDetail[] = CONTENT.cases.map((record) => {
+  const f = record.fields
+  const n = narrativeOf(record)
+  const treatment = CONTENT.treatments.find((t) => t.id === f.treatmentId)
+
+  return {
+    slug: record.slug as string,
+    title: record.title,
+    concernLabel: '',
+    concernHref: '',
+    lede: record.summary ?? '',
+    shootingConditions: (f.shootingConditions as string) ?? '',
+    facts: n.facts ?? ({} as CaseDetail['facts']),
+    sections: n.sections ?? [],
+    timeline: n.timeline ?? [],
+    testimonial: n.testimonial ?? '',
+    // 🔴 四個法規揭露欄位在資料庫是 NOT NULL（docs/08 §C-5）——
+    //    它們是這一頁能不能存在的前提，不是可選欄位。
+    individualVarianceStatement: (f.individualVarianceStatement as string) ?? '',
+    hasWrittenConsent: Boolean(f.hasWrittenConsent) as true,
+    consentReference: (f.consentReference as string) ?? '',
+    doctorQuote: n.doctorQuote ?? ({} as CaseDetail['doctorQuote']),
+    treatmentsUsed: treatment
+      ? [{
+          name: treatment.title,
+          href: treatment.urlPath ?? '#',
+          image: toImage(treatment.fields.cover, treatment.title),
+          excerpt: treatment.summary ?? '',
+        }]
+      : [],
+    moreCaseSlugs: CONTENT.cases.filter((c) => c.id !== record.id).map((c) => c.slug as string),
+  }
+})
 
 export function findCaseDetail(slug: string): CaseDetail | undefined {
   return CASE_DETAILS.find((c) => c.slug === slug)

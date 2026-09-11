@@ -119,193 +119,129 @@ function nap(href: string) {
 const sijiNap = nap('/clinics/siji/')
 const erlinNap = nap('/clinics/erlin/')
 
-export const CLINICS: Clinic[] = [
-  {
-    slug: 'siji',
-    name: sijiNap.name,
+// ── 資料來源：content/clinics.json（docs/09 §3）──────────────────────────
+//
+// ⚠️ 版面用的字串（英文小標、英文角色標籤、時段表格、JSON-LD 的固定描述）留在前台 ——
+//    它們由設計稿決定，不是院方會在後台改的內容（見 _presentation.ts 的分類原則）。
+//    真正的內容（地址、電話、門診時段、交通資訊、照片、介紹）都在資料庫。
+
+import { CONTENT, REL, img, parseBlocks, relationsOf, type ContentRecord } from './_content'
+import { eyebrowFor } from './_presentation'
+import { CLINIC_NAP } from '~/data/navigation'
+
+/** 版面字串：與內容無關，改版面才會動。 */
+const PRESENTATION: Record<string, {
+  eyebrow: string
+  phoneHref: string
+  hoursFootnote: string
+  jsonLdDescription: string
+  roleLabel: string
+  medicalSpecialty: string[]
+  facebookUrl?: string
+  facebookLabel?: string
+}> = {
+  siji: {
     eyebrow: 'SIJI CLINIC',
-    roleLabel: 'MEDICAL AESTHETICS',
-    desc: '以醫學美容與光電療程為主，設有獨立諮詢空間與療程室，多數雷射、電波與注射項目皆在此進行。',
-    lede: '以醫學美容與光電療程為主，設有獨立諮詢空間與療程室，多數雷射、電波與注射項目皆在此進行。',
-    phone: sijiNap.phone,
     phoneHref: 'tel:+886400000000',
-    address: sijiNap.address,
-    hoursSummary: sijiNap.hours,
-    pageDescription: '四季診所（20SKIN 美醫集團）位於彰化縣二林鎮，提供醫學美容與光電雷射療程，完整地址、電話與門診時段一次看。',
+    hoursFootnote: '週日休診。六上午看診至 12:30。',
     jsonLdDescription: '四季診所位於彰化縣二林鎮，提供醫學美容與光電雷射療程，週一二四五09:00–13:00／17:00–21:00，週六09:00–12:30，週三、日休診。',
-    medicalSpecialty: ['醫學美容'],
+    roleLabel: 'MEDICAL AESTHETICS',
+    medicalSpecialty: ['Dermatology', 'CosmeticDentistry'],
     facebookUrl: 'https://www.facebook.com/20skin4g88/',
     facebookLabel: '四季診所',
-    heroPhoto: {
-      src: '/assets/img/photo-facade-detail.jpg',
-      width: 1800,
-      height: 1167,
-      alt: '四季診所白磚立面與招牌',
-      caption: '四季診所．院區外觀',
-    },
-    transportInfo: [
-      { icon: 'car', title: '開車前往', points: ['下交流道後沿主要道路直行即可抵達。', '兩院區相距步行可達的距離，走錯不用重新搭車。'] },
-      { icon: 'bus', title: '大眾運輸', points: ['可搭乘客運至二林站，下車後步行前往。', '詳細班次請以客運業者公告時刻表為準。'] },
-      { icon: 'parking', title: '停車資訊', points: ['周邊停車位置與特約停車方式，可於預約時一併洽詢櫃檯。'] },
-    ],
-    businessHours: [
-      { day: 1, start: '09:00', end: '13:00' },
-      { day: 1, start: '17:00', end: '21:00' },
-      { day: 2, start: '09:00', end: '13:00' },
-      { day: 2, start: '17:00', end: '21:00' },
-      { day: 4, start: '09:00', end: '13:00' },
-      { day: 4, start: '17:00', end: '21:00' },
-      { day: 5, start: '09:00', end: '13:00' },
-      { day: 5, start: '17:00', end: '21:00' },
-      { day: 6, start: '09:00', end: '12:30' },
-    ],
-    hoursTable: [
-      { label: '09:00–13:00', days: [true, true, false, true, true, true, false] },
-      { label: '17:00–21:00', days: [true, true, true, true, true, false, false] },
-    ],
-    hoursFootnote: '週日休診。六上午看診至 12:30。',
-    faqs: [
-      {
-        question: '兩個院區有什麼不同？',
-        answer:
-          '四季診所以醫學美容與光電療程為主；二林四季皮膚科以一般皮膚疾病門診為主，同時提供基礎光電與保養類療程。兩院區的門診時段與駐診醫師不同，預約時請留意。',
-      },
-      {
-        question: '可以在 A 院區看診、B 院區做療程嗎？',
-        answer: '部分項目因設備配置只在特定院區提供。面診時醫師會說明該項目在哪一個院區施作，並協助安排時段。',
-      },
-      {
-        question: '沒有預約可以直接到現場嗎？',
-        answer: '可以現場掛號，但需視當日名額與候診狀況，已預約者優先看診。建議先行預約以縮短等候時間。',
-      },
-    ],
   },
-  {
-    slug: 'erlin',
-    name: erlinNap.name,
+  erlin: {
     eyebrow: 'ERLIN CLINIC',
+    phoneHref: 'tel:+886400000000',
+    hoursFootnote: '週日休診。',
+    jsonLdDescription: '二林四季皮膚科位於彰化縣二林鎮，提供皮膚科一般診療與醫學美容療程。',
     roleLabel: 'DERMATOLOGY',
-    desc: '以一般皮膚疾病門診為主，涵蓋濕疹、蕁麻疹、灰指甲等診療，同時提供基礎光電與保養類療程。',
-    lede: '紮根彰化二林的皮膚科專科診所，一般皮膚疾病與醫學美容並行。',
-    phone: erlinNap.phone,
-    phoneHref: 'tel:0400000000',
-    address: erlinNap.address,
-    hoursSummary: erlinNap.hours,
-    pageDescription: '二林四季皮膚科（20SKIN 美醫集團）位於彰化縣二林鎮，提供一般皮膚科診療與醫學美容服務，完整地址、電話與門診時段一次看。',
-    jsonLdDescription: '二林四季皮膚科位於彰化縣二林鎮，提供一般皮膚科診療與醫學美容服務，週一二四五08:30–12:00／15:00–21:00，週三六08:30–12:00／15:00–18:00，週日休診。',
-    medicalSpecialty: ['皮膚科', '醫學美容'],
+    medicalSpecialty: ['Dermatology'],
     facebookUrl: 'https://www.facebook.com/20skin.tw',
     facebookLabel: '20SKIN 美醫集團',
-    heroPhoto: {
-      src: '/assets/img/photo-street-green.jpg',
-      width: 1800,
-      height: 1119,
-      alt: '二林四季皮膚科周邊街景與行道樹',
-      caption: '二林四季皮膚科．院區周邊街景',
-    },
-    galleryPhotos: [
-      {
-        src: '/assets/img/photo-glass-facade.jpg',
-        width: 1488,
-        height: 1800,
-        alt: '玻璃立面與 20SKIN 蝕刻標誌',
-        caption: '玻璃立面與品牌標誌',
-      },
-      {
-        src: '/assets/img/photo-brand-detail.jpg',
-        width: 1800,
-        height: 1038,
-        alt: '品牌識別牆面與大理石細節',
-        caption: '品牌識別牆面細節',
-      },
-    ],
-    transportInfo: [
-      { icon: 'car', title: '開車前往', points: ['由台 19 線轉入二林市區，往鎮公所方向行駛約 5 分鐘。', '院區周邊道路標示以現場實際指標為準。'] },
-      { icon: 'bus', title: '大眾運輸', points: ['可搭乘彰化客運至二林站，下車後步行約 10 分鐘可達。', '詳細班次請以客運公司公告時刻表為準。'] },
-      { icon: 'parking', title: '停車資訊', points: ['院區周邊備有路邊停車格。', '鄰近設有付費停車場，步行約 3–5 分鐘可達。'] },
-    ],
-    businessHours: [
-      { day: 1, start: '08:30', end: '12:00' },
-      { day: 1, start: '15:00', end: '21:00' },
-      { day: 2, start: '08:30', end: '12:00' },
-      { day: 2, start: '15:00', end: '21:00' },
-      { day: 3, start: '08:30', end: '12:00' },
-      { day: 3, start: '15:00', end: '18:00' },
-      { day: 4, start: '08:30', end: '12:00' },
-      { day: 4, start: '15:00', end: '21:00' },
-      { day: 5, start: '08:30', end: '12:00' },
-      { day: 5, start: '15:00', end: '21:00' },
-      { day: 6, start: '08:30', end: '12:00' },
-      { day: 6, start: '15:00', end: '18:00' },
-    ],
-    hoursTable: [
-      { label: '08:30–12:00', days: [true, true, true, true, true, true, false] },
-      { label: '15:00–18:00', days: [true, true, true, true, true, true, false] },
-      { label: '18:00–21:00', days: [true, true, false, true, true, false, false] },
-    ],
-    hoursFootnote: '週日休診。',
-    treatmentGroups: [
-      {
-        categoryLabel: '光療美顏',
-        categorySlug: 'laser',
-        items: [
-          { label: 'Picosure® Pro 蜂巢皮秒雷射', slug: 'picosure-pro' },
-          { label: 'Capri 藍雷射', slug: 'capri-blue' },
-          { label: 'D.O.E HELIOS III 光繞雷射', slug: 'helios-iii' },
-        ],
-      },
-      {
-        categoryLabel: '微針美容',
-        categorySlug: 'microneedle',
-        items: [
-          { label: 'Sculptra 舒顏萃 4D聚左旋乳酸', slug: 'sculptra' },
-          { label: '電動微針療程' },
-        ],
-      },
-      {
-        categoryLabel: '光電美容',
-        categorySlug: 'photoelectric',
-        items: [
-          { label: 'Thermage FLX 鳳凰電波', slug: 'thermage-flx' },
-          { label: 'Ultherapy 音波拉皮', slug: 'ulthera' },
-        ],
-      },
-      {
-        categoryLabel: '醫美保養',
-        categorySlug: 'skincare',
-        items: [{ label: 'HydraFacial 海菲秀', slug: 'hydrafacial' }],
-      },
-    ],
-    generalServices: ['一般皮膚疾病', '兒童皮膚過敏', '特殊皮膚疾病', '皮膚腫瘤處理'],
-    faqs: [
-      {
-        question: '需要預約才能看診嗎？',
-        answer: '建議透過線上預約系統或 LINE 官方帳號提前預約，以掌握看診順序；亦可現場掛號，惟需視當日看診狀況等候。',
-        lastReviewedOn: '2026-08',
-      },
-      {
-        question: '可以查詢目前看診進度嗎？',
-        answer: '可透過 LINE 官方帳號洽詢目前看診進度，現場亦設有看診號次顯示，方便掌握等候時間。',
-        lastReviewedOn: '2026-08',
-      },
-      {
-        question: '初診要帶什麼？',
-        answer: '請攜帶健保卡與身分證件；如有其他院所的診療紀錄或用藥資訊，建議一併攜帶供醫師參考。',
-        lastReviewedOn: '2026-08',
-      },
-      {
-        question: '有提供停車位嗎？',
-        answer: '院區周邊備有路邊停車格，鄰近亦有付費停車場，詳見上方「位置與交通」段落。',
-        lastReviewedOn: '2026-08',
-      },
-      {
-        question: '兒童皮膚問題可以看嗎？',
-        answer: '可以，本院區提供兒童皮膚過敏及一般皮膚疾病診療服務，建議掛號時告知孩童年齡以利安排。',
-        lastReviewedOn: '2026-08',
-      },
-    ],
   },
-]
+}
+
+function hoursTableOf(hours: { dayOfWeek: number; startTime: string; endTime: string }[]): ClinicHoursTableRow[] {
+  const rows = new Map<string, ClinicHoursTableRow>()
+  for (const h of hours) {
+    const label = `${h.startTime.slice(0, 5)}–${h.endTime.slice(0, 5)}`
+    const row = rows.get(label) ?? { label, days: [false, false, false, false, false, false, false] }
+    // ⚠️ 欄位順序是「一二三四五六日」（HOURS_WEEKDAY_LABELS），而 DoctorSchedules／
+    //    ClinicBusinessHours 的 DayOfWeek 是 0＝星期日（docs/08 §C-7）。差一格就整排錯開。
+    row.days[(h.dayOfWeek + 6) % 7] = true
+    rows.set(label, row)
+  }
+  return [...rows.values()]
+}
+
+const toPhoto = (value: unknown, caption: string, fallbackAlt: string): ClinicPhoto => {
+  const i = img(value)
+  return { src: i?.src ?? '', width: i?.width ?? 0, height: i?.height ?? 0, alt: i?.alt || fallbackAlt, caption }
+}
+
+function toClinic(record: ContentRecord): Clinic {
+  const f = record.fields
+  const slug = record.slug as ClinicSlug
+  const look = PRESENTATION[slug] ?? {
+    eyebrow: '', phoneHref: '', hoursFootnote: '', jsonLdDescription: '', roleLabel: '', medicalSpecialty: [],
+  }
+  const nap = CLINIC_NAP.find((n) => n.name === record.title)
+  const hours = ((f.businessHours ?? []) as { dayOfWeek: number; startTime: string; endTime: string; sortOrder: number }[])
+    .slice()
+    .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.sortOrder - b.sortOrder)
+  const photos = (f.photos ?? []) as { image: unknown; caption: string | null; sortOrder: number }[]
+  const intro = parseBlocks<{ lede: string | null } | null>(f.intro, null)
+
+  return {
+    slug,
+    name: record.title,
+    eyebrow: look.eyebrow || eyebrowFor(slug),
+    roleLabel: look.roleLabel,
+    desc: record.summary ?? '',
+    lede: intro?.lede ?? record.summary ?? '',
+    phone: (f.phone as string) ?? '',
+    phoneHref: look.phoneHref,
+    address: (f.address as string) ?? '',
+    // ⚠️ 門診時段的一句話摘要與頁尾共用同一份 NAP 主資料（docs/03 §4 ③：
+    //    任何不一致都會降低 AI 對這個實體的確信度）。
+    hoursSummary: nap?.hours ?? '',
+    pageDescription: (record.seo?.metaDescription as string) ?? record.summary ?? '',
+    jsonLdDescription: look.jsonLdDescription,
+    medicalSpecialty: look.medicalSpecialty,
+    facebookUrl: look.facebookUrl,
+    facebookLabel: look.facebookLabel,
+    latitude: (f.latitude as number) || undefined,
+    longitude: (f.longitude as number) || undefined,
+    heroPhoto: toPhoto(photos[0]?.image, photos[0]?.caption ?? '', record.title),
+    galleryPhotos: photos.slice(1).map((p) => toPhoto(p.image, p.caption ?? '', record.title)),
+    transportInfo: parseBlocks<ClinicTransportStep[]>(f.transportInfo, []),
+    businessHours: hours.map((h) => ({
+      day: h.dayOfWeek as ClinicBusinessHour['day'],
+      start: h.startTime.slice(0, 5),
+      end: h.endTime.slice(0, 5),
+    })),
+    // 時段表格由 businessHours 推導：同一組起訖時間是一列，該列標出星期幾有這個時段。
+    // ⚠️ 不另存一份 —— 兩份會分岔。mockup 那份手寫表格就已經分岔了：它把週六標成
+    //    09:00–13:00，而 businessHours 是 09:00–12:30；二林的 15:00–21:00 也被拆成兩段。
+    //    頁面上的時間與實際門診時間不一樣，是這個專案裡最不該發生的錯。
+    hoursTable: hoursTableOf(hours),
+    hoursFootnote: PRESENTATION[slug]?.hoursFootnote ?? '',
+    faqs: relationsOf(record, REL.clinicToFaq).map((r) => {
+      const faq = CONTENT.faqs.find((x) => x.slug === r.toSlug)
+      return {
+        question: faq?.title ?? (r.toTitle as string),
+        answer: (faq?.fields.webAnswer as string) ?? '',
+        lastReviewedOn: (faq?.fields.lastReviewedOn as string) ?? undefined,
+      }
+    }),
+  }
+}
+
+export const CLINICS: Clinic[] = CONTENT.clinics
+  .slice()
+  .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+  .map(toClinic)
 
 export function findClinic(slug: string): Clinic | undefined {
   return CLINICS.find((c) => c.slug === slug)

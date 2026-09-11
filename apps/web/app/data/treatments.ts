@@ -244,6 +244,11 @@ function toTreatment(record: ContentRecord): Treatment {
       }),
     detailTags: concernTags.length ? concernTags : undefined,
     cases: [],
+    faqLastUpdated: relationsOf(record, REL.treatmentToFaq)
+      .map((r) => (CONTENT.faqs.find((x) => x.slug === r.toSlug)?.fields.lastReviewedOn as string) ?? '')
+      .filter(Boolean)
+      .sort()
+      .at(-1)?.slice(0, 7) ?? undefined,
     faqs: relationsOf(record, REL.treatmentToFaq).map((r) => {
       const faq = CONTENT.faqs.find((x) => x.slug === r.toSlug)
       return { q: faq?.title ?? (r.toTitle as string), a: (faq?.fields.webAnswer as string) ?? '' }

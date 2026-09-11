@@ -92,6 +92,7 @@ export const REL = {
   articleToTag: 11,
   pageToFeatured: 12,
   doctorToConcern: 13,
+  concernToConcern: 14,
 } as const
 
 /** 分類與標籤的型別（docs/08 §C-9）。 */

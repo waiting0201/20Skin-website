@@ -9,6 +9,8 @@
 #      buildId（每次 build 一個新 GUID）、prerenderedAt（時間戳）、
 #      _nuxt/*.js 的 chunk 雜湊、payload json 的檔名
 #    —— 這些與內容無關。第一次跑沒有正規化時，107 頁全紅，看起來像災難。
+#    payload 裡的路徑結尾斜線也要正規化：同一頁被 /search 或 /search/ 連到，
+#    產出的檔案一樣，只有 payload 裡那個字串差一個 \u002F。
 #
 # ⚠️ **預期內的差異有兩類**，不要試圖把它們「修掉」：
 #      ① 圖片網址從 /assets/img/ 變成 Blob 網址 —— 內容圖本來就該存 Blob（docs/02 §4）
@@ -28,7 +30,8 @@ norm() {
     -e 's#/_nuxt/[A-Za-z0-9_.-]+\.js#/_nuxt/CHUNK.js#g' \
     -e 's#/[A-Za-z0-9_./-]*\.json\?_b=BUILDID#/PAYLOAD.json?_b=BUILDID#g' \
     -e 's/"prerenderedAt":[0-9]+/"prerenderedAt":0/g' \
-    -e 's/,1789[0-9]+\]/,0]/g' "$1"
+    -e 's/,1789[0-9]+\]/,0]/g' \
+    -e 's#\\u002F",0\]#",0]#g' "$1"
 }
 
 case "${1:-compare}" in

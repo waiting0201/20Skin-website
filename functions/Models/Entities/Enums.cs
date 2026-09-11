@@ -139,6 +139,13 @@ public enum RelationType : byte
     /// 導致這份內容在後台既編不到、也存不下來。
     /// </summary>
     DoctorToConcern = 13,
+
+    /// <summary>
+    /// 困擾 → 困擾（「此困擾相關」）。
+    /// ⚠️ 2026-09-11 補：困擾頁本來就有這一區，且**推導不出來** —— 8 個困擾裡有 7 個
+    /// 沒有任何建議療程，沒有共同點可以算。這是編輯判斷，只能存下來。
+    /// </summary>
+    ConcernToConcern = 14,
 }
 
 /// <summary>未命中題目的來源（docs/08 §F）。</summary>

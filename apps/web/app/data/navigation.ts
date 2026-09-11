@@ -19,98 +19,42 @@ export const EXTERNAL = {
   shop: 'https://www.20skinshop.com/',
 } as const
 
-export const MAIN_NAV: NavItem[] = [
-  {
-    label: '品牌理念',
-    href: '/about/',
-    children: [
-      { label: '品牌理念', href: '/about/' },
-      { label: '新中式美學', href: '/about/new-chinese-aesthetics/' },
-      { label: '彩妝式輕醫美', href: '/about/makeup-style/' },
-    ],
-  },
-  {
-    label: '肌膚困擾',
-    href: '/concerns/',
-    children: [
-      { label: '痘痘・粉刺', href: '/concerns/acne/' },
-      { label: '敏感肌', href: '/concerns/sensitive-skin/' },
-      { label: '斑點・色素沉澱', href: '/concerns/pigmentation/' },
-      { label: '抗老・緊緻', href: '/concerns/anti-aging/' },
-      { label: '生髮・落髮', href: '/concerns/hair-loss/' },
-      { label: '除毛', href: '/concerns/hair-removal/' },
-      { label: '多汗・狐臭', href: '/concerns/hyperhidrosis/' },
-      { label: '一般皮膚疾病', href: '/concerns/dermatology/' },
-    ],
-  },
-  {
-    label: '專業服務',
-    href: '/treatments/',
-    children: [
-      { label: '光療美顏', href: '/treatments/laser/' },
-      { label: '微針美容', href: '/treatments/microneedle/' },
-      { label: '光電美容', href: '/treatments/photoelectric/' },
-      { label: '醫美保養', href: '/treatments/skincare/' },
-    ],
-  },
-  { label: '醫師團隊', href: '/team/' },
-  {
-    label: '臻美分享',
-    href: '/blog/',
-    children: [
-      { label: '醫美新知', href: '/blog/medical-aesthetics/' },
-      { label: '皮膚新知', href: '/blog/dermatology/' },
-      { label: '媒體報導', href: '/blog/media/' },
-      { label: '演講授課', href: '/blog/lectures/' },
-    ],
-  },
-  { label: '案例分享', href: '/cases/' },
-  { label: '常見問題', href: '/faq/' },
-  {
-    label: '診所據點',
-    href: '/clinics/',
-    children: [
-      { label: '四季診所', href: '/clinics/siji/' },
-      { label: '二林四季皮膚科', href: '/clinics/erlin/' },
-    ],
-  },
-  { label: '線上購物', href: EXTERNAL.shop, external: true },
-]
+// ── 資料來源：content/menu.json（MenuItems，docs/08 §G-3）────────────────
+//
+// ⚠️ 選單是後台可編的內容（「導覽選單與頁尾」畫面，限超級管理員），不是寫死的版面。
+//    改一個選項不需要工程介入 —— 這正是它進資料庫的理由。
 
-export const FOOTER_COLUMNS: { title: string; items: NavItem[] }[] = [
-  {
-    title: '肌膚困擾',
-    items: [
-      { label: '痘痘・粉刺', href: '/concerns/acne/' },
-      { label: '敏感肌', href: '/concerns/sensitive-skin/' },
-      { label: '斑點・色素沉澱', href: '/concerns/pigmentation/' },
-      { label: '抗老・緊緻', href: '/concerns/anti-aging/' },
-    ],
-  },
-  {
-    title: '專業服務',
-    items: [
-      { label: '光療美顏', href: '/treatments/laser/' },
-      { label: '微針美容', href: '/treatments/microneedle/' },
-      { label: '光電美容', href: '/treatments/photoelectric/' },
-      { label: '醫美保養', href: '/treatments/skincare/' },
-    ],
-  },
-  {
-    title: '關於 20SKIN',
-    items: [
-      { label: '品牌理念', href: '/about/' },
-      { label: '醫師團隊', href: '/team/' },
-      { label: '臻美分享', href: '/blog/' },
-      { label: '常見問題', href: '/faq/' },
-      { label: '聯絡我們', href: '/contact/' },
-      { label: '網站搜尋', href: '/search/' },
-      { label: '線上購物', href: EXTERNAL.shop, external: true },
-    ],
-  },
-]
+import menuJson from '~~/content/menu.json'
+import { LEGAL_DOCS } from './pages'
 
-/** NAP 主資料。正式站來自全站設定（docs/02 §3），⚠️ 目前為 mockup 的佔位值。 */
+interface MenuNode {
+  label: string
+  linkKind: number
+  url: string | null
+  external: boolean
+  relAttr: string | null
+  openInNewTab: boolean
+  children: MenuNode[]
+}
+
+const MENU = menuJson as unknown as { main: MenuNode[]; footer: MenuNode[] }
+
+const toNavItem = (node: MenuNode): NavItem => ({
+  label: node.label,
+  href: node.url ?? '#',
+  ...(node.external ? { external: true } : {}),
+  ...(node.children.length ? { children: node.children.map(toNavItem) } : {}),
+})
+
+export const MAIN_NAV: NavItem[] = MENU.main.map(toNavItem)
+
+// 頁尾在資料庫是一棵樹（欄標題是一層節點），前台是分欄的 —— 這裡攤回欄的形狀。
+// ⚠️ 欄標題在版面上是純文字，所以只取 title，不用它的 url。
+export const FOOTER_COLUMNS: { title: string; items: NavItem[] }[] = MENU.footer.map((col) => ({
+  title: col.label,
+  items: col.children.map(toNavItem),
+}))
+
 export const CLINIC_NAP = [
   {
     name: '四季診所',
@@ -128,11 +72,10 @@ export const CLINIC_NAP = [
   },
 ]
 
-export const LEGAL_LINKS: NavItem[] = [
-  { label: '隱私權政策', href: '/privacy/' },
-  { label: '服務條款', href: '/terms/' },
-  { label: '醫療免責聲明', href: '/medical-disclaimer/' },
-]
+export const LEGAL_LINKS: NavItem[] = LEGAL_DOCS.map((doc) => ({
+  label: doc.navLabel,
+  href: doc.path,
+}))
 
 export const SOCIAL_LINKS = [
   { label: '四季診所 Facebook', href: 'https://www.facebook.com/20skin4g88/' },

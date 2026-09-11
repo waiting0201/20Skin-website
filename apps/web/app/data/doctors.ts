@@ -129,7 +129,11 @@ function toDoctor(record: ContentRecord): Doctor {
     specialty: (f.specialty as string) ?? undefined,
     photo: { src: photo?.src ?? '', width: photo?.width ?? 0, height: photo?.height ?? 0 },
     tags: tags.filter((t) => t.type === 1).map((t) => t.tag),
-    expertiseTags: tags.filter((t) => t.type === 2).map((t) => t.tag),
+    // ⚠️ 沒有擅長項目時要回 undefined 而不是空陣列 —— 個人頁的 displayTags 用
+    //    `expertiseTags ?? tags` 退回專長標籤，空陣列不會觸發 ?? ，整個「專長領域」區塊就消失了。
+    expertiseTags: tags.some((t) => t.type === 2)
+      ? tags.filter((t) => t.type === 2).map((t) => t.tag)
+      : undefined,
     yearsInPractice: bio.yearsInPractice ?? undefined,
     lede: record.summary ?? undefined,
     bio: bio.paragraphs.length ? bio.paragraphs : undefined,

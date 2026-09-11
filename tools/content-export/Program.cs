@@ -101,6 +101,81 @@ foreach (var group in grouped)
     Console.WriteLine($"  {name,-12} {group.Count(),4} 筆 → {path}");
 }
 
+// 首頁版位與導覽選單不走 ContentItems（docs/08 §G-2、§G-3），各自輸出一份。
+var homeSections = await db.QueryAsync<HomeSectionRow>(
+    "SELECT Id, SectionKey, Title, Subtitle, IsEnabled, SortOrder, Settings FROM HomeSections ORDER BY SortOrder, Id;");
+
+var homeItems = (await db.QueryAsync<HomeItemRow>(
+    """
+    SELECT hi.HomeSectionId, hi.ContentItemId, hi.SortOrder,
+           ci.ContentType, ci.Slug, ci.UrlPath, ci.Title, ci.Status
+    FROM HomeSectionItems hi
+    INNER JOIN ContentItems ci ON ci.Id = hi.ContentItemId
+    ORDER BY hi.SortOrder, hi.Id;
+    """)).ToLookup(i => i.HomeSectionId);
+
+var homeArray = new JsonArray();
+foreach (var section in homeSections)
+{
+    var items = new JsonArray();
+    // ⚠️ 只輸出已發布的引用 —— 版位勾了一筆草稿時，前台不該渲染出一個連到 404 的卡片。
+    foreach (var item in homeItems[section.Id].Where(i => i.Status == 3))
+    {
+        items.Add(new JsonObject
+        {
+            ["contentItemId"] = item.ContentItemId,
+            ["contentType"] = item.ContentType,
+            ["slug"] = item.Slug,
+            ["urlPath"] = item.UrlPath,
+            ["title"] = item.Title,
+            ["sortOrder"] = item.SortOrder,
+        });
+    }
+
+    homeArray.Add(new JsonObject
+    {
+        ["sectionKey"] = section.SectionKey,
+        ["title"] = section.Title,
+        ["subtitle"] = section.Subtitle,
+        ["isEnabled"] = section.IsEnabled,
+        ["sortOrder"] = section.SortOrder,
+        // 版位設定是 JSON 字串，這裡解析成物件 —— 前端不必再 parse 一次。
+        ["settings"] = string.IsNullOrWhiteSpace(section.Settings) ? null : JsonNode.Parse(section.Settings),
+        ["items"] = items,
+    });
+}
+
+await File.WriteAllTextAsync(Path.Combine(outDir, "home.json"),
+    homeArray.ToJsonString(jsonOptions) + "\n", new UTF8Encoding(false));
+Console.WriteLine($"  {"home",-12} {homeArray.Count,4} 個版位 → {Path.Combine(outDir, "home.json")}");
+
+var menuRows = (await db.QueryAsync<MenuRow>(
+    """
+    SELECT Id, MenuKey, ParentId, Label, LinkKind, ContentItemId, Url, RelAttr, OpenInNewTab, SortOrder
+    FROM MenuItems ORDER BY SortOrder, Id;
+    """)).ToList();
+
+JsonArray BuildMenu(string menuKey, int? parentId) =>
+    new(menuRows
+        .Where(m => m.MenuKey == menuKey && m.ParentId == parentId)
+        .Select(m => (JsonNode)new JsonObject
+        {
+            ["label"] = m.Label,
+            ["linkKind"] = m.LinkKind,
+            // linkKind=1 指向內容時，網址由 ContentItems.UrlPath 決定 —— 不在選單裡另存一份。
+            ["url"] = m.Url ?? targets.GetValueOrDefault(m.ContentItemId ?? 0)?.UrlPath,
+            ["external"] = m.LinkKind == 3,
+            ["relAttr"] = m.RelAttr,
+            ["openInNewTab"] = m.OpenInNewTab,
+            ["children"] = BuildMenu(menuKey, m.Id),
+        })
+        .ToArray());
+
+var menuObject = new JsonObject { ["main"] = BuildMenu("main", null), ["footer"] = BuildMenu("footer", null) };
+await File.WriteAllTextAsync(Path.Combine(outDir, "menu.json"),
+    menuObject.ToJsonString(jsonOptions) + "\n", new UTF8Encoding(false));
+Console.WriteLine($"  {"menu",-12} 主選單 {menuObject["main"]!.AsArray().Count} 項、頁尾 {menuObject["footer"]!.AsArray().Count} 欄");
+
 // 全站設定是 key-value，不走 ContentItems。
 var settings = await db.QueryAsync<(string SettingKey, string? SettingValue, byte ValueType)>(
     "SELECT SettingKey, SettingValue, ValueType FROM SiteSettings ORDER BY SettingKey;");
@@ -116,3 +191,9 @@ internal sealed record ContentRow(int Id, byte ContentType, string? Slug, string
     int SortOrder, bool IncludeInSitemap, DateTime UpdatedAt, string Snapshot);
 
 internal sealed record TargetRow(int Id, byte ContentType, string? Slug, string? UrlPath, string Title, byte Status);
+
+internal sealed record HomeSectionRow(int Id, string SectionKey, string Title, string? Subtitle, bool IsEnabled, int SortOrder, string? Settings);
+
+internal sealed record HomeItemRow(int HomeSectionId, int ContentItemId, int SortOrder, byte ContentType, string? Slug, string? UrlPath, string Title, byte Status);
+
+internal sealed record MenuRow(int Id, string MenuKey, int? ParentId, string Label, byte LinkKind, int? ContentItemId, string? Url, string? RelAttr, bool OpenInNewTab, int SortOrder);

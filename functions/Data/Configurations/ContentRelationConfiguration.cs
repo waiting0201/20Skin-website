@@ -12,9 +12,9 @@ public sealed class ContentRelationConfiguration : IEntityTypeConfiguration<Cont
     {
         b.ToTable("ContentRelations", t =>
         {
-            t.HasCheckConstraint("CK_ContentRelations_RelationType", "[RelationType] BETWEEN 1 AND 13");
+            t.HasCheckConstraint("CK_ContentRelations_RelationType", "[RelationType] BETWEEN 1 AND 14");
 
-            // 13 種合法組合，逐一對應 docs/08 §D 的關聯型別清單。
+            // 14 種合法組合，逐一對應 docs/08 §D 的關聯型別清單。
             // ⚠️ PageToFeatured（12）的目標型別 docs 未鎖定單一類型（「精選項目」語意上
             //    可以是療程／醫師／困擾／文章／案例／FAQ／據點／分類標籤中的任一種），
             //    這裡放寬為除了 Page 本身以外皆可——已回報，若之後鎖定單一型別要收窄。
@@ -31,7 +31,8 @@ public sealed class ContentRelationConfiguration : IEntityTypeConfiguration<Cont
                 (RelationType = 10 AND FromContentType = 7 AND ToContentType = 6) OR
                 (RelationType = 11 AND FromContentType = 4 AND ToContentType = 9) OR
                 (RelationType = 12 AND FromContentType = 8 AND ToContentType IN (1,2,3,4,5,6,7,9)) OR
-                (RelationType = 13 AND FromContentType = 2 AND ToContentType = 3)
+                (RelationType = 13 AND FromContentType = 2 AND ToContentType = 3) OR
+                (RelationType = 14 AND FromContentType = 3 AND ToContentType = 3)
                 """);
         });
 

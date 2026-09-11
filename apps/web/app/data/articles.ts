@@ -34,32 +34,23 @@ export interface ArticleCategory {
 }
 
 /** 四個分類 slug 為定案值（docs/01-sitemap.md §1、CLAUDE.md）。 */
-export const ARTICLE_CATEGORIES: ArticleCategory[] = [
-  {
-    slug: 'medical-aesthetics',
-    label: '醫美新知',
-    eyebrow: 'MEDICAL AESTHETICS',
-    description: '四季診所醫療團隊的新技術與品牌活動第一手紀錄，經醫師與編輯部共同確認後刊出。',
-  },
-  {
-    slug: 'dermatology',
-    label: '皮膚新知',
-    eyebrow: 'DERMATOLOGY',
-    description: '皮膚科臨床衛教與保養觀念整理，經醫師與編輯部共同確認內容後刊出。',
-  },
-  {
-    slug: 'media',
-    label: '媒體報導',
-    eyebrow: 'MEDIA COVERAGE',
-    description: '媒體採訪與報導彙整，經醫師與編輯部共同確認內容後刊出。',
-  },
-  {
-    slug: 'lectures',
-    label: '演講授課',
-    eyebrow: 'LECTURES',
-    description: '醫療團隊對外授課與研討會紀錄，經醫師與編輯部共同確認內容後刊出。',
-  },
-]
+// ── 資料來源：content/articles.json ＋ terms.json（docs/09 §3）───────────
+
+import { CONTENT, REL, TERM, img, relationsOf, termsOf, type ContentRecord } from './_content'
+import { eyebrowFor } from './_presentation'
+
+const toImage = (value: unknown, fallbackAlt = ''): ArticleImage => {
+  const i = img(value)
+  return { src: i?.src ?? '', alt: i?.alt || fallbackAlt, width: i?.width ?? 0, height: i?.height ?? 0 }
+}
+
+export const ARTICLE_CATEGORIES: ArticleCategory[] = termsOf(TERM.articleCategory).map((t) => ({
+  slug: t.slug as ArticleCategorySlug,
+  label: t.title,
+  // 英文小標由設計稿決定（見 _presentation.ts）。
+  eyebrow: eyebrowFor(t.slug as string),
+  description: t.summary ?? '',
+}))
 
 export function getArticleCategory(slug: string): ArticleCategory | undefined {
   return ARTICLE_CATEGORIES.find((c) => c.slug === slug)
@@ -96,16 +87,6 @@ export interface ArticleTagRef {
 }
 
 /** 側欄「熱門標籤」（mockup/06-blog-list.html）。 */
-export const POPULAR_TAGS: ArticleTagRef[] = [
-  { slug: 'botox', label: '肉毒桿菌' },
-  { slug: 'hyaluronic-acid', label: '玻尿酸' },
-  { slug: 'thermage', label: '電波拉提' },
-  { slug: 'picosecond-laser', label: '皮秒雷射' },
-  { slug: 'phototherapy', label: '光療美顏' },
-  { slug: 'aftercare', label: '術後保養' },
-  { slug: 'anti-aging-topic', label: '抗老緊緻' },
-  { slug: 'brand-event', label: '品牌活動' },
-]
 
 export function getTagLabel(slug: string): string {
   return POPULAR_TAGS.find((t) => t.slug === slug)?.label ?? slug
@@ -168,265 +149,78 @@ export interface Article {
   authorBio?: string
 }
 
-export const ARTICLES: Article[] = [
-  {
-    slug: 'eye-area-sculpting',
-    title: '素顏也不怕！眼周精雕打造晶亮美眸',
-    categorySlug: 'medical-aesthetics',
-    featured: true,
-    tags: [
-      { slug: 'eye-area', label: '眼周' },
-      { slug: 'fine-lines', label: '細紋' },
-      { slug: 'hyaluronic-acid', label: '玻尿酸' },
-      { slug: 'botox', label: '肉毒' },
-      { slug: 'anti-aging-topic', label: '抗老' },
-    ],
-    author: AUTHORS.huang,
-    reviewer: { doctorSlug: AUTHORS.huang.doctorSlug!, name: AUTHORS.huang.name, role: AUTHORS.huang.role },
-    reviewedOn: '2026-08-05',
-    displayDate: '2026-07-28',
-    dateModified: '2026-08-05',
-    cover: {
-      src: '/assets/img/stock-facial-calm.jpg',
-      alt: '閉眼特寫，眼周保養情境示意',
-      width: 1800,
-      height: 1199,
-    },
-    summary: '從基礎保養到精緻療程，找到適合自己的眼周保養節奏。',
-    metaDescription:
-      '眼周細紋、眼袋與淚溝成因不同，本文整理眼周老化原因、常見困擾差異、可能的療程方向與術後注意事項，由黃勇學醫師審閱。',
-    aiSummary:
-      '眼周是全臉皮膚最薄、最早顯現老化徵兆的區域。從細紋、眼袋到淚溝，成因各不相同，這篇文章整理基礎保養重點與可能的療程方向，幫助讀者在諮詢醫師前先建立正確認識。',
-    readingMinutes: 6,
-    relatedConcerns: [
-      { slug: 'anti-aging', label: '抗老・緊緻' },
-      { slug: 'acne', label: '痘痘・粉刺' },
-    ],
-    relatedTreatments: [
-      {
-        slug: 'picosure-pro',
-        categorySlug: 'laser',
-        categoryLabel: '光療美顏',
-        name: 'Picosure® Pro 鉑金版蜂巢皮秒雷射',
-        image: { src: '/assets/img/product-p01.png', alt: 'Picosure Pro 鉑金版蜂巢皮秒雷射機台', width: 550, height: 550 },
-      },
-      {
-        slug: 'xeomin',
-        categorySlug: 'microneedle',
-        categoryLabel: '微針美容',
-        name: 'Xeomin 新一代天使肉毒',
-        image: { src: '/assets/img/product-p05.png', alt: 'Xeomin 新一代天使肉毒產品', width: 550, height: 550 },
-      },
-      {
-        slug: 'restylane',
-        categorySlug: 'microneedle',
-        categoryLabel: '微針美容',
-        name: 'Restylane 瑞絲朗／彈麗玻',
-        image: { src: '/assets/img/product-p04.png', alt: 'Restylane 瑞絲朗／彈麗玻產品', width: 550, height: 550 },
-      },
-    ],
-    authorBio: '長期投入皮膚科臨床與雷射光電治療，擅長依個人膚況規劃保養與療程方向，強調自然協調而非單一標準樣貌。',
-    body: [
-      {
-        type: 'lead',
-        text: '眼周皮膚厚度只有臉頰的三分之一，油脂分泌少、微血管與淋巴循環也相對脆弱，是全臉最早出現細紋、暗沉與鬆弛徵兆的區域。這篇文章整理眼周老化的成因、常見困擾的差異，以及可能的保養與療程方向，幫助讀者在諮詢醫師前先建立基礎認識。',
-      },
-      { type: 'heading', level: 2, id: 'why-ages-faster', text: '眼周為什麼比其他部位更快顯老？' },
-      { type: 'paragraph', text: '眼周皮膚平均厚度約0.5毫米，只有臉頰皮膚的三分之一左右，皮下脂肪與膠原蛋白含量也偏低，因此對外界刺激與地心引力的抵抗力較弱。' },
-      { type: 'paragraph', text: '眼周周圍幾乎沒有皮脂腺，天然皮脂膜的保護與保濕能力有限，水分容易散失，久而久之角質層變得乾燥，細紋也更容易顯現。' },
-      { type: 'paragraph', text: '眨眼動作平均一天超過一萬次，眼輪匝肌反覆收縮牽動皮膚，長期下來容易在眼尾與下眼瞼形成動態紋，若合併日曬與作息不規律，老化徵兆通常會提早出現。' },
-      {
-        type: 'figure',
-        wide: true,
-        image: { src: '/assets/img/stock-clinical-hands.jpg', alt: '戴手套進行臉部保養操作，情境示意', width: 1800, height: 1197 },
-        caption: '無論選擇哪一種療程，實際做法都需要經醫師評估後執行。',
-      },
-      { type: 'heading', level: 2, id: 'types-different', text: '眼周細紋、眼袋、淚溝有什麼不同？' },
-      { type: 'paragraph', text: '眼周常見的困擾其實成因各不相同，混為一談容易讓保養或療程規劃失焦。下表整理三種常見困擾的主要成因與可能對應方向，實際狀況仍需經醫師面診評估。' },
-      {
-        type: 'table',
-        headers: ['困擾類型', '常見成因', '可能對應方向'],
-        rows: [
-          ['細紋', '皮膚乾燥、表情肌反覆收縮、膠原蛋白流失', '加強保濕防曬，可與醫師討論居家保養或光電相關療程'],
-          ['眼袋', '眼周脂肪膨出，或皮膚鬆弛下垂', '依成因不同，建議與醫師討論適合的處理方向'],
-          ['淚溝', '眼眶下緣骨骼與軟組織凹陷、皮下脂肪流失', '可與醫師討論填充相關療程，實際適用需經評估'],
-        ],
-      },
-      { type: 'heading', level: 3, text: '靜態紋與動態紋有何不同？' },
-      { type: 'paragraph', text: '動態紋是做表情時才出現的紋路，例如微笑時眼尾浮現的細紋，通常在放鬆後會逐漸淡化；靜態紋則是即使臉部放鬆也持續存在的紋路，多半與皮膚彈性流失有關，兩者在保養與療程規劃的優先順序上會有所不同。' },
-      { type: 'heading', level: 2, id: 'treatment-options', text: '眼周可以做哪些療程？' },
-      { type: 'paragraph', text: '眼周療程選項相當多元，從居家保養到門診光電、微整形都有對應做法，實際適合的組合需由醫師依個人膚況、困擾類型與生活型態綜合評估後規劃，下列僅為常見方向的概略整理。' },
-      { type: 'heading', level: 3, text: '光電與微整形類' },
-      {
-        type: 'list',
-        ordered: false,
-        items: [
-          '皮秒雷射：常見於細紋與膚質相關的討論方向，實際效果與所需次數依個人膚況而異',
-          '電波拉皮：訴求緊緻與支撐力，常見於眼周鬆弛的討論方向',
-          '玻尿酸填充：可與醫師討論用於淚溝凹陷的支撐',
-          '肉毒桿菌素：常用於討論動態紋的處理方向',
-        ],
-      },
-      { type: 'heading', level: 3, text: '居家與日常保養類' },
-      {
-        type: 'list',
-        ordered: true,
-        items: [
-          '選用質地溫和、經測試不易刺激眼周的保養品',
-          '白天確實使用防曬，降低光老化對眼周的影響',
-          '避免用力搓揉或拉扯眼周皮膚',
-          '維持規律作息，減少熬夜造成的循環不佳與浮腫',
-        ],
-      },
-      { type: 'heading', level: 2, id: 'aftercare', text: '眼周療程術後要注意什麼？' },
-      { type: 'paragraph', text: '無論選擇哪一種療程，術後照護都會直接影響恢復狀況與皮膚穩定度。以下整理幾個常見的注意方向，實際照護建議仍以醫師當次診斷與衛教說明為準。' },
-      {
-        type: 'list',
-        ordered: true,
-        items: [
-          '依醫師指示做好防曬，避免直接曝曬眼周',
-          '保持治療部位清潔，避免用手直接觸碰或搓揉',
-          '若有輕微紅腫或不適，可與診所確認是否為正常反應',
-          '按照回診時間追蹤恢復狀況，讓醫師評估後續保養方向',
-        ],
-      },
-      {
-        type: 'note',
-        variant: 'info',
-        text: '眼周皮膚較薄，術後保養請務必依醫師指示執行；若出現持續不適或異常反應，請儘速回診諮詢，勿自行停藥或另行處置。',
-      },
-      { type: 'heading', level: 2, id: 'who-should-avoid', text: '什麼情況不適合做眼周療程？' },
-      { type: 'paragraph', text: '並非所有人在任何時間點都適合進行眼周療程，以下幾種情況建議先與醫師充分討論，由醫師評估是否適合、或是否需要調整時機與做法。' },
-      {
-        type: 'list',
-        ordered: false,
-        items: [
-          '眼周皮膚有發炎、感染或傷口尚未癒合',
-          '懷孕或哺乳期間，部分療程需暫緩',
-          '有特定慢性病史或凝血功能相關疾病，尚未告知醫師',
-          '近期眼周曾接受手術，仍在恢復期內',
-        ],
-      },
-      {
-        type: 'note',
-        variant: 'warn',
-        text: '以上僅為常見注意情況的概略整理，並非完整禁忌清單。是否適合進行療程，仍需由醫師親自問診、評估病史與現況後判斷，請勿自行判斷是否適用。',
-      },
-    ],
-  },
-  {
-    slug: 'xeomin-angel-botox',
-    title: 'Xeomin 德國天使肉毒｜美得純淨無瑕，更精準、更快速、更安全',
-    categorySlug: 'medical-aesthetics',
-    tags: [{ slug: 'botox', label: '肉毒桿菌' }],
-    author: AUTHORS.linYuanfu,
-    displayDate: '2026-08-03',
-    cover: { src: '/assets/img/index-p02.jpg', alt: 'Xeomin德國天使肉毒文章封面', width: 480, height: 300 },
-    summary: '認識新一代肉毒桿菌素的作用原理與臨床施打觀察重點。',
-    readingMinutes: 5,
-  },
-  {
-    slug: 'profhilo-taiwan-launch',
-    title: '全球熱銷超過 90 國 PROFHILO 逆時針．正式進駐四季診所',
-    categorySlug: 'medical-aesthetics',
-    tags: [{ slug: 'hyaluronic-acid', label: '玻尿酸' }, { slug: 'brand-event', label: '品牌活動' }],
-    author: AUTHORS.chung,
-    displayDate: '2026-07-22',
-    cover: { src: '/assets/img/banner2.jpg', alt: 'PROFHILO逆時針進駐四季診所文章封面', width: 480, height: 300 },
-    summary: '認識具生物再生特性的複合型玻尿酸如何應用於臨床評估。',
-    readingMinutes: 4,
-  },
-  {
-    slug: 'ultherapy-prime-seoul',
-    title: 'Ultherapy PRIME 韓國首爾上市記者會',
-    categorySlug: 'medical-aesthetics',
-    tags: [{ slug: 'brand-event', label: '品牌活動' }],
-    author: AUTHORS.hung,
-    displayDate: '2026-07-09',
-    cover: { src: '/assets/img/index-p04.jpg', alt: 'Ultherapy PRIME韓國首爾記者會文章封面', width: 480, height: 300 },
-    summary: '四季診所受邀出席海外品牌發表活動，掌握第一手技術資訊。',
-    readingMinutes: 3,
-  },
-  {
-    slug: 'ultraclear-launch-event',
-    title: 'UltraClear 上市發表會｜堅持追求醫美新科技',
-    categorySlug: 'medical-aesthetics',
-    tags: [{ slug: 'brand-event', label: '品牌活動' }, { slug: 'phototherapy', label: '光療美顏' }],
-    author: AUTHORS.chao,
-    displayDate: '2026-06-28',
-    cover: { src: '/assets/img/stock-stones.jpg', alt: '黑白疊石，水墨感意象', width: 1800, height: 1199 },
-    summary: '記錄新科技發表活動的機台原理與臨床應用重點。',
-    readingMinutes: 3,
-  },
-  {
-    slug: 'post-laser-recovery-habits',
-    title: '雷射術後修復期：三個你該放進日常保養的習慣',
-    categorySlug: 'medical-aesthetics',
-    tags: [{ slug: 'aftercare', label: '術後保養' }, { slug: 'picosecond-laser', label: '皮秒雷射' }],
-    author: AUTHORS.yangLanyi,
-    displayDate: '2026-06-14',
-    cover: { src: '/assets/img/product-p01.png', alt: '雷射術後修復保養文章封面', width: 550, height: 550 },
-    summary: '整理術後肌膚在修復期間需要留意的保養細節。',
-    readingMinutes: 4,
-  },
-  {
-    slug: 'hyaluronic-acid-faq',
-    title: '玻尿酸填充常見疑問：醫師來解答',
-    categorySlug: 'medical-aesthetics',
-    tags: [{ slug: 'hyaluronic-acid', label: '玻尿酸' }],
-    author: AUTHORS.linYuanfu,
-    displayDate: '2026-05-30',
-    cover: { src: '/assets/img/product-p05.png', alt: '玻尿酸填充常見疑問文章封面', width: 580, height: 580 },
-    summary: '整理求美者在諮詢時最常提出的問題與醫師解答。',
-    readingMinutes: 5,
-  },
-  {
-    slug: 'thermage-mechanism',
-    title: '電波拉提原理解析：熱能如何作用於真皮層',
-    categorySlug: 'medical-aesthetics',
-    tags: [{ slug: 'thermage', label: '電波拉提' }],
-    author: AUTHORS.chung,
-    displayDate: '2026-05-18',
-    cover: { src: '/assets/img/product-p13.png', alt: '電波拉提原理解析文章封面', width: 550, height: 550 },
-    summary: '說明電波類療程在臨床上的作用層次與應用邏輯。',
-    readingMinutes: 6,
-  },
-  {
-    slug: 'picosecond-vs-toning-laser',
-    title: '淨膚雷射與皮秒雷射，差別在哪裡？',
-    categorySlug: 'medical-aesthetics',
-    tags: [{ slug: 'picosecond-laser', label: '皮秒雷射' }],
-    author: AUTHORS.hung,
-    displayDate: '2026-05-05',
-    cover: { src: '/assets/img/product-p16.png', alt: '淨膚雷射與皮秒雷射比較文章封面', width: 550, height: 550 },
-    summary: '整理兩種雷射適用的膚況差異與評估方式。',
-    readingMinutes: 4,
-  },
-  {
-    slug: 'botox-injection-areas',
-    title: '肉毒桿菌施打部位解析：不只除皺這麼簡單',
-    categorySlug: 'medical-aesthetics',
-    tags: [{ slug: 'botox', label: '肉毒桿菌' }],
-    author: AUTHORS.chao,
-    displayDate: '2026-04-21',
-    cover: { src: '/assets/img/product-p22.png', alt: '肉毒桿菌施打部位解析文章封面', width: 550, height: 550 },
-    summary: '說明肉毒桿菌素在不同部位的應用邏輯。',
-    readingMinutes: 4,
-  },
-  {
-    slug: 'consultation-prep-tips',
-    title: '醫美諮詢前的準備：如何與醫師溝通你的期待',
-    categorySlug: 'medical-aesthetics',
-    tags: [{ slug: 'anti-aging-topic', label: '抗老緊緻' }],
-    author: AUTHORS.yangLanyi,
-    displayDate: '2026-04-08',
-    cover: { src: '/assets/img/stock-camellia.jpg', alt: '白山茶花特寫，季節感意象', width: 1800, height: 1199 },
-    summary: '整理諮詢前可以先準備的肌膚紀錄與需求描述。',
-    readingMinutes: 3,
-  },
-]
+export const POPULAR_TAGS: ArticleTagRef[] = termsOf(TERM.articleTag).map((t) => ({
+  slug: t.slug as string,
+  label: t.title,
+}))
 
-/** 側欄「熱門療程」（mockup/06-blog-list.html）。slug／分類對照 docs/01-sitemap.md §1 的定案清單。 */
+/** 署名：醫師帶「醫師」，非醫師（藝術總監）不帶。 */
+const doctorByline = (d: ContentRecord): string => (d.fields.isPhysician ? `${d.title} 醫師` : d.title)
+
+const termTitle = (id: unknown): string => CONTENT.terms.find((t) => t.id === id)?.title ?? ''
+const termSlug = (id: unknown): string => CONTENT.terms.find((t) => t.id === id)?.slug ?? ''
+
+function toArticle(record: ContentRecord): Article {
+  const f = record.fields
+  const authorDoctor = CONTENT.doctors.find((d) => d.id === f.authorDoctorId)
+  const reviewerDoctor = CONTENT.doctors.find((d) => d.id === f.reviewerDoctorId)
+
+  return {
+    slug: record.slug as string,
+    title: record.title,
+    categorySlug: termSlug(f.categoryTermId) as ArticleCategorySlug,
+    tags: relationsOf(record, REL.articleToTag).map((r) => ({
+      slug: r.toSlug as string,
+      label: r.toTitle as string,
+    })),
+    author: authorDoctor
+      ? {
+          doctorSlug: authorDoctor.slug as string,
+          // ⚠️ 署名要帶「醫師」——資料庫存的是姓名（ContentItems.Title），
+          //    是不是醫師由 IsPhysician 決定（14 位裡有 1 位是藝術總監，CLAUDE.md）。
+          name: doctorByline(authorDoctor),
+          role: (authorDoctor.fields.jobTitle as string) ?? undefined,
+          avatarSrc: img(authorDoctor.fields.photo)?.src,
+        }
+      : { doctorSlug: null, name: (f.authorName as string) ?? '' },
+    reviewer: reviewerDoctor
+      ? {
+          doctorSlug: reviewerDoctor.slug as string,
+          name: doctorByline(reviewerDoctor),
+          role: (reviewerDoctor.fields.jobTitle as string) ?? undefined,
+        }
+      : undefined,
+    reviewedOn: (f.reviewedOn as string) ?? undefined,
+    // 🔴 DisplayDate ≠ PublishAt（CLAUDE.md 關鍵數字）：前者是對外顯示與 datePublished 的來源。
+    displayDate: String(f.displayDate ?? '').slice(0, 10),
+    dateModified: record.updatedAt.slice(0, 10),
+    cover: toImage(f.cover, record.title),
+    summary: record.summary ?? '',
+    metaDescription: (record.seo?.metaDescription as string) ?? undefined,
+    aiSummary: (record.seo?.aiSummary as string) ?? undefined,
+    readingMinutes: (f.readingMinutes as number) ?? 0,
+    body: f.bodyBlocks ? (JSON.parse(f.bodyBlocks as string) as ArticleBodyBlock[]) : undefined,
+    relatedTreatments: CONTENT.treatments
+      .filter((t) => t.relations.some((r) => r.relationType === REL.treatmentToArticle && r.toSlug === record.slug))
+      .map((t) => ({
+        slug: t.slug as string,
+        categorySlug: termSlug(t.fields.categoryTermId),
+        categoryLabel: termTitle(t.fields.categoryTermId),
+        name: t.title,
+        image: toImage(t.fields.cover, t.title),
+      })),
+    relatedConcerns: CONTENT.concerns
+      .filter((c) => c.relations.some((r) => r.relationType === REL.concernToArticle && r.toSlug === record.slug))
+      .map((c) => ({ slug: c.slug as string, label: c.title })),
+    authorBio: authorDoctor?.summary ?? undefined,
+  }
+}
+
+export const ARTICLES: Article[] = CONTENT.articles
+  .slice()
+  .sort((a, b) => String(b.fields.displayDate ?? '').localeCompare(String(a.fields.displayDate ?? '')))
+  .map(toArticle)
+
 export const POPULAR_TREATMENTS_FOR_BLOG: RelatedTreatmentRef[] = [
   {
     slug: 'picosure-pro',
