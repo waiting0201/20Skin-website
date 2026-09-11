@@ -40,7 +40,7 @@ public sealed class ExceptionMiddleware(ILogger<ExceptionMiddleware> logger) : I
             logger.LogWarning("業務例外 {Code}：{Message}", ex.Code, ex.Message);
             await WriteAsync(context, ex.StatusCode, ApiResponse.Fail(ex.Code, ex.Message));
         }
-        catch (SqlException ex) when (ex.Number is SqlUniqueIndexViolation or SqlUniqueConstraintViolation)
+        catch (Exception ex) when (SqlErrorNumber(ex) is SqlUniqueIndexViolation or SqlUniqueConstraintViolation)
         {
             // UrlPath 的 filtered unique index 是全站網址唯一性的最後防線（docs/08 §B-1）。
             // 撞到時要回得出「這個網址已被使用」，不是一句系統錯誤。
@@ -48,7 +48,7 @@ public sealed class ExceptionMiddleware(ILogger<ExceptionMiddleware> logger) : I
             await WriteAsync(context, 409, ApiResponse.Fail(
                 ErrorCodes.ConflictDuplicate, "這個值已經有人用了（可能是網址、slug 或帳號重複）。"));
         }
-        catch (SqlException ex) when (ex.Number == SqlForeignKeyViolation)
+        catch (Exception ex) when (SqlErrorNumber(ex) == SqlForeignKeyViolation)
         {
             logger.LogWarning(ex, "外鍵違反");
             await WriteAsync(context, 409, ApiResponse.Fail(
@@ -62,6 +62,22 @@ public sealed class ExceptionMiddleware(ILogger<ExceptionMiddleware> logger) : I
                 ErrorCodes.Internal, "系統發生未預期的錯誤，請稍後再試。"));
         }
     }
+
+    /// <summary>
+    /// 取出這個例外（或它的內層例外）帶的 SQL 錯誤碼。
+    /// <para>
+    /// 🔴 <b>不能只看最外層。</b> EF Core 會把 <see cref="SqlException"/> 包進
+    /// <c>DbUpdateException</c>，所以「只 catch SqlException」的寫法對**所有經由 EF 的寫入
+    /// 完全不生效** —— 約束違反會一路變成 500「系統發生未預期的錯誤」，而使用者其實只是
+    /// 存了一筆重複的關聯。2026-09-11 匯入內容時實際踩到（PUT relations 撞 2601 回 500）。
+    /// </para>
+    /// </summary>
+    private static int? SqlErrorNumber(Exception ex) => ex switch
+    {
+        SqlException sql => sql.Number,
+        { InnerException: { } inner } => SqlErrorNumber(inner),
+        _ => null,
+    };
 
     private static async Task WriteAsync<T>(FunctionContext context, int statusCode, ApiResponse<T> body)
     {

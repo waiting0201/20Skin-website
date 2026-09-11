@@ -41,6 +41,16 @@ public sealed class Treatment : ContentItem
     public string? DeviceInfo { get; set; }
 
     /// <summary>
+    /// 細節頁的規格數據列（區塊 JSON 的 label／value 陣列）：療程時間、恢復期、麻醉方式、建議次數…
+    /// <para>
+    /// ⚠️ 與 <see cref="DurationText"/>／<see cref="SessionsText"/> 重疊是刻意的：那兩欄是
+    /// 列表與結構化資料要單獨取用的值，這一欄是細節頁照順序整列渲染的完整清單。
+    /// 只留其一的話，不是列表拿不到值，就是細節頁少掉「恢復期」「麻醉方式」這些沒有專屬欄位的項目。
+    /// </para>
+    /// </summary>
+    public string? Facts { get; set; }
+
+    /// <summary>
     /// 療程流程（區塊 JSON）。
     /// ⚠️ 與 <see cref="Mechanism"/> 分開是刻意的：「原理」講的是為什麼有效，
     /// 「流程」講的是當天會發生什麼事，兩者在細節頁是兩個區塊，併成一格會讓後台編輯看到兩件事混在一起。
@@ -154,6 +164,15 @@ public sealed class Concern : ContentItem
 
     /// <summary>何時該就醫。</summary>
     public string? WhenToSeeDoctor { get; set; }
+
+    /// <summary>
+    /// 「建議療程」與「諮詢醫師」兩個區段的引言與註記（區塊 JSON）。
+    /// <para>
+    /// ⚠️ 這兩個區段的內容來自 <c>ContentRelations</c>，但區段本身的引言文字不屬於任何一筆關聯
+    /// （<c>ContentRelations.Note</c> 是逐筆的推薦理由，不是整段的引言），所以需要自己的欄位。
+    /// </para>
+    /// </summary>
+    public string? RecommendationIntro { get; set; }
 
     public UploadedImage? Cover { get; set; }
 }

@@ -93,7 +93,12 @@ export class ApiClient {
    * 所以每一次都要確認狀態，不是只在新建時發布。
    */
   async ensurePublished(unit, item) {
-    if (item.status === 3) return item
+    // 🔴 **「已發布」不等於「有快照」。** 種子資料用 HasData 直接把 Status 設成 3，
+    //    但沒有（也沒辦法）產生 ContentVersions —— 13 個分類與 11 個系統頁因此是
+    //    「已發布、PublishedVersionId 為 NULL」。而建置期匯出讀的是已核准的快照
+    //    （docs/09 §3），所以那些頁面會**憑空從網站上消失**：/faq/、/clinics/、/search/、
+    //    /404 與全部分類頁。2026-09-11 匯入內容時發現。
+    if (item.status === 3 && item.publishedVersionId) return item
     return this.publish(unit, item.id)
   }
 

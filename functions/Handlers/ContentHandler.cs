@@ -1338,6 +1338,7 @@ public sealed class ContentHandler(
         ["aftercare"] = t.Aftercare,
         ["contraindications"] = t.Contraindications,
         ["deviceInfo"] = t.DeviceInfo,
+        ["facts"] = t.Facts,
         ["steps"] = t.Steps,
         ["cover"] = ImageFields(t.Cover),
         ["images"] = t.Images.OrderBy(i => i.SortOrder).Select(i => new Dictionary<string, object?>
@@ -1362,6 +1363,7 @@ public sealed class ContentHandler(
         if (f.TryGetProperty("aftercare", out _)) t.Aftercare = JStr(f, "aftercare");
         if (f.TryGetProperty("contraindications", out _)) t.Contraindications = JStr(f, "contraindications");
         if (f.TryGetProperty("deviceInfo", out _)) t.DeviceInfo = JStr(f, "deviceInfo");
+        if (f.TryGetProperty("facts", out _)) t.Facts = JStr(f, "facts");
         if (f.TryGetProperty("steps", out _)) t.Steps = JStr(f, "steps");
         if (f.TryGetProperty("cover", out _)) t.Cover = JImage(f, "cover");
 
@@ -1476,6 +1478,7 @@ public sealed class ContentHandler(
         ["causes"] = c.Causes,
         ["selfCheckGuide"] = c.SelfCheckGuide,
         ["whenToSeeDoctor"] = c.WhenToSeeDoctor,
+        ["recommendationIntro"] = c.RecommendationIntro,
         ["cover"] = ImageFields(c.Cover),
     };
 
@@ -1485,6 +1488,7 @@ public sealed class ContentHandler(
         if (f.TryGetProperty("causes", out _)) c.Causes = JStr(f, "causes");
         if (f.TryGetProperty("selfCheckGuide", out _)) c.SelfCheckGuide = JStr(f, "selfCheckGuide");
         if (f.TryGetProperty("whenToSeeDoctor", out _)) c.WhenToSeeDoctor = JStr(f, "whenToSeeDoctor");
+        if (f.TryGetProperty("recommendationIntro", out _)) c.RecommendationIntro = JStr(f, "recommendationIntro");
         if (f.TryGetProperty("cover", out _)) c.Cover = JImage(f, "cover");
     }
 
