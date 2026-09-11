@@ -349,6 +349,11 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
    ⚠️ `tools/deploy-swa.sh` **不含這個 App**，那支只管 SWA 的前台／後台／`/api/fallback`；
    獨立 Function App 不隨內容重建（CLAUDE.md 決策 7）
 2. `tools/deploy-swa.sh` 重新部署前台與 `apps/admin` 產物（媒體庫畫面已拿掉）
+   🔴 **這一步同時修掉一個正式環境上的既有故障**：`staticwebapp.config.json` 的
+   `/admin/*` rewrite 把 `/admin/static/*.js` 也改寫成 `index.html`，
+   **後台在正式環境上是白畫面**（2026-09-11 實測：`/admin/` 與它的 JS 回同一份 740 bytes）。
+   已補一條 `/admin/static/*` 排在它前面，但**要重新部署才會生效**。
+   與這輪的媒體庫改動無關，來自 `7d6e65b` 的 workspace 重構。
 
 **三組 SQL 身分**（docs/08 §J-3）：
 

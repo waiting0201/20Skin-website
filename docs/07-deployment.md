@@ -110,6 +110,10 @@
 
 **代價**：Managed Functions 是 Consumption 方案、沒有預熱，每個未命中的請求會吃一次冷啟動（數秒）。遷移期爬蟲會密集打舊網址，這段期間的 301 回應會偏慢。Google 容忍這個延遲，且流量會隨時間衰減，但要有心理準備。
 
+🔴 **`routes` 的順序決定後台開不開得起來。** SWA 是「先比對 `routes`、後找檔案」，所以 `/admin/*` 那條 SPA rewrite 會把 `/admin/static/index-*.js` 也改寫成 `index.html` —— 瀏覽器拿到 `text/html` 當 module 解析，後台是一片白畫面，而且**前台完全正常**，不會有任何錯誤訊息提醒你。`/admin/static/*` 必須排在它前面。2026-09-11 在正式環境實際踩到（`/admin/` 與它的 JS 回的是同一份 740 bytes）。
+
+⚠️ 設定檔是純 JSON，且 SWA 會驗 schema —— **不要加 `_comment` 這類自訂欄位**，說明寫在這裡或 `tools/deploy-swa.sh` 的檔頭。
+
 > **這支 Function 不能搬到 `api.20skin.tw`。** `navigationFallback` 只支援 rewrite 到站內路徑，指不到外部網址；SWA 也沒有「轉發到外部 API」的機制（那需要 Standard 的 linked backend，見 §1）。所以 SWA 的 `api/` 資料夾會**只留這一支** function，其餘全部在獨立 Function App。
 >
 > 連帶結果：SWA 端仍需要一組 **SQL 唯讀連線字串**來查 301 對照表，這是 SWA 上唯一剩下的明文密鑰（§6）。

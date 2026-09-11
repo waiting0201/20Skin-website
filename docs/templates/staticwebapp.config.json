@@ -18,6 +18,13 @@
   },
   "routes": [
     {
+      "route": "/admin/static/*",
+      "headers": {
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "X-Robots-Tag": "noindex, nofollow"
+      }
+    },
+    {
       "route": "/admin/*",
       "rewrite": "/admin/index.html",
       "headers": {

@@ -27,7 +27,14 @@
 #     所以 404 版面只能由那支 function 自己送。它讀的是產物根目錄的 404.html。
 #     ⚠️ 這代表**改了 404 頁的版面要重新部署 API**，不是只重新部署前台。
 #
-#  4. **api/ 是 net9.0，不是 net10.0。**
+#  4. **staticwebapp.config.json 的 routes 順序決定後台開不開得起來。**
+#     SWA 是「先比對 routes、後找檔案」——/admin/* 那條 rewrite 會連
+#     /admin/static/index-*.js 一起改寫成 index.html，瀏覽器拿到 text/html
+#     當 module 解析，後台變白畫面。所以 /admin/static/* 必須排在它前面。
+#     2026-09-11 在正式環境實際踩到（部署後 /admin/ 與它的 JS 回的是同一份 740 bytes）。
+#     ⚠️ 設定檔是純 JSON 且 SWA 會驗 schema，**不要加 _comment 這類自訂欄位**。
+#
+#  5. **api/ 是 net9.0，不是 net10.0。**
 #     SWA 的 apiRuntime 上限就是 dotnet-isolated:9.0（docs/07 §1）。
 #     functions/ 那個獨立 Function App 才是 net10.0，兩者不要混。
 #     那個 App 不由這支腳本部署——它不隨內容重建（CLAUDE.md 決策 7）。
