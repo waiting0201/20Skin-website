@@ -95,6 +95,32 @@ async function ensureTerm(type, slug, title) {
     // ⚠️ 標籤預設 IncludeInSitemap=0 ＋ NoIndex=1（docs/08 §C-9），由 API 依 termType 處理，這裡不覆寫。
     ids.term.set(termKey(TERM_TYPE.articleTag, tag.slug), await ensureTerm(TERM_TYPE.articleTag, tag.slug, tag.label))
   }
+  // 療程分類的導言與代表圖：種子只建了名稱與路徑，內容在前台資料裡。
+  for (const c of data.treatments.treatmentCategories) {
+    const id = ids.term.get(termKey(TERM_TYPE.treatmentCategory, c.slug))
+      ?? termIndex.get(termKey(TERM_TYPE.treatmentCategory, c.slug))?.id
+    if (!id) continue
+    await api.put(`/admin/term/${id}`, {
+      summary: c.lede ?? null,
+      intro: blocks(c.lede ? { lede: c.lede } : null),
+      cover: c.image ? imageField(`term/${c.slug}/cover`, c.image.src, {
+        alt: c.image.alt, width: c.image.width, height: c.image.height,
+      }) : null,
+    })
+    enqueuePublish('term', id)
+  }
+
+  // 文章分類的導言。
+  for (const c of data.articles.ARTICLE_CATEGORIES) {
+    const id = termIndex.get(termKey(TERM_TYPE.articleCategory, c.slug))?.id
+    if (!id) continue
+    await api.put(`/admin/term/${id}`, {
+      summary: c.description ?? null,
+      intro: blocks(c.description ? { lede: c.description } : null),
+    })
+    enqueuePublish('term', id)
+  }
+
   // 既有的分類也要確認是已發布狀態（種子建的是草稿還是發布，不該用猜的）。
   for (const [key, item] of [...termIndex]) {
     if (item.status !== 3) await api.ensurePublished('term', item)
@@ -159,9 +185,8 @@ async function ensureTerm(type, slug, title) {
 }
 
 // ── 3. 療程 ──────────────────────────────────────────────────────────
-// ⚠️ 27 項中多數沒有站內內容（docs/06 §3 的 12 項需從零撰寫）。沒有內容的照樣建，
-//    但**留在草稿**：建置期匯出只讀已發布快照，草稿不會產生頁面 —— 這正是我們要的，
-//    前台現在那句「內容建置中」在正式站上根本不該存在（STATUS §二）。
+// ⚠️ 27 項中多數沒有站內內容（docs/06 §3 的 12 項需從零撰寫）。沒有內容的照樣建、照樣發布 ——
+//    理由見下方發布那一段的說明。
 {
   const existing = await api.indexBySlug('treatment')
   let created = 0, updated = 0, drafts = 0
@@ -206,12 +231,19 @@ async function ensureTerm(type, slug, title) {
       ? (updated++, await api.put(`/admin/treatment/${existing.get(t.slug).id}`, body))
       : (created++, await api.post('/admin/treatment', { slug: t.slug, ...body }))
 
-    if (hasDetail) enqueuePublish('treatment', item.id)
-    else drafts++
+    // 🔴 **無站內內容的療程照樣發布。**
+    //    docs/08 §C-1 預期「這 12 筆會長時間停在 Status=1 草稿」，那是對院方日後工作流程的
+    //    預測，不是搬遷指令。照字面留草稿的話：26 個療程頁當場消失、首頁與文章頁指向它們的
+    //    11 個連結全部斷掉、四個分類頁只剩 1 筆 —— 那不是「忠實搬遷」，是把現有的站砍掉一大塊。
+    //    療程本身（名稱、分類、所屬）是實數（CLAUDE.md：27 項為實數），缺的只是細節文案，
+    //    而細節頁本來就設計成「只渲染有資料的區塊」（mockup/04 原始碼的註記）。
+    //    ⚠️ 院方日後要把哪幾筆下架，在後台按一下即可 —— 那是他們的決定，不該由搬遷腳本代勞。
+    enqueuePublish('treatment', item.id)
+    if (!hasDetail) drafts++
     ids.treatment.set(t.slug, item.id)
   }
   report('treatment', created, updated)
-  console.log(`             （其中 ${drafts} 項無站內內容，留在草稿：不會產生頁面）`)
+  console.log(`             （其中 ${drafts} 項只有名稱與分類，細節頁只渲染有資料的區塊）`)
 }
 
 // ── 4. 困擾 ──────────────────────────────────────────────────────────

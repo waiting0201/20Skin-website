@@ -173,315 +173,120 @@ const doctorHung: RelatedDoctor = {
   photo: { src: '/assets/img/doctor-hung.jpg', alt: '洪健睿 醫師', width: 700, height: 1022 },
 }
 
-export const treatmentCategories: TreatmentCategory[] = [
-  {
-    slug: 'laser',
-    name: '光療美顏',
-    eyebrow: 'LASER',
-    lede: '以雷射與光波能量為基礎，依波長特性分別作用於色素、痘疤與膚色不均。實際儀器組合與療程間隔，需經醫師評估。',
-    image: {
-      src: '/assets/img/stock-facial-calm.jpg',
-      alt: '臉部特寫，光療與肌膚意象',
-      width: 1800,
-      height: 1199,
-    },
-    count: 4,
-    sampleTags: ['蜂巢皮秒雷射', '藍雷射', '光繞雷射', '鉺雅鉻雷射'],
-    concernTags: ['痘疤', '斑點・色素沉澱', '抗老・緊緻', '毛孔粗大', '膚色不均'],
-    doctors: [doctorHuang, doctorChung, doctorChao, doctorHung],
-    articles: [
-      {
-        title: '皮秒雷射如何作用？認識蜂巢透鏡技術原理',
-        href: '/blog/',
-        category: '醫美新知',
-        author: '黃勇學 醫師',
-        date: '2026.07.02',
-        readingMinutes: 4,
-        photo: { src: '/assets/img/index-p02.jpg', alt: '皮秒雷射原理相關文章封面', width: 480, height: 230 },
-      },
-      {
-        title: '痘疤修復的雷射選擇：淺談光療與恢復期',
-        href: '/blog/',
-        category: '醫美新知',
-        author: '鍾佩宜 醫師',
-        date: '2026.06.20',
-        readingMinutes: 5,
-        photo: { src: '/assets/img/index-p03.jpg', alt: '痘疤雷射選擇相關文章封面', width: 480, height: 230 },
-      },
-      {
-        title: '膚色不均與色素沉澱：光療保養的日常照護重點',
-        href: '/blog/',
-        category: '皮膚新知',
-        author: '趙映程 醫師',
-        date: '2026.05.11',
-        readingMinutes: 4,
-        photo: { src: '/assets/img/index-p04.jpg', alt: '膚色不均日常照護相關文章封面', width: 480, height: 230 },
-      },
-    ],
-  },
-  {
-    slug: 'photoelectric',
-    name: '光電美容',
-    eyebrow: 'PHOTOELECTRIC',
-    lede: '涵蓋電波、音波與磁波等能量式項目，訴求支撐力與緊緻度，通常需分次進行。',
-    image: {
-      src: '/assets/img/stock-clinical-hands.jpg',
-      alt: '戴手套操作能量儀器的療程情境',
-      width: 1800,
-      height: 1197,
-    },
-    count: 12,
-    sampleTags: ['鳳凰電波', '超音波拉提', 'EMFACE', '除毛雷射'],
-  },
-  {
-    slug: 'microneedle',
-    name: '微針美容',
-    eyebrow: 'MICRONEEDLE',
-    lede: '以注射方式進行，包含填充、支撐與保濕類材料，部位與劑量需經醫師評估。',
-    image: {
-      src: '/assets/img/stock-injection.jpg',
-      alt: '注射類療程的施作情境',
-      width: 1200,
-      height: 1800,
-    },
-    count: 5,
-    sampleTags: ['舒顏萃', '洢蓮絲', '玻尿酸', '肉毒'],
-  },
-  {
-    slug: 'skincare',
-    name: '醫美保養',
-    eyebrow: 'SKINCARE',
-    lede: '以清潔、導入與換膚為主，恢復期短，適合作為療程間的日常維持。',
-    image: {
-      src: '/assets/img/stock-skincare-smile.jpg',
-      alt: '白底保養情境',
-      width: 1800,
-      height: 1199,
-    },
-    count: 6,
-    sampleTags: ['海菲秀', '果酸換膚', '冷凍導入', '高壓氧艙'],
-  },
-]
+// ── 資料來源：content/treatments.json ＋ terms.json（docs/09 §3）──────────
+//
+// ⚠️ 這支檔案是「形狀轉接層」，內容在資料庫。
+//
+// ⚠️ **只有已發布的療程會出現。** 27 項裡多數沒有站內內容，在資料庫裡是草稿
+//    （docs/08 §C-1：「這 12 筆會長時間停在 Status=1」），草稿不匯出、也不產生頁面。
+//    前台原本那句「內容建置中」因此不再需要 —— 正式站不該有一個只寫著建置中的頁面。
 
-export const treatments: Treatment[] = [
-  // ── 光療美顏（laser）──────────────────────────────────────────────
-  {
-    slug: 'picosure-pro',
-    categorySlug: 'laser',
-    title: '鉑金版蜂巢皮秒雷射',
-    nameEn: 'PICOSURE® PRO',
+import {
+  CONTENT, REL, TERM, img, parseBlocks, relationsOf, termsOf, type ContentRecord,
+} from './_content'
+import { eyebrowFor } from './_presentation'
+
+const categoryOf = (record: ContentRecord): ContentRecord | undefined =>
+  CONTENT.terms.find((t) => t.id === record.fields.categoryTermId)
+
+const toImage = (value: unknown, fallbackAlt = ''): ImageRef => {
+  const i = img(value)
+  return { src: i?.src ?? '', alt: i?.alt || fallbackAlt, width: i?.width ?? 0, height: i?.height ?? 0 }
+}
+
+function toTreatment(record: ContentRecord): Treatment {
+  const f = record.fields
+  const category = categoryOf(record)
+  const indications = parseBlocks<{ heading: string | null; items: TreatmentIndication[] } | null>(f.indications, null)
+  const mechanism = parseBlocks<{ heading: string | null; paragraphs: string[]; image: unknown } | null>(f.mechanism, null)
+  const precautions = parseBlocks<{ items: string[]; note: string | null } | null>(f.contraindications, null)
+  const gallery = (f.images ?? []) as { image: unknown; caption: string | null; sortOrder: number }[]
+
+  // 「此療程可改善的困擾」是關聯（型別 2），不是一組字串欄位。
+  const concernTags = relationsOf(record, REL.treatmentToConcern).map((r) => r.toTitle as string)
+
+  return {
+    slug: record.slug as string,
+    categorySlug: category?.slug ?? '',
+    title: record.title,
+    nameEn: (f.nameEn as string) ?? '',
+    // 匯出的都是已發布的，也就是都有內容。這個旗標留著只為了不動消費端的型別。
     needsContentFromScratch: false,
-    cardExcerpt: '蜂巢透鏡導入皮秒雷射，作用於淺層色素與痘疤紋理。',
-    cardTags: ['痘疤', '斑點・色素沉澱', '膚色不均'],
-    cardImage: {
-      src: '/assets/img/product-p01.png',
-      alt: 'Picosure Pro 鉑金版蜂巢皮秒雷射機台',
-      width: 550,
-      height: 550,
-    },
-    summary:
-      '以皮秒級脈衝搭配蜂巢透鏡聚焦技術，針對色素、痘疤與毛孔問題進行調理。實際效果依個人膚況而異，須經醫師評估。',
-    facts: [
-      { label: '療程時間', value: '約 30–45 分鐘（依施打範圍而定）' },
-      { label: '恢復期', value: '約 1–3 天輕微泛紅' },
-      { label: '建議次數', value: '3–5 次為一療程，間隔 4–6 週（依個人膚況調整）' },
-      { label: '麻醉方式', value: '外用表面麻醉' },
-      { label: '適用部位', value: '全臉、頸部、手部' },
-    ],
-    indicationsHeading: '蜂巢皮秒雷射可以處理哪些問題？',
-    indications: [
-      { title: '淺層與深層色素斑', desc: '依部位與深淺調整能量與波長，經醫師評估後執行。' },
-      { title: '痘疤與凹陷型疤痕', desc: '刺激真皮膠原新生，有助於改善疤痕輪廓。' },
-      { title: '毛孔粗大', desc: '透過微創傷點刺激，有助於改善毛孔外觀。' },
-      { title: '細紋', desc: '刺激膠原增生，可改善淺層細紋質地。' },
-      { title: '膚色不均', desc: '均勻擊碎黑色素顆粒，有助於改善膚色不均問題。' },
-      { title: '刺青去除', desc: '依墨色深淺與範圍調整能量，通常需多次療程。' },
-    ],
-    mechanismHeading: '蜂巢皮秒和一般雷射差在哪裡？',
-    mechanismParagraphs: [
-      '傳統雷射多屬奈秒等級脈衝，以光熱效應為主；皮秒雷射脈衝時間更短，改以光機械效應震碎色素顆粒，對周邊組織的熱影響較低。',
-      '蜂巢透鏡將單一光束切割為數百個微光點，聚焦作用於表皮與真皮淺層，形成微創傷點刺激膠原新生，同時保留光點間的正常組織以縮短恢復期。',
-    ],
-    mechanismImage: {
-      src: '/assets/img/stock-clinical-hands.jpg',
-      alt: '戴手套進行療程操作情境',
-      width: 1800,
-      height: 1197,
-    },
-    steps: [
-      { num: 1, title: '諮詢評估', desc: '醫師依膚況、病史與生活習慣進行評估與衛教，說明可能之風險與注意事項。' },
-      { num: 2, title: '卸妝清潔', desc: '徹底移除彩妝、防曬與臉部油脂，保持治療部位清潔乾淨。' },
-      { num: 3, title: '敷麻', desc: '視部位與範圍外用表面麻醉藥膏，降低施打不適感，需留置約 20–30 分鐘。' },
-      { num: 4, title: '施打', desc: '醫師依部位調整能量與波長，施打全程監控膚況反應。' },
-      { num: 5, title: '舒緩鎮定', desc: '治療後立即進行冷敷與舒緩保養，降低泛紅與不適感。' },
-      { num: 6, title: '衛教', desc: '說明術後照護重點與回診安排，並提供書面衛教資料。' },
-    ],
-    aftercare: [
-      { when: '當天', desc: '避免碰水加溫（如三溫暖、泡湯）、避免劇烈運動與飲酒。治療部位可能出現輕微泛紅或熱脹感，屬正常反應。' },
-      { when: '3 天內', desc: '加強保濕並落實物理性防曬（帽子、洋傘），避免自行摳抓脫屑處。' },
-      { when: '一週內', desc: '持續防曬，暫停使用果酸、A 酸等刺激性保養品，避免長時間處於高溫環境。' },
-      { when: '一個月內', desc: '落實日常防曬，依醫囑安排回診追蹤；如有異常反應請盡速回診。' },
-    ],
-    precautionsList: [
-      '懷孕或哺乳中',
-      '患有光敏感性疾病，或近期服用具光敏感性之藥物',
-      '施打部位有活動性感染、發炎或傷口尚未癒合',
-      '近期有明顯日曬或曬傷',
-      '蟹足腫（瘢瘤）體質',
-      '凝血功能異常或正服用抗凝血藥物',
-    ],
-    precautionsNote: '以上僅為一般性提醒，實際是否適合治療，需由醫師親自面診評估後判定。',
-    device: [
-      { label: '原廠廠牌', value: 'Cynosure（美國）' },
-      { label: '機型', value: 'PicoSure Pro' },
-      { label: '醫療器材許可字號', value: '衛部醫器輸字第 0XXXXX 號' },
-    ],
-    gallery: [
-      {
-        src: '/assets/img/photo-facade-detail.jpg',
-        alt: '四季診所白磚立面與招牌',
-        width: 1800,
-        height: 1167,
-        caption: '四季診所．外觀',
-      },
-      {
-        src: '/assets/img/photo-street-green.jpg',
-        alt: '二林四季皮膚科周邊街景與行道樹',
-        width: 1800,
-        height: 1119,
-        caption: '二林四季皮膚科．周邊環境',
-      },
-    ],
-    doctors: [doctorHuang, doctorChung, doctorChao],
-    detailTags: ['痘疤・粉刺', '斑點・色素沉澱', '抗老・緊緻', '毛孔粗大'],
-    cases: [
-      {
-        title: '色素調理案例分享',
-        excerpt: '依個人膚況規劃療程次數與間隔，逐步改善色素分布狀況。',
-        photo: { src: '/assets/img/index-p01.jpg', alt: '色素調理案例情境示意', width: 480, height: 360 },
-      },
-      {
-        title: '痘疤修復案例分享',
-        excerpt: '搭配術後照護計畫，觀察疤痕輪廓隨療程推進的變化。',
-        photo: { src: '/assets/img/banner3.jpg', alt: '痘疤修復案例情境示意', width: 480, height: 360 },
-      },
-      {
-        title: '毛孔緊緻案例分享',
-        excerpt: '透過多次療程觀察毛孔外觀的漸進式調理過程。',
-        photo: { src: '/assets/img/banner4.jpg', alt: '毛孔緊緻案例情境示意', width: 480, height: 360 },
-      },
-    ],
-    faqLastUpdated: '2026-08',
-    faqs: [
-      { q: '皮秒雷射會痛嗎？', a: '治療前會外用表面麻醉，多數人僅感覺輕微刺痛或熱脹感，實際感受因個人痛覺閾值與施打部位而異。' },
-      { q: '術後多久可以化妝？', a: '若無傷口或明顯脫屑，通常隔日即可淡妝，實際時間需依當次治療反應與醫師建議調整。' },
-      { q: '需要請假嗎？', a: '多數人治療後可正常上班上課，僅需注意當天避免碰水加溫與劇烈運動，不一定需要請假，仍依個人恢復狀況而定。' },
-      { q: '和淨膚雷射差在哪？', a: '兩者波長與作用原理不同，皮秒雷射脈衝時間更短、以光機械效應為主；淨膚雷射則多屬奈秒等級光熱效應。實際適合的雷射類型需由醫師依膚況判斷。' },
-      { q: '一次就會有效果嗎？', a: '色素、痘疤與毛孔問題多需要多次治療累積效果，建議療程為 3–5 次、間隔 4–6 週，實際次數依個人膚況而異。' },
-      { q: '懷孕可以做嗎？', a: '懷孕或哺乳期間不建議進行本療程，詳見上方「禁忌症與注意事項」，實際仍需經醫師面診評估。' },
-    ],
-    articles: [
-      {
-        title: '素顏也不怕！眼周精雕打造晶亮美眸',
-        href: '/blog/',
-        category: '醫美新知',
-        author: '楊嵐怡 醫師',
-        date: '2026.06.12',
-        photo: { src: '/assets/img/index-p01.jpg', alt: '眼周精雕相關文章封面', width: 480, height: 230 },
-      },
-      {
-        title: '全球熱銷超過 90 國 PROFHILO 逆時針．正式進駐四季診所',
-        href: '/blog/',
-        category: '醫美新知',
-        author: '鍾佩宜 醫師',
-        date: '2026.04.15',
-        photo: { src: '/assets/img/index-p03.jpg', alt: 'PROFHILO逆時針相關文章封面', width: 480, height: 230 },
-      },
-      {
-        title: 'Ultherapy PRIME 韓國首爾上市記者會',
-        href: '/blog/',
-        category: '媒體報導',
-        author: '編輯部',
-        date: '2026.03.02',
-        photo: { src: '/assets/img/index-p04.jpg', alt: 'Ultherapy PRIME韓國首爾記者會相關文章封面', width: 480, height: 230 },
-      },
-    ],
-  },
-  {
-    slug: 'capri-blue',
-    categorySlug: 'laser',
-    title: '藍雷射',
-    nameEn: 'CAPRI',
-    needsContentFromScratch: true,
-    cardExcerpt: '455nm 藍光波段雷射，用於處理表層色素與膚質紋理。',
-    cardTags: ['斑點・色素沉澱', '膚色不均'],
-    cardImage: {
-      src: '/assets/img/product-p18.png',
-      alt: 'Capri 藍雷射儀器操作面板',
-      width: 550,
-      height: 550,
-    },
-  },
-  {
-    slug: 'helios-iii',
-    categorySlug: 'laser',
-    title: '光繞雷射',
-    nameEn: 'D.O.E HELIOS III',
-    needsContentFromScratch: true,
-    cardExcerpt: '分段式光纖雷射，訴求毛孔與膚質紋理調理。',
-    cardTags: ['毛孔粗大', '抗老・緊緻', '痘疤'],
-    cardImage: {
-      src: '/assets/img/product-p12.png',
-      alt: 'D.O.E HELIOS III 光繞雷射機台',
-      width: 550,
-      height: 550,
-    },
-  },
-  {
-    slug: 'er-yag',
-    categorySlug: 'laser',
-    title: '鉺雅鉻雷射／汽化雷射',
-    nameEn: 'ER:YAG',
-    needsContentFromScratch: false,
-    cardExcerpt: '汽化型雷射，用於淺層角質更新與局部組織處理。',
-    cardTags: ['毛孔粗大', '抗老・緊緻'],
-    cardImage: {
-      src: '/assets/img/product-p17.png',
-      alt: 'Er:YAG 鉺雅鉻雷射／汽化雷射機台',
-      width: 550,
-      height: 550,
-    },
-  },
+    cardExcerpt: record.summary ?? undefined,
+    cardTags: concernTags.length ? concernTags : undefined,
+    cardImage: f.cover ? toImage(f.cover, record.title) : undefined,
+    summary: (f.subtitle as string) ?? undefined,
+    facts: parseBlocks<TreatmentFact[]>(f.facts, []),
+    indicationsHeading: indications?.heading ?? undefined,
+    indications: indications?.items,
+    mechanismHeading: mechanism?.heading ?? undefined,
+    mechanismParagraphs: mechanism?.paragraphs,
+    mechanismImage: mechanism?.image ? toImage(mechanism.image) : undefined,
+    steps: parseBlocks<TreatmentStep[]>(f.steps, []),
+    aftercare: parseBlocks<TreatmentAftercareItem[]>(f.aftercare, []),
+    precautionsList: precautions?.items,
+    precautionsNote: precautions?.note ?? undefined,
+    device: parseBlocks<TreatmentFact[]>(f.deviceInfo, []),
+    gallery: gallery
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((g) => ({ ...toImage(g.image), caption: g.caption ?? '' })),
+    doctors: relationsOf(record, REL.treatmentToDoctor)
+      .filter((r) => r.toIsPublished)
+      .map((r) => {
+        const doctor = CONTENT.doctors.find((d) => d.slug === r.toSlug)
+        return {
+          slug: r.toSlug as string,
+          name: doctor?.title ?? (r.toTitle as string),
+          title: (doctor?.fields.jobTitle as string) ?? '',
+          photo: toImage(doctor?.fields.photo, r.toTitle ?? ''),
+        }
+      }),
+    detailTags: concernTags.length ? concernTags : undefined,
+    cases: [],
+    faqs: relationsOf(record, REL.treatmentToFaq).map((r) => {
+      const faq = CONTENT.faqs.find((x) => x.slug === r.toSlug)
+      return { q: faq?.title ?? (r.toTitle as string), a: (faq?.fields.webAnswer as string) ?? '' }
+    }),
+    articles: relationsOf(record, REL.treatmentToArticle)
+      .filter((r) => r.toIsPublished)
+      .map((r) => {
+        const a = CONTENT.articles.find((x) => x.slug === r.toSlug)
+        const cat = a ? categoryOf(a) : undefined
+        return {
+          title: a?.title ?? (r.toTitle as string),
+          href: r.toUrlPath ?? '#',
+          category: cat?.title ?? '',
+          author: '',
+          date: String(a?.fields.displayDate ?? '').slice(0, 10),
+          photo: toImage(a?.fields.cover, a?.title ?? ''),
+        }
+      }),
+  }
+}
 
-  // ── 光電美容（photoelectric）──────────────────────────────────────
-  { slug: 'emface', categorySlug: 'photoelectric', title: 'EMFACE 恰恰電波', nameEn: 'EMFACE', needsContentFromScratch: true },
-  { slug: 'dermav', categorySlug: 'photoelectric', title: 'DermaV 精靈電波', nameEn: 'DERMA V', needsContentFromScratch: false },
-  { slug: 'onda', categorySlug: 'photoelectric', title: 'ONDA 極線音波', nameEn: 'ONDA', needsContentFromScratch: true },
-  { slug: 'emsella', categorySlug: 'photoelectric', title: 'EMSELLA 幸福椅', nameEn: 'EMSELLA', needsContentFromScratch: true },
-  { slug: 'btl-embody', categorySlug: 'photoelectric', title: 'BTL Embody 磁波椅', nameEn: 'BTL EMBODY', needsContentFromScratch: false },
-  { slug: 'thermage-flx', categorySlug: 'photoelectric', title: 'Thermage FLX 鳳凰電波', nameEn: 'THERMAGE FLX', needsContentFromScratch: true },
-  { slug: 'ulthera', categorySlug: 'photoelectric', title: 'Ulthera 超音波拉提', nameEn: 'ULTHERA', needsContentFromScratch: true },
-  { slug: 'sylfirm', categorySlug: 'photoelectric', title: 'Sylfirm 矽谷電波', nameEn: 'SYLFIRM', needsContentFromScratch: false },
-  { slug: 'potenza', categorySlug: 'photoelectric', title: 'POTENZA 黃金電波', nameEn: 'POTENZA', needsContentFromScratch: true },
-  { slug: 'lightsheer-duet', categorySlug: 'photoelectric', title: 'LightSheer Duet 除毛雷射', nameEn: 'LIGHTSHEER DUET', needsContentFromScratch: false },
-  { slug: 'miradry', categorySlug: 'photoelectric', title: 'miraDry 清新微波', nameEn: 'MIRADRY', needsContentFromScratch: false },
-  { slug: 'regenera-activa', categorySlug: 'photoelectric', title: 'Regenera Activa 生髮療程', nameEn: 'REGENERA ACTIVA', needsContentFromScratch: true },
+export const treatments: Treatment[] = CONTENT.treatments
+  .slice()
+  .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+  .map(toTreatment)
 
-  // ── 微針美容（microneedle）────────────────────────────────────────
-  { slug: 'sculptra', categorySlug: 'microneedle', title: 'Sculptra 舒顏萃 4D聚左旋乳酸', nameEn: 'SCULPTRA', needsContentFromScratch: false },
-  { slug: 'radiesse', categorySlug: 'microneedle', title: 'Radiesse 洢蓮絲', nameEn: 'RADIESSE', needsContentFromScratch: false },
-  { slug: 'belotero-revive', categorySlug: 'microneedle', title: 'Belotero Revive 保濕針', nameEn: 'BELOTERO REVIVE', needsContentFromScratch: false },
-  { slug: 'restylane', categorySlug: 'microneedle', title: 'Restylane 瑞絲朗玻尿酸', nameEn: 'RESTYLANE', needsContentFromScratch: false },
-  { slug: 'xeomin', categorySlug: 'microneedle', title: 'Xeomin 德國天使肉毒', nameEn: 'XEOMIN', needsContentFromScratch: false },
-
-  // ── 醫美保養（skincare）───────────────────────────────────────────
-  { slug: 'targetcool', categorySlug: 'skincare', title: 'TargetCool 冷凍導入', nameEn: 'TARGETCOOL', needsContentFromScratch: true },
-  { slug: 'hbot', categorySlug: 'skincare', title: 'HBOT 高壓氧艙', nameEn: 'HBOT', needsContentFromScratch: false },
-  { slug: 'hydrafacial', categorySlug: 'skincare', title: 'HydraFacial 海菲秀', nameEn: 'HYDRAFACIAL', needsContentFromScratch: true },
-  { slug: 'neostrata-peel', categorySlug: 'skincare', title: 'NeoStrata 果酸換膚', nameEn: 'NEOSTRATA PEEL', needsContentFromScratch: false },
-  { slug: 'retinol-peel', categorySlug: 'skincare', title: 'A醇煥膚', nameEn: 'RETINOL PEEL', needsContentFromScratch: true },
-  { slug: 'neo-tec', categorySlug: 'skincare', title: 'Neo-Tec 妮傲絲翠保養', nameEn: 'NEO-TEC', needsContentFromScratch: false },
-]
+export const treatmentCategories: TreatmentCategory[] = termsOf(TERM.treatmentCategory).map((term) => {
+  const items = treatments.filter((t) => t.categorySlug === term.slug)
+  return {
+    slug: term.slug as string,
+    name: term.title,
+    // 英文小標由設計稿決定，不進資料庫（見 _presentation.ts）。
+    eyebrow: eyebrowFor(term.slug as string),
+    lede: term.summary ?? '',
+    image: toImage(term.fields.cover, term.title),
+    // 數量由查詢算出，不是另存一份會過期的數字。
+    count: items.length,
+    sampleTags: items.slice(0, 4).map((t) => t.title),
+    concernTags: [...new Set(items.flatMap((t) => t.cardTags ?? []))],
+    doctors: [...new Map(items.flatMap((t) => t.doctors ?? []).map((d) => [d.slug, d])).values()],
+    articles: items.flatMap((t) => t.articles ?? []).slice(0, 3),
+  }
+})
 
 export function getCategory(slug: string): TreatmentCategory | undefined {
   return treatmentCategories.find((c) => c.slug === slug)

@@ -14,6 +14,8 @@
 #      ① 圖片網址從 /assets/img/ 變成 Blob 網址 —— 內容圖本來就該存 Blob（docs/02 §4）
 #      ② 草稿內容不再被連結 —— 26 項療程沒有站內內容，在資料庫裡是草稿，
 #         正式站本來就不該產生那些頁面（STATUS §二）
+# ⚠️ 變數後面直接接全形標點時要寫 ${VAR} —— bash 會把「，」「（」當成變數名的一部分，
+#    在 set -u 底下直接變成 unbound variable。這支腳本踩過兩次。
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -33,19 +35,19 @@ case "${1:-compare}" in
   snapshot)
     rm -rf "$GOLDEN" && mkdir -p "$GOLDEN"
     (cd "$BUILD" && find . -name '*.html' -print0 | tar -cf - --null -T -) | (cd "$GOLDEN" && tar -xf -)
-    echo "已存黃金樣本：$(find "$GOLDEN" -name '*.html' | wc -l | tr -d ' ') 頁 → $GOLDEN"
+    echo "已存黃金樣本：$(find "$GOLDEN" -name '*.html' | wc -l | tr -d ' ') 頁 → ${GOLDEN}"
     ;;
   compare)
-    [ -d "$GOLDEN" ] || { echo "找不到黃金樣本 $GOLDEN，先跑 snapshot。" >&2; exit 1; }
+    [ -d "$GOLDEN" ] || { echo "找不到黃金樣本 ${GOLDEN}，先跑 snapshot。" >&2; exit 1; }
     same=0; diffs=()
     for f in $(cd "$GOLDEN" && find . -name '*.html' | sort); do
-      if [ ! -f "$BUILD/$f" ]; then diffs+=("$f（產物中不存在）"); continue; fi
+      if [ ! -f "$BUILD/$f" ]; then diffs+=("${f}（產物中不存在）"); continue; fi
       if diff -q <(norm "$GOLDEN/$f") <(norm "$BUILD/$f") >/dev/null 2>&1; then
         same=$((same + 1))
       else
         img=$(diff <(norm "$GOLDEN/$f" | tr '<' '\n<') <(norm "$BUILD/$f" | tr '<' '\n<') \
               | grep '^[<>]' | grep -cv 'blob\.core\.windows\.net\|/assets/img/' || true)
-        diffs+=("$f（非圖片差異 $img 行）")
+        diffs+=("${f}（非圖片差異 ${img} 行）")
       fi
     done
     echo "一致：$same 頁　不同：${#diffs[@]} 頁"
