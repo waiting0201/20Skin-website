@@ -19,5 +19,12 @@ mockup/
 mockup2/
 mockup3/
 
+# ── .NET ─────────────────────────────────────────────────────────────
+# 建置產物。⚠️ 漏了這幾條，functions/bin 會塞進 6.5 MB 的 Roslyn DLL，
+# 而 tools/sync-public.sh 的單檔 2 MB 斷言會擋下推送（2026-09-11 實際踩到）。
+[Bb]in/
+[Oo]bj/
+functions/local.settings.json
+
 # ── frontend ─────────────────────────────────────────────────────────
 # 其餘規則在 frontend/.gitignore（.nuxt／.output／public/assets 等產物）

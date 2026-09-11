@@ -33,7 +33,7 @@
 | `Dapper` | 讀取 | §6 |
 | `Azure.Identity` ＋ `Azure.Storage.Blobs` | Managed Identity、SAS 簽發 | §9 |
 | `Microsoft.ApplicationInsights.WorkerService` | 遙測 | **2.x。3.x 在 isolated worker 會 `TypeLoadException`** |
-| BCrypt | 密碼雜湊 | §5.1 |
+| `Microsoft.Extensions.Identity.Core` | 密碼雜湊（`PasswordHasher<T>`） | §5.1。**不是 BCrypt**，見該節 |
 
 根目錄放 `global.json` 鎖 SDK feature band，避免不同機器產出的 Migration 有差異。
 
@@ -165,7 +165,7 @@ public sealed class AppException(string code, string message, int statusCode = 4
 
 - **只有一套身分：後台管理員。** 前台全站匿名，沒有會員系統
 - 登入識別是 `Users.UserName`，**不是 email**（[08](08-database.md) §A-1）。`NotifyEmail` 是選填的通知欄位，token 的 email claim 可能不存在 —— **身分一律看 `sub`**
-- 密碼走 BCrypt；登入失敗訊息不區分「帳號不存在」與「密碼錯誤」
+- 密碼走 **ASP.NET Core `PasswordHasher<T>`（PBKDF2-HMAC-SHA512）**，對齊 [08](08-database.md) §A-1 的 `PasswordHash` 欄位定義。⚠️ 本節初版寫 BCrypt，與 08 相衝，**以 08 為準**（schema 是權威）。登入失敗訊息不區分「帳號不存在」與「密碼錯誤」
 - **第一位超級管理員由種子建立**（`sa@system.local`，[08](08-database.md) §A-5），帶強制改密碼旗標
 
 ### 5.2 JWT

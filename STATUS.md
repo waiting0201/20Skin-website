@@ -14,10 +14,11 @@
 **規劃全部完成，前台切版與後台地基已落地，但資料庫、API 與 Azure 資源一個都還沒開。**
 
 `apps/web` 的 21 個模板全數完成（220 條預渲染路由），`apps/admin` **31／31 個畫面全數完成**。
-**後台目前接的是 localStorage mock，內容是從 `mockup/` 抽出來的真實文案** ——
-客戶打開看得懂那是自己的東西，但那不是資料庫。
+**資料庫 schema 也完成了** —— 37 張表的 EF Core migration 已在真的 SQL Server 2022 上
+實測建立成功，種子資料 165 列。
 
-下一步是 `functions/`（API）與 EF Core migrations，兩者都還沒開工。
+**但前後台接的仍是 localStorage mock**：`functions/` 只有資料層，**API 端點一支都還沒寫**。
+下一步是 `RouterFunction` 與各單元的 Handler。
 
 ---
 
@@ -42,8 +43,8 @@
 | 技術架構與規格 | ✅ | [07](docs/07-deployment.md) 部署、[08](docs/08-database.md) 資料庫、[09](docs/09-frontend.md) 前端、[10](docs/10-api.md) API 契約、[11](docs/11-backend-design.md) 後端施工標準 |
 | **前台開發** | 🟡 | 21 個模板切版完成、SEO 與 JSON-LD 落地；**內容仍是 `app/data/*.ts`，未接資料庫**（§二） |
 | **後台開發** | 🟡 | **31／31 畫面完成**；接 mock，未接 API（§三） |
-| **資料模型與 migrations** | ⬜ | schema 設計完成（37 張表），**一行 migration 都還沒寫**（§四） |
-| **API** | ⬜ | 契約與施工標準已定，`functions/` 目錄尚不存在（§五） |
+| **資料模型與 migrations** | ✅ | 37 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四） |
+| **API** | 🟡 | 專案骨架與資料層完成；**端點一支都還沒寫**（§五） |
 | 部署與 CI/CD | ⬜ | 範本在 [`docs/templates/`](docs/templates/)，**Azure 資源未開、workflow 未進 repo**（§六） |
 | 內容遷移（約 800 篇） | ⬜ | 需先有資料庫 |
 | 療程內容（27 項，12 項從零寫） | 🔴 | **需醫師投入，Phase 1 最大瓶頸** |
@@ -133,9 +134,10 @@ Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/ad
 
 ---
 
-## 四、資料模型 ⬜
+## 四、資料模型 ✅
 
-**設計完成、實作未開工。** [08-database.md](docs/08-database.md)：**37 張表**，以功能單元劃分。
+**37 張表的 EF Core migration 完成，已對真的 SQL Server 2022 實測。**
+schema 的真實來源是 `functions/Data/Migrations/`（docs/07 §5）。
 
 | 單元 | 張數 |
 |---|---|
@@ -148,14 +150,70 @@ Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/ad
 | G 站台編排 | 4 |
 | H SEO 與 301 | 1 |
 
-⬜ 未做：`functions/Data/` 的 DbContext、Configuration、Migrations、種子資料
-（順序見 [08](docs/08-database.md) §J-4，**步驟 3、4 沒跑完就匯內容會沒有分類可掛**）。
+### ✅ 實測驗證過的（不是只有產得出 SQL）
+
+| 項目 | 結果 |
+|---|---|
+| 建立 37 張表 | ✅ 對 `Skin20_Verify`（定序 `Chinese_Taiwan_Stroke_CI_AS`）實跑成功 |
+| 約束名稱重複 | **0**（TPT 的 PK 命名坑已避開，見下） |
+| 匿名 DEFAULT 約束 | **0**（20 個具名 `DF_`） |
+| `UrlPath` 全站唯一 | ✅ 實測插入重複網址被擋下 |
+| `ContentType` 值域 | ✅ 實測插入 99 被 CHECK 擋下 |
+| 「退回必填原因」 | ✅ 實測 `Status=3` 未填 `DecisionNote` 被擋下 |
+| BIN2 定序 | ✅ `Slug`／`UrlPath`／`Redirects.FromPath`／`ToPath` 四欄逐欄套用 |
+| 複合外鍵 | ✅ `ContentRelations` 兩條指向 `(Id, ContentType)` 替代索引鍵 |
+
+### ✅ 種子資料（165 列，順序依 docs/08 §J-4）
+
+角色 5／權限碼 31／角色權限 65／使用者 1／分類 13／頁面 17／版位 7／選單 13／設定 15／風險字詞 25
+
+三個關鍵值已實測確認：**AI FAQ 開關＝關閉**、**外部網域只有 2 筆**（`booking` 與 `shop`，
+整個 schema 的唯一落點）、**內容編輯的 `*.publish` 權限＝0**（發布權與編輯權分離）。
+
+### 🔴 一個假設，需要你追認
+
+**FAQ 五大分類的種子用了 `mockup/16-faq.html` 那一組**（`treatment`／`aftercare`／`visit`／
+`fee`／`clinic`），不是 docs/08 §C-9 的清單。理由寫在 `SeedData.FaqCategories` 的註解裡：
+08 那組**沒有 slug**，而 `/faq/{category}/` 需要 slug 才成立；且它有「肌膚困擾」，
+與 `/concerns/` 整段重複。**改這裡一處即可切換，但那時已產生的 URL 需要補 301。**
+
+### ⚠️ 踩到並修掉的四個問題
+
+| 問題 | 說明 |
+|---|---|
+| **10 張表共用 `PK_ContentItems`** | 在 `HasKey()` 上強制命名，TPT 下被九個子表繼承。SQL Server 的約束名稱必須整個 schema 唯一，**migration 建到第二張子表就會失敗**。改為交給 EF 依表名產生 |
+| `CS0111` 重複定義 | `PropertyBuilder<string?>` 與 `PropertyBuilder<string>` 在 CLR 層同型別，nullable 註記不影響簽章 |
+| `SetValueGenerated` 不存在 | `IMutableProperty` 只有可寫屬性 |
+| NuGet 降版 | `Microsoft.Data.SqlClient 6.1.1` 要求 `Azure.Identity >= 1.14.2` |
+
+### ⚠️ docs/08 寫不出來的三處（未自行發明欄位補洞）
+
+1. **`Terms` 的 `UNIQUE (TermType, Slug)` 在 TPT 下無法表達** —— `TermType` 在子表、`Slug` 在父表，
+   索引要求同一張實體表。**判定為不需要補**：所有 Term 都有 `UrlPath`，`UQ_ContentItems_UrlPath`
+   已保證全站唯一；而原約束想擋的「療程分類與文章分類同名」其實**應該允許**（網址本來就不同）
+2. `ContentRelations` 的 `PageToFeatured`（12）**目標型別未指定**，CHECK 暫時放寬為除 Page 外皆可
+3. `Pages.ListSortRule` **沒有值域列舉**，只有 tinyint 範圍
+
+### ⬜ 未做
+
+內容匯入（約 800 篇，需先有 API 或直連腳本）、`efbundle` 的 CI 步驟、
+本機開發用的 `docker` 建庫腳本（目前是手動指令）
 
 ---
 
-## 五、API ⬜
+## 五、API 🟡
 
-**契約（[10](docs/10-api.md)）與施工標準（[11](docs/11-backend-design.md)）已定，`functions/` 目錄尚不存在。**
+**專案骨架與資料層完成，端點一支都還沒寫。**
+
+✅ 已完成：`Skin20.Api.csproj`（.NET 10 isolated ＋ EF Core 10 ＋ Dapper）、`Program.cs`
+（Managed Identity 連 SQL／Blob，**執行期無密鑰**）、`Skin20DbContext` ＋ 37 張表的
+Configuration ＋ migration ＋ 種子、`ISqlConnectionFactory`（Dapper 讀取路徑）、
+`Skin20DbContextFactory`（設計期，供 `dotnet ef`）。
+
+⬜ 未做：`RouterFunction` catch-all ＋ `AppRouter` 集中式分派與預設拒絕授權、
+各單元 Handler、Dapper ReadService、`ApiResponse` 信封與 `ExceptionMiddleware`、
+JWT 與登入次數限制、Timer Function（排程發布／版本修剪／計數清理）、
+`openapi.yaml`。施工標準見 [11](docs/11-backend-design.md)。
 
 兩處 API 的分工是全篇最容易搞錯的地方：
 

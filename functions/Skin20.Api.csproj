@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    獨立 Azure Functions App（api.20skin.tw）——前後台共用的應用程式 API。
+    docs/07-deployment.md §5、docs/11-backend-design.md §1。
+
+    ⚠️ 這裡是 net10.0。SWA 的 Managed Function（api/ 那支 fallback）最高只能
+       net9.0，那是平台限制不是疏漏，兩者不要混為一談（docs/10-api.md §1）。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Skin20.Api</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 執行模型：isolated worker ＋ ASP.NET Core Integration（docs/11 §1）。
+         ⚠️ 必須是 .Extensions.Http.AspNetCore，不是一般的 .Extensions.Http ——
+            少了它 Handler 收到的是 HttpRequestData 而不是 HttpRequest。 -->
+    <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.5" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.0.2" />
+
+    <!-- Managed Identity 連 SQL 與 Blob，執行期沒有任何密鑰（docs/07 §6） -->
+    <PackageReference Include="Azure.Identity" Version="1.14.2" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.24.0" />
+
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.3">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Dapper" Version="2.1.66" />
+    <!-- 密碼雜湊 PasswordHasher&lt;T&gt;（docs/08 §A-1：PBKDF2-HMAC-SHA512） -->
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- docs/11 §12：local.settings.json 不進版控，也不進發布產物 -->
+    <None Update="host.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="local.settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
