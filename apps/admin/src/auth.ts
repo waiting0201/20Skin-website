@@ -5,8 +5,9 @@
 // plain reactive 物件，而不是任何會落地儲存的 API——重新整理分頁就會登出，
 // 這是設計行為，不是還沒做完。
 //
-// 雙因素是登入流程的第二段（docs/11-backend-design.md §5.2）：第一段通過
-// 只給 challengeId，不發 token；驗證碼通過才建立 session。
+// 登入是單段的帳號密碼（docs/11-backend-design.md §5.2）——不做雙因素
+// （2026-09-11 院方決定）。⚠️ 連帶後果：**登入次數限制是唯一的防線**，
+// 前端不要加任何會放寬判定的東西（「記住此裝置」之類）。
 
 import { reactive, readonly } from 'vue'
 import type { CurrentUser } from './types'
@@ -30,7 +31,7 @@ export function currentUser(): CurrentUser | null {
   return state.user
 }
 
-/** 內部使用：登入／2FA 驗證成功後寫入 session。不對外匯出，避免元件繞過流程直接寫入。 */
+/** 內部使用：登入成功後寫入 session。不對外匯出，避免元件繞過流程直接寫入。 */
 export function _setSession(user: CurrentUser, token: string) {
   state.user = user
   state.token = token

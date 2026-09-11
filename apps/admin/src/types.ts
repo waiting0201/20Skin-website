@@ -174,7 +174,6 @@ export interface CurrentUser {
   /** 「醫師」角色綁定自己的個人頁用（docs/08 §A-1）。 */
   doctorId: number | null
   mustChangePassword: boolean
-  twoFactorEnabled: boolean
 }
 
 /** 前台可見性顯示用（docs/11-backend-design.md §7 的推導規則，不是資料庫欄位）。 */

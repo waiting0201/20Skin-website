@@ -206,7 +206,7 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
 9. **上傳檔案一律存 Azure Blob**，由**瀏覽器直傳**（後台向 API 取短效 SAS，不讓檔案流經 Function）。SAS 以 **Managed Identity** 簽發（user delegation key），不存放儲存體金鑰。全架構剩下的唯一明文密鑰是 SWA 上給 `/api/fallback` 用的 SQL 唯讀連線字串。見 [docs/07-deployment.md](docs/07-deployment.md) §3、§6
 10. **前後台同一個 SWA、同一個網域**：`20skin.tw` 前台、**`20skin.tw/admin` 後台**（Nuxt `ssr: false` 的 SPA）。API 則在另一個網域 `api.20skin.tw`，見第 7 條。
    後台路徑 `/admin/` 為客戶指定（2026-08-10），**不要再提案改成非預設路徑** —— 早期文件曾寫 `/manage/`，那是舊版。
-   **後台 IP 白名單不做**（院方決定，2026-08-13）—— 技術上做得到（獨立 Function App 支援入站 IP 限制），是院方選擇不採用，**不要重新提案**。因此登入防護只剩**雙因素驗證**與**登入次數限制**兩項，兩項都要做紮實（次數限制需帳號＋來源 IP 雙維度計數）。連帶確定 API 不拆成兩個 Function App。見 [docs/02-backend-cms.md](docs/02-backend-cms.md) §4、[docs/07-deployment.md](docs/07-deployment.md) §2
+   **後台 IP 白名單不做**（院方決定，2026-08-13）—— 技術上做得到（獨立 Function App 支援入站 IP 限制），是院方選擇不採用，**不要重新提案**。**雙因素也不做**（院方決定，2026-09-11）。因此登入防護**只剩登入次數限制一項**，它必須做紮實（需帳號＋來源 IP 雙維度計數），且帳密成為唯一憑證 —— 種子密碼上線前必須更換。連帶確定 API 不拆成兩個 Function App。見 [docs/02-backend-cms.md](docs/02-backend-cms.md) §4、[docs/07-deployment.md](docs/07-deployment.md) §2
 11. **設計方向 = `mockup/`（方向 A）**，2026-08-27 客戶選定。白底左右分欄、版面裡的裱框輪播、直角＋細框、暖金 `--accent`，參考 `website-template.jpg`。
    **`mockup2/`（B）與 `mockup3/`（C）落選** —— 檔案保留在 repo 供日後對照，但**不再更新，也不要再提案**。之後所有視覺、切版、元件的討論一律以 `mockup/` 為準。
    動效系統（`.js-anim` 載入序列 ＋ `IntersectionObserver` 顯影）仍是客戶指定保留的部分（2026-08-19），不要動。

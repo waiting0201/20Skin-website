@@ -2,7 +2,7 @@
 
 > 本文件規範**怎麼寫**；[10-api.md](10-api.md) 規範**寫什麼**。開工後，`functions/` 的所有程式碼以本文件為唯一施工標準。
 >
-> 資料表以 [08-database.md](08-database.md) 為準（38 張表）；平台限制與 CI/CD 以 [07-deployment.md](07-deployment.md) 為準；功能語意以 [02-backend-cms.md](02-backend-cms.md) 為準。
+> 資料表以 [08-database.md](08-database.md) 為準（37 張表）；平台限制與 CI/CD 以 [07-deployment.md](07-deployment.md) 為準；功能語意以 [02-backend-cms.md](02-backend-cms.md) 為準。
 
 ---
 
@@ -166,14 +166,14 @@ public sealed class AppException(string code, string message, int statusCode = 4
 - **只有一套身分：後台管理員。** 前台全站匿名，沒有會員系統
 - 登入識別是 `Users.UserName`，**不是 email**（[08](08-database.md) §A-1）。`NotifyEmail` 是選填的通知欄位，token 的 email claim 可能不存在 —— **身分一律看 `sub`**
 - 密碼走 BCrypt；登入失敗訊息不區分「帳號不存在」與「密碼錯誤」
-- **第一位超級管理員由種子建立**（`sa@system.local`，[08](08-database.md) §A-6），帶強制改密碼旗標
+- **第一位超級管理員由種子建立**（`sa@system.local`，[08](08-database.md) §A-5），帶強制改密碼旗標
 
-### 5.2 JWT 與雙因素
+### 5.2 JWT
 
 - 自寫 `JwtService`（HS256），**不接 `AddAuthentication().AddJwtBearer()`** —— isolated worker 的 pipeline 與 ASP.NET Core 不同，自己驗證比接管線可控
 - `MapInboundClaims = false` 保持 claim 原名；驗證參數全開，`ClockSkew = 30s`；驗證失敗回 `null`，由呼叫端轉 401
 - claims：`sub`、`roles`、`permissions`、`is_superadmin`
-- **雙因素是登入流程的第二段**，不是 token 之後的事：第一段通過只發 challenge id，**不發 access token**。管理員與審核者強制開啟（[02](02-backend-cms.md) §4）
+- **沒有雙因素**（2026-09-11 院方決定）：`POST /auth/login` 帳密驗證通過就直接發 token，沒有第二段。⚠️ 連帶後果是**次數限制成為唯一防線**，下一條因此不可打折
 - **登入次數限制以帳號與來源 IP 雙維度計數**，狀態存 `LoginThrottles` 表。⚠️ **不要用 `MemoryCache`** —— Flex Consumption 是多執行個體，記憶體計數形同虛設。成功登入即清除計數，**不留歷史**（[08](08-database.md) §I）
 
 ### 5.3 授權集中在 Router：預設拒絕

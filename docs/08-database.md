@@ -11,8 +11,9 @@
 | **以功能單元為劃分依據** | 全文以 §A–§H 八個功能單元組織，每個單元對應後台畫面群組 |
 | **不做 log** | 不建操作日誌、登入紀錄、搜尋日誌。原與 [02-backend-cms.md](02-backend-cms.md) §4 相衝，**2026-09-11 已確認拿掉並同步全部文件**，見 §I |
 | **後台帳號不用 email** | 登入識別為 `UserName`，email 降為選填的通知欄位。超級管理員種子帳號 `sa@system.local` / `Admin@123` |
+| **不做雙因素**（2026-09-11 追加） | `Users` 移除三個 TwoFactor 欄位、`TwoFactorRecoveryCodes` 整張表刪除。⚠️ 連帶後果見 §A-5 |
 
-**合計 38 張表。**
+**合計 37 張表。**
 
 ---
 
@@ -48,7 +49,7 @@
 
 ---
 
-## A. 帳號與權限（8 張）
+## A. 帳號與權限（7 張）
 
 > 後台畫面：登入、帳號管理、角色權限設定（[06](06-page-inventory.md) §5）
 
@@ -64,9 +65,6 @@
 | `NotifyEmail` | nvarchar(256) **NULL** | **選填，僅供通知，非登入識別、不唯一、可留空** |
 | `IsActive` | bit NOT NULL | 停用不刪除（內容的 `CreatedByUserId` 還指著它） |
 | `MustChangePassword` | bit NOT NULL | 種子帳號為 1 |
-| `TwoFactorEnabled` | bit NOT NULL | |
-| `TwoFactorSecret` | varbinary(256) NULL | TOTP 種子，**加密後儲存**（ASP.NET Data Protection 或 Always Encrypted），不落明文 |
-| `TwoFactorConfirmedAt` | datetime2 NULL | 完成綁定的時間點 |
 | `DoctorId` | int NULL FK → `Doctors` | **「醫師」角色綁定自己的個人頁用** |
 | `CreatedAt` / `UpdatedAt` | datetime2 | |
 
@@ -97,13 +95,7 @@ account.manage           redirect.manage            media.manage
 
 ⚠️ **`seo.edit` 與 `content.*.edit` 必須是兩個獨立權限。** 這是 SeoMeta 獨立成表的原因（§B-4）—— 權限檢查落在「表」的層級最不容易寫錯，落在「同一張表的某幾個欄位」則遲早有人漏掉。
 
-### A-3 `TwoFactorRecoveryCodes`
-
-`Id`, `UserId` FK, `CodeHash`, `UsedAt` NULL
-
-[02](02-backend-cms.md) §4 定案「雙因素不提供略過管道」。既然沒有略過管道，**備援碼就是必要的**，否則超級管理員換手機那天只能直接改資料庫。一次產 10 組，存 hash。
-
-### A-4 `LoginThrottles`
+### A-3 `LoginThrottles`
 
 | 欄位 | 說明 |
 |---|---|
@@ -120,13 +112,13 @@ UNIQUE (`Dimension`, `ThrottleKey`)
 
 ⚠️ **這是計數器，不是日誌。** 登入成功即刪除該帳號那筆、鎖定到期即歸零，不保留任何歷史。符合本次「不做 log」的指定。
 
-### A-5 `RefreshTokens`
+### A-4 `RefreshTokens`
 
 `Id`, `UserId` FK, `TokenHash`, `ExpiresAt`, `RevokedAt` NULL, `CreatedAt`
 
 存權杖的 hash，不存明文。存在的理由只有一個：**停用帳號要能即時失效**。若改用短效（≤15 分）JWT ＋ `SecurityStamp` 檢查，這張表可以省掉 —— 開工前二選一，不要兩套都做。
 
-### A-6 種子帳號
+### A-5 種子帳號
 
 ```
 UserName            sa@system.local
@@ -135,14 +127,13 @@ Password            Admin@123          （寫進 migration 的是預先算好的
 Roles               SuperAdmin
 IsActive            1
 MustChangePassword  1
-TwoFactorEnabled    0
 ```
 
 三個必須知道的配套：
 
 1. **hash 要預先算好、寫死在 migration 裡。** 不要在 migration 執行時即席計算 —— migration 必須可重現，同一份 migration 在不同環境跑出不同 hash 會很難查。
 2. **`Admin@123` 是建置期預設密碼，上線前必須更換。** 後台路徑 `/admin/` 是客戶指定、且沒有 IP 白名單（[02](02-backend-cms.md) §4），登入端點直接暴露在公網掃描下，這組密碼不能留到正式環境。
-3. **超級管理員強制雙因素**，但種子帳號的 `TwoFactorConfirmedAt` 是 NULL。登入流程要判斷「角色需 2FA 但未綁定」→ 強制導向綁定頁，不給跳過。
+3. 🔴 **沒有雙因素，所以這組密碼就是唯一憑證**（2026-09-11 院方決定不做雙因素）。原本三道防線（雙因素、IP 白名單、次數限制）現在只剩次數限制一道，而後台路徑 `/admin/` 是客戶指定、公開可猜。**上線前更換這組密碼不是建議事項，是必要條件**；密碼強度與輪替規則需一併訂定（[02](02-backend-cms.md) §4）。
 
 ---
 
@@ -681,7 +672,7 @@ sitemap 的 5 個分檔（pages／treatments／concerns／doctors／blog）**不
 
 | 功能單元 | 表 | 數 |
 |---|---|---|
-| **A 帳號與權限** | `Users`／`Roles`／`UserRoles`／`Permissions`／`RolePermissions`／`TwoFactorRecoveryCodes`／`LoginThrottles`／`RefreshTokens` | 8 |
+| **A 帳號與權限** | `Users`／`Roles`／`UserRoles`／`Permissions`／`RolePermissions`／`LoginThrottles`／`RefreshTokens` | 7 |
 | **B 內容主幹** | `ContentItems`／`ContentVersions`／`ContentReviews`／`SeoMeta`／`RiskTerms` | 5 |
 | **C 九個內容模型** | `Treatments`／`TreatmentImages`／`Doctors`／`DoctorTags`／`DoctorCredentials`／`DoctorSchedules`／`Concerns`／`Articles`／`Cases`／`CaseImages`／`Faqs`／`Clinics`／`ClinicBusinessHours`／`ClinicPhotos`／`Pages`／`Terms` | 16 |
 | **D 內容關聯** | `ContentRelations` | 1 |
@@ -689,7 +680,7 @@ sitemap 的 5 個分檔（pages／treatments／concerns／doctors／blog）**不
 | **F FAQ 題庫成長** | `QuestionInbox` | 1 |
 | **G 站台編排** | `SiteSettings`／`HomeSections`／`HomeSectionItems`／`MenuItems` | 4 |
 | **H SEO 與 301** | `Redirects` | 1 |
-| **合計** | | **38** |
+| **合計** | | **37** |
 
 儀表板（[06](06-page-inventory.md) §5「系統」群組）**沒有專屬資料表**，全部是對上述表的聚合查詢。
 
@@ -697,7 +688,7 @@ sitemap 的 5 個分檔（pages／treatments／concerns／doctors／blog）**不
 
 ```
 Users ──┬─ UserRoles ── Roles ── RolePermissions ── Permissions
-        ├─ TwoFactorRecoveryCodes / LoginThrottles / RefreshTokens
+        ├─ LoginThrottles / RefreshTokens
         └─ DoctorId ─────────────────────┐
                                           │
 ContentItems ─┬─ SeoMeta (1:1)            │
@@ -730,7 +721,7 @@ ContentItems ─┬─ SeoMeta (1:1)            │
 
 | 項目 | 影響 |
 |---|---|
-| **`RefreshTokens` vs 短效 JWT ＋ `SecurityStamp`** | 二選一，不要兩套都做。見 §A-5 |
+| **`RefreshTokens` vs 短效 JWT ＋ `SecurityStamp`** | 二選一，不要兩套都做。見 §A-4 |
 | **衍生尺寸誰產**（[07](07-deployment.md) §3 待決） | 不影響 schema（`Variants` 用 JSON 承接），但影響上傳流程的實作 |
 | **AI FAQ 開關的執行期讀取端點** | 純靜態前台要在執行期讀 `SiteSettings`，需與前端確認做法。見 §G-1 |
 | `/api/fallback` 唯讀使用者的權限收斂 | 需在院方開帳號時指明只能 `SELECT Redirects`。見 §J-3 |

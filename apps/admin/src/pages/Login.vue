@@ -1,7 +1,12 @@
 <script setup lang="ts">
 // 後台登入。docs/10-api.md §3.2、docs/11-backend-design.md §5.2：
-// 帳號（userName，不是 email）＋ 密碼 → 若該帳號啟用雙因素，
-// 只回 challengeId，不發 token；第二段驗證碼通過才建立 session。
+// 帳號（userName，**不是 email**）＋ 密碼，**單段驗證**——不做雙因素
+// （2026-09-11 院方決定）。
+//
+// 🔴 連帶後果：登入次數限制是後台唯一的防線（IP 白名單與雙因素都不做，
+// 而 /admin/ 是客戶指定、公開可猜的路徑）。**不要在這裡加任何會放寬判定的
+// 東西**——「記住此裝置」、失敗提示區分帳號是否存在、前端自行放寬鎖定，
+// 每一項都是在拆僅剩的那道防線。
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { adminApi, ApiError } from '@/api/client'
@@ -21,12 +26,8 @@ if (isAuthenticated()) {
   router.replace((route.query.redirect as string) || '/')
 }
 
-type Step = 'credentials' | '2fa'
-const step = ref<Step>('credentials')
 const userName = ref('')
 const password = ref('')
-const code = ref('')
-const challengeId = ref('')
 const errorMessage = ref('')
 const submitting = ref(false)
 
@@ -34,30 +35,11 @@ async function submitCredentials() {
   errorMessage.value = ''
   submitting.value = true
   try {
-    const result = await adminApi.auth.login(userName.value.trim(), password.value)
-    if (result.requires2fa) {
-      challengeId.value = result.challengeId!
-      step.value = '2fa'
-    } else if (result.user) {
-      _setSession(result.user, `mock-token-${result.user.id}-${Date.now()}`)
-      await router.push((route.query.redirect as string) || '/')
-    }
-  } catch (e) {
-    errorMessage.value = e instanceof ApiError ? e.message : '登入失敗，請稍後再試。'
-  } finally {
-    submitting.value = false
-  }
-}
-
-async function submit2fa() {
-  errorMessage.value = ''
-  submitting.value = true
-  try {
-    const user = await adminApi.auth.verify2fa(challengeId.value, code.value.trim())
+    const user = await adminApi.auth.login(userName.value.trim(), password.value)
     _setSession(user, `mock-token-${user.id}-${Date.now()}`)
     await router.push((route.query.redirect as string) || '/')
   } catch (e) {
-    errorMessage.value = e instanceof ApiError ? e.message : '驗證失敗，請稍後再試。'
+    errorMessage.value = e instanceof ApiError ? e.message : '登入失敗，請稍後再試。'
   } finally {
     submitting.value = false
   }
@@ -72,10 +54,10 @@ async function submit2fa() {
           <!-- 動態綁定，理由見 src/AdminLayout.vue 同一張圖的註解。 -->
           <img :src="'/assets/logo.jpg'" alt="" width="48" height="49">
           <h1>20SKIN 後台管理</h1>
-          <p>docs/02-backend-cms.md §4：雙因素驗證是登入流程的一部分，不提供略過管道。</p>
+          <p>docs/02-backend-cms.md §4：登入次數限制為帳號與來源 IP 雙維度計數。</p>
         </div>
 
-        <form v-if="step === 'credentials'" class="adm-form" @submit.prevent="submitCredentials">
+        <form class="adm-form" @submit.prevent="submitCredentials">
           <p v-if="errorMessage" class="adm-login__error">{{ errorMessage }}</p>
           <div class="adm-field">
             <label class="adm-field__label" for="userName">帳號</label>
@@ -90,23 +72,11 @@ async function submit2fa() {
           </button>
         </form>
 
-        <form v-else class="adm-form" @submit.prevent="submit2fa">
-          <p v-if="errorMessage" class="adm-login__error">{{ errorMessage }}</p>
-          <div class="adm-field">
-            <label class="adm-field__label" for="code">雙因素驗證碼</label>
-            <input id="code" v-model="code" class="adm-input" type="text" inputmode="numeric" autocomplete="one-time-code" required>
-            <p class="adm-field__hint">六位數驗證碼，或輸入救援碼。</p>
-          </div>
-          <button type="submit" class="btn btn--primary btn--block" :disabled="submitting">
-            {{ submitting ? '驗證中…' : '驗證並登入' }}
-          </button>
-        </form>
-
         <p class="adm-login__hint">
           示範帳號（開發期 mock，見 src/api/mock-seed.ts）：<br>
-          sa／Admin@123（超級管理員，需 2FA，碼 123456）<br>
+          sa／Admin@123（超級管理員）<br>
           editor1／Editor@123（內容編輯）・doctor1／Doctor@123（醫師）<br>
-          marketing1／Marketing@123（行銷）・reviewer1／Reviewer@123（審核者，需 2FA，碼 123456）
+          marketing1／Marketing@123（行銷）・reviewer1／Reviewer@123（審核者）
         </p>
       </div>
     </div>

@@ -57,8 +57,6 @@
 | `VALIDATION_RANGE` | 400 | 長度／數值超出範圍（SEO 標題、AI 摘要 40–60 字） |
 | `AUTH_INVALID_CREDENTIALS` | 401 | 帳密錯誤。**不區分「帳號不存在」與「密碼錯誤」** |
 | `AUTH_TOKEN_INVALID` | 401 | token 缺失／過期／簽章不符 |
-| `AUTH_2FA_REQUIRED` | 401 | 第一段驗證通過，待輸入雙因素碼 |
-| `AUTH_2FA_INVALID` | 401 | 雙因素碼錯誤 |
 | `AUTH_MUST_CHANGE_PASSWORD` | 403 | 首次登入尚未改密碼 |
 | `AUTH_ACCOUNT_INACTIVE` | 403 | 帳號停用 |
 | `FORBIDDEN` | 403 | 權限碼不足 |
@@ -96,14 +94,13 @@
 
 | 端點 | 說明 |
 |---|---|
-| `POST /auth/login` | body 為 `userName` ＋ `password`。**登入識別不是 email**（[08](08-database.md) §A-1）。成功時若該帳號已啟用雙因素 → 回 `AUTH_2FA_REQUIRED` ＋ 一次性的 challenge id |
-| `POST /auth/2fa/verify` | challenge id ＋ 六位碼或救援碼。通過才發 access ＋ refresh token |
+| `POST /auth/login` | body 為 `userName` ＋ `password`。**登入識別不是 email**（[08](08-database.md) §A-1）。**單段驗證** —— 通過就直接發 access ＋ refresh token，沒有雙因素（2026-09-11 院方決定） |
 | `POST /auth/refresh` | refresh token 輪替（見 §5 待確認） |
 | `POST /auth/logout` | 撤銷該 refresh token |
 | `POST /auth/change-password` | 需有效 token，**不需權限碼** —— 首登強制改密碼時使用者還沒有任何權限 |
-| `POST /auth/2fa/setup`／`/auth/2fa/recovery-codes` | 綁定驗證器、產生救援碼（`TwoFactorRecoveryCodes`） |
 
-⚠️ **`POST /auth/login` 的次數限制是帳號與來源 IP 雙維度計數**（只鎖帳號擋不住撞庫、只鎖 IP 擋不住分散式嘗試）。鎖定事件**即時寄出告警信、不留存紀錄**（[02](02-backend-cms.md) §4、[08](08-database.md) §I）。這是後台僅剩的兩道防線之一 —— IP 白名單不做（2026-08-13 院方決定），登入端點直接暴露在公網掃描下。
+🔴 **`POST /auth/login` 的次數限制是後台唯一的防線**，所以它不能打折：**帳號與來源 IP 雙維度計數**（只鎖帳號擋不住撞庫、只鎖 IP 擋不住分散式嘗試），鎖定事件**即時寄出告警信、不留存紀錄**（[02](02-backend-cms.md) §4、[08](08-database.md) §I）。
+原規劃三道防線都不在了：IP 白名單不做（2026-08-13）、**雙因素不做（2026-09-11）**，而後台路徑 `/admin/` 是客戶指定、公開可猜。**帳密成為唯一憑證**，密碼強度與輪替規則需一併訂定。
 
 ### 3.3 後台：九個內容模型
 
@@ -151,7 +148,7 @@
 | `GET|POST /admin/redirect/export|import` | `redirect.export` | CSV 匯入匯出。**約 770 條不可能手工維護** |
 | `GET|PATCH|DELETE /admin/question` | `question.*` | 未命中題目清單；`PATCH` 可標記為已建立並回填 `LinkedFaqContentItemId` |
 | `GET|POST|PUT|DELETE /admin/user` | `user.*` | 帳號管理（限超級管理員） |
-| `PUT /admin/user/{id}/password`、`POST /admin/user/{id}/2fa/reset` | `user.edit` | 重設密碼／解除雙因素綁定 |
+| `PUT /admin/user/{id}/password` | `user.edit` | 重設密碼 |
 | `GET /admin/role`、`PUT /admin/role/{id}/permissions` | `role.*` | 角色權限設定（限超級管理員） |
 | `POST /admin/rebuild` | `rebuild.trigger` | 手動觸發全站重建。**有聚合窗口**，見 [11](11-backend-design.md) §10 |
 | `GET /admin/export/preview` | `setting.view` | 預覽 `faq.json`／`llms.txt` 的內容。**實際產物在建置期產生**，此端點只供後台畫面預覽（[07](07-deployment.md) §4） |

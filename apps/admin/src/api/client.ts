@@ -451,14 +451,13 @@ function structuredCloneRecord(stored: StoredRecord): StoredRecord {
 
 // ── Auth（mock）────────────────────────────────────────────────────────
 
-interface LoginChallenge {
-  challengeId: string
-  userId: number
-  expiresAt: number
-}
-const pendingChallenges = new Map<string, LoginChallenge>()
-
-/** docs/11-backend-design.md §5.2：帳號與來源 IP 雙維度計數。mock 只做帳號維度示意。 */
+/**
+ * docs/11-backend-design.md §5.2：帳號與來源 IP 雙維度計數。mock 只做帳號維度示意。
+ *
+ * 🔴 **這是後台唯一的防線。** 雙因素不做（2026-09-11 院方決定）、IP 白名單不做
+ * （2026-08-13），而後台路徑 /admin/ 是客戶指定、公開可猜。正式實作時
+ * 次數限制不可打折，且狀態要存 DB（Flex Consumption 多執行個體，記憶體計數無效）。
+ */
 const loginFailures = new Map<string, { count: number; lockedUntil: number | null }>()
 const MAX_ATTEMPTS = 5
 const LOCK_MS = 60_000
@@ -491,7 +490,8 @@ function clearFailures(userName: string) {
 }
 
 const auth = {
-  async login(userName: string, password: string): Promise<{ requires2fa: boolean; challengeId?: string; user?: CurrentUser }> {
+  /** 單段驗證：帳密通過就登入，沒有第二因素（docs/10-api.md §3.2）。 */
+  async login(userName: string, password: string): Promise<CurrentUser> {
     requireNoLockout(userName)
     const record = MOCK_USERS.find((u) => u.userName.toLowerCase() === userName.toLowerCase())
     // ⚠️ docs/10-api.md §2：不區分「帳號不存在」與「密碼錯誤」
@@ -501,24 +501,7 @@ const auth = {
     }
     if (!record.isActive) throw new ApiError('AUTH_ACCOUNT_INACTIVE', '帳號已停用。')
     clearFailures(userName)
-    if (record.twoFactorEnabled) {
-      const challengeId = `chal-${record.id}-${Date.now()}`
-      pendingChallenges.set(challengeId, { challengeId, userId: record.id, expiresAt: Date.now() + 5 * 60_000 })
-      return { requires2fa: true, challengeId }
-    }
     if (record.mustChangePassword) throw new ApiError('AUTH_MUST_CHANGE_PASSWORD', '首次登入請先變更密碼。')
-    return { requires2fa: false, user: toCurrentUser(record) }
-  },
-
-  async verify2fa(challengeId: string, code: string): Promise<CurrentUser> {
-    const challenge = pendingChallenges.get(challengeId)
-    if (!challenge || challenge.expiresAt < Date.now()) {
-      throw new ApiError('AUTH_TOKEN_INVALID', '驗證逾時，請重新登入。')
-    }
-    const record = MOCK_USERS.find((u) => u.id === challenge.userId)!
-    const validCode = record.credential.twoFactorCode === code || code === 'RESCUE-0001'
-    if (!validCode) throw new ApiError('AUTH_2FA_INVALID', '雙因素驗證碼錯誤。')
-    pendingChallenges.delete(challengeId)
     return toCurrentUser(record)
   },
 

@@ -15,7 +15,6 @@ import type { RelationType } from '../unit-schema'
 export interface MockCredential {
   userName: string
   password: string
-  twoFactorCode: string | null // null = 未啟用雙因素
 }
 
 export interface MockUserRecord extends CurrentUser {
@@ -33,9 +32,8 @@ export const MOCK_USERS: MockUserRecord[] = [
     isSuperAdmin: true,
     doctorId: null,
     mustChangePassword: false,
-    twoFactorEnabled: true,
     isActive: true,
-    credential: { userName: 'sa', password: 'Admin@123', twoFactorCode: '123456' },
+    credential: { userName: 'sa', password: 'Admin@123' },
   },
   {
     id: 2,
@@ -45,9 +43,8 @@ export const MOCK_USERS: MockUserRecord[] = [
     isSuperAdmin: false,
     doctorId: null,
     mustChangePassword: false,
-    twoFactorEnabled: false,
     isActive: true,
-    credential: { userName: 'editor1', password: 'Editor@123', twoFactorCode: null },
+    credential: { userName: 'editor1', password: 'Editor@123' },
   },
   {
     id: 3,
@@ -57,9 +54,8 @@ export const MOCK_USERS: MockUserRecord[] = [
     isSuperAdmin: false,
     doctorId: 101,
     mustChangePassword: false,
-    twoFactorEnabled: false,
     isActive: true,
-    credential: { userName: 'doctor1', password: 'Doctor@123', twoFactorCode: null },
+    credential: { userName: 'doctor1', password: 'Doctor@123' },
   },
   {
     id: 4,
@@ -69,9 +65,8 @@ export const MOCK_USERS: MockUserRecord[] = [
     isSuperAdmin: false,
     doctorId: null,
     mustChangePassword: false,
-    twoFactorEnabled: false,
     isActive: true,
-    credential: { userName: 'marketing1', password: 'Marketing@123', twoFactorCode: null },
+    credential: { userName: 'marketing1', password: 'Marketing@123' },
   },
   {
     id: 5,
@@ -81,9 +76,8 @@ export const MOCK_USERS: MockUserRecord[] = [
     isSuperAdmin: false,
     doctorId: null,
     mustChangePassword: false,
-    twoFactorEnabled: true,
     isActive: true,
-    credential: { userName: 'reviewer1', password: 'Reviewer@123', twoFactorCode: '123456' },
+    credential: { userName: 'reviewer1', password: 'Reviewer@123' },
   },
 ]
 
