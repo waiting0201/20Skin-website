@@ -267,7 +267,7 @@ schema 的真實來源是 `functions/Data/Migrations/`（docs/07 §5）。
 
 ## 六、部署 🟡
 
-**Azure 資源已於 2026-09-11 建立**，但**還沒有部署任何程式碼**（workflow 未進 repo）。
+**Azure 資源已於 2026-09-11 建立，資料庫 schema 也已套用**，但**還沒有部署任何程式碼**（workflow 未進 repo）。
 
 ### ✅ 已建立（`rg-20skin-web-prod`／westus2／CSP 訂閱）
 
@@ -296,13 +296,41 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 **有 SLA**、IP 範圍限制變成可用。產物大小閘同步放寬為 350 MB 警告／450 MB 擋下
 （目前 14.7 MB）。
 
+### ✅ Azure SQL 已就緒（2026-09-11）
+
+`20skin-website.database.windows.net` / `20Skin-website`，**與其餘資源同一個資源群組與區域**
+（`rg-20skin-web-prod`／westus2），所以沒有跨區查詢的問題。
+
+| 項目 | 值 |
+|---|---|
+| 方案 | **Basic**（2 GB／5 DTU） |
+| 定序 | **`Chinese_Taiwan_Stroke_CI_AS`** ✅（docs/08 §0 決策三） |
+| schema | **37 張表 ＋ 165 列種子已套用**，用 `efbundle`（docs/11 §13） |
+| 驗證 | 表數 37、匿名約束 0、AI FAQ 開關 `false`、外部網域 2 筆 —— 與本機實測一致 |
+
+**三組 SQL 身分**（docs/08 §J-3）：
+
+| 身分 | 權限 | 狀態 |
+|---|---|---|
+| `func-20skin-web-api-prod`（受控識別） | `db_datareader` ＋ `db_datawriter`，**不給 DDL** | ✅ |
+| `fallback_readonly`（帳密） | **只有 `SELECT` `Redirects` 一張表** | ✅ 實測：讀得到 `Redirects`、讀不到 `Users` |
+| CI 遷移身分（DDL） | 待建服務主體 | ⬜ 等 repo 上 GitHub |
+
+`fallback_readonly` 的連線字串已寫進 SWA 的 `SKIN20_SQL_CONNECTION`，密碼未經對話、
+產生後直接寫入並刪除暫存。**這是全架構唯一的明文密鑰**，權限收斂到單一資料表。
+
+> ⚠️ **Basic 的兩個上限要盯著**：2 GB（主要成長來源是 `ContentVersions.Snapshot`，
+> 由 `VersionPrune` Timer 每筆保留 30 版擋著）、5 DTU（建置期全站匯出與 800 篇遷移會慢）。
+> 反過來 Basic 是**常駐**的，比 Serverless 好 —— 後者的自動暫停會讓遷移期的
+> `/api/fallback` 301 查詢撞上數十秒的喚醒延遲。
+
 ### ⬜ 未做
 
 | 項目 | 說明 |
 |---|---|
 | **兩條 workflow 進 repo** | 範本在 [`docs/templates/`](docs/templates/)，尚未複製到 `.github/workflows/` |
 | **部署程式碼** | 前台、後台、API 都還沒推上去 |
-| **Azure SQL** | 🔴 **院方自建**，尚未提供。連帶 `SQL_SERVER`／`SQL_DATABASE` 與兩組 SQL 使用者都還是空的 |
+| ~~Azure SQL~~ | ✅ **已就緒**（見下方） |
 | 自訂網域 | `20skin.tw`／`www.20skin.tw`／`api.20skin.tw` 都還沒綁 |
 | CORS | Function App 的 allow-list 由院方設定 |
 | 其餘應用程式設定 | `GITHUB_REPO`／`GITHUB_DISPATCH_TOKEN`（待 repo 上 GitHub）、`Smtp__*`（待院方）、`BotCheck__SecretKey`（供應商未定） |
