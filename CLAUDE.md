@@ -15,6 +15,7 @@
 
 ```
 CLAUDE.md              ← 你在這裡。專案索引與工作慣例
+STATUS.md              ★ 進度總表：做到哪裡了（狀態的單一真相來源）
 pnpm-workspace.yaml    packages = apps/*
 apps/
   web/                 前台：Nuxt 3 純靜態（21 個模板、約 950 頁預渲染）
@@ -34,7 +35,7 @@ docs/                  工程端文件（真實來源）
   05-roadmap.md        導入時程（含內部風險備註）
   06-page-inventory.md 頁面清點與工程量估算
   07-deployment.md     部署架構與 CI/CD（Azure SWA ＋ Functions ＋ SQL）
-  08-database.md       資料庫規劃（以功能單元劃分，38 張表）
+  08-database.md       資料庫規劃（以功能單元劃分，37 張表）
   09-frontend.md       前端技術架構（apps/web 前台 ＋ apps/admin 後台）
   10-api.md            API 契約（端點、信封、錯誤碼、權限碼）
   11-backend-design.md 後端施工標準（分層、路由授權、EF＋Dapper、工作流狀態機）
@@ -58,6 +59,18 @@ scripts/
   build-mockup-fonts.sh   中文襯線字型子集
   build-mockup3-hero.py   mockup3 Hero 底圖（只裁切，不調色）
 ```
+
+---
+
+## 三份文件，各司其職
+
+| 檔案 | 記錄什麼 |
+|---|---|
+| `CLAUDE.md` | **規範、關鍵數字、已定案決策** |
+| [`STATUS.md`](STATUS.md) | **狀態** —— 做到哪裡了、什麼被擋住、上線前 checklist |
+| [`docs/`](docs/README.md) | **規格與施工標準** |
+
+三份不要互相抄。改了狀態就更新 `STATUS.md`，改了結論才動 `CLAUDE.md` 與 `docs/`。
 
 ---
 

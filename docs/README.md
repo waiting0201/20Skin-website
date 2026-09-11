@@ -2,6 +2,9 @@
 
 20SKIN 美醫集團網站改版專案的工程端文件。客戶交付物在 [`../output/`](../output/)。
 
+> 這裡記錄**規格與施工標準**。「做到哪裡了」在 [`../STATUS.md`](../STATUS.md)，
+> 專案規範與已定案決策在 [`../CLAUDE.md`](../CLAUDE.md)。
+
 ## 閱讀順序
 
 | # | 文件 | 內容 |
@@ -14,7 +17,7 @@
 | 05 | [roadmap](05-roadmap.md) | 導入時程 — 兩階段推進、成效指標、內部風險備註 |
 | 06 | [page-inventory](06-page-inventory.md) | **頁面清點與工程量估算** — 模板數、URL 數、工時提醒 |
 | 07 | [deployment](07-deployment.md) | **部署架構與 CI/CD** — Azure SWA（Free）＋ 獨立 Azure Functions（.NET 10．EF Core ＋ Dapper）＋ Blob ＋ SQL、平台硬限制、GitHub Actions、EF Core 遷移 |
-| 08 | [database](08-database.md) | **資料庫規劃** — 以功能單元劃分的 38 張表、共用內容主幹、權限與帳號、301 對照表、EF Core 對應與種子順序 |
+| 08 | [database](08-database.md) | **資料庫規劃** — 以功能單元劃分的 37 張表、共用內容主幹、權限與帳號、301 對照表、EF Core 對應與種子順序 |
 | 09 | [frontend](09-frontend.md) | **前端技術架構** — 一份 Nuxt 專案兩種產物、建置期資料流、純靜態站的三個執行期例外、21 個模板對應、後台 SPA |
 | 10 | [api](10-api.md) | **API 契約** — 回應信封、錯誤碼、端點清單、權限碼與五種角色對應 |
 | 11 | [backend-design](11-backend-design.md) | **後端施工標準** — 分層鐵律、集中式路由與預設拒絕、EF Core ＋ Dapper 分工、工作流狀態機、Coding Checklist |
