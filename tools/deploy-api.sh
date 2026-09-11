@@ -51,7 +51,9 @@ cd "$ROOT/functions"
 
 echo "── 確認 Azure 登入身分 ──"
 # func 沿用 az 的認證。沒登入的話它會在部署到一半才失敗，不如先問清楚。
-az account show --query "{訂閱:name, 帳號:user.name}" -o tsv
+# ⚠️ JMESPath 的鍵必須是 ASCII 識別字（中文要加引號才合法），而 -o tsv 本來就不印鍵名
+#    —— 所以這裡直接取值，不要寫成 {訂閱:name, ...}（實測 invalid jmespath_type）。
+az account show --query "[name, user.name]" -o tsv
 
 if [[ $CHECKS == 1 ]]; then
   echo "── pre-flight：建置（docs/11 §15：0 errors / 0 warnings）──"
