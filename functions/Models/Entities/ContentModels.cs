@@ -40,6 +40,13 @@ public sealed class Treatment : ContentItem
     /// <summary>儀器／原廠資訊。</summary>
     public string? DeviceInfo { get; set; }
 
+    /// <summary>
+    /// 療程流程（區塊 JSON）。
+    /// ⚠️ 與 <see cref="Mechanism"/> 分開是刻意的：「原理」講的是為什麼有效，
+    /// 「流程」講的是當天會發生什麼事，兩者在細節頁是兩個區塊，併成一格會讓後台編輯看到兩件事混在一起。
+    /// </summary>
+    public string? Steps { get; set; }
+
     /// <summary>封面圖（docs/08 §0 決策五：內嵌欄位，不是媒體庫的外鍵）。</summary>
     public UploadedImage? Cover { get; set; }
 
@@ -93,6 +100,10 @@ public sealed class DoctorTag
 {
     public int Id { get; set; }
     public int DoctorId { get; set; }
+
+    /// <summary>列表卡片的專長標籤／個人頁的「擅長項目」是兩個區塊，見 <see cref="DoctorTagType"/>。</summary>
+    public DoctorTagType Type { get; set; }
+
     public string Tag { get; set; } = string.Empty;
     public int SortOrder { get; set; }
 
@@ -268,6 +279,13 @@ public sealed class Faq : ContentItem
     /// （輸出 <c>dateModified</c>），改個錯字不該讓它跳動。
     /// </summary>
     public DateOnly LastReviewedOn { get; set; }
+
+    /// <summary>
+    /// 審閱者署名，例如「黃勇學 醫師」。
+    /// ⚠️ 是**自由文字不是外鍵**：審閱者未必是站內有個人頁的醫師，而且這一欄的用途是
+    /// 對外顯示「這則答案由誰確認過」，不需要、也不該因為該醫師離職就跟著消失。
+    /// </summary>
+    public string? ReviewedBy { get; set; }
 
     public Term Category { get; set; } = null!;
 }

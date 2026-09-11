@@ -32,13 +32,14 @@ export const doctorUnit: UnitDefinition = {
       label: '學歷與經歷',
       type: 'repeater',
       group: '學經歷',
-      hint: '可重複欄位（docs/02 §1）。型別：學歷／經歷／證照與學會資格。',
+      hint: '可重複欄位（docs/02 §1）。型別：現職／學歷／經歷／證照與學會資格。⚠️ 「現職」與「經歷」是個人頁時間軸上兩種不同的標籤，不要混用。',
       repeaterFields: [
         {
           key: 'type',
           label: '類型',
           type: 'select',
           options: [
+            { value: '4', label: '現職' },
             { value: '1', label: '學歷' },
             { value: '2', label: '經歷' },
             { value: '3', label: '證照與學會資格' },
@@ -47,7 +48,8 @@ export const doctorUnit: UnitDefinition = {
         { key: 'text', label: '內容', type: 'text' },
       ],
     },
-    { key: 'tags', label: '專長標籤', type: 'tags', group: '學經歷', hint: '刻意不走「分類與標籤」模型——專長標籤不產生 URL、不需要 SEO 欄位（docs/02 §1）。' },
+    { key: 'tags', label: '專長標籤', type: 'tags', group: '學經歷', hint: '列表卡片上的標籤。刻意不走「分類與標籤」模型——專長標籤不產生 URL、不需要 SEO 欄位（docs/02 §1）。' },
+    { key: 'expertiseTags', label: '擅長項目', type: 'tags', group: '學經歷', hint: '個人頁的「擅長項目」區塊，與上面的專長標籤是兩個不同的區塊（docs/08 §C-2 DoctorTags.Type）。' },
     { key: 'bio', label: '簡介', type: 'richtext', group: '簡介', riskScan: true },
     { key: 'publications', label: '著作', type: 'textarea', group: '簡介' },
     {

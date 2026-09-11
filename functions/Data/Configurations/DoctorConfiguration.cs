@@ -30,8 +30,11 @@ public sealed class DoctorTagConfiguration : IEntityTypeConfiguration<DoctorTag>
 {
     public void Configure(EntityTypeBuilder<DoctorTag> b)
     {
-        b.ToTable("DoctorTags");
+        b.ToTable("DoctorTags", t => t.HasCheckConstraint(
+            "CK_DoctorTags_Type", "[Type] BETWEEN 1 AND 2"));
+
         b.HasKey(x => x.Id).HasName("PK_DoctorTags");
+        b.Property(x => x.Type).HasColumnType("tinyint");
 
         b.Property(x => x.Tag).HasMaxLength(40).IsRequired();
 
@@ -40,8 +43,8 @@ public sealed class DoctorTagConfiguration : IEntityTypeConfiguration<DoctorTag>
             .HasConstraintName("FK_DoctorTags_Doctors")
             .OnDelete(DeleteBehavior.Cascade);
 
-        // 醫師個人頁的專長標籤顯示順序
-        b.HasIndex(x => new { x.DoctorId, x.SortOrder }).HasDatabaseName("IX_DoctorTags_Doctor_Sort");
+        // 兩組標籤各自分段顯示（列表卡片的專長標籤／個人頁的擅長項目），所以 Type 進索引
+        b.HasIndex(x => new { x.DoctorId, x.Type, x.SortOrder }).HasDatabaseName("IX_DoctorTags_Doctor_Type_Sort");
     }
 }
 
@@ -50,7 +53,7 @@ public sealed class DoctorCredentialConfiguration : IEntityTypeConfiguration<Doc
     public void Configure(EntityTypeBuilder<DoctorCredential> b)
     {
         b.ToTable("DoctorCredentials", t => t.HasCheckConstraint(
-            "CK_DoctorCredentials_Type", "[Type] BETWEEN 1 AND 3"));
+            "CK_DoctorCredentials_Type", "[Type] BETWEEN 1 AND 4"));
 
         b.HasKey(x => x.Id).HasName("PK_DoctorCredentials");
 

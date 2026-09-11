@@ -31,6 +31,7 @@ export const treatmentUnit: UnitDefinition = {
     { key: 'mechanism', label: '原理', type: 'richtext', group: '療程內容', riskScan: true },
     { key: 'durationText', label: '療程時間', type: 'text', group: '療程內容' },
     { key: 'sessionsText', label: '建議次數', type: 'text', group: '療程內容' },
+    { key: 'steps', label: '療程流程', type: 'richtext', group: '療程內容', hint: '當天會發生什麼事。與「原理」（為什麼有效）是細節頁上兩個不同的區塊。' },
     { key: 'aftercare', label: '術後照護', type: 'textarea', group: '療程內容' },
     {
       key: 'contraindications',

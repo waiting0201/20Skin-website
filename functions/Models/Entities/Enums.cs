@@ -68,6 +68,25 @@ public enum CredentialType : byte
     Education = 1,
     Experience = 2,
     Certification = 3,
+
+    /// <summary>
+    /// 現職。⚠️ 與 <see cref="Experience"/> 分開是刻意的：醫師個人頁的時間軸把
+    /// 「現職」與「經歷」當成兩種標籤渲染，併成一種會讓畫面上的標籤變掉（2026-09-11 內容搬遷時發現）。
+    /// </summary>
+    CurrentPosition = 4,
+}
+
+/// <summary>
+/// 醫師標籤的分組（docs/08 §C-2）。
+/// <para>
+/// ⚠️ 兩組標籤在個人頁是**兩個不同的區塊**：<see cref="Specialty"/> 是列表卡片上的專長標籤，
+/// <see cref="Expertise"/> 是個人頁「擅長項目」。沒有這一欄就會混成同一串。
+/// </para>
+/// </summary>
+public enum DoctorTagType : byte
+{
+    Specialty = 1,
+    Expertise = 2,
 }
 
 /// <summary>案例照片的階段（docs/08 §C-5）。</summary>

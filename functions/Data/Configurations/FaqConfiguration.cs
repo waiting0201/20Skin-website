@@ -20,6 +20,9 @@ public sealed class FaqConfiguration : IEntityTypeConfiguration<Faq>
         b.Property(x => x.WebAnswer).IsRequired();          // nvarchar(max)
         b.Property(x => x.AiAnswer).HasMaxLength(500).IsRequired();
 
+        // 審閱者署名（自由文字，不是外鍵——見 Faq.ReviewedBy 的說明）
+        b.Property(x => x.ReviewedBy).HasMaxLength(100);
+
         b.HasOne(x => x.Category).WithMany()
             .HasForeignKey(x => x.CategoryTermId)
             .HasConstraintName("FK_Faqs_Terms_Category")

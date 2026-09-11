@@ -333,6 +333,20 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 | schema | **35 張表 ＋ 165 列種子已套用**，用 `efbundle`（docs/11 §13）。兩支遷移都已套用，見下方 |
 | 驗證 | `InitialSchema` 當時：表數 37、匿名約束 0、AI FAQ 開關 `false`、外部網域 2 筆 |
 
+### 🟡 第三支遷移 `AddContentFieldsForMigration`（2026-09-11，**尚未套用到正式庫**）
+
+搬 mockup 內容進資料庫時發現四個欄位無處可放，補上（已對本機 `Skin20_Dev` 實跑）：
+
+| 欄位 | 為什麼非補不可 |
+|---|---|
+| `DoctorCredentials.Type` 放寬到 **4＝現職** | 個人頁時間軸把「現職」與「經歷」當兩種標籤，併一起畫面標籤就變了 |
+| `DoctorTags.Type`（1 專長標籤／2 擅長項目） | 個人頁是兩個區塊，沒有這欄會混成同一串 |
+| `Faqs.ReviewedBy` nvarchar(100) | 「這則答案由誰確認過」，前台有顯示 |
+| `Treatments.Steps` nvarchar(max) | 療程流程。與「原理」是細節頁兩個區塊，併一格後台會看到兩件事混在一起 |
+
+⚠️ `DoctorTags.Type` 的一次性回填值手動改成 1（EF 預設產 0，會違反 `CK_DoctorTags_Type`）。
+兩邊的 `DoctorTags` 目前都是空的，但遷移不該只在空表上成立（docs/11 §13）。
+
 ### ✅ 遷移到 `RemoveMediaLibrary`（2026-09-11）
 
 不做媒體庫的 schema 改動**已套用到正式庫**。以本機 `efbundle` 執行，身分走

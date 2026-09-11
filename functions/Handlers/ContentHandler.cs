@@ -1320,6 +1320,7 @@ public sealed class ContentHandler(
         ["aftercare"] = t.Aftercare,
         ["contraindications"] = t.Contraindications,
         ["deviceInfo"] = t.DeviceInfo,
+        ["steps"] = t.Steps,
         ["cover"] = ImageFields(t.Cover),
         ["images"] = t.Images.OrderBy(i => i.SortOrder).Select(i => new Dictionary<string, object?>
         {
@@ -1343,6 +1344,7 @@ public sealed class ContentHandler(
         if (f.TryGetProperty("aftercare", out _)) t.Aftercare = JStr(f, "aftercare");
         if (f.TryGetProperty("contraindications", out _)) t.Contraindications = JStr(f, "contraindications");
         if (f.TryGetProperty("deviceInfo", out _)) t.DeviceInfo = JStr(f, "deviceInfo");
+        if (f.TryGetProperty("steps", out _)) t.Steps = JStr(f, "steps");
         if (f.TryGetProperty("cover", out _)) t.Cover = JImage(f, "cover");
 
         if (f.TryGetProperty("images", out var imagesEl) && imagesEl.ValueKind == JsonValueKind.Array)
@@ -1369,8 +1371,9 @@ public sealed class ContentHandler(
         ["photo"] = ImageFields(d.Photo),
         ["bio"] = d.Bio,
         ["publications"] = d.Publications,
-        ["tags"] = d.Tags.OrderBy(x => x.SortOrder).Select(x => new Dictionary<string, object?>
+        ["tags"] = d.Tags.OrderBy(x => x.Type).ThenBy(x => x.SortOrder).Select(x => new Dictionary<string, object?>
         {
+            ["type"] = (byte)x.Type,
             ["tag"] = x.Tag,
             ["sortOrder"] = x.SortOrder,
         }).ToList(),
@@ -1409,6 +1412,8 @@ public sealed class ContentHandler(
             {
                 d.Tags.Add(new DoctorTag
                 {
+                    // ⚠️ 兩組標籤是個人頁的兩個區塊（docs/08 §C-2），沒帶就會混成同一串。
+                    Type = (DoctorTagType)(JInt(tag, "type") ?? (int)DoctorTagType.Specialty),
                     Tag = tag.GetProperty("tag").GetString() ?? string.Empty,
                     SortOrder = JInt(tag, "sortOrder") ?? 0,
                 });
@@ -1579,6 +1584,7 @@ public sealed class ContentHandler(
         ["webAnswer"] = f.WebAnswer,
         ["aiAnswer"] = f.AiAnswer,
         ["lastReviewedOn"] = f.LastReviewedOn.ToString("yyyy-MM-dd"),
+        ["reviewedBy"] = f.ReviewedBy,
     };
 
     private static void ApplyFaqFields(Faq faq, JsonElement f, bool isCreate)
@@ -1603,6 +1609,8 @@ public sealed class ContentHandler(
 
         if (JDateOnly(f, "lastReviewedOn") is DateOnly lastReviewedOn) faq.LastReviewedOn = lastReviewedOn;
         else if (isCreate) faq.LastReviewedOn = DateOnly.FromDateTime(Clock.UtcNow);
+
+        if (f.TryGetProperty("reviewedBy", out _)) faq.ReviewedBy = JStr(f, "reviewedBy");
     }
 
     // ── Clinic（docs/08 §C-7）──────────────────────────────────────────

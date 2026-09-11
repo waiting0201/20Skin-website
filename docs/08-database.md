@@ -264,7 +264,7 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 
 ### C-1 `Treatments` ＋ `TreatmentImages`
 
-`CategoryTermId` int NOT NULL FK → `Terms`（療程分類）、`NameEn`、`Subtitle`、`Indications`（適應症）、`Mechanism`（原理）、`DurationText`（療程時間）、`SessionsText`（建議次數）、`Aftercare`（術後照護）、`Contraindications`（禁忌症與注意事項）、`DeviceInfo`（儀器／原廠資訊）、`Cover` 內嵌圖片欄位（§0 決策四）
+`CategoryTermId` int NOT NULL FK → `Terms`（療程分類）、`NameEn`、`Subtitle`、`Indications`（適應症）、`Mechanism`（原理）、`DurationText`（療程時間）、`SessionsText`（建議次數）、`Aftercare`（術後照護）、`Contraindications`（禁忌症與注意事項）、`DeviceInfo`（儀器／原廠資訊）、**`Steps`（療程流程，區塊 JSON）**、`Cover` 內嵌圖片欄位（§0 決策四）
 
 `TreatmentImages`：`Id`, `TreatmentId` FK, `Image` 內嵌圖片欄位（**NOT NULL**）, `Caption`, `SortOrder`
 
@@ -278,8 +278,10 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 
 ⚠️ **`IsPhysician` 不是可有可無的欄位。** 14 位團隊成員是 **13 位醫師 ＋ 1 位藝術總監**（安喬／許媖琄，兼執行長與「新中式美學」創始人）。資料層若預設全部是醫師，前台的「本文由 ○○ 醫師審閱」與 `Physician` schema 就會掛錯人。
 
-- `DoctorTags`（`Id`, `DoctorId`, `Tag` nvarchar(40), `SortOrder`）—— 專長標籤。**刻意不走 `Terms`**：專長標籤不產生 URL、不需要 SEO 欄位，塞進 `Terms` 會破壞「每一筆 Term 都是 ContentItem、都可能有頁面」這條規則。
-- `DoctorCredentials`（`Id`, `DoctorId`, `Type` tinyint〔1 學歷／2 經歷／3 證照與學會資格〕, `Text` nvarchar(300), `SortOrder`）—— [02](02-backend-cms.md) §1 的「可重複欄位」
+- `DoctorTags`（`Id`, `DoctorId`, **`Type` tinyint〔1 專長標籤／2 擅長項目〕**, `Tag` nvarchar(40), `SortOrder`）—— **刻意不走 `Terms`**：專長標籤不產生 URL、不需要 SEO 欄位，塞進 `Terms` 會破壞「每一筆 Term 都是 ContentItem、都可能有頁面」這條規則。
+  ⚠️ **`Type` 不是可有可無的**：個人頁上「列表卡片的專長標籤」與「擅長項目」是兩個不同的區塊，少了這一欄兩組會混成同一串（2026-09-11 內容搬遷時發現）。
+- `DoctorCredentials`（`Id`, `DoctorId`, `Type` tinyint〔1 學歷／2 經歷／3 證照與學會資格／**4 現職**〕, `Text` nvarchar(300), `SortOrder`）—— [02](02-backend-cms.md) §1 的「可重複欄位」
+  ⚠️ **「現職」與「經歷」分開是刻意的**：個人頁時間軸把兩者當成不同標籤渲染，併成一種畫面上的標籤就變了（2026-09-11 內容搬遷時發現）。
 - `DoctorSchedules`（`Id`, `DoctorId`, `ClinicId` FK, `DayOfWeek` tinyint 0–6, `StartTime` time(0), `EndTime` time(0), `Note`）—— 看診時段
 
 「公開／隱藏」**不另開欄位**，用 `ContentItems.Status` 表達。同一件事有兩個開關，遲早會不同步。
@@ -337,6 +339,7 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 | `WebAnswer` nvarchar(max) **NOT NULL** | 網頁版 150–400 字 |
 | `AiAnswer` nvarchar(500) **NOT NULL** | AI 摘要版 60–100 字，語意自足 |
 | `LastReviewedOn` date NOT NULL | 最後更新日 |
+| `ReviewedBy` nvarchar(100) NULL | 審閱者署名，如「黃勇學 醫師」。⚠️ **自由文字不是外鍵**：審閱者未必是站內有個人頁的醫師，且這一欄的用途是對外顯示「這則答案由誰確認過」，不該因為該醫師離職就跟著消失 |
 
 - 問題本體＝`ContentItems.Title`
 - FAQ **不產生獨立網址** → `ContentItems.UrlPath` 為 NULL；`Slug` 仍填，當 `/faq/` 的頁內錨點用
