@@ -17,7 +17,7 @@ export const concernUnit: UnitDefinition = {
     { key: 'causes', label: '成因', type: 'textarea', group: '內容' },
     { key: 'selfCheckGuide', label: '自我判斷指引', type: 'textarea', group: '內容' },
     { key: 'whenToSeeDoctor', label: '何時該就醫', type: 'textarea', group: '內容' },
-    { key: 'coverImageUrl', label: '封面圖', type: 'image', group: '圖片' },
+    { key: 'cover', label: '封面圖', type: 'image', group: '圖片' },
   ],
   relations: [
     {

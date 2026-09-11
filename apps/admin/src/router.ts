@@ -19,7 +19,6 @@ const UnitEdit = () => import('@/pages/UnitEdit.vue')
 // /:unit 路由，這些各有各的形狀，所以一個畫面一支元件。
 const SYSTEM_SCREENS: { path: string; name: string; permission: string; component: () => Promise<unknown> }[] = [
   { path: '/review',        name: 'review',        permission: 'review.view',   component: () => import('@/pages/Review.vue') },
-  { path: '/media',         name: 'media',         permission: 'media.view',    component: () => import('@/pages/Media.vue') },
   { path: '/questions',     name: 'questions',     permission: 'question.view', component: () => import('@/pages/Questions.vue') },
   { path: '/sitemap',       name: 'sitemap',       permission: 'setting.view',  component: () => import('@/pages/SitemapSettings.vue') },
   { path: '/redirects',     name: 'redirects',     permission: 'redirect.view', component: () => import('@/pages/Redirects.vue') },

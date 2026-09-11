@@ -12,12 +12,13 @@
 | **不做 log** | 不建操作日誌、登入紀錄、搜尋日誌。原與 [02-backend-cms.md](02-backend-cms.md) §4 相衝，**2026-09-11 已確認拿掉並同步全部文件**，見 §I |
 | **後台帳號不用 email** | 登入識別為 `UserName`，email 降為選填的通知欄位。超級管理員種子帳號 `sa@system.local` / `Admin@123` |
 | **不做雙因素**（2026-09-11 追加） | `Users` 移除三個 TwoFactor 欄位、`TwoFactorRecoveryCodes` 整張表刪除。⚠️ 連帶後果見 §A-5 |
+| **不做媒體庫**（2026-09-11 追加） | `MediaAssets`／`MediaUsages` 整組刪除，圖片改成擁有者表上的內嵌欄位。見 §0 決策四 |
 
-**合計 37 張表。**
+**合計 35 張表。**
 
 ---
 
-## 0. 先講三個貫穿全域的決策
+## 0. 先講四個貫穿全域的決策
 
 ### 決策一：九個內容模型共用一張主幹表
 
@@ -46,6 +47,28 @@
 | **`Slug`／`UrlPath`／`Redirects.FromPath`／`ToPath`** | **`Latin1_General_100_BIN2`** | 網址是位元組比對，不該做語言排序。BIN2 讓 index seek 最快、比對結果可預測，也避免「大小寫不同的網址被視為同一筆」這種難查的問題 |
 
 ⚠️ 這要在 migration 的欄位定義上逐欄指定（EF Core `.UseCollation()`），不能只設資料庫預設。
+
+### 決策四：不做媒體庫，圖片是欄位的一部分
+
+**2026-09-11 定案**（客戶指定）。上傳不做成媒體庫 —— 沒有「所有檔案」的清單畫面、沒有挑圖瀏覽器、沒有獨立的刪除入口。上傳只發生在**需要那張圖的欄位裡**，上傳完成就是那個欄位的值。
+
+因此 `MediaAssets`／`MediaUsages` 兩張表**不存在**，`CoverMediaId`／`PhotoMediaId`／`OgImageMediaId` 這類外鍵也不存在。取而代之的是一組內嵌欄位，以 EF Core 的 **owned type** 落在擁有者自己那張表上：
+
+| 欄位 | 型別 | 說明 |
+|---|---|---|
+| `{前綴}Url` | nvarchar(600) | 對外網址。架構中沒有 CDN，圖片由 Blob 直接服務，靠長效 `Cache-Control` |
+| `{前綴}BlobPath` | nvarchar(400) | 換圖與刪內容時要靠它把舊檔案從 Blob 刪掉 |
+| `{前綴}Alt` | nvarchar(300) NULL | ⚠️ 舊站 alt 普遍缺漏，遷移時要補（[02](02-backend-cms.md) §7 步驟 6） |
+| `{前綴}Width`／`{前綴}Height` | int NULL | 回報端點讀檔頭量到的尺寸 |
+| `{前綴}Variants` | nvarchar(max) NULL | 衍生尺寸（WebP／AVIF、`srcset`）的 JSON。⚠️ 用 JSON 是刻意的：衍生尺寸誰來產尚未定案（[07](07-deployment.md) §3），兩種做法確定後都不必再做一次 migration |
+
+前綴共十處：`Treatments.Cover`、`TreatmentImages.Image`、`Doctors.Photo`、`Concerns.Cover`、`Articles.Cover`、`CaseImages.Image`、`ClinicPhotos.Image`、`Pages.Cover`、`Terms.Cover`、`SeoMeta.OgImage`。**圖庫明細列（`TreatmentImages`／`CaseImages`／`ClinicPhotos`）的圖片欄位 NOT NULL** —— 那些列的存在理由就是那張圖。
+
+三個連帶後果，**都不是疏漏**：
+
+1. **一個欄位獨佔一個 blob，不跨內容去重。** 上傳時 blob 名稱是隨機唯一值而不是內容雜湊 —— 兩個欄位選了同一張圖就是兩份位元組。沒有 `MediaUsages` 之後「還有誰在用這個檔案」無從查起，去重會讓「換圖就刪舊檔」變成可能刪掉別人正在用的檔案。多存一份位元組遠比斷圖便宜
+2. **換圖、移除、刪內容時，舊檔案當場從 Blob 刪掉**（[11](11-backend-design.md) §9）。連帶：**版本還原救不回已經被刪掉的圖片** —— 還原只還原記錄
+3. **只收圖片。** 非圖片檔案在後台沒有任何欄位可以承接，`media-private` 容器因此沒有任何內容欄位會用到。日後要放 PDF 是「內文檔案區塊」這個獨立需求
 
 ---
 
@@ -207,7 +230,7 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 | `ContentItemId` int **PK ＋ FK**（1:1） | |
 | `SeoTitle` nvarchar(200) NULL | 留空則由內容自動組出 |
 | `MetaDescription` nvarchar(400) NULL | |
-| `OgImageMediaId` int NULL FK → `MediaAssets` | |
+| `OgImage` 內嵌圖片欄位（`OgImageUrl`／`OgImageBlobPath`／`OgImageAlt`／…） | §0 決策四。**不是外鍵** —— 沒有媒體庫可以指 |
 | `CanonicalOverride` nvarchar(300) NULL | |
 | `NoIndex` bit NOT NULL DEFAULT 0 | **文章標籤種子為 1** |
 | `StructuredDataOverride` nvarchar(max) NULL | JSON-LD 覆寫，一般情況留空由系統產生 |
@@ -241,9 +264,9 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 
 ### C-1 `Treatments` ＋ `TreatmentImages`
 
-`CategoryTermId` int NOT NULL FK → `Terms`（療程分類）、`NameEn`、`Subtitle`、`Indications`（適應症）、`Mechanism`（原理）、`DurationText`（療程時間）、`SessionsText`（建議次數）、`Aftercare`（術後照護）、`Contraindications`（禁忌症與注意事項）、`DeviceInfo`（儀器／原廠資訊）、`CoverMediaId` FK
+`CategoryTermId` int NOT NULL FK → `Terms`（療程分類）、`NameEn`、`Subtitle`、`Indications`（適應症）、`Mechanism`（原理）、`DurationText`（療程時間）、`SessionsText`（建議次數）、`Aftercare`（術後照護）、`Contraindications`（禁忌症與注意事項）、`DeviceInfo`（儀器／原廠資訊）、`Cover` 內嵌圖片欄位（§0 決策四）
 
-`TreatmentImages`：`Id`, `TreatmentId` FK, `MediaId` FK, `Caption`, `SortOrder`
+`TreatmentImages`：`Id`, `TreatmentId` FK, `Image` 內嵌圖片欄位（**NOT NULL**）, `Caption`, `SortOrder`
 
 ⚠️ **`UrlPath` 依賴 `CategoryTermId`** —— `/treatments/{分類}/{slug}/`。換分類就會改網址，因此**換分類時應用程式必須自動寫一筆 `Redirects`**（§H，`Source=3`）。[02](02-backend-cms.md) §1 說「分類是實體之後，療程換分類是後台操作」，schema 要讓這件事可以安全執行，不是只讓它可以按。
 
@@ -251,7 +274,7 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 
 ### C-2 `Doctors` ＋ `DoctorTags` ＋ `DoctorCredentials` ＋ `DoctorSchedules`
 
-`Doctors`：`JobTitle`（職稱）、**`IsPhysician` bit NOT NULL**、`Specialty`（專科）、`PhotoMediaId` FK、`Bio`、`Publications`
+`Doctors`：`JobTitle`（職稱）、**`IsPhysician` bit NOT NULL**、`Specialty`（專科）、`Photo` 內嵌圖片欄位、`Bio`、`Publications`
 
 ⚠️ **`IsPhysician` 不是可有可無的欄位。** 14 位團隊成員是 **13 位醫師 ＋ 1 位藝術總監**（安喬／許媖琄，兼執行長與「新中式美學」創始人）。資料層若預設全部是醫師，前台的「本文由 ○○ 醫師審閱」與 `Physician` schema 就會掛錯人。
 
@@ -263,7 +286,7 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 
 ### C-3 `Concerns`
 
-`Symptoms`（症狀描述）、`Causes`（成因）、`SelfCheckGuide`（自我判斷指引）、`WhenToSeeDoctor`（何時該就醫）、`CoverMediaId` FK
+`Symptoms`（症狀描述）、`Causes`（成因）、`SelfCheckGuide`（自我判斷指引）、`WhenToSeeDoctor`（何時該就醫）、`Cover` 內嵌圖片欄位
 
 「建議療程（多選＋排序＋推薦理由）」走 §D 的 `ContentRelations`，`RelationType=5`，用上該表的 `SortOrder` 與 `Note`。**`Note` 欄位存在的唯一理由就是這個推薦理由**。
 
@@ -279,7 +302,7 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 | `ReviewerDoctorId` int NULL FK → `Doctors` | 審閱醫師 |
 | `ReviewedOn` date NULL | 審閱日期 |
 | **`DisplayDate`** datetime2 NOT NULL | **對外顯示的發布日期。遷移時保留舊站原始日期** |
-| `CoverMediaId` int NULL FK | |
+| `Cover` 內嵌圖片欄位（§0 決策四） | |
 | `Summary` nvarchar(500) | 摘要 |
 | `BodyBlocks` nvarchar(max) | 區塊編輯器內容（JSON 區塊陣列） |
 | `ReadingMinutes` int NULL | 可由字數自動算 |
@@ -304,7 +327,7 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 
 ⚠️ **用 NOT NULL 在資料層強制，不是只在前端驗證。** [02](02-backend-cms.md) §7 定案內容遷移以本機腳本**直連 SQL** 執行 —— 腳本繞過 API，也就繞過所有前端與 API 層的驗證，這時候只有資料庫約束擋得住。
 
-`CaseImages`：`Id`, `CaseId` FK, `MediaId` FK, `Phase` tinyint（1 術前／2 術後）, `TakenOn` date NULL, `SortOrder`
+`CaseImages`：`Id`, `CaseId` FK, `Image` 內嵌圖片欄位（**NOT NULL**）, `Phase` tinyint（1 術前／2 術後）, `TakenOn` date NULL, `SortOrder`
 
 ### C-6 `Faqs`
 
@@ -332,7 +355,7 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 
 ⚠️ **一天可以有多列，午休斷點就是這樣表達的**（09:00–12:00 ／ 14:30–21:00）。**不要用「開始／結束＋午休開始／午休結束」四個欄位** —— 那撐不住第三段診次，也很難輸出 `openingHoursSpecification`。休診日＝該 `DayOfWeek` 一列都沒有。
 
-`ClinicPhotos`：`Id`, `ClinicId` FK, `MediaId` FK, `Caption`, `SortOrder`
+`ClinicPhotos`：`Id`, `ClinicId` FK, `Image` 內嵌圖片欄位（**NOT NULL**）, `Caption`, `SortOrder`
 
 駐診醫師與可提供療程走 §D 的關聯表。
 
@@ -344,7 +367,7 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 | `SystemKey` nvarchar(40) NULL UNIQUE | 系統頁識別碼 |
 | `Lead` nvarchar(max) | 導言 |
 | `BodyBlocks` nvarchar(max) NULL | 自由頁內文；系統頁不用 |
-| `CoverMediaId` int NULL FK | |
+| `Cover` 內嵌圖片欄位（§0 決策四） | |
 | `ListSortRule` tinyint NULL | 系統頁：列表排序規則 |
 | `PageSize` int NULL | 系統頁：每頁筆數 |
 | `SuperAdminOnly` bit NOT NULL | 法務三頁為 1 |
@@ -370,7 +393,7 @@ contact              search              not-found
 |---|---|
 | `TermType` tinyint NOT NULL | 1 療程分類／2 文章分類／3 FAQ 分類／4 文章標籤 |
 | `Intro` nvarchar(max) NULL | 介紹文案 |
-| `CoverMediaId` int NULL FK | |
+| `Cover` 內嵌圖片欄位（§0 決策四） | |
 
 UNIQUE (`TermType`, `Slug`)
 
@@ -441,39 +464,15 @@ CHECK ((RelationType, FromContentType, ToContentType) IN (...合法組合...))
 
 ---
 
-## E. 媒體庫（2 張）
+## E. 上傳（0 張）
 
-> 後台畫面：媒體庫
+> 後台畫面：**沒有**。上傳沒有自己的畫面，只發生在需要那張圖的欄位裡。
 
-### E-1 `MediaAssets`
+**2026-09-11 定案不做媒體庫**（§0 決策四），所以這個功能單元一張表都沒有 —— 原本的 `MediaAssets`／`MediaUsages` 整組刪除。圖片是欄位的一部分，欄位長什麼樣見 §0 決策四。
 
-| 欄位 | 說明 |
-|---|---|
-| `Id` int PK | |
-| `ContainerName` nvarchar(63) | 公開容器／私有容器 |
-| `BlobPath` nvarchar(400) | **檔名用內容雜湊** —— 架構中沒有 CDN，圖片由 Blob 直接服務，靠長效 `Cache-Control` |
-| `PublicUrl` nvarchar(600) | 資料庫只存 URL，一個檔案都不進 build 產物 |
-| `OriginalFileName` nvarchar(260) | |
-| `ContentType` nvarchar(100) | |
-| `ByteSize` bigint／`Width` int NULL／`Height` int NULL | |
-| `ContentHash` char(64) UNIQUE | SHA-256，去重 |
-| **`AltText`** nvarchar(300) NULL | ⚠️ 舊站 alt 普遍缺漏，遷移時要補（[02](02-backend-cms.md) §7 步驟 6） |
-| `Caption` nvarchar(300) NULL | |
-| `IsPrivate` bit | 私有檔案走讀取 SAS 的另一個容器 |
-| `Variants` nvarchar(max) NULL | 衍生尺寸（WebP／AVIF、`srcset`）的 JSON |
-| `UploadedByUserId`／`CreatedAt` | |
+保留這個編號是為了讓 §F–§H 的段落編號與既有交叉引用不必重排。
 
-⚠️ **`Variants` 用 JSON 是刻意的。** [07](07-deployment.md) §3 的「衍生尺寸誰來產」尚未定案（瀏覽器端上傳前轉檔 vs Function App 以 sharp 轉檔）。用 JSON 承接，**兩種做法確定後都不必再做一次 migration**。
-
-⚠️ **這張表可能落後於 Blob 的實際內容。** 上傳是瀏覽器直傳（[07](07-deployment.md) §3：取 SAS → PUT Blob → 回報 API 寫入記錄），第三步失敗就會留下**孤兒 blob**。這不是 schema 能解決的，但需要一支對帳工具，且要列進上線前的驗收項目。
-
-### E-2 `MediaUsages`
-
-`Id`, `MediaId` FK, `ContentItemId` FK, `UsageKind` tinyint（1 封面／2 圖庫／3 內文嵌入／4 OG 圖）
-
-UNIQUE (`MediaId`, `ContentItemId`, `UsageKind`)
-
-刪除媒體前要知道誰在用。FK 欄位（`CoverMediaId` 等）用查詢就找得到，但**內嵌在 `BodyBlocks` JSON 裡的圖片查不到** —— 這張表由儲存內容時解析 `BodyBlocks` 寫入，是唯一能回答「這張圖被哪幾篇文章引用」的地方。
+⚠️ **孤兒檔仍然存在，只是換了成因。** 上傳是瀏覽器直傳（[07](07-deployment.md) §3：取 SAS → PUT Blob → 回報 API），回報那一步失敗就留下一個沒有任何欄位指向的 blob。少了 `MediaUsages`，對帳工具不能再查一張表，得掃過十個內嵌圖片欄位**以及 `BodyBlocks` 內文裡的插圖**。這支工具仍要列進上線前的驗收項目（[11](11-backend-design.md) §9）。
 
 ---
 
@@ -676,11 +675,11 @@ sitemap 的 5 個分檔（pages／treatments／concerns／doctors／blog）**不
 | **B 內容主幹** | `ContentItems`／`ContentVersions`／`ContentReviews`／`SeoMeta`／`RiskTerms` | 5 |
 | **C 九個內容模型** | `Treatments`／`TreatmentImages`／`Doctors`／`DoctorTags`／`DoctorCredentials`／`DoctorSchedules`／`Concerns`／`Articles`／`Cases`／`CaseImages`／`Faqs`／`Clinics`／`ClinicBusinessHours`／`ClinicPhotos`／`Pages`／`Terms` | 16 |
 | **D 內容關聯** | `ContentRelations` | 1 |
-| **E 媒體庫** | `MediaAssets`／`MediaUsages` | 2 |
+
 | **F FAQ 題庫成長** | `QuestionInbox` | 1 |
 | **G 站台編排** | `SiteSettings`／`HomeSections`／`HomeSectionItems`／`MenuItems` | 4 |
 | **H SEO 與 301** | `Redirects` | 1 |
-| **合計** | | **37** |
+| **合計** | | **35** |
 
 儀表板（[06](06-page-inventory.md) §5「系統」群組）**沒有專屬資料表**，全部是對上述表的聚合查詢。
 
@@ -694,7 +693,6 @@ Users ──┬─ UserRoles ── Roles ── RolePermissions ── Permissi
 ContentItems ─┬─ SeoMeta (1:1)            │
               ├─ ContentVersions ── ContentReviews
               ├─ ContentRelations (From / To，複合 FK 帶型別)
-              ├─ MediaUsages ── MediaAssets
               ├─ Redirects.ToContentItemId
               ├─ HomeSectionItems ── HomeSections
               ├─ MenuItems.ContentItemId

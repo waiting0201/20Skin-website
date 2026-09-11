@@ -20,10 +20,7 @@ public sealed class PageConfiguration : IEntityTypeConfiguration<Page>
         // ⚠️ ListSortRule 未在 docs/08 §C-8 定義合法值域（無對應列舉），因此這裡除了
         //    tinyint 的型別範圍外不加 CHECK——已回報，等值域確定後再補約束。
 
-        b.HasOne(x => x.CoverMedia).WithMany()
-            .HasForeignKey(x => x.CoverMediaId)
-            .HasConstraintName("FK_Pages_MediaAssets_Cover")
-            .OnDelete(DeleteBehavior.Restrict);
+        b.OwnsImage(x => x.Cover, "Cover");
 
         // 系統頁識別碼查找（如 SystemKey='home'、'contact'）
         b.HasIndex(x => x.SystemKey)

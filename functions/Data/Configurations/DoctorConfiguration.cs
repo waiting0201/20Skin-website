@@ -19,10 +19,7 @@ public sealed class DoctorConfiguration : IEntityTypeConfiguration<Doctor>
         // ⚠️ 刻意不給 HasDefaultValue：14 位是 13 醫師 ＋ 1 藝術總監，
         //    每一筆都必須由寫入端明確給值，不容許靜默落成某個預設。
 
-        b.HasOne(x => x.PhotoMedia).WithMany()
-            .HasForeignKey(x => x.PhotoMediaId)
-            .HasConstraintName("FK_Doctors_MediaAssets_Photo")
-            .OnDelete(DeleteBehavior.Restrict);
+        b.OwnsImage(x => x.Photo, "Photo");
 
         // 團隊列表頁按「是否為醫師」篩選（首頁醫師版位、team-index）。
         b.HasIndex(x => x.IsPhysician).HasDatabaseName("IX_Doctors_IsPhysician");

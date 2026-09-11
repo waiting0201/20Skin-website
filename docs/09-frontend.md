@@ -201,8 +201,8 @@ AND (UnpublishAt IS NULL OR UnpublishAt >  @now)
 
 **架構中沒有 CDN，圖片由 Blob Storage 直接服務**（[07](07-deployment.md) §3）。因此：
 
-- 上傳時就寫入長效 `Cache-Control`，並以內容雜湊當檔名
-- `srcset` 的各尺寸來自 `MediaAssets.Variants`（JSON，[08](08-database.md) §E-1）。**衍生尺寸由誰產是待決項**（瀏覽器端上傳前轉檔 vs Function 端以 sharp 轉檔，[07](07-deployment.md) §3 末段）—— 前端這側兩種都吃得下，但要先定案才能寫上傳流程
+- 上傳時就寫入長效 `Cache-Control`。**檔名是隨機唯一值，不是內容雜湊** —— 一個欄位獨佔一個 blob，不跨內容去重（[08](08-database.md) §0 決策四）。內容永遠不變，一樣可以用 `immutable` 快取
+- `srcset` 的各尺寸來自圖片欄位的 `{前綴}Variants`（JSON，[08](08-database.md) §0 決策四）。**衍生尺寸由誰產是待決項**（瀏覽器端上傳前轉檔 vs Function 端以 sharp 轉檔，[07](07-deployment.md) §3 末段）—— 前端這側兩種都吃得下，但要先定案才能寫上傳流程
 - 每張圖必須有明確的 `width`／`height`，這是 CLS 的主要來源
 - 首屏外一律 lazy load
 
@@ -264,16 +264,25 @@ apps/admin/src/router.ts               # /、/login、/:unit、/:unit/:id（base
 
 ---
 
-## 9. 上傳：瀏覽器直傳 Blob
+## 9. 上傳：欄位裡直傳 Blob
+
+🔴 **沒有媒體庫**（2026-09-11 定案）。上傳只發生在需要那張圖的欄位裡 —— 沒有清單畫面、沒有挑圖瀏覽器、沒有刪除入口。
 
 ```
-後台選檔
-  → POST /admin/media/sas         取短效寫入 SAS（限定容器與 blob 名稱、write only、數分鐘到期）
+在某個圖片欄位按「上傳圖片」
+  → POST /admin/upload/sas        取短效寫入 SAS（限定容器與 blob 名稱、write only、數分鐘到期）
   → 瀏覽器直接 PUT 到 Blob
-  → POST /admin/media             回報並寫入 MediaAssets
+  → POST /admin/upload/commit     回報；API 讀檔頭驗真實型別，回傳一組圖片值
+  → 前端把那組值放進欄位，隨內容一起 PUT /admin/{unit}/{id} 存下
 ```
+
+⚠️ **回報端點回傳的東西，就是欄位要存的東西**（`{ blobPath, url, alt, width, height, variants }`，[08](08-database.md) §0 決策四）。`blobPath` 要原封不動存回去 —— 少了它，這張圖被換掉時 API 找不到檔案可刪。
 
 **檔案不經過 API 的 request body。** 讓大檔流經 Function 是白付執行時間與記憶體，而且直傳本來就比較快（[07](07-deployment.md) §3）。
+
+圖片欄位的 UI 只有三個動作：**上傳、改 alt、移除**。
+
+🔴 **「移除」是真的會刪檔**，不是解除引用 —— 存檔之後那個網址就是 404，版本還原也救不回來（[11](11-backend-design.md) §9）。按鈕與還原畫面的文案要照實說。
 
 ⚠️ **Storage 帳戶的 CORS 必須放行 `https://20skin.tw` 的 `PUT`**，這與 Function App 的 CORS 是**兩套各自獨立的設定**。上線前驗收時來源是 SWA 的預設網址（`*.azurestaticapps.net`），那個也要一併放行。
 
@@ -306,7 +315,8 @@ apps/admin/src/router.ts               # /、/login、/:unit、/:unit/:id（base
 | ISR／on-demand revalidation | SWA 沒有。內容更新一律走重建 |
 | 會員／預約／購物 | 已排除於範圍（CLAUDE.md 決策 4） |
 | 前台直連資料庫 | 前台是靜態檔案，沒有執行期 |
-| 媒體庫的「插入既有圖片」瀏覽器 | [02](02-backend-cms.md) 決議：圖片只能從所屬欄位上傳 |
+| **媒體庫**（清單、挑圖瀏覽器、獨立刪除入口） | 2026-09-11 客戶指定不做。圖片只能從所屬欄位上傳，見 §9 與 [08](08-database.md) §0 決策四 |
+| 上傳非圖片檔案 | 沒有媒體庫之後，PDF 之類的檔案在後台沒有欄位可以承接（[02](02-backend-cms.md) §4） |
 
 ---
 

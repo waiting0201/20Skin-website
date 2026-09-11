@@ -34,7 +34,6 @@ const unitNavItems = computed<NavItem[]>(() =>
 // ⚠️ 兩處的權限碼要一致 —— 選單看得到卻進不去，比選單不顯示更難查。
 const SYSTEM_NAV: { label: string; href: string; permission: string }[] = [
   { label: '審核佇列', href: '/review', permission: 'review.view' },
-  { label: '媒體庫', href: '/media', permission: 'media.view' },
   { label: '未命中題目清單', href: '/questions', permission: 'question.view' },
   { label: 'sitemap 設定', href: '/sitemap', permission: 'setting.view' },
   { label: '301 轉址管理', href: '/redirects', permission: 'redirect.view' },

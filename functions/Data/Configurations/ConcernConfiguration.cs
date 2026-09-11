@@ -14,9 +14,6 @@ public sealed class ConcernConfiguration : IEntityTypeConfiguration<Concern>
 
         // Symptoms／Causes／SelfCheckGuide／WhenToSeeDoctor：真正的長文，nvarchar(max)。
 
-        b.HasOne(x => x.CoverMedia).WithMany()
-            .HasForeignKey(x => x.CoverMediaId)
-            .HasConstraintName("FK_Concerns_MediaAssets_Cover")
-            .OnDelete(DeleteBehavior.Restrict);
+        b.OwnsImage(x => x.Cover, "Cover");
     }
 }

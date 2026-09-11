@@ -57,8 +57,6 @@ public sealed class Skin20DbContext(DbContextOptions<Skin20DbContext> options) :
 
     // ── D–H ──────────────────────────────────────────────────────────
     public DbSet<ContentRelation> ContentRelations => Set<ContentRelation>();
-    public DbSet<MediaAsset> MediaAssets => Set<MediaAsset>();
-    public DbSet<MediaUsage> MediaUsages => Set<MediaUsage>();
     public DbSet<QuestionInbox> QuestionInboxItems => Set<QuestionInbox>();
     public DbSet<SiteSetting> SiteSettings => Set<SiteSetting>();
     public DbSet<HomeSection> HomeSections => Set<HomeSection>();

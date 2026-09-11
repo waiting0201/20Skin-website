@@ -28,10 +28,7 @@ public sealed class TreatmentConfiguration : IEntityTypeConfiguration<Treatment>
         // 相依資料（含補寫 Redirects），不要讓刪分類意外砍光療程分類欄。
         b.HasIndex(x => x.CategoryTermId).HasDatabaseName("IX_Treatments_CategoryTermId");
 
-        b.HasOne(x => x.CoverMedia).WithMany()
-            .HasForeignKey(x => x.CoverMediaId)
-            .HasConstraintName("FK_Treatments_MediaAssets_Cover")
-            .OnDelete(DeleteBehavior.Restrict);
+        b.OwnsImage(x => x.Cover, "Cover");
     }
 }
 
@@ -50,11 +47,8 @@ public sealed class TreatmentImageConfiguration : IEntityTypeConfiguration<Treat
             .HasConstraintName("FK_TreatmentImages_Treatments")
             .OnDelete(DeleteBehavior.Cascade);
 
-        // 媒體刪除前要先確認沒有明細列還在用它，Restrict 當最後一道防線。
-        b.HasOne(x => x.Media).WithMany()
-            .HasForeignKey(x => x.MediaId)
-            .HasConstraintName("FK_TreatmentImages_MediaAssets")
-            .OnDelete(DeleteBehavior.Restrict);
+        // 圖片內嵌在明細列上：刪掉這一列就等於解除引用，沒有第三張表要對帳。
+        b.OwnsImage(x => x.Image, "Image", required: true);
 
         // 療程頁圖庫的顯示順序
         b.HasIndex(x => new { x.TreatmentId, x.SortOrder }).HasDatabaseName("IX_TreatmentImages_Treatment_Sort");

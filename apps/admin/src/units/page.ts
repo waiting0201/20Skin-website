@@ -32,7 +32,7 @@ export const pageUnit: UnitDefinition = {
     { key: 'systemKey', label: '系統鍵值', type: 'text', readOnly: true, group: '基本資料', hint: '系統頁專用識別碼，種子建立，不可編輯。' },
     { key: 'lead', label: '導言', type: 'textarea', group: '內容' },
     { key: 'bodyBlocks', label: '內文', type: 'richtext', group: '內容', hint: '系統頁列表內容由對應模型自動帶出，這裡只管頁面外框文案。' },
-    { key: 'coverImageUrl', label: '封面圖', type: 'image', group: '圖片' },
+    { key: 'cover', label: '封面圖', type: 'image', group: '圖片' },
     {
       key: 'listSortRule',
       label: '列表排序規則',

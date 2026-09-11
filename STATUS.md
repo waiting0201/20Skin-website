@@ -13,12 +13,18 @@
 
 **規劃、前台、後台、資料庫、API 全部完成，且已實際部署到 Azure 的正式環境（尚未切 DNS）。**
 
-`apps/web` 的 21 個模板全數完成（220 條預渲染路由），`apps/admin` **31／31 個畫面全數完成**。
-**資料庫 schema 也完成了** —— 37 張表的 EF Core migration 已在真的 SQL Server 2022 上
+`apps/web` 的 21 個模板全數完成（220 條預渲染路由），`apps/admin` **30／30 個畫面全數完成**。
+**資料庫 schema 也完成了** —— 35 張表的 EF Core migration 已在真的 SQL Server 2022 上
 實測建立成功，種子資料 165 列。
 
-**API 也完成了** —— 37 張表 ＋ 全部端點 ＋ 三支 Timer，已在本機對真的 SQL Server 2022
+**API 也完成了** —— 35 張表 ＋ 全部端點 ＋ 三支 Timer，已在本機對真的 SQL Server 2022
 跑過端到端驗證（登入、首登強制改密碼、預設拒絕授權、九個內容單元的清單）。
+
+⚠️ **2026-09-11 改動：不做媒體庫**（客戶指定）。後台的「媒體庫」畫面整個拿掉（31 → 30），
+`MediaAssets`／`MediaUsages` 兩張表刪除（37 → 35），圖片改成擁有者表上的內嵌欄位。
+遷移 `20260911100157_RemoveMediaLibrary` **已套用到正式 Azure SQL**（2026-09-11，本機 `efbundle`）。
+🔴 **但正式 Function App 還是舊組建，尚未重新部署** —— 見 §六。
+決策與連帶後果見 CLAUDE.md 決策 13。
 
 **已部署並驗收** —— <https://jolly-hill-015d56f1e.5.azurestaticapps.net>。
 本次補建了 CLAUDE.md 決策 7 當中先前**完全沒有建立**的另一半 API：
@@ -49,8 +55,8 @@
 | UI/UX 設計定稿 | ✅ | `mockup/` 方向 A，客戶 2026-08-27 選定。21 個模板全數完成 |
 | 技術架構與規格 | ✅ | [07](docs/07-deployment.md) 部署、[08](docs/08-database.md) 資料庫、[09](docs/09-frontend.md) 前端、[10](docs/10-api.md) API 契約、[11](docs/11-backend-design.md) 後端施工標準 |
 | **前台開發** | 🟡 | 21 個模板切版完成、SEO 與 JSON-LD 落地；**內容仍是 `app/data/*.ts`，未接資料庫**（§二） |
-| **後台開發** | 🟡 | **31／31 畫面完成**；接 mock，未接 API（§三） |
-| **資料模型與 migrations** | ✅ | 37 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四） |
+| **後台開發** | 🟡 | **30／30 畫面完成**；接 mock，未接 API（§三） |
+| **資料模型與 migrations** | ✅ | 35 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四），兩支遷移**都已套用到正式庫**（§六） |
 | **API** | ✅ | 端點、服務、三支 Timer 完成，**已對真 SQL Server 端到端驗證**（§五） |
 | 部署與 CI/CD | 🟡 | **已部署並實測**（前台 ＋ 後台 ＋ 兩個 API）；workflow 未進 repo，目前靠 `tools/deploy-swa.sh` 本機部署（§六） |
 | 內容遷移（約 800 篇） | ⬜ | 需先有資料庫 |
@@ -104,14 +110,13 @@ Nuxt 3 純靜態，21 個模板 → **220 條預渲染路由、106 頁 HTML**。
 Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/admin/`。
 ⚠️ **建置順序：先 admin 後 web。**
 
-### ✅ 已完成（31／31 畫面）
+### ✅ 已完成（30／30 畫面）
 
 | 群組 | 畫面 | 數 |
 |---|---|---|
 | 內容模型 | 九個模型 ×（列表＋編輯），共用 `ListPage`／`EditPage` ＋ 單元宣告 | 18 |
 | 帳號 | 登入（單段帳密）、帳號管理、角色權限設定 | 3 |
 | 工作流 | 審核佇列 | 1 |
-| 資產 | 媒體庫 | 1 |
 | FAQ 題庫 | 未命中題目清單 | 1 |
 | SEO | sitemap 設定、301 轉址管理、FAQ／語料匯出 | 3 |
 | 系統 | 儀表板、全站設定、首頁版位編排、導覽選單與頁尾 | 4 |
@@ -127,7 +132,7 @@ Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/ad
 | 缺口 | 說明 |
 |---|---|
 | **接的是 mock**（localStorage） | `src/api/client.ts` 是唯一門面，接 API 時只改這一個檔 |
-| 上傳未串接 | `media.requestUploadSas()` 刻意丟 TODO，不假裝成功 |
+| 上傳未串接 | `adminApi.upload.upload()` 刻意丟 TODO，不假裝成功。圖片欄位先以「貼上網址」示意（`ImageField.vue`） |
 | 富文本 | 等寬文字框模擬，未接區塊編輯器 |
 | 拖曳排序 | 現為上／下移動按鈕 |
 | slug 唯一性 | mock 只檢查單元內；正式是全站 `UrlPath` 唯一索引 |
@@ -143,7 +148,7 @@ Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/ad
 
 ## 四、資料模型 ✅
 
-**37 張表的 EF Core migration 完成，已對真的 SQL Server 2022 實測。**
+**35 張表的 EF Core migration 完成，已對真的 SQL Server 2022 實測。**
 schema 的真實來源是 `functions/Data/Migrations/`（docs/07 §5）。
 
 | 單元 | 張數 |
@@ -152,7 +157,7 @@ schema 的真實來源是 `functions/Data/Migrations/`（docs/07 §5）。
 | B 內容主幹（工作流／版本／SEO） | 5 |
 | C 九個內容模型（TPT） | 16 |
 | D 內容關聯 | 1 |
-| E 媒體庫 | 2 |
+| E 上傳 | **0** —— 不做媒體庫，圖片是內嵌欄位（docs/08 §0 決策四） |
 | F FAQ 題庫成長 | 1 |
 | G 站台編排 | 4 |
 | H SEO 與 301 | 1 |
@@ -161,7 +166,8 @@ schema 的真實來源是 `functions/Data/Migrations/`（docs/07 §5）。
 
 | 項目 | 結果 |
 |---|---|
-| 建立 37 張表 | ✅ 對 `Skin20_Verify`（定序 `Chinese_Taiwan_Stroke_CI_AS`）實跑成功 |
+| 建立 35 張表 | ✅ 對 `Skin20_Verify`（定序 `Chinese_Taiwan_Stroke_CI_AS`）實跑成功 |
+| **兩支遷移接續套用** | ✅ 2026-09-11 對 `Skin20_MediaVerify` 實跑：`InitialSchema` → `RemoveMediaLibrary`，結果 35 張表、0 個媒體殘留、10 個內嵌圖片欄位 |
 | 約束名稱重複 | **0**（TPT 的 PK 命名坑已避開，見下） |
 | 匿名 DEFAULT 約束 | **0**（20 個具名 `DF_`） |
 | `UrlPath` 全站唯一 | ✅ 實測插入重複網址被擋下 |
@@ -314,8 +320,32 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 |---|---|
 | 方案 | **Basic**（2 GB／5 DTU） |
 | 定序 | **`Chinese_Taiwan_Stroke_CI_AS`** ✅（docs/08 §0 決策三） |
-| schema | **37 張表 ＋ 165 列種子已套用**，用 `efbundle`（docs/11 §13） |
-| 驗證 | 表數 37、匿名約束 0、AI FAQ 開關 `false`、外部網域 2 筆 —— 與本機實測一致 |
+| schema | **35 張表 ＋ 165 列種子已套用**，用 `efbundle`（docs/11 §13）。兩支遷移都已套用，見下方 |
+| 驗證 | `InitialSchema` 當時：表數 37、匿名約束 0、AI FAQ 開關 `false`、外部網域 2 筆 |
+
+### ✅ 遷移到 `RemoveMediaLibrary`（2026-09-11）
+
+不做媒體庫的 schema 改動**已套用到正式庫**。以本機 `efbundle` 執行，身分走
+`Authentication=Active Directory Default` ——`az` 登入的帳號正是這台 SQL Server 的
+**Entra 管理員**，所以不必等 CI 服務主體建好就有 DDL 權限。
+
+驗證：`dotnet ef migrations list` 對 `20Skin-website` 回報 `InitialSchema` 與
+`RemoveMediaLibrary` 兩支**都已套用、沒有 pending**。整份遷移包在單一交易裡
+（`DROP TABLE MediaAssets`／`MediaUsages` ＋ 10 個 `DROP COLUMN *MediaId` ＋ 60 個
+內嵌圖片欄位 `ADD`），提交成功即代表全部生效。
+
+⚠️ **這支遷移不向後相容，也刻意不做成向後相容**（docs/11 §13 第 2 條的例外）：
+正式庫當時只有種子資料、沒有任何內容，沒有資料要保。**等到有內容之後就不是這樣了。**
+
+🔴 **第二步還沒做：正式 Function App 仍是舊組建。**
+`func-20skin-web-api-prod` 上跑的程式還會去查已經被刪掉的 `MediaAssets` ——
+現在是「新 schema 配舊程式」的空窗。站還沒切 DNS、資料庫也沒有內容，沒有實際影響，
+但**不要停在只做一半**：
+
+1. 重新部署 `func-20skin-web-api-prod`（⚠️ `tools/deploy-swa.sh` **不含它**，
+   那支腳本只管 SWA 的前台／後台／`/api/fallback`；獨立 Function App 不隨內容重建，
+   見 CLAUDE.md 決策 7）
+2. `tools/deploy-swa.sh` 重新部署前台與 `apps/admin` 產物（媒體庫畫面已拿掉）
 
 **三組 SQL 身分**（docs/08 §J-3）：
 
@@ -440,6 +470,8 @@ STATUS 先前寫的「301 種子約 772 筆」指的是**後台畫面的 mock �
 - [ ] build 產物大小 vs 250 MB（含 Nuxt 每路由一份的 `_payload.json`）
 - [ ] 全站 `nuxt generate` 時間（950 頁）
 - [ ] Blob 直傳鏈路（Storage CORS、SAS 效期、`Cache-Control`）
+- [ ] **換圖與移除真的把舊檔從 Blob 刪掉**（docs/11 §9.2）——本機只驗到「刪不掉也不會翻掉存檔」，真的刪成功還沒驗過
+- [ ] **孤兒檔對帳工具**（回報成功但沒按存檔的檔案；要掃十個內嵌圖片欄位 ＋ `BodyBlocks`，docs/08 §E）
 - [ ] 冷啟動對 301 與後台操作的實際延遲
 - [ ] `api/` 實際可用的 .NET 版本（9.0 未證實，兩份 Azure 文件互相矛盾）
 - [ ] 遷移在正式資料庫的實際行為（先在可丟棄的庫演練一次完整遷移與回滾）

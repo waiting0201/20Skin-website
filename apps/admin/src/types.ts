@@ -4,6 +4,8 @@
 // docs/10-api.md §2「請求與回應一律 camelCase」）。這一份是九個內容模型
 // 共用的「形狀」，單元專屬欄位另見 src/units/*.ts。
 
+import type { UploadedImage } from './api/upload'
+
 /** 九個內容模型的單元代號。逐字對應 docs/10-api.md §3.3 的 `{unit}` 與權限碼前綴，不做單複數轉換。 */
 export type UnitKey =
   | 'treatment'
@@ -62,8 +64,8 @@ export const ROLE_LABEL: Record<RoleCode, string> = {
 export interface SeoMeta {
   seoTitle: string | null
   metaDescription: string | null
-  ogImageMediaId: number | null
-  ogImageUrl: string | null
+  /** 內嵌圖片欄位，形狀同內容欄位裡的圖（docs/08 §0 決策五）。沒有媒體庫，也就沒有 mediaId。 */
+  ogImage: UploadedImage | null
   canonicalOverride: string | null
   /** 文章標籤種子為 true；與 includeInSitemap 是兩件事（08 §B-4）。 */
   noIndex: boolean
@@ -76,8 +78,7 @@ export function emptySeo(): SeoMeta {
   return {
     seoTitle: null,
     metaDescription: null,
-    ogImageMediaId: null,
-    ogImageUrl: null,
+    ogImage: null,
     canonicalOverride: null,
     noIndex: false,
     structuredDataOverride: null,

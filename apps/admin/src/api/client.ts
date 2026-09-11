@@ -46,7 +46,7 @@ import {
 } from './mock-seed'
 
 import { ApiError } from './errors'
-import { mediaApi } from './media'
+import { uploadApi } from './upload'
 import { redirectApi } from './redirect'
 import { seoApi } from './seo'
 import { questionApi } from './question'
@@ -914,12 +914,14 @@ const dashboard = {
   },
 }
 
-// ── 媒體：瀏覽器直傳 Blob 的流程先做出來，實際上傳留 TODO ─────────────
+// ── 上傳：瀏覽器直傳 Blob 的流程先做出來，實際上傳留 TODO ─────────────
 //
-// docs/09-frontend.md §9：「後台選檔 → POST /admin/media/sas 取短效 SAS →
-// 瀏覽器直接 PUT 到 Blob → POST /admin/media 回報」。現在沒有 API，
-// 這裡刻意讓它明確失敗（而不是假裝成功），EditPage 的上傳欄位改用「貼上
-// 圖片網址」當示意替代方案，見 src/components 內圖片欄位的註解。
+// docs/09-frontend.md §9：「欄位內選檔 → POST /admin/upload/sas 取短效 SAS →
+// 瀏覽器直接 PUT 到 Blob → POST /admin/upload/commit 回報」。現在沒有 API，
+// 這裡刻意讓它明確失敗（而不是假裝成功），圖片欄位改用「貼上圖片網址」當
+// 示意替代方案，見 src/components/ImageField.vue 的註解。
+//
+// ⚠️ 沒有 media 門面了 —— 不做媒體庫（2026-09-11 定案），沒有清單與刪除端點。
 
 // ── 對外門面 ──────────────────────────────────────────────────────────
 
@@ -935,7 +937,7 @@ export const adminApi = {
   rebuild,
   dashboard,
   // ── 第二輪的系統類畫面（docs/06 §5）。各區實作在 src/api/<area>.ts ──
-  media: mediaApi,
+  upload: uploadApi,
   redirect: redirectApi,
   seo: seoApi,
   question: questionApi,

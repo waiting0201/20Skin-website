@@ -40,10 +40,10 @@ public sealed class Treatment : ContentItem
     /// <summary>儀器／原廠資訊。</summary>
     public string? DeviceInfo { get; set; }
 
-    public int? CoverMediaId { get; set; }
+    /// <summary>封面圖（docs/08 §0 決策五：內嵌欄位，不是媒體庫的外鍵）。</summary>
+    public UploadedImage? Cover { get; set; }
 
     public Term Category { get; set; } = null!;
-    public MediaAsset? CoverMedia { get; set; }
     public ICollection<TreatmentImage> Images { get; set; } = [];
     public ICollection<Case> Cases { get; set; } = [];
 }
@@ -53,12 +53,11 @@ public sealed class TreatmentImage
 {
     public int Id { get; set; }
     public int TreatmentId { get; set; }
-    public int MediaId { get; set; }
+    public UploadedImage Image { get; set; } = new();
     public string? Caption { get; set; }
     public int SortOrder { get; set; }
 
     public Treatment Treatment { get; set; } = null!;
-    public MediaAsset Media { get; set; } = null!;
 }
 
 /// <summary>
@@ -76,11 +75,10 @@ public sealed class Doctor : ContentItem
     public string? JobTitle { get; set; }
     public bool IsPhysician { get; set; }
     public string? Specialty { get; set; }
-    public int? PhotoMediaId { get; set; }
+    public UploadedImage? Photo { get; set; }
     public string? Bio { get; set; }
     public string? Publications { get; set; }
 
-    public MediaAsset? PhotoMedia { get; set; }
     public ICollection<DoctorTag> Tags { get; set; } = [];
     public ICollection<DoctorCredential> Credentials { get; set; } = [];
     public ICollection<DoctorSchedule> Schedules { get; set; } = [];
@@ -146,9 +144,7 @@ public sealed class Concern : ContentItem
     /// <summary>何時該就醫。</summary>
     public string? WhenToSeeDoctor { get; set; }
 
-    public int? CoverMediaId { get; set; }
-
-    public MediaAsset? CoverMedia { get; set; }
+    public UploadedImage? Cover { get; set; }
 }
 
 /// <summary>
@@ -178,7 +174,7 @@ public sealed class Article : ContentItem
     /// <summary>對外顯示的發布日期。遷移時保留舊站原始日期，見上方警告。</summary>
     public DateTime DisplayDate { get; set; }
 
-    public int? CoverMediaId { get; set; }
+    public UploadedImage? Cover { get; set; }
     public string? Summary { get; set; }
 
     /// <summary>區塊編輯器內容（JSON 區塊陣列）。</summary>
@@ -197,7 +193,6 @@ public sealed class Article : ContentItem
     public Term Category { get; set; } = null!;
     public Doctor? AuthorDoctor { get; set; }
     public Doctor? ReviewerDoctor { get; set; }
-    public MediaAsset? CoverMedia { get; set; }
 }
 
 /// <summary>
@@ -238,13 +233,12 @@ public sealed class CaseImage
 {
     public int Id { get; set; }
     public int CaseId { get; set; }
-    public int MediaId { get; set; }
+    public UploadedImage Image { get; set; } = new();
     public CasePhase Phase { get; set; }
     public DateOnly? TakenOn { get; set; }
     public int SortOrder { get; set; }
 
     public Case Case { get; set; } = null!;
-    public MediaAsset Media { get; set; } = null!;
 }
 
 /// <summary>
@@ -333,12 +327,11 @@ public sealed class ClinicPhoto
 {
     public int Id { get; set; }
     public int ClinicId { get; set; }
-    public int MediaId { get; set; }
+    public UploadedImage Image { get; set; } = new();
     public string? Caption { get; set; }
     public int SortOrder { get; set; }
 
     public Clinic Clinic { get; set; } = null!;
-    public MediaAsset Media { get; set; } = null!;
 }
 
 /// <summary>
@@ -366,7 +359,7 @@ public sealed class Page : ContentItem
     /// <summary>自由頁內文；系統頁不用。</summary>
     public string? BodyBlocks { get; set; }
 
-    public int? CoverMediaId { get; set; }
+    public UploadedImage? Cover { get; set; }
 
     /// <summary>系統頁：列表排序規則。</summary>
     public byte? ListSortRule { get; set; }
@@ -376,8 +369,6 @@ public sealed class Page : ContentItem
 
     /// <summary>法務三頁為 1。</summary>
     public bool SuperAdminOnly { get; set; }
-
-    public MediaAsset? CoverMedia { get; set; }
 }
 
 /// <summary>
@@ -399,7 +390,5 @@ public sealed class Term : ContentItem
     /// <summary>介紹文案。</summary>
     public string? Intro { get; set; }
 
-    public int? CoverMediaId { get; set; }
-
-    public MediaAsset? CoverMedia { get; set; }
+    public UploadedImage? Cover { get; set; }
 }

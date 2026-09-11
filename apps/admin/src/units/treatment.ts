@@ -42,7 +42,7 @@ export const treatmentUnit: UnitDefinition = {
       hint: '醫療廣告法遵兩層防護之一：本文送審時會掃描高風險字詞（docs/02 §5）。',
     },
     { key: 'deviceInfo', label: '儀器／原廠資訊', type: 'text', group: '療程內容' },
-    { key: 'coverImageUrl', label: '封面圖', type: 'image', group: '圖片', hint: '建議尺寸 1200×900（4:3），上傳走瀏覽器直傳 Blob（docs/09 §9）。' },
+    { key: 'cover', label: '封面圖', type: 'image', group: '圖片', hint: '建議尺寸 1200×900（4:3），上傳走瀏覽器直傳 Blob（docs/09 §9）。' },
     { key: 'gallery', label: '圖庫', type: 'gallery', group: '圖片', hint: '對應 TreatmentImages，可複選、可排序、可加圖說。' },
   ],
   relations: [

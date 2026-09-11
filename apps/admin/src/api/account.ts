@@ -251,7 +251,7 @@ const UNIT_ACTIONS: { action: string; label: string }[] = [
 /** 非九個內容模型的系統類權限碼（docs/10-api.md §3.4 端點群組表逐條對應）。 */
 const SYSTEM_GROUPS: { key: string; label: string; codes: { code: string; label: string }[] }[] = [
   { key: 'review', label: '審核佇列', codes: [{ code: 'review.view', label: '檢視佇列' }, { code: 'review.decide', label: '核准／退回' }] },
-  { key: 'media', label: '媒體庫', codes: [{ code: 'media.view', label: '檢視' }, { code: 'media.edit', label: '上傳／刪除' }] },
+  { key: 'upload', label: '上傳圖片', codes: [{ code: 'upload.file', label: '在內容欄位裡上傳' }] },
   { key: 'home', label: '首頁版位編排', codes: [{ code: 'home.view', label: '檢視' }, { code: 'home.edit', label: '編排' }, { code: 'home.submit', label: '送審' }, { code: 'home.publish', label: '發布' }] },
   { key: 'question', label: '未命中題目清單', codes: [{ code: 'question.view', label: '檢視' }, { code: 'question.edit', label: '處理（標記已建題／忽略）' }] },
   { key: 'menu', label: '導覽選單與頁尾', codes: [{ code: 'menu.view', label: '檢視' }, { code: 'menu.edit', label: '編輯（限超管）' }] },

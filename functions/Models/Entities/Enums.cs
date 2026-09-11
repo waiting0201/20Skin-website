@@ -115,15 +115,6 @@ public enum RelationType : byte
     PageToFeatured = 12,
 }
 
-/// <summary>媒體被引用的方式（docs/08 §E-2）。</summary>
-public enum MediaUsageKind : byte
-{
-    Cover = 1,
-    Gallery = 2,
-    InlineBody = 3,
-    OgImage = 4,
-}
-
 /// <summary>未命中題目的來源（docs/08 §F）。</summary>
 public enum QuestionSource : byte
 {

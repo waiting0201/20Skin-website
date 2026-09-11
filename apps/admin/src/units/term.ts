@@ -33,7 +33,7 @@ export const termUnit: UnitDefinition = {
       ],
     },
     { key: 'intro', label: '介紹文案', type: 'textarea', group: '基本資料' },
-    { key: 'coverImageUrl', label: '封面圖', type: 'image', group: '圖片' },
+    { key: 'cover', label: '封面圖', type: 'image', group: '圖片' },
     {
       key: 'usageCount',
       label: '使用筆數',

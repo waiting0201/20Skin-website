@@ -26,7 +26,7 @@ export const doctorUnit: UnitDefinition = {
       hint: '⚠️ 14 位團隊成員是 13 醫師 ＋ 1 藝術總監（安喬／許媖琄，兼執行長，非醫師）。這一欄決定前台「本文由 ○○ 醫師審閱」與 Physician JSON-LD 會不會掛錯人，不是預設全開（docs/08 §C-2）。',
     },
     { key: 'specialty', label: '專科', type: 'text', group: '基本資料' },
-    { key: 'photoUrl', label: '大頭照', type: 'image', group: '基本資料', hint: '建議尺寸 900×1200（3:4 直式），對齊頭部裁切。' },
+    { key: 'photo', label: '大頭照', type: 'image', group: '基本資料', hint: '建議尺寸 900×1200（3:4 直式），對齊頭部裁切。' },
     {
       key: 'credentials',
       label: '學歷與經歷',

@@ -13,7 +13,7 @@
 | 資訊架構與 UI/UX 設計定稿 | 設計／PM | [01-sitemap.md](01-sitemap.md) 目錄樹、內部連結矩陣落實為線稿與視覺稿 |
 | **部署與 CI/CD 串接** | 工程 | **Nuxt 3 純靜態**＋ SWA（Free）＋**獨立 Azure Functions（.NET 10）**＋ Blob；GitHub Actions **兩條 workflow**（前台／API 各一），API 這條含**資料庫遷移**。**資料庫執行個體由院方自建**，需其建立兩組 SQL 使用者（執行期 DML／遷移 DDL）並放行防火牆。見 [07-deployment.md](07-deployment.md) |
 | **資料模型與 EF Core migrations** | 工程 | 以 [02-backend-cms.md](02-backend-cms.md) 的內容模型與權限設計為準建立 DbContext 與初版遷移。**schema 是本專案產出**，非院方提供。上線前需在可丟棄的資料庫演練一次完整遷移與回滾 |
-| 後台系統開發（CMS ＋ 權限 ＋ FAQ 模組） | 工程 | [02-backend-cms.md](02-backend-cms.md) **九個內容模型**（含頁面、分類與標籤）、五種角色、三段審核工作流，另含首頁版位編排與導覽選單。**約 31 個畫面**，見 [06-page-inventory.md](06-page-inventory.md) §5 |
+| 後台系統開發（CMS ＋ 權限 ＋ FAQ 模組） | 工程 | [02-backend-cms.md](02-backend-cms.md) **九個內容模型**（含頁面、分類與標籤）、五種角色、三段審核工作流，另含首頁版位編排與導覽選單。**約 30 個畫面**，見 [06-page-inventory.md](06-page-inventory.md) §5 |
 | 前台開發與結構化資料實作 | 工程 | 8 類 schema 自動輸出；SEO 欄位由後台驅動 |
 | **浮動 AI 問答入口（介面）** | 工程 | sticky CTA 按鈕與面板外殼：開闔、關閉鍵、無障礙、延後載入、後台啟用開關。**只交付介面，AI 串上後才有功能，Phase 1 預設關閉不對外顯示**。驗收標準見 [04-ai-faq.md](04-ai-faq.md) §4 |
 | **療程內容結構化（需醫師參與）** | 醫師／編輯 | 27 項療程整理為適應症／原理／次數／術後照護／禁忌症欄位。**其中 12 項無站內內容需從零撰寫。本階段工作量最大的一項**，建議先做流量前 15 名 |

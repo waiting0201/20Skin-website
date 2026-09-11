@@ -149,7 +149,7 @@ public sealed class SeoMeta
     public string? SeoTitle { get; set; }
 
     public string? MetaDescription { get; set; }
-    public int? OgImageMediaId { get; set; }
+    public UploadedImage? OgImage { get; set; }
     public string? CanonicalOverride { get; set; }
 
     /// <summary>⚠️ 文章標籤種子為 1。與 <c>ContentItems.IncludeInSitemap</c> 是兩件事。</summary>
@@ -168,7 +168,6 @@ public sealed class SeoMeta
     public DateTime UpdatedAt { get; set; }
 
     public ContentItem ContentItem { get; set; } = null!;
-    public MediaAsset? OgImage { get; set; }
 }
 
 /// <summary>

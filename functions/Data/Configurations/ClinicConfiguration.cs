@@ -60,10 +60,7 @@ public sealed class ClinicPhotoConfiguration : IEntityTypeConfiguration<ClinicPh
             .HasConstraintName("FK_ClinicPhotos_Clinics")
             .OnDelete(DeleteBehavior.Cascade);
 
-        b.HasOne(x => x.Media).WithMany()
-            .HasForeignKey(x => x.MediaId)
-            .HasConstraintName("FK_ClinicPhotos_MediaAssets")
-            .OnDelete(DeleteBehavior.Restrict);
+        b.OwnsImage(x => x.Image, "Image", required: true);
 
         b.HasIndex(x => new { x.ClinicId, x.SortOrder }).HasDatabaseName("IX_ClinicPhotos_Clinic_Sort");
     }

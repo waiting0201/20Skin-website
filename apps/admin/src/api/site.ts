@@ -8,6 +8,7 @@
 // 連到既有內容、NAP 與據點頁比對），一律由呼叫端的 Vue 元件取得後傳進來，
 // 這裡只管三塊資料本身的形狀與持久化。
 
+import type { UploadedImage } from './upload'
 import type { UnitKey } from '../types'
 import { ApiError } from './errors'
 import { createStore } from './mock-store'
@@ -53,8 +54,10 @@ export interface AiFaqSettings {
 
 export interface SiteSettingsData {
   siteName: string
-  logoUrl: string
-  defaultOgImageUrl: string
+  /** ⚠️ 內嵌圖片欄位，不是媒體庫的 Id——對應 SiteSettings 的 `site.logoImage`（JSON）。 */
+  logo: UploadedImage | null
+  /** 個別內容頁沒設 OG 圖時的退回值。對應 `site.defaultOgImage`（JSON）。 */
+  defaultOgImage: UploadedImage | null
   /** 全站 NAP 主資料。⚠️ 必須與據點頁、頁尾逐字一致（CLAUDE.md／docs/03 §4 ③）。 */
   nap: NapEntry[]
   /** 追蹤碼（GA／GTM／Meta Pixel 等），先以自由文字收納——docs/08 §G-1：
@@ -74,8 +77,8 @@ export interface SiteSettingsData {
 function seedSettings(): SiteSettingsData {
   return {
     siteName: '20SKIN 美醫集團',
-    logoUrl: '/assets/logo.jpg',
-    defaultOgImageUrl: '',
+    logo: { blobPath: '', url: '/assets/logo.jpg', alt: '20SKIN', width: null, height: null, variants: null },
+    defaultOgImage: null,
     // 與 apps/web/app/data/navigation.ts 的 CLINIC_NAP 相同的佔位值——
     // 兩邊本來就該來自同一份主資料，這裡刻意抄一致，示範「一致」長什麼樣子。
     nap: [

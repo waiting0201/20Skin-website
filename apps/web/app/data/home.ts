@@ -7,8 +7,8 @@
 // 接上 CMS 時只換資料來源、不改元件。
 //
 // 欄位命名對齊 docs/08-database.md 的 ContentItems／各模型主幹（title／slug／urlPath／summary），
-// 圖片用 imagePath 是建置期產物的簡化表示 —— 正式站對應的是 CoverMediaId／PhotoMediaId
-// （FK 指向媒體庫，不是路徑字串），不是資料庫的實際欄位名。
+// 圖片用 imagePath 是建置期產物的簡化表示 —— 正式站對應的是內嵌圖片欄位
+// （CoverUrl／CoverAlt／CoverWidth…，見 docs/08-database.md §0 決策五），不是資料庫的實際欄位名。
 
 import { CLINIC_NAP } from './navigation'
 

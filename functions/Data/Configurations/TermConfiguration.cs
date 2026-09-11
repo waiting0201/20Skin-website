@@ -16,10 +16,7 @@ public sealed class TermConfiguration : IEntityTypeConfiguration<Term>
         b.Property(x => x.TermType).HasColumnType("tinyint");
         // Intro：nvarchar(max)。
 
-        b.HasOne(x => x.CoverMedia).WithMany()
-            .HasForeignKey(x => x.CoverMediaId)
-            .HasConstraintName("FK_Terms_MediaAssets_Cover")
-            .OnDelete(DeleteBehavior.Restrict);
+        b.OwnsImage(x => x.Cover, "Cover");
 
         // 🔴 docs/08 §C-9 要求 UNIQUE (TermType, Slug)，未實作——見 Term 類別上的說明：
         //    TermType 在本表（TPT 子表），Slug 在 ContentItems（父表），

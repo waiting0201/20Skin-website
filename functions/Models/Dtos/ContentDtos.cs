@@ -58,7 +58,7 @@ public sealed record ContentDetailDto(
 public sealed record SeoMetaDto(
     string? SeoTitle,
     string? MetaDescription,
-    int? OgImageMediaId,
+    UploadedImageDto? OgImage,
     string? CanonicalOverride,
     bool NoIndex,
     string? StructuredDataOverride,
@@ -71,7 +71,7 @@ public sealed class SeoSaveRequest
 {
     public string? SeoTitle { get; set; }
     public string? MetaDescription { get; set; }
-    public int? OgImageMediaId { get; set; }
+    public UploadedImageDto? OgImage { get; set; }
     public string? CanonicalOverride { get; set; }
     public bool NoIndex { get; set; }
     public string? StructuredDataOverride { get; set; }

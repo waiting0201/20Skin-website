@@ -183,10 +183,7 @@ public sealed class SeoMetaConfiguration : IEntityTypeConfiguration<SeoMeta>
             .HasConstraintName("FK_SeoMeta_ContentItems")
             .OnDelete(DeleteBehavior.Cascade);
 
-        b.HasOne(x => x.OgImage).WithMany()
-            .HasForeignKey(x => x.OgImageMediaId)
-            .HasConstraintName("FK_SeoMeta_MediaAssets")
-            .OnDelete(DeleteBehavior.Restrict);
+        b.OwnsImage(x => x.OgImage, "OgImage");
 
         b.HasOne<User>().WithMany()
             .HasForeignKey(x => x.UpdatedByUserId)

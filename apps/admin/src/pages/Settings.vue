@@ -13,6 +13,7 @@ import { adminApi } from '@/api/client'
 import type { SiteSettingsData } from '@/api/site'
 import { currentUser } from '@/auth'
 import { hasPermission } from '@/permissions'
+import ImageField from '@/components/ImageField.vue'
 import type { AdminRecord } from '@/types'
 
 const user = currentUser()
@@ -26,8 +27,8 @@ const actionNotice = ref('')
 
 const form = reactive<SiteSettingsData>({
   siteName: '',
-  logoUrl: '',
-  defaultOgImageUrl: '',
+  logo: null,
+  defaultOgImage: null,
   nap: [],
   trackingCodes: '',
   contactEmail: '',
@@ -96,8 +97,8 @@ async function save() {
     const next = await adminApi.site.settings.update(
       {
         siteName: form.siteName,
-        logoUrl: form.logoUrl,
-        defaultOgImageUrl: form.defaultOgImageUrl,
+        logo: form.logo,
+        defaultOgImage: form.defaultOgImage,
         nap: form.nap,
         trackingCodes: form.trackingCodes,
         contactEmail: form.contactEmail,
@@ -142,13 +143,12 @@ async function save() {
               <input v-model="form.siteName" class="adm-input" type="text" :disabled="!canEdit">
             </div>
             <div class="adm-field">
-              <label class="adm-field__label">Logo 網址</label>
-              <input v-model="form.logoUrl" class="adm-input" type="text" :disabled="!canEdit">
-              <p class="adm-field__hint">此輪先以網址輸入示意，正式上傳見 docs/09-frontend.md §9。</p>
+              <label class="adm-field__label">Logo</label>
+              <ImageField :model-value="form.logo" :disabled="!canEdit" @update:model-value="(v) => (form.logo = v)" />
             </div>
             <div class="adm-field">
               <label class="adm-field__label">預設 OG 分享圖</label>
-              <input v-model="form.defaultOgImageUrl" class="adm-input" type="text" :disabled="!canEdit">
+              <ImageField :model-value="form.defaultOgImage" :disabled="!canEdit" @update:model-value="(v) => (form.defaultOgImage = v)" />
               <p class="adm-field__hint">個別內容頁的 SEO 區塊若沒設定 OG 圖，退回用這張。</p>
             </div>
             <div class="adm-field">

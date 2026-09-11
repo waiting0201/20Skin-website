@@ -63,10 +63,8 @@ public sealed partial class AppRouter
             ("POST", ["admin", "review", _, "approve"]) => PermissionCodes.ReviewApprove,
             ("POST", ["admin", "review", _, "reject"]) => PermissionCodes.ReviewReject,
 
-            // ── 媒體庫 ───────────────────────────────────────────────
-            ("POST", ["admin", "media", "sas"]) => PermissionCodes.MediaManage,
-            ("GET" or "POST", ["admin", "media"]) => PermissionCodes.MediaManage,
-            ("DELETE", ["admin", "media", _]) => PermissionCodes.MediaManage,
+            // ── 上傳（不是媒體庫：沒有清單、沒有刪除）──────────────────
+            ("POST", ["admin", "upload", "sas" or "commit"]) => PermissionCodes.UploadFile,
 
             // ── 站台編排 ─────────────────────────────────────────────
             ("GET" or "PUT", ["admin", "home-section"]) => PermissionCodes.HomeArrange,
@@ -125,10 +123,8 @@ public sealed partial class AppRouter
             ("POST", ["admin", "review", var id, "approve"]) => Wrap(review.ApproveAsync(req, id)),
             ("POST", ["admin", "review", var id, "reject"]) => Wrap(review.RejectAsync(req, id)),
 
-            ("POST", ["admin", "media", "sas"]) => Wrap(media.RequestSasAsync(req)),
-            ("GET", ["admin", "media"]) => Wrap(media.ListAsync(req)),
-            ("POST", ["admin", "media"]) => Wrap(media.RegisterAsync(req)),
-            ("DELETE", ["admin", "media", var id]) => Wrap(media.DeleteAsync(id)),
+            ("POST", ["admin", "upload", "sas"]) => Wrap(upload.RequestSasAsync(req)),
+            ("POST", ["admin", "upload", "commit"]) => Wrap(upload.CommitAsync(req)),
 
             ("GET", ["admin", "home-section"]) => Wrap(homeSection.GetAsync()),
             ("PUT", ["admin", "home-section"]) => Wrap(homeSection.UpdateAsync(req)),

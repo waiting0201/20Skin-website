@@ -139,8 +139,8 @@
 | `POST /admin/review/{id}/approve` | `review.approve` | 核准。核准即進入發布判定（[11](11-backend-design.md) §7） |
 | `POST /admin/review/{id}/reject` | `review.reject` | 退回，**`decisionNote` 必填** |
 | `GET /admin/dashboard` | 登入即可 | 聚合查詢，**無專屬資料表**。含「我的退件」＝ `ContentReviews WHERE Status=3 AND SubmittedByUserId=@me` |
-| `POST /admin/media/sas` | `media.manage` | 取短效寫入 SAS（限定容器與 blob 名稱、write only） |
-| `GET|POST|DELETE /admin/media` | `media.manage` | 媒體清單／回報寫入／刪除。刪除前檢查 `MediaUsages` |
+| `POST /admin/upload/sas` | `upload.file` | 取短效寫入 SAS（限定容器與 blob 名稱、write only、只收圖片） |
+| `POST /admin/upload/commit` | `upload.file` | 直傳完成後回報。API 讀檔頭驗真實型別，通過就回傳一組**圖片值**：`{ blobPath, url, alt, width, height, variants }` |
 | `GET|PUT /admin/home-section` | `home.arrange` | 首頁版位編排。**只能引用既有內容，不收自由文案** |
 | `GET|PUT /admin/menu` | `menu.edit` | 導覽選單與頁尾（限超級管理員） |
 | `GET|PUT /admin/setting` | `settings.edit` | 全站設定（限超級管理員），含 AI FAQ 開關 |
@@ -154,6 +154,8 @@
 | `GET /admin/export/{kind}` | `settings.edit` | 預覽 `faq.json`／`llms.txt`／`llms-full.txt`。**實際產物在建置期產生**，此端點只供後台畫面預覽（[07](07-deployment.md) §4） |
 
 **未列於上表的 `/admin/*` 路徑一律拒絕（403）。** 新增後台端點時必須同步補進路由表與權限表兩處（[11](11-backend-design.md) §5.3）。
+
+🔴 **上傳沒有清單與刪除端點**（2026-09-11 定案不做媒體庫）。`GET /admin/media`、`DELETE /admin/media/{id}` 這類端點**不存在，也不要補回來** —— 圖片是內容欄位的一部分，它的建立、修改與刪除全部隨所屬內容的 `PUT`／`DELETE` 發生（[08](08-database.md) §0 決策四、[11](11-backend-design.md) §9）。SEO 區塊的 OG 圖同理，欄位名是 `ogImage`，值是同一個圖片值物件，不是 `ogImageMediaId`。
 
 ---
 
@@ -177,7 +179,7 @@
 | 分類與標籤 | `taxonomy.tag.create`、`taxonomy.category.manage` |
 | 頁面 | `page.legal.edit` |
 | 站台編排 | `home.arrange`、`menu.edit`、`settings.edit` |
-| 系統 | `account.manage`、`media.manage` |
+| 系統 | `account.manage`、`upload.file` |
 
 ⚠️ **沒有獨立的 `view` 權限碼。** 讀取端點是「登入即可」—— 能編輯就看得到，
 行銷與審核者靠 `seo.edit`／`content.*.publish` 進來。**刪除用 `content.{unit}.edit`**，
@@ -186,9 +188,9 @@
 | 角色 | 權限 |
 |---|---|
 | **超級管理員** | 全部 31 個 |
-| **內容編輯** | 九個 `content.{unit}.edit` ＋ `content.submit` ＋ `seo.edit` ＋ `taxonomy.tag.create` ＋ `home.arrange` ＋ `media.manage`。**沒有任何 `publish`** |
-| **醫師** | `content.doctor.edit`／`content.article.edit`（**僅 `OwnerUserId` 是自己的**）＋ `content.submit` ＋ `review.approve`／`review.reject` ＋ `media.manage` |
-| **行銷** | `seo.edit` ＋ `content.faq.edit` ＋ `media.manage`。**沒有其他 `edit`** |
+| **內容編輯** | 九個 `content.{unit}.edit` ＋ `content.submit` ＋ `seo.edit` ＋ `taxonomy.tag.create` ＋ `home.arrange` ＋ `upload.file`。**沒有任何 `publish`** |
+| **醫師** | `content.doctor.edit`／`content.article.edit`（**僅 `OwnerUserId` 是自己的**）＋ `content.submit` ＋ `review.approve`／`review.reject` ＋ `upload.file` |
+| **行銷** | `seo.edit` ＋ `content.faq.edit` ＋ `upload.file`。**沒有其他 `edit`** |
 | **審核者** | 九個 `content.{unit}.publish` ＋ `review.approve`／`review.reject` |
 
 ⚠️ **發布權與編輯權必須分離。** 這是三段式工作流的前提，也是 [02](02-backend-cms.md) §5 兩層防護的第一層 —— 療程、案例、FAQ 三類內容不得跳過審核直接上線。

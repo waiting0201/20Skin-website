@@ -30,7 +30,7 @@ public static class PermissionCodes
     public const string SettingsEdit = "settings.edit";
     public const string AccountManage = "account.manage";
     public const string RedirectManage = "redirect.manage";
-    public const string MediaManage = "media.manage";
+    public const string UploadFile = "upload.file";
 }
 
 /// <summary>角色代碼（種子，<c>IsSystem = 1</c> 不可刪）。</summary>

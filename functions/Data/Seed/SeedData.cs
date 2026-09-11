@@ -92,7 +92,7 @@ public static class SeedData
         ("settings.edit", "全站設定", "站台編排"),
         ("account.manage", "帳號與角色管理", "系統"),
         ("redirect.manage", "301 轉址管理", "SEO"),
-        ("media.manage", "媒體庫", "資產"),
+        ("upload.file", "上傳圖片", "資產"),
     ];
 
     /// <summary>權限碼 → Id。Id 硬編：內容類 1–18、跨單元 19–31。</summary>
@@ -167,16 +167,16 @@ public static class SeedData
         // 超級管理員：全部
         Grant(RoleSuperAdmin, [.. ids.Keys]);
 
-        // 內容編輯：九單元 edit ＋ 送審 ＋ SEO ＋ 新增標籤 ＋ 版位編排 ＋ 媒體。沒有 publish。
+        // 內容編輯：九單元 edit ＋ 送審 ＋ SEO ＋ 新增標籤 ＋ 版位編排 ＋ 上傳。沒有 publish。
         Grant(RoleEditor, [.. ContentUnits.Select(u => $"content.{u.Unit}.edit")]);
-        Grant(RoleEditor, "content.submit", "seo.edit", "taxonomy.tag.create", "home.arrange", "media.manage");
+        Grant(RoleEditor, "content.submit", "seo.edit", "taxonomy.tag.create", "home.arrange", "upload.file");
 
         // 醫師：只有自己的個人頁與自己署名的文章，加上指派的醫學審閱
         Grant(RoleDoctor, "content.doctor.edit", "content.article.edit",
-            "content.submit", "review.approve", "review.reject", "media.manage");
+            "content.submit", "review.approve", "review.reject", "upload.file");
 
         // 行銷：SEO ＋ FAQ，讀得到全部但改不了本文
-        Grant(RoleMarketing, "seo.edit", "content.faq.edit", "media.manage");
+        Grant(RoleMarketing, "seo.edit", "content.faq.edit", "upload.file");
 
         // 審核者：九單元 publish ＋ 審核決定
         Grant(RoleReviewer, [.. ContentUnits.Select(u => $"content.{u.Unit}.publish")]);
@@ -428,8 +428,10 @@ public static class SeedData
         Add("site.description",
             "20SKIN 美醫集團——四季診所與二林四季皮膚科，以新中式美學為理念的皮膚科專科醫療團隊。",
             SettingValueType.Text);
-        Add("site.logoMediaId", "", SettingValueType.Text);
-        Add("site.defaultOgMediaId", "", SettingValueType.Text);
+        // ⚠️ 存的是內嵌圖片的 JSON（url／blobPath／alt／…），不是媒體庫的 Id——
+        //    不做媒體庫之後沒有可以指過去的表（docs/08 §0 決策五）。
+        Add("site.logoImage", "", SettingValueType.Json);
+        Add("site.defaultOgImage", "", SettingValueType.Json);
 
         // ⚠️ NAP 主資料：必須與據點頁、頁尾逐字一致（docs/03 §4 ③ —— AI 靠交叉比對
         //    建立實體信心，任何不一致都會降低確信度）。

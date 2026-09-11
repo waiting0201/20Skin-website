@@ -44,8 +44,7 @@ const EDITOR_PERMISSIONS: PermissionCode[] = [
   ]),
   // 系統類（docs/10-api.md §3.4）。⚠️ 首頁版位編排走送審、不直接發布，
   // 所以只有 edit 與 submit，沒有 home.publish。
-  'media.view',
-  'media.edit',
+  'upload.file',
   'home.view',
   'home.edit',
   'home.submit',
@@ -61,17 +60,15 @@ const DOCTOR_PERMISSIONS: PermissionCode[] = [
   unitPerm('article', 'edit'),
   'review.decide',
   // 編輯自己的內容時要能換圖
-  'media.view',
-  'media.edit',
+  'upload.file',
 ]
 
 /** 行銷：全單元 view ＋ {unit}.seo ＋ FAQ 的 faq.edit。沒有其他 edit。 */
 const MARKETING_PERMISSIONS: PermissionCode[] = [
   ...UNIT_KEYS.flatMap((u) => [unitPerm(u, 'view'), unitPerm(u, 'seo')]),
   unitPerm('faq', 'edit'),
-  // SEO 區塊有 OG 分享圖，所以要能上傳與挑圖
-  'media.view',
-  'media.edit',
+  // SEO 區塊有 OG 分享圖，所以要能上傳
+  'upload.file',
   'question.view',
   'home.view',
 ]
@@ -81,7 +78,6 @@ const REVIEWER_PERMISSIONS: PermissionCode[] = [
   ...UNIT_KEYS.flatMap((u) => [unitPerm(u, 'view'), unitPerm(u, 'publish')]),
   'review.view',
   'review.decide',
-  'media.view',
   'home.view',
   'home.publish',
   'question.view',

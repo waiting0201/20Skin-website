@@ -55,10 +55,7 @@ public sealed class CaseImageConfiguration : IEntityTypeConfiguration<CaseImage>
             .HasConstraintName("FK_CaseImages_Cases")
             .OnDelete(DeleteBehavior.Cascade);
 
-        b.HasOne(x => x.Media).WithMany()
-            .HasForeignKey(x => x.MediaId)
-            .HasConstraintName("FK_CaseImages_MediaAssets")
-            .OnDelete(DeleteBehavior.Restrict);
+        b.OwnsImage(x => x.Image, "Image", required: true);
 
         // 案例內頁依「術前／術後」分組顯示
         b.HasIndex(x => new { x.CaseId, x.Phase, x.SortOrder }).HasDatabaseName("IX_CaseImages_Case_Phase_Sort");

@@ -31,7 +31,7 @@
      └──▶ │  api.20skin.tw                       │
   （XHR）  │  獨立 Azure Functions（Flex Consumption）│
           │  · 前後台共用的應用程式 API           │
-          │  · CMS／認證／AI FAQ／媒體 SAS        │
+          │  · CMS／認證／AI FAQ／上傳 SAS        │
           │  · Timer trigger ← 排程發布（§4）      │
           └────┬────────────────────────┬────────┘
                │ Managed Identity       │ Managed Identity
@@ -185,12 +185,15 @@
 **上傳檔案不經過 API 的 request body**，一律由瀏覽器直傳 Blob：
 
 ```
-後台選檔
-  → 打 api.20skin.tw/media/sas 取得短效寫入 SAS
+在某個圖片欄位按「上傳圖片」
+  → 打 api.20skin.tw/admin/upload/sas 取得短效寫入 SAS
     （限定容器與 blob 名稱、write only、數分鐘到期）
   → 瀏覽器直接 PUT 到 Blob
-  → 完成後回報 API，寫入資料庫的媒體記錄
+  → 打 /admin/upload/commit 回報；API 讀檔頭驗證後回傳一組圖片值，
+    由前端放進欄位、隨內容一起存
 ```
+
+🔴 **不做媒體庫**（2026-09-11 定案）——上傳沒有自己的畫面，也沒有清單與刪除端點；圖片是內容欄位的一部分。見 [08](08-database.md) §0 決策四、[11](11-backend-design.md) §9。
 
 即使 API 已搬到獨立 Function App、逾時放寬到 230 秒（§4），這個設計仍然要保留：讓大檔流經 Function 是白付執行時間與記憶體，而且直傳本來就比較快。
 
@@ -199,8 +202,8 @@
 | 項目 | 說明 |
 |---|---|
 | **Storage 帳戶 CORS** | 必須放行 `https://20skin.tw` 的 `PUT`，否則瀏覽器直傳會被擋。與 Function App 的 CORS 是**兩套各自獨立的設定**，別漏掉其中一邊。上線前驗證時來源是 SWA 的預設網址，那個也要一併放行（§5） |
-| **容器讀取權限** | 公開圖片容器設 blob 層級公開讀取；私有檔案（如內部文件）另開容器走讀取 SAS |
-| **`Cache-Control`** | 架構中**沒有 CDN**，圖片是由 Blob 直接服務。上傳時就要寫入長效 `Cache-Control`，並用內容雜湊當檔名以便長期快取 |
+| **容器讀取權限** | 公開圖片容器設 blob 層級公開讀取。⚠️ **只收圖片**，所以既有的 `media-private` 容器沒有任何內容欄位會用到（[02](02-backend-cms.md) §4） |
+| **`Cache-Control`** | 架構中**沒有 CDN**，圖片是由 Blob 直接服務。上傳時就要寫入長效 `Cache-Control`。⚠️ 檔名是**隨機唯一值不是內容雜湊**（一個欄位獨佔一個 blob，[08](08-database.md) §0 決策四）——內容一樣永遠不變，`immutable` 照用 |
 | **SAS 用 Managed Identity 簽**（改善） | 獨立 Function App 支援 Managed Identity，可對 Storage 取 **user delegation key** 來簽 SAS，**不需要儲存帳戶金鑰**。原本卡在 SWA Free 沒有 Managed Identity，現在這個限制消失了。見 §6 |
 
 **待決策：衍生尺寸誰來產。** [03-seo-geo.md](03-seo-geo.md) 要求 WebP／AVIF 與響應式 `srcset`，但圖片不在 repo 裡，**建置期產不出來**。API 搬家後逾時已不是障礙，所以現在有兩個都可行的選項：**瀏覽器端上傳前轉檔**（省後端資源），或**Function App 以 sharp 於上傳後轉檔**（品質與一致性較好，之前受 45 秒限制而不可行）。此項需在開工前確認。
@@ -411,7 +414,7 @@ functions/         獨立 Azure Functions App —— 應用程式 API（.NET 10�
 | 文件 | 影響 |
 |---|---|
 | [01-sitemap.md](01-sitemap.md) §4 | 301 對照表內容不變，落地位置從主機 `.htaccess` 變成「SQL ＋ `/api/fallback`」 |
-| [02-backend-cms.md](02-backend-cms.md) | 排程發布改用 **Timer trigger**（§4，已非 GitHub Actions cron）；**後台 IP 白名單與雙因素都不做**，登入防護只剩次數限制一項（§2）；角色授權在 Function 內驗證；800 篇匯入仍用本機腳本；語料匯出在建置期；媒體庫上傳為瀏覽器直傳 Blob（§3） |
+| [02-backend-cms.md](02-backend-cms.md) | 排程發布改用 **Timer trigger**（§4，已非 GitHub Actions cron）；**後台 IP 白名單與雙因素都不做**，登入防護只剩次數限制一項（§2）；角色授權在 Function 內驗證；800 篇匯入仍用本機腳本；語料匯出在建置期；**不做媒體庫**，上傳只在內容欄位裡發生且為瀏覽器直傳 Blob（§3、§4） |
 | [05-roadmap.md](05-roadmap.md) | Phase 1 新增部署與 CI/CD 工項（**兩條 workflow**）；**上線前驗收改在尚未切 DNS 的正式環境**（不設 staging、不設 PR 預覽）；新增 build 時間與產物大小實測 |
 
 **來源**

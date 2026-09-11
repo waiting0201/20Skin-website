@@ -31,7 +31,7 @@ public sealed partial class AppRouter(
     DashboardHandler dashboard,
     ContentHandler content,
     ReviewHandler review,
-    MediaHandler media,
+    UploadHandler upload,
     HomeSectionHandler homeSection,
     MenuHandler menu,
     RedirectHandler redirect,

@@ -16,12 +16,14 @@ import { currentUser } from '@/auth'
 import { can, canDeleteTerm, ownsRecord } from '@/permissions'
 import type { AdminRecord, RelationItem, SeoMeta, UnitKey } from '@/types'
 import { emptySeo } from '@/types'
+import type { UploadedImage } from '@/api/upload'
 import type { UnitField } from '@/unit-schema'
 import { UNIT_REGISTRY } from '@/units'
 import StatusBadge from './StatusBadge.vue'
 import RelationPicker from './RelationPicker.vue'
 import Repeater from './Repeater.vue'
 import HoursEditor from './HoursEditor.vue'
+import ImageField from './ImageField.vue'
 
 const props = defineProps<{ unit: UnitKey; id: number }>()
 const router = useRouter()
@@ -389,31 +391,23 @@ async function restore(versionNo: number) {
                     <option v-for="opt in fieldOptions[field.key] ?? []" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                   </select>
 
-                  <!-- image：此輪先做 URL 示意輸入 ＋ 停用的上傳按鈕，見 client.ts media.requestUploadSas -->
-                  <div v-else-if="field.type === 'image'" class="adm-upload">
-                    <div class="adm-upload__preview">
-                      <img v-if="bodyForm.fields[field.key]" :src="String(bodyForm.fields[field.key])" alt="">
-                      <span v-else>尚無圖片</span>
-                    </div>
-                    <div class="adm-upload__row">
-                      <input
-                        class="adm-input"
-                        type="text"
-                        placeholder="示意用：貼上圖片網址"
-                        :value="String(bodyForm.fields[field.key] ?? '')"
-                        :disabled="!canEditBody"
-                        @input="bodyForm.fields[field.key] = ($event.target as HTMLInputElement).value"
-                      >
-                      <button type="button" class="btn btn--line btn--sm" disabled title="TODO：瀏覽器直傳 Blob，見 docs/09-frontend.md §9">上傳（尚未串接）</button>
-                    </div>
-                  </div>
+                  <!-- image：上傳就在欄位裡，沒有媒體庫可挑（docs/08 §0 決策五）-->
+                  <ImageField
+                    v-else-if="field.type === 'image'"
+                    :model-value="(bodyForm.fields[field.key] as UploadedImage | null) ?? null"
+                    :disabled="!canEditBody"
+                    @update:model-value="(v) => (bodyForm.fields[field.key] = v)"
+                  />
 
-                  <!-- gallery：圖片 URL + 圖說的簡化清單，欄位形狀對齊 TreatmentImages / CaseImages -->
+                  <!-- gallery：一列一張圖 ＋ 圖說，形狀對齊 TreatmentImages／CaseImages／ClinicPhotos -->
                   <div v-else-if="field.type === 'gallery'" class="adm-repeater">
                     <div v-for="(item, idx) in (bodyForm.fields[field.key] as Record<string, unknown>[] | undefined) ?? []" :key="idx" class="adm-repeater__row">
                       <div class="adm-repeater__fields">
-                        <input class="adm-input" type="text" placeholder="圖片網址" :value="item.url ?? ''" :disabled="!canEditBody"
-                          @input="item.url = ($event.target as HTMLInputElement).value">
+                        <ImageField
+                          :model-value="(item.image as UploadedImage | null) ?? null"
+                          :disabled="!canEditBody"
+                          @update:model-value="(v) => (item.image = v)"
+                        />
                         <input class="adm-input" type="text" placeholder="圖說" :value="item.caption ?? ''" :disabled="!canEditBody"
                           @input="item.caption = ($event.target as HTMLInputElement).value">
                       </div>
@@ -421,8 +415,8 @@ async function restore(versionNo: number) {
                         @click="(bodyForm.fields[field.key] as unknown[]).splice(idx, 1)">移除</button>
                     </div>
                     <button type="button" class="btn btn--ghost btn--sm" style="align-self:flex-start" :disabled="!canEditBody"
-                      @click="bodyForm.fields[field.key] = [...((bodyForm.fields[field.key] as unknown[]) ?? []), { url: '', caption: '' }]">
-                      ＋ 新增圖片（示意用網址輸入，正式上傳見 docs/09 §9）
+                      @click="bodyForm.fields[field.key] = [...((bodyForm.fields[field.key] as unknown[]) ?? []), { image: null, caption: '' }]">
+                      ＋ 新增圖片
                     </button>
                   </div>
 
@@ -510,8 +504,12 @@ async function restore(versionNo: number) {
               </p>
             </div>
             <div class="adm-field">
-              <label class="adm-field__label">OG 分享圖網址</label>
-              <input v-model="seoForm.ogImageUrl" class="adm-input" type="text" :disabled="!canEditSeo">
+              <label class="adm-field__label">OG 分享圖</label>
+              <ImageField
+                :model-value="seoForm.ogImage"
+                :disabled="!canEditSeo"
+                @update:model-value="(v) => (seoForm.ogImage = v)"
+              />
             </div>
             <div class="adm-field">
               <label class="adm-field__label">Canonical 覆寫</label>

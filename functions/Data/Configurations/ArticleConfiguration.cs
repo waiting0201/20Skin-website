@@ -33,10 +33,7 @@ public sealed class ArticleConfiguration : IEntityTypeConfiguration<Article>
             .HasConstraintName("FK_Articles_Doctors_Reviewer")
             .OnDelete(DeleteBehavior.Restrict);
 
-        b.HasOne(x => x.CoverMedia).WithMany()
-            .HasForeignKey(x => x.CoverMediaId)
-            .HasConstraintName("FK_Articles_MediaAssets_Cover")
-            .OnDelete(DeleteBehavior.Restrict);
+        b.OwnsImage(x => x.Cover, "Cover");
 
         // 文章列表頁的分類篩選（06-page-inventory §1）
         b.HasIndex(x => new { x.CategoryTermId, x.DisplayDate }).HasDatabaseName("IX_Articles_Category_DisplayDate");

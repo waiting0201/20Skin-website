@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Skin20.Api.Common;
 using Skin20.Api.Data;
@@ -59,6 +60,8 @@ public sealed class ContentHandler(
     ISqlConnectionFactory sqlFactory,
     IRebuildService rebuild,
     IMemoryCache cache,
+    IBlobStorageService blobStorage,
+    IConfiguration configuration,
     ILogger<ContentHandler> logger)
 {
     private readonly ContentReadService _read = new(sqlFactory);
@@ -231,6 +234,9 @@ public sealed class ContentHandler(
         if (entity.Status == ContentStatus.InReview)
             throw AppException.Conflict(ErrorCodes.ConflictState, "送審中的內容本文已鎖定，請等待審核結果。");
 
+        // 換圖與移除圖片要把舊檔從 Blob 刪掉，所以在動欄位之前先記下原本引用了哪些檔案（docs/11 §9）。
+        var blobsBefore = CollectBlobPaths(entity);
+
         var body = await ReadJsonBodyAsync(req, ct);
 
         var title = JStr(body, "title");
@@ -312,6 +318,8 @@ public sealed class ContentHandler(
             await tx.CommitAsync(ct);
         });
 
+        await DeleteUnreferencedBlobsAsync(blobsBefore, CollectBlobPaths(entity), ct);
+
         return await GetAsync(unit, id);
     }
 
@@ -320,6 +328,8 @@ public sealed class ContentHandler(
         var contentId = ParseId(id);
         var ct = req.HttpContext.RequestAborted;
         var entity = await LoadAsync(unit, contentId, tracking: true, ct) ?? throw AppException.NotFound("內容");
+
+        var blobsBefore = CollectBlobPaths(entity);
 
         var body = await ReadJsonAsync<SeoSaveRequest>(req, ct);
 
@@ -337,7 +347,7 @@ public sealed class ContentHandler(
         entity.Seo ??= new SeoMeta { ContentItemId = entity.Id };
         entity.Seo.SeoTitle = body.SeoTitle;
         entity.Seo.MetaDescription = body.MetaDescription;
-        entity.Seo.OgImageMediaId = body.OgImageMediaId;
+        entity.Seo.OgImage = body.OgImage?.ToEntity();
         entity.Seo.CanonicalOverride = body.CanonicalOverride;
         entity.Seo.NoIndex = body.NoIndex;
         entity.Seo.StructuredDataOverride = body.StructuredDataOverride;
@@ -355,6 +365,8 @@ public sealed class ContentHandler(
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         });
+
+        await DeleteUnreferencedBlobsAsync(blobsBefore, CollectBlobPaths(entity), ct);
 
         if (entity.Status == ContentStatus.Published) await TryRebuildAsync();
 
@@ -652,6 +664,7 @@ public sealed class ContentHandler(
         }
 
         var wasPublished = entity.Status == ContentStatus.Published;
+        var blobsBefore = CollectBlobPaths(entity);
 
         var strategy = db.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
@@ -668,6 +681,9 @@ public sealed class ContentHandler(
 
             await tx.CommitAsync(ct);
         });
+
+        // 內容沒了，它的圖片就沒有任何欄位指得到——一個欄位獨佔一個 blob，可以直接刪。
+        await DeleteUnreferencedBlobsAsync(blobsBefore, [], ct);
 
         if (wasPublished) await TryRebuildAsync();
 
@@ -717,6 +733,7 @@ public sealed class ContentHandler(
             throw AppException.Conflict(ErrorCodes.ConflictState, "送審中的內容已鎖定，請等待審核結果。");
 
         var userId = RequestContext.UserId(req);
+        var blobsBefore = CollectBlobPaths(entity);
 
         using var doc = JsonDocument.Parse(row.Snapshot);
         var root = doc.RootElement;
@@ -776,6 +793,10 @@ public sealed class ContentHandler(
 
             await tx.CommitAsync(ct);
         });
+
+        // ⚠️ 還原之後，被換下來的那些圖片一樣沒有欄位指得到了，照樣刪。
+        //    反過來說，快照裡指向的檔案若早就被換掉，還原不會把它變回來（docs/11 §9）。
+        await DeleteUnreferencedBlobsAsync(blobsBefore, CollectBlobPaths(entity), ct);
 
         return await GetAsync(unit, id);
     }
@@ -1127,7 +1148,7 @@ public sealed class ContentHandler(
     }
 
     private static SeoMetaDto ToSeoDto(SeoMeta seo) => new(
-        seo.SeoTitle, seo.MetaDescription, seo.OgImageMediaId, seo.CanonicalOverride,
+        seo.SeoTitle, seo.MetaDescription, seo.OgImage?.ToDto(), seo.CanonicalOverride,
         seo.NoIndex, seo.StructuredDataOverride, seo.AiSummary, seo.UpdatedByUserId, seo.UpdatedAt);
 
     private static string StatusName(ContentStatus s) => s switch
@@ -1299,10 +1320,10 @@ public sealed class ContentHandler(
         ["aftercare"] = t.Aftercare,
         ["contraindications"] = t.Contraindications,
         ["deviceInfo"] = t.DeviceInfo,
-        ["coverMediaId"] = t.CoverMediaId,
+        ["cover"] = ImageFields(t.Cover),
         ["images"] = t.Images.OrderBy(i => i.SortOrder).Select(i => new Dictionary<string, object?>
         {
-            ["mediaId"] = i.MediaId,
+            ["image"] = ImageFields(i.Image),
             ["caption"] = i.Caption,
             ["sortOrder"] = i.SortOrder,
         }).ToList(),
@@ -1322,7 +1343,7 @@ public sealed class ContentHandler(
         if (f.TryGetProperty("aftercare", out _)) t.Aftercare = JStr(f, "aftercare");
         if (f.TryGetProperty("contraindications", out _)) t.Contraindications = JStr(f, "contraindications");
         if (f.TryGetProperty("deviceInfo", out _)) t.DeviceInfo = JStr(f, "deviceInfo");
-        if (f.TryGetProperty("coverMediaId", out _)) t.CoverMediaId = JInt(f, "coverMediaId");
+        if (f.TryGetProperty("cover", out _)) t.Cover = JImage(f, "cover");
 
         if (f.TryGetProperty("images", out var imagesEl) && imagesEl.ValueKind == JsonValueKind.Array)
         {
@@ -1331,7 +1352,7 @@ public sealed class ContentHandler(
             {
                 t.Images.Add(new TreatmentImage
                 {
-                    MediaId = img.GetProperty("mediaId").GetInt32(),
+                    Image = RequireImage(img, "image"),
                     Caption = JStr(img, "caption"),
                     SortOrder = JInt(img, "sortOrder") ?? 0,
                 });
@@ -1345,7 +1366,7 @@ public sealed class ContentHandler(
         ["jobTitle"] = d.JobTitle,
         ["isPhysician"] = d.IsPhysician,
         ["specialty"] = d.Specialty,
-        ["photoMediaId"] = d.PhotoMediaId,
+        ["photo"] = ImageFields(d.Photo),
         ["bio"] = d.Bio,
         ["publications"] = d.Publications,
         ["tags"] = d.Tags.OrderBy(x => x.SortOrder).Select(x => new Dictionary<string, object?>
@@ -1377,7 +1398,7 @@ public sealed class ContentHandler(
         else if (isCreate) throw AppException.BadRequest(ErrorCodes.ValidationRequired, "isPhysician 為必填欄位（14 位團隊成員含 13 位醫師與 1 位藝術總監，不可省略）。");
 
         if (f.TryGetProperty("specialty", out _)) d.Specialty = JStr(f, "specialty");
-        if (f.TryGetProperty("photoMediaId", out _)) d.PhotoMediaId = JInt(f, "photoMediaId");
+        if (f.TryGetProperty("photo", out _)) d.Photo = JImage(f, "photo");
         if (f.TryGetProperty("bio", out _)) d.Bio = JStr(f, "bio");
         if (f.TryGetProperty("publications", out _)) d.Publications = JStr(f, "publications");
 
@@ -1432,7 +1453,7 @@ public sealed class ContentHandler(
         ["causes"] = c.Causes,
         ["selfCheckGuide"] = c.SelfCheckGuide,
         ["whenToSeeDoctor"] = c.WhenToSeeDoctor,
-        ["coverMediaId"] = c.CoverMediaId,
+        ["cover"] = ImageFields(c.Cover),
     };
 
     private static void ApplyConcernFields(Concern c, JsonElement f)
@@ -1441,7 +1462,7 @@ public sealed class ContentHandler(
         if (f.TryGetProperty("causes", out _)) c.Causes = JStr(f, "causes");
         if (f.TryGetProperty("selfCheckGuide", out _)) c.SelfCheckGuide = JStr(f, "selfCheckGuide");
         if (f.TryGetProperty("whenToSeeDoctor", out _)) c.WhenToSeeDoctor = JStr(f, "whenToSeeDoctor");
-        if (f.TryGetProperty("coverMediaId", out _)) c.CoverMediaId = JInt(f, "coverMediaId");
+        if (f.TryGetProperty("cover", out _)) c.Cover = JImage(f, "cover");
     }
 
     // ── Article（docs/08 §C-4）─────────────────────────────────────────
@@ -1453,7 +1474,7 @@ public sealed class ContentHandler(
         ["reviewerDoctorId"] = a.ReviewerDoctorId,
         ["reviewedOn"] = a.ReviewedOn?.ToString("yyyy-MM-dd"),
         ["displayDate"] = a.DisplayDate,
-        ["coverMediaId"] = a.CoverMediaId,
+        ["cover"] = ImageFields(a.Cover),
         ["summary"] = a.Summary,
         ["bodyBlocks"] = a.BodyBlocks,
         ["readingMinutes"] = a.ReadingMinutes,
@@ -1473,7 +1494,7 @@ public sealed class ContentHandler(
         if (JDateTime(f, "displayDate") is DateTime displayDate) a.DisplayDate = displayDate;
         else if (isCreate) a.DisplayDate = Clock.UtcNow; // 新建文章：對外顯示日期預設為現在（docs/08 §C-4）
 
-        if (f.TryGetProperty("coverMediaId", out _)) a.CoverMediaId = JInt(f, "coverMediaId");
+        if (f.TryGetProperty("cover", out _)) a.Cover = JImage(f, "cover");
 
         if (f.TryGetProperty("summary", out _))
         {
@@ -1503,7 +1524,7 @@ public sealed class ContentHandler(
         ["shootingConditions"] = c.ShootingConditions,
         ["images"] = c.Images.OrderBy(i => i.Phase).ThenBy(i => i.SortOrder).Select(i => new Dictionary<string, object?>
         {
-            ["mediaId"] = i.MediaId,
+            ["image"] = ImageFields(i.Image),
             ["phase"] = (byte)i.Phase,
             ["takenOn"] = i.TakenOn?.ToString("yyyy-MM-dd"),
             ["sortOrder"] = i.SortOrder,
@@ -1542,7 +1563,7 @@ public sealed class ContentHandler(
             {
                 c.Images.Add(new CaseImage
                 {
-                    MediaId = img.GetProperty("mediaId").GetInt32(),
+                    Image = RequireImage(img, "image"),
                     Phase = (CasePhase)img.GetProperty("phase").GetByte(),
                     TakenOn = JDateOnly(img, "takenOn"),
                     SortOrder = JInt(img, "sortOrder") ?? 0,
@@ -1604,7 +1625,7 @@ public sealed class ContentHandler(
         }).ToList(),
         ["photos"] = c.Photos.OrderBy(p => p.SortOrder).Select(p => new Dictionary<string, object?>
         {
-            ["mediaId"] = p.MediaId,
+            ["image"] = ImageFields(p.Image),
             ["caption"] = p.Caption,
             ["sortOrder"] = p.SortOrder,
         }).ToList(),
@@ -1654,7 +1675,7 @@ public sealed class ContentHandler(
             {
                 c.Photos.Add(new ClinicPhoto
                 {
-                    MediaId = p.GetProperty("mediaId").GetInt32(),
+                    Image = RequireImage(p, "image"),
                     Caption = JStr(p, "caption"),
                     SortOrder = JInt(p, "sortOrder") ?? 0,
                 });
@@ -1669,7 +1690,7 @@ public sealed class ContentHandler(
         ["systemKey"] = p.SystemKey,
         ["lead"] = p.Lead,
         ["bodyBlocks"] = p.BodyBlocks,
-        ["coverMediaId"] = p.CoverMediaId,
+        ["cover"] = ImageFields(p.Cover),
         ["listSortRule"] = p.ListSortRule,
         ["pageSize"] = p.PageSize,
         ["superAdminOnly"] = p.SuperAdminOnly,
@@ -1682,7 +1703,7 @@ public sealed class ContentHandler(
         if (f.TryGetProperty("lead", out _)) p.Lead = JStr(f, "lead");
         if (f.TryGetProperty("bodyBlocks", out var bodyEl))
             p.BodyBlocks = bodyEl.ValueKind == JsonValueKind.Null ? null : bodyEl.GetRawText();
-        if (f.TryGetProperty("coverMediaId", out _)) p.CoverMediaId = JInt(f, "coverMediaId");
+        if (f.TryGetProperty("cover", out _)) p.Cover = JImage(f, "cover");
 
         if (p.PageKind == PageKind.System)
         {
@@ -1697,7 +1718,7 @@ public sealed class ContentHandler(
     {
         ["termType"] = (byte)t.TermType,
         ["intro"] = t.Intro,
-        ["coverMediaId"] = t.CoverMediaId,
+        ["cover"] = ImageFields(t.Cover),
     };
 
     private static void ApplyTermFields(Term t, JsonElement f)
@@ -1705,6 +1726,196 @@ public sealed class ContentHandler(
         // ⚠️ termType 建立後不可修改：分類是 URL 結構的一部分（docs/08 §C-9），
         //    CreateAsync 已在建構實體前就決定並設好 TermType。
         if (f.TryGetProperty("intro", out _)) t.Intro = JStr(f, "intro");
-        if (f.TryGetProperty("coverMediaId", out _)) t.CoverMediaId = JInt(f, "coverMediaId");
+        if (f.TryGetProperty("cover", out _)) t.Cover = JImage(f, "cover");
     }
+
+    // ════════════════════════════════════════════════════════════════════
+    // 8. 內嵌圖片欄位與舊檔清除（docs/08 §0 決策五、docs/11 §9）
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>公開圖片容器。上傳只收圖片，只進這一個容器（<see cref="UploadHandler"/>）。</summary>
+    private string PublicContainer => configuration["BLOB_PUBLIC_CONTAINER"] ?? "media";
+
+    /// <summary>把內嵌圖片輸出成欄位 JSON。<c>null</c> 代表這個欄位沒有圖。</summary>
+    private static Dictionary<string, object?>? ImageFields(UploadedImage? i) => i is null ? null : new()
+    {
+        ["blobPath"] = i.BlobPath,
+        ["url"] = i.Url,
+        ["alt"] = i.Alt,
+        ["width"] = i.Width,
+        ["height"] = i.Height,
+        ["variants"] = i.Variants,
+    };
+
+    /// <summary>
+    /// 讀一個可為空的圖片欄位：<c>null</c>／不是物件都當成「這個欄位沒有圖」。
+    /// ⚠️ 呼叫端必須先 <c>TryGetProperty</c> 確認欄位有送，否則沒送的欄位會被當成要清空。
+    /// </summary>
+    private static UploadedImage? JImage(JsonElement f, string name)
+        => f.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.Object
+            ? ReadImage(el, name)
+            : null;
+
+    /// <summary>讀圖庫明細列上的圖片：那一列的存在理由就是這張圖，缺了就是壞資料。</summary>
+    private static UploadedImage RequireImage(JsonElement row, string name)
+        => row.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.Object
+            ? ReadImage(el, name)
+            : throw AppException.BadRequest(ErrorCodes.ValidationRequired, $"圖庫明細缺少 {name}。");
+
+    /// <summary>
+    /// ⚠️ <c>url</c> 與 <c>blobPath</c> 都必填，且必須原封不動來自
+    /// <c>POST /admin/upload/commit</c> 的回傳值——前端不自行拼字串。
+    /// 少了 <c>blobPath</c>，這張圖被換掉時就找不到檔案可刪（docs/11 §9）。
+    /// </summary>
+    private static UploadedImage ReadImage(JsonElement el, string name)
+    {
+        var url = JStr(el, "url");
+        var blobPath = JStr(el, "blobPath");
+
+        if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(blobPath))
+            throw AppException.BadRequest(ErrorCodes.ValidationRequired, $"{name} 缺少 url 或 blobPath。");
+
+        return new UploadedImage
+        {
+            Url = url,
+            BlobPath = blobPath,
+            Alt = JStr(el, "alt"),
+            Width = JInt(el, "width"),
+            Height = JInt(el, "height"),
+            Variants = JStr(el, "variants"),
+        };
+    }
+
+    /// <summary>
+    /// 這一筆內容目前引用到的所有 blob 路徑。
+    /// <para>
+    /// ⚠️ <b>必須涵蓋 <c>BodyBlocks</c> 內文裡的插圖</b>，不是只有具名的圖片欄位——
+    /// 漏了就會把正在用的內文插圖判成孤兒刪掉（docs/11 §9）。內文是自由形狀的區塊 JSON，
+    /// 所以用走訪的方式撈出所有 <c>blobPath</c>，不預設區塊長什麼樣。
+    /// </para>
+    /// </summary>
+    private static List<string> CollectBlobPaths(ContentItem entity)
+    {
+        var paths = new List<string>();
+
+        void Add(UploadedImage? image)
+        {
+            if (image is { BlobPath.Length: > 0 }) paths.Add(image.BlobPath);
+        }
+
+        Add(entity.Seo?.OgImage);
+
+        switch (entity)
+        {
+            case Treatment t:
+                Add(t.Cover);
+                foreach (var i in t.Images) Add(i.Image);
+                break;
+            case Doctor d:
+                Add(d.Photo);
+                break;
+            case Concern c:
+                Add(c.Cover);
+                break;
+            case Article a:
+                Add(a.Cover);
+                CollectBlobPathsFromJson(a.BodyBlocks, paths);
+                break;
+            case Case cs:
+                foreach (var i in cs.Images) Add(i.Image);
+                break;
+            case Clinic cl:
+                foreach (var photo in cl.Photos) Add(photo.Image);
+                break;
+            case Page pg:
+                Add(pg.Cover);
+                CollectBlobPathsFromJson(pg.BodyBlocks, paths);
+                break;
+            case Term tm:
+                Add(tm.Cover);
+                break;
+        }
+
+        return paths;
+    }
+
+    private static void CollectBlobPathsFromJson(string? json, List<string> into)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            Walk(doc.RootElement);
+        }
+        catch (JsonException)
+        {
+            // 內文不是合法 JSON 就當它沒有圖。⚠️ 這裡寧可少刪也不要多刪——
+            // 判斷失準的代價是留下孤兒檔，反過來則是把正在用的圖刪掉。
+        }
+
+        void Walk(JsonElement el)
+        {
+            switch (el.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var prop in el.EnumerateObject())
+                    {
+                        if (prop.NameEquals("blobPath") && prop.Value.ValueKind == JsonValueKind.String)
+                        {
+                            var value = prop.Value.GetString();
+                            if (!string.IsNullOrWhiteSpace(value)) into.Add(value);
+                        }
+                        else Walk(prop.Value);
+                    }
+                    break;
+                case JsonValueKind.Array:
+                    foreach (var item in el.EnumerateArray()) Walk(item);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 存檔後把「換掉或移除、已經沒有欄位指向它」的檔案從 Blob 刪掉（docs/11 §9）。
+    /// <para>
+    /// 🔴 <b>順序不可顛倒：資料庫先存成功，才動實體檔案。</b> 反過來的話存檔失敗會留下
+    /// 「紀錄還在、檔案已經沒了」的斷鏈，比孤兒檔案更糟。
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>刪不掉不要往外丟例外</b>：內容已經存好了，清檔失敗只該留下孤兒檔與一筆告警，
+    /// 不該讓使用者看到一個失敗的存檔。
+    /// </para>
+    /// <para>
+    /// ⚠️ 連帶後果：<b>版本還原救不回已經被刪掉的圖片</b>。還原只還原記錄，
+    /// 舊版快照裡指向的檔案若當時已被換掉，那個 URL 就是 404（docs/11 §8、§9）。
+    /// </para>
+    /// </summary>
+    private async Task DeleteUnreferencedBlobsAsync(
+        IReadOnlyCollection<string> before, IReadOnlyCollection<string> after, CancellationToken ct)
+    {
+        var orphans = before.Except(after, StringComparer.Ordinal).Distinct(StringComparer.Ordinal).ToList();
+        if (orphans.Count == 0) return;
+
+        // ⚠️ 這段跑在存檔交易之後、回應之前，所以要有上限。實測過：儲存體連不上時
+        // Azure SDK 的重試會讓一次 DeleteIfExists 卡數十秒，兩個檔案就把一個存檔請求
+        // 拖成近一分鐘。清檔不是使用者等待的理由——逾時就放掉，留孤兒檔給對帳工具。
+        using var cleanup = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cleanup.CancelAfter(CleanupBudget);
+
+        foreach (var path in orphans)
+        {
+            try
+            {
+                await blobStorage.DeleteAsync(PublicContainer, path, cleanup.Token);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "換圖後刪除舊檔失敗，留下孤兒檔：{Container}/{BlobPath}", PublicContainer, path);
+            }
+        }
+    }
+
+    /// <summary>一次存檔用在清除舊檔上的時間上限，見 <see cref="DeleteUnreferencedBlobsAsync"/>。</summary>
+    private static readonly TimeSpan CleanupBudget = TimeSpan.FromSeconds(15);
 }

@@ -106,7 +106,7 @@ builder.Services.AddScoped<SettingHandler>();
 builder.Services.AddScoped<DashboardHandler>();
 builder.Services.AddScoped<ContentHandler>();
 builder.Services.AddScoped<ReviewHandler>();
-builder.Services.AddScoped<MediaHandler>();
+builder.Services.AddScoped<UploadHandler>();
 builder.Services.AddScoped<HomeSectionHandler>();
 builder.Services.AddScoped<MenuHandler>();
 builder.Services.AddScoped<RedirectHandler>();
