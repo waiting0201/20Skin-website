@@ -1,10 +1,10 @@
 # 07 — 部署架構與 CI/CD
 
-> **Azure Static Web Apps（Free）＋ 獨立 Azure Functions（.NET 10）＋ Blob Storage ＋ Azure SQL**，GitHub Actions 部署。
+> **Azure Static Web Apps（Standard）＋ 獨立 Azure Functions（Flex Consumption．NET 10）＋ Blob Storage ＋ Azure SQL**，GitHub Actions 部署。
 > 部署交付範圍：**SWA ＋ Functions ＋ Blob ＋ 資料庫 schema（EF Core migrations）**。資料庫執行個體由院方自建。
 > Azure 平台限制查證日期：2026-08-10，來源見末段。
 
-架構本身很單純：一個靜態網站、一組 API、一個資料庫。但這個站有 **950 個 URL、約 800 篇文章、約 770 條 301**，這三個數字會撞到 SWA Free 的幾道牆。本文件就講這些牆和怎麼繞過，其餘照一般官網做即可。
+架構本身很單純：一個靜態網站、一組 API、一個資料庫。但這個站有 **950 個 URL、約 800 篇文章、約 770 條 301**，這三個數字會撞到 SWA 的幾道牆。本文件就講這些牆和怎麼繞過，其餘照一般官網做即可。
 
 > **API 拆成兩塊，這是全篇最容易搞錯的地方。**
 > 前後台共用的應用程式 API 放在**獨立的 Azure Functions App**（2026-08-10 定案），由瀏覽器跨網域直接呼叫。
@@ -19,7 +19,7 @@
      │
      ├──▶ 20skin.tw / www.20skin.tw
      │    ┌──────────────────────────────────────┐
-     │    │  Azure Static Web Apps（Free）        │
+     │    │  Azure Static Web Apps（Standard）    │
      │    │  · 預渲染 HTML 約 950 頁（nuxt generate）│
      │    │  · /admin/* 後台 SPA（apps/admin）    │
      │    │  · /api/fallback ← 約 770 條 301（§2） │
@@ -45,7 +45,7 @@
 
 沒有 CDN／WAF 中間層。SWA 本身有全球節點與 100 GB／月流量，這個規模夠用。
 
-**API 網域用 `api.20skin.tw`（CNAME 指向 Function App）。** 這個自訂網域掛在 Function App 上，**不吃 SWA Free 的 2 個自訂網域額度**（那兩個已被 `20skin.tw` 與 `www.20skin.tw` 用滿）。因為與前台不同源，**CORS 由院方自行設定**（2026-08-10 確認）。
+**API 網域用 `api.20skin.tw`（CNAME 指向 Function App）。** 這個自訂網域掛在 Function App 上，與 SWA 的自訂網域額度無關。因為與前台不同源，**CORS 由院方自行設定**（2026-08-10 確認）。
 
 ⚠️ **跨來源的連帶影響：SWA 內建驗證的 `x-ms-client-principal` 到不了外部 Function App。** 認證與五種角色本來就規劃在 Function 內自行驗證（[02](02-backend-cms.md) §4），維持該作法即可，但 token 要用 **Bearer** 帶，不要指望跨來源 cookie。
 
@@ -61,9 +61,22 @@
 
 **一個原則：公開頁面全部是建置期產生的實體 HTML 檔，執行期不打 API、不打資料庫。** [03-seo-geo.md](03-seo-geo.md) 的 GEO 策略前提是 AI 爬蟲取得到內容，而 AI 爬蟲基本上不執行 JavaScript —— SPA-only 的內容對它們等於不存在。後台 `/admin/*` 則相反，純 SPA、不預渲染、不需被索引。
 
-需要建立的資源：**SWA（Free）**、**Azure Functions App（Flex Consumption）**、**Blob Storage**，加上院方的 Azure SQL，總共四樣。
+**資源已於 2026-09-11 建立**，資源群組 `rg-20skin-web-prod`（westus2）：
 
-> **為什麼不用 SWA 的「Bring your own API」串接？** 官方文件：*Bring your own APIs is only available in the Standard plan*，且 *cannot be linked to a Static Web Apps pull request environment*。串接要付 Standard 又驗不了 PR 預覽，不划算。這裡的作法是**不串接** —— Function App 就是一個獨立服務，前端拿完整網址呼叫它，SWA 完全不需要知道它的存在。SWA 維持 Free。
+| 資源 | 名稱 |
+|---|---|
+| Static Web Apps（Standard） | `swa-20skin-web-prod` |
+| Azure Functions（Flex Consumption．dotnet-isolated 10.0） | `func-20skin-web-api-prod` |
+| Blob Storage | `st20skinweb`（容器 `media` 公開／`media-private`／`system-state`／`deploy-package`） |
+| Application Insights ＋ Log Analytics | `appi-20skin-web-prod`／`log-20skin-web-prod` |
+
+加上院方的 Azure SQL，總共五樣。
+
+🔴 **不要把資源建進 `rg-20skin-prod`。** 那是**線上預約系統**的正式環境，正在服務 `booking.20skin.tw`（`swa-20skin-customer-prod` ＋ `func-20skin-api-prod` 的 `ApiRouter`／`SmsReminder`）。而預約系統正是 CLAUDE.md 決策 4 明文排除在本專案之外的東西 —— 部署進去會弄壞診所正在營運的預約。
+
+> **為什麼不用 SWA 的「Bring your own API」串接？** 這裡的作法是**不串接** —— Function App 就是一個獨立服務，前端拿完整網址呼叫它，SWA 完全不需要知道它的存在。
+>
+> ⚠️ 原本的理由是「BYOF 僅限 Standard 方案」，那個理由在 2026-09-11 改用 Standard 之後已經不成立。**但作法維持不變**：不串接的架構更單純（前後端各自獨立部署），而 BYOF 之下 `navigationFallback` 是否仍然可用尚未驗證 —— 770 條 301 全靠它。
 
 ---
 
@@ -132,7 +145,12 @@
 
 ### 後台 IP 白名單：不做（2026-08-13 定案）
 
-**後台不設 IP 白名單。** 技術上做得到 —— 獨立 Function App 支援 **inbound access restrictions**（平台層 IP 限制，SWA Free 給不了），但院方決定不採用，不要重新提案。
+**後台不設 IP 白名單。** 技術上做得到 —— 獨立 Function App 支援 **inbound access restrictions**（平台層 IP 限制），但院方決定不採用，不要重新提案。
+
+> ⚠️ **兩個前提在決定之後變了，記錄於此供院方日後重新評估，不是重新提案**：
+> ① **雙因素也不做了**（2026-09-11），三道防線只剩登入次數限制一道；
+> ② SWA 已改用 **Standard**（2026-09-11，原因見 §3），平台層的 IP 範圍限制變成可用，
+>    不必再為此拆 Function App。
 
 連帶結果：**API 維持單一 Function App，前後台共用**。原本「拆 `api-admin`／`api-public` 兩個 App」的提案只為了套白名單（限制粒度是整個 App，共用會把前台的表單送出、站內搜尋一起擋掉），白名單不做，這個拆分就沒有理由，**此項已從待決策移除**。
 
@@ -146,15 +164,19 @@
 
 ---
 
-## 3. 🔴 Free 方案單一環境 250 MB
+## 3. 單一環境儲存上限 500 MB
 
-950 頁預渲染 HTML ＋ JS/CSS/字型，估約 90 MB，塞得下但沒有太多餘裕，而且**會隨文章數成長**。三件事必須做到：
+> ⚠️ **2026-09-11 由 Free 改為 Standard**，上限從 250 MB 變成 500 MB。改的原因不是評估後改變主意，而是**訂閱裡的 Free 方案配額已被既有專案用滿**（`az staticwebapp create --sku Free` 直接回 `This subscription has too many static sites with SKU: Free`）。
+> 連帶解掉的還有：自訂網域 2 → 5 個、可用 IP 範圍限制、**有 SLA**。
+> 本節原標題是「🔴 Free 方案單一環境 250 MB」，數字已全部更新。
+
+950 頁預渲染 HTML ＋ JS/CSS/字型，估約 90 MB。餘裕比 Free 時期寬鬆得多，但**會隨文章數成長**，三件事仍必須做到：
 
 1. **所有上傳檔案一律走 Blob Storage**，一個都不進 build 產物。CMS 上傳直接寫 Blob，資料庫只存 URL。詳見下方「上傳走 Blob」。
 2. **繁中字型必須子集化**。未子集化的一套 5–15 MB，在 250 MB 的預算裡不可忽略。
-3. **CI 內建大小檢查**（範本已含：180 MB 警告、230 MB 擋下）。
+3. **CI 內建大小檢查**（350 MB 警告、450 MB 擋下）。
 
-> 全部環境合計另有 500 MB 上限。因為不設 PR 預覽環境（§5），實際上只有正式環境一個，這條上限不會構成問題。
+> 因為不設 PR 預覽環境（§5），實際上只有正式環境一個，全環境合計的上限不會構成問題。
 
 > ⚠️ **Nuxt 特有的體積因子：`_payload.json`。** Nuxt 預渲染時會為每條路由額外產出一份 payload 檔，950 條路由就是 950 個檔案。上面的 90 MB 估算是在框架未定案時做的，**未計入這一項**，實測前不要當定論。若壓不下來，可在 `nuxt.config` 關閉 `renderJsonPayloads`，代價是首次導航要多打一次資料。
 
@@ -258,9 +280,9 @@ functions/         獨立 Azure Functions App —— 應用程式 API（.NET 10�
 
 > **這不是選擇，是平台限制，已查證。** SWA 的 managed functions 至今不支援 .NET 10，`apiRuntime` 上限為 `dotnet-isolated:9.0`，微軟未公布時程。
 >
-> **要讓 SWA 上也是 .NET 10，唯一途徑是升級 Standard 方案並改用 bring-your-own-functions**（把 SWA 的 `/api/*` 串到我們自己的 Function App，SWA 上就不留任何自有程式碼）—— 這是微軟自己給的建議作法。已評估，**因需付月費而未採用**（2026-08-10）。
+> ⚠️ **2026-09-11 起方案已是 Standard**（原因見 §3），所以「升級 Standard ＋ 改用 bring-your-own-functions」這條路現在**是開著的** —— 把 SWA 的 `/api/*` 串到我們自己的 Function App，`api/` 就不必停在 net9.0。
 >
-> 若日後改變主意，Standard 順帶會解掉：單一環境儲存 250 MB → **500 MB**（§3 目前最緊的限制）、可用 `networking.allowedIpRanges`（後台 IP 白名單目前不做，見 §2；日後若要做，Standard 是另一條路）、以及 Free 方案所沒有的 **SLA**。此段保留供日後評估，**不要當成待辦**。
+> **但不要急著改。** BYOF 之下 `navigationFallback` 能不能照常 rewrite 到 `/api/fallback` **尚未驗證**，而約 770 條 301 全靠它。這是可評估項，不是待辦 —— 先把 §8 的第一週技術驗證做完再說。
 >
 > 影響範圍很小：`api/` 只有 fallback 一支、約 80 行、沒有領域邏輯，[範本](templates/Fallback.cs)只用 Dapper。應用程式 API 100% 是 .NET 10。
 
@@ -328,7 +350,7 @@ functions/         獨立 Azure Functions App —— 應用程式 API（.NET 10�
 |---|---|
 | **為 Function App 的 Managed Identity 建 SQL 使用者**（執行期身分） | 應用程式 API 走 **Microsoft Entra 驗證**，不用帳號密碼：`CREATE USER [<function-app-name>] FROM EXTERNAL PROVIDER`，授予 `db_datareader` ＋ `db_datawriter` ＋ 必要的 stored procedure 執行權。**不要給 DDL 權限** —— 執行期不做遷移 |
 | **為 GitHub Actions 服務主體建 SQL 使用者**（遷移身分） | 這個才需要 DDL 權限（建議 `db_ddladmin` ＋ `db_datareader`／`db_datawriter`，仍不建議 `db_owner`）。**與上一列是兩個不同的身分，不可共用** |
-| **一組 SQL 唯讀連線字串**（給 SWA） | 僅供 `/api/fallback` 查 301 對照表。⚠️ SWA Free 沒有 Managed Identity，**這組只能明文存在 SWA application settings** —— 請給唯讀專用帳號並規劃密碼輪替。是整個架構剩下的唯一明文密鑰，`redirects.json` 方案若採用可連這個一起消滅（§2） |
+| **一組 SQL 唯讀連線字串**（給 SWA） | 僅供 `/api/fallback` 查 301 對照表。⚠️ **SWA 的 managed functions 能否用 Managed Identity 連 SQL 尚未查證**（改 Standard 之後可能有解），在確認之前仍假設**這組只能明文存在 SWA application settings** —— 請給唯讀專用帳號並規劃密碼輪替。是整個架構剩下的唯一明文密鑰，`redirects.json` 方案若採用可連這個一起消滅（§2）。**列入 §8 待驗證** |
 | **SQL 防火牆放行** | ①「允許 Azure 服務存取」—— Flex Consumption 的出口 IP 不固定；若院方要求收斂，可改用 **VNet 整合 ＋ 服務端點**（Flex Consumption 支援，Managed Functions 不支援）。② GitHub Actions runner —— build 期間要讀 DB 做預渲染、部署時要跑遷移。runner IP 浮動，**需授權 CI 以 `az sql server firewall-rule` 動態開關**（範本已含，結束即刪） |
 | **一套非正式資料庫**（建議） | 沒有 staging 也沒有 PR 預覽環境（§5），上線前的後台流程驗證是直接對尚未切 DNS 的正式環境做。若那時已載入正式內容，寫入測試會落進正式資料 —— 有一套可丟棄的資料庫會乾淨很多。上線後若要做破壞性測試，也只能靠它 |
 
@@ -365,18 +387,20 @@ functions/         獨立 Azure Functions App —— 應用程式 API（.NET 10�
 | **`/api/fallback` 的 301 行為** | 整批 301 都靠它。要確認 `x-ms-original-url` 帶得到 query string、回應的 301 ＋ `Location` 原樣送出、`/admin/*` 的 SPA 深層連結不會被誤導進 fallback。**開工第一週就要做的技術驗證** |
 | **跨來源鏈路**（新增） | 前台在 `20skin.tw`、API 在 `api.20skin.tw`。要驗 preflight、認證 token 的攜帶方式、錯誤回應是否也帶得到 CORS 標頭（**漏掉這點會讓 4xx/5xx 在瀏覽器變成看不出原因的 network error**）。CORS 由院方設定，但驗收要一起做 |
 | **Managed Identity 連 SQL 與 Blob**（新增） | 沒有密鑰是好事，但也代表本機開發與 CI 的驗證路徑不同，要先確認開發流程走得通 |
-| **build 產物大小 vs 250 MB** | Free 方案最緊的一條，超過就必須改變資產策略。Nuxt 的 `_payload.json`（每路由一份，950 份）未計入原估算，要單獨量 |
+| **build 產物大小 vs 500 MB** | 超過就必須改變資產策略。Nuxt 的 `_payload.json`（每路由一份，950 份）未計入原估算，要單獨量 |
 | **全站 `nuxt generate` 時間**（950 頁） | 決定內容更新的可接受延遲，也決定要不要改增量建置 |
 | **`/admin/**` 的 `ssr: false` 產出** | 要確認 Nuxt 實際產生的 SPA shell 檔案路徑，與 `staticwebapp.config.json` 的 `rewrite: /admin/index.html` 對得上 |
 | **Blob 直傳鏈路** | Storage CORS、SAS 有效期、上傳後的 `Cache-Control` 是否正確寫入。沒有 CDN，圖片由 Blob 直接服務，快取設錯會直接反映在 CWV |
 | 冷啟動對 301 的實際延遲 | 遷移期爬蟲會密集打舊網址，太慢要考慮加大 config 內的規則數或加快取 |
 | 冷啟動對後台操作的體感 | Flex Consumption 可設 always-ready 執行個體降低冷啟動，但要付費。先量再決定 |
+| **SWA managed function 能否用 Managed Identity 連 SQL** | 若可以，就能消滅全架構最後一組明文密鑰（§6）。改 Standard 之後值得查一次 |
 | **`api/` 實際可用的 .NET 版本** | .NET 10 確定不支援（§1），但 9.0 也還沒確認：Azure 兩份文件互相矛盾 —— [apis-functions](https://learn.microsoft.com/en-us/azure/static-web-apps/apis-functions) 只列到 **.NET 8.0**，[configuration](https://learn.microsoft.com/en-us/azure/static-web-apps/configuration) 的 `apiRuntime` 表列到 **`dotnet-isolated:9.0`**。範本先寫 9.0，**第一週要實測，不通就退 8.0**。只影響 fallback 那一支，`functions/` 的 .NET 10 不受此限 |
 | **遷移在正式資料庫的實際行為**（新增） | 沒有 staging，第一次跑 `efbundle` 就是對正式庫跑。至少要先在一套可丟棄的資料庫演練一次完整遷移與回滾，見 §6 |
 
 **待決策**：圖片衍生尺寸由誰產（§3 末段）、301 對照表是否改為建置期烤成 `redirects.json`（§2）、Azure 訂閱歸屬與區域。
 
 > 已定案、不再是待決事項（均 2026-08-10）：前端 **Nuxt 3 純靜態**、API 放**獨立 Azure Functions App**、API 語言 **.NET 10 isolated ＋ EF Core（寫入）＋ Dapper（讀取）**、**schema 由 EF Core migrations 管理**。
+> **Azure 訂閱與區域已定（2026-09-11）**：CSP 訂閱、`westus2`、資源群組 `rg-20skin-web-prod`。
 > **排程發布不再是待決項** —— 獨立 Function App 有 Timer trigger，直接做即可（§4）。
 > **後台 IP 白名單不做**（2026-08-13），連帶確定 **API 維持單一 Function App、不拆 `api-admin`／`api-public`**（§2）。
 

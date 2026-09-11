@@ -200,7 +200,10 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
 2. **`20skinblog.com` 整併進主站 `/blog/`**，保留原 slug。**本專案只負責抓回 101 篇的內文與圖片**；跨網域 301 不在範圍內，由院方自行處置（見 [docs/01-sitemap.md](docs/01-sitemap.md) 決策三）
 3. 後台範圍 = **CMS ＋ 權限帳號 ＋ AI FAQ 管理**（不含數據報表模組）
 4. **不含線上購物與線上預約** —— `20skinshop.com` 與 `booking.20skin.tw` 僅以外部導流連結存在，不納入 sitemap、不納入後台、不納入內容策略
-5. **部署在 Azure**：**Static Web Apps（Free）＋ 獨立 Azure Functions（Flex Consumption）＋ Blob ＋ Azure SQL**，GitHub Actions **兩條 workflow**。沒有 CDN／WAF 中間層。
+5. **部署在 Azure**：**Static Web Apps（Standard）＋ 獨立 Azure Functions（Flex Consumption）＋ Blob ＋ Azure SQL**，GitHub Actions **兩條 workflow**。沒有 CDN／WAF 中間層。
+   **資源已於 2026-09-11 建立**：訂閱 CSP、區域 `westus2`、資源群組 **`rg-20skin-web-prod`**。
+   ⚠️ **SWA 方案由 Free 改為 Standard**（2026-09-11）—— 不是改變主意，是**訂閱裡的 Free 配額已被既有專案用滿**。連帶把單一環境儲存上限從 250 MB 拉到 500 MB。
+   🔴 **不要把資源建進 `rg-20skin-prod`** —— 那是**線上預約系統**的正式環境（`booking.20skin.tw`），正是決策 4 排除在本專案外的系統。部署進去會弄壞診所營運中的預約。
    交付範圍 **SWA ＋ Functions ＋ Blob ＋ 資料庫 schema**（資料庫執行個體由院方自建，見第 8 條）。
    **只有正式環境 —— 不設 staging，也不設 PR 預覽環境**（2026-08-10 定案）。前台與 API 都是 `main` 合併即上線。上線前的驗收對**尚未切 DNS 的正式環境**（`*.azurestaticapps.net`／`*.azurewebsites.net`）做；上線後沒有預演，靠 `main` 分支保護 ＋ CI 檢查 ＋ 部署後 smoke test 三道攔截。**不要在文件裡寫回 PR 預覽或 staging。**
    由平台限制逼出來的例外，**不要當成可以靠設定繞過**：約 770 條 301 由 `/api/fallback` 查 SQL 對照表（SWA 設定檔上限 20 KB）、上傳檔案放 Blob（單一環境 250 MB）。見 [docs/07-deployment.md](docs/07-deployment.md)

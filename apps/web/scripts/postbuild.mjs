@@ -34,14 +34,14 @@ if (existsSync(generated)) {
 }
 
 // ── 2. 大小 ───────────────────────────────────────────────────────────
-const WARN = 180 * 1024 * 1024
-const FAIL = 230 * 1024 * 1024
+const WARN = 350 * 1024 * 1024
+const FAIL = 450 * 1024 * 1024
 
 let total = 0
 for await (const file of walk(OUT)) total += (await stat(file)).size
 
 const mb = (n) => (n / 1024 / 1024).toFixed(1) + ' MB'
-console.log(`· 產物大小 ${mb(total)}（SWA Free 單一環境上限 250 MB）`)
+console.log(`· 產物大小 ${mb(total)}（SWA Standard 單一環境上限 500 MB）`)
 
 if (total > FAIL) {
   console.error(`✗ 超過 ${mb(FAIL)}，不可部署。見 docs/07-deployment.md §3`)

@@ -48,7 +48,7 @@
 | **後台開發** | 🟡 | **31／31 畫面完成**；接 mock，未接 API（§三） |
 | **資料模型與 migrations** | ✅ | 37 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四） |
 | **API** | ✅ | 端點、服務、三支 Timer 完成，**已對真 SQL Server 端到端驗證**（§五） |
-| 部署與 CI/CD | ⬜ | 範本在 [`docs/templates/`](docs/templates/)，**Azure 資源未開、workflow 未進 repo**（§六） |
+| 部署與 CI/CD | 🟡 | **Azure 資源已建立**（`rg-20skin-web-prod`）；workflow 未進 repo、程式碼未部署（§六） |
 | 內容遷移（約 800 篇） | ⬜ | 需先有資料庫 |
 | 療程內容（27 項，12 項從零寫） | 🔴 | **需醫師投入，Phase 1 最大瓶頸** |
 | 上線前驗收 | ⬜ | checklist 見 §七 |
@@ -265,13 +265,47 @@ schema 的真實來源是 `functions/Data/Migrations/`（docs/07 §5）。
 
 ---
 
-## 六、部署 ⬜
+## 六、部署 🟡
 
-**Azure 資源一個都還沒開。** 範本在 [`docs/templates/`](docs/templates/)，尚未複製到 repo 根的
-`.github/workflows/`。
+**Azure 資源已於 2026-09-11 建立**，但**還沒有部署任何程式碼**（workflow 未進 repo）。
 
-需要建立：SWA（Free）、Azure Functions App（Flex Consumption）、Blob Storage，
-加上院方的 Azure SQL，共四樣。
+### ✅ 已建立（`rg-20skin-web-prod`／westus2／CSP 訂閱）
+
+| 資源 | 名稱 | 備註 |
+|---|---|---|
+| Static Web Apps | `swa-20skin-web-prod` | **Standard**（見下方） |
+| Azure Functions | `func-20skin-web-api-prod` | Flex Consumption ＋ **dotnet-isolated 10.0** ＋ SystemAssigned 身分 |
+| Blob Storage | `st20skinweb` | 容器 `media`（公開讀）／`media-private`／`system-state`／`deploy-package` |
+| Application Insights | `appi-20skin-web-prod` | ＋ `log-20skin-web-prod` |
+
+Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 **Blob Delegator**
+（後者是簽 user delegation SAS 必要的），執行期不需要儲存體金鑰。
+`Jwt__Secret` 已產生並只存在 Azure 的應用程式設定裡。
+
+### 🔴 兩件必須知道的事
+
+**① 不要把資源建進 `rg-20skin-prod`。**
+那是**線上預約系統**的正式環境，正在服務 `booking.20skin.tw` —— `swa-20skin-customer-prod`
+（Standard）、`swa-20skin-admin-prod`、`func-20skin-api-prod`（`ApiRouter` ＋ `SmsReminder`）。
+而預約系統正是 CLAUDE.md 決策 4 明文排除在本專案外的東西。部署進去會**弄壞診所營運中的預約**。
+
+**② SWA 由 Free 改為 Standard。**
+不是改變主意 —— `az staticwebapp create --sku Free` 直接回
+`This subscription has too many static sites with SKU: Free`，配額已被既有專案用滿。
+連帶影響（`docs/07` §3 已全面更新）：單一環境儲存 **250 MB → 500 MB**、自訂網域 2 → 5、
+**有 SLA**、IP 範圍限制變成可用。產物大小閘同步放寬為 350 MB 警告／450 MB 擋下
+（目前 14.7 MB）。
+
+### ⬜ 未做
+
+| 項目 | 說明 |
+|---|---|
+| **兩條 workflow 進 repo** | 範本在 [`docs/templates/`](docs/templates/)，尚未複製到 `.github/workflows/` |
+| **部署程式碼** | 前台、後台、API 都還沒推上去 |
+| **Azure SQL** | 🔴 **院方自建**，尚未提供。連帶 `SQL_SERVER`／`SQL_DATABASE` 與兩組 SQL 使用者都還是空的 |
+| 自訂網域 | `20skin.tw`／`www.20skin.tw`／`api.20skin.tw` 都還沒綁 |
+| CORS | Function App 的 allow-list 由院方設定 |
+| 其餘應用程式設定 | `GITHUB_REPO`／`GITHUB_DISPATCH_TOKEN`（待 repo 上 GitHub）、`Smtp__*`（待院方）、`BotCheck__SecretKey`（供應商未定） |
 
 ### ✅ 版控與分流已就緒
 
