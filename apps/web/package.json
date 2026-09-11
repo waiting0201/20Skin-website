@@ -10,7 +10,8 @@
     "postinstall": "nuxt prepare",
     "verify:css": "node scripts/verify-css.mjs",
     "verify": "npm run verify:css && npm run verify:links",
-    "verify:links": "node scripts/verify-links.mjs"
+    "verify:links": "node scripts/verify-links.mjs",
+    "export:content": "cd ../.. && dotnet run --project tools/content-export -- apps/web/content"
   },
   "devDependencies": {
     "nuxt": "^3.19.0",

@@ -26,6 +26,8 @@ apps/
 tools/deploy-swa.sh    部署 SWA：前台 ＋ 後台 SPA ＋ /api/fallback（⚠️ 不含獨立 Function App）
 tools/deploy-api.sh    部署獨立 Function App（functions/ → func-20skin-web-api-prod）
                        ⚠️ 尚未對 Azure 實跑驗證，見檔頭
+tools/content-import/  mockup 內容 → 資料庫（dump／import／upload-images／golden-diff）
+tools/content-export/  資料庫 → apps/web/content/*.json（Dapper 唯讀，建置期跑）
 tools/sync-public.sh   master → public 分支（去除 reference/ output/），推 GitHub 前執行
 .githooks/pre-push     安全網：擋下含非公開路徑或過大檔案的 ref 推向 Remote_GitHub
 docs/                  工程端文件（真實來源）
@@ -104,6 +106,12 @@ scripts/
 ## 常用指令
 
 ```bash
+# 內容管線（⚠️ 順序：匯入 → 匯出 → 建置）
+node tools/content-import/dump.mjs /tmp/frontend-data.json   # TS 資料模組 → JSON
+node tools/content-import/import.mjs /tmp/frontend-data.json # → 資料庫（走真正的 API，需先啟動 func）
+pnpm --filter web export:content                             # 資料庫 → apps/web/content/*.json
+node tools/content-import/upload-images.mjs /tmp/frontend-data.json  # 圖片 → Blob（含對帳）
+
 # 前後台建置（⚠️ 順序不可顛倒：先 admin 後 web）
 pnpm --filter admin build && pnpm --filter web build
 
@@ -250,6 +258,19 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    後台畫面 31 → 30（「資產／媒體庫」整個拿掉）。
    見 [08-database.md](docs/08-database.md) §0 決策四、[11-backend-design.md](docs/11-backend-design.md) §9、[02-backend-cms.md](docs/02-backend-cms.md) §4。
 
+
+14. **前台內容一律來自資料庫**，2026-09-11 完成搬遷。鏈路是
+   `資料庫 →（Dapper 唯讀）→ apps/web/content/*.json →（Vite 建置期內聯）→ 靜態產物`，
+   **執行期不查詢、不讀檔**（docs/09 §3）。`apps/web/app/data/*.ts` 從內容本體變成
+   **形狀轉接層**：欄位怎麼排、叫什麼名字仍是前台的契約，內容在資料庫。
+   ⚠️ 匯出讀的是**已核准的版本快照**，不是 `ContentItems` 的即時欄位 ——
+   兩種錯法都是災難（編輯已上線的頁面會 404／未審核的編輯直接上線）。
+   ⚠️ **版面留在前台**（`app/data/_presentation.ts`）：英文小標、圖示、
+   JSON-LD 的固定描述這類設計稿決定的字串不進資料庫。判斷標準是「院方會想改它嗎？」
+   ⚠️ **內容圖在 Blob，版面素材在建置產物**。路徑是決定性的
+   （`media/{yyyy}/{MM}/{32hex}{ext}`），所以上傳與匯入可以分開跑、重跑安全。
+   ⚠️ 搬遷正確性靠 `tools/content-import/golden-diff.sh` 把關 ——
+   它比對重建後的 107 頁與搬遷前的黃金樣本。
 
 ---
 
