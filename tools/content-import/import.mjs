@@ -119,8 +119,15 @@ async function ensureTerm(type, slug, title) {
         width: d.photo?.width ?? null,
         height: d.photo?.height ?? null,
       }),
-      // 簡介是段落陣列 → 區塊 JSON（與後台富文本同格式）。
-      bio: blocks(d.bio),
+      // 簡介是一份區塊文件：段落 ＋ 兩個沒有專屬欄位的內容字串。
+      // ⚠️ heroRole（個人頁 Hero 的職稱，與列表卡片的 jobTitle 刻意不同）與
+      //    yearsInPractice（執業年資）都是院方會改的內容，但各自加一欄不划算 ——
+      //    它們只出現在個人頁，且天生屬於「簡介」這份文件。
+      bio: blocks({
+        heroRole: d.heroRole ?? null,
+        yearsInPractice: d.yearsInPractice ?? null,
+        paragraphs: d.bio ?? [],
+      }),
       // 媒體與講座紀錄。前台叫 media，資料庫的語意是「著作」。
       publications: blocks(d.media),
       // 兩組標籤合成一個陣列，用 type 區分（docs/08 §C-2）。

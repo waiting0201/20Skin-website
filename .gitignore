@@ -31,3 +31,6 @@ functions/local.settings.json
 
 # 建置期資料快照（docs/09 §3）：由 tools/content-export 從資料庫產生，不進版控。
 apps/web/content/
+
+# 黃金樣本（tools/content-import/golden-diff.sh）
+.golden-html/
