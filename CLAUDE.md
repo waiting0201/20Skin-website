@@ -23,6 +23,9 @@ apps/
   admin/               後台：Vite ＋ Vue 3 的 SPA，base=/admin/
                        build 產物直接寫進 apps/web/public/admin/
                        ⚠️ 建置順序：先 admin 後 web
+tools/deploy-swa.sh    部署 SWA：前台 ＋ 後台 SPA ＋ /api/fallback（⚠️ 不含獨立 Function App）
+tools/deploy-api.sh    部署獨立 Function App（functions/ → func-20skin-web-api-prod）
+                       ⚠️ 尚未對 Azure 實跑驗證，見檔頭
 tools/sync-public.sh   master → public 分支（去除 reference/ output/），推 GitHub 前執行
 .githooks/pre-push     安全網：擋下含非公開路徑或過大檔案的 ref 推向 Remote_GitHub
 docs/                  工程端文件（真實來源）

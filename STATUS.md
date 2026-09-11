@@ -342,9 +342,12 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 現在是「新 schema 配舊程式」的空窗。站還沒切 DNS、資料庫也沒有內容，沒有實際影響，
 但**不要停在只做一半**：
 
-1. 重新部署 `func-20skin-web-api-prod`（⚠️ `tools/deploy-swa.sh` **不含它**，
-   那支腳本只管 SWA 的前台／後台／`/api/fallback`；獨立 Function App 不隨內容重建，
-   見 CLAUDE.md 決策 7）
+1. `tools/deploy-api.sh` 重新部署 `func-20skin-web-api-prod`
+   ⚠️ **這支腳本 2026-09-11 新寫、尚未對 Azure 實跑驗證** —— 在此之前這個 App
+   是手動部署的，repo 裡沒有紀錄。權威來源是 `docs/templates/deploy-api.yml`（CI 版），
+   本腳本是它的本機等價物。**第一次跑請盯著輸出，跑通後把檔頭那段警告拿掉。**
+   ⚠️ `tools/deploy-swa.sh` **不含這個 App**，那支只管 SWA 的前台／後台／`/api/fallback`；
+   獨立 Function App 不隨內容重建（CLAUDE.md 決策 7）
 2. `tools/deploy-swa.sh` 重新部署前台與 `apps/admin` 產物（媒體庫畫面已拿掉）
 
 **三組 SQL 身分**（docs/08 §J-3）：
