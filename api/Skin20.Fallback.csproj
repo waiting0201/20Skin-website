@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    SWA Managed Function —— 只有 fallback 這一支（docs/07-deployment.md §2、CLAUDE.md 決策 7）。
+
+    ⚠️ 這個專案跟 functions/ 是兩個不同的東西，最容易搞錯的三點：
+
+      1. **TargetFramework 是 net9.0，不是 net10.0。**
+         SWA 的 apiRuntime 上限是 dotnet-isolated:9.0，改成 net10.0 會部署失敗。
+         這是已查證的平台限制，不是疏漏（docs/07 §1）。唯一解法是升 Standard ＋ BYOF，
+         但 BYOF 之下 navigationFallback 能不能照常 rewrite 到 /api/fallback 尚未驗證，
+         而約 770 條 301 全靠它 —— 不要因為 SWA 已經是 Standard 就順手改上去。
+
+      2. **只用 Dapper，絕不載入 EF Core。**
+         Managed Functions 是 Consumption、沒有預熱，每個未命中的請求都吃一次冷啟動。
+         這支只有一個單筆 seek 查詢，載入 EF Core 會直接拖慢遷移期的 301 回應速度。
+
+      3. **不用 ASP.NET Core Integration。**
+         functions/ 用 Extensions.Http.AspNetCore（收 HttpRequest）；這裡刻意用
+         一般的 Extensions.Http（收 HttpRequestData），少載一整層 ASP.NET Core 管線。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Skin20.Fallback</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- 根目錄 global.json 釘的是 SDK 10.0.100；SDK 10 編 net9.0 沒有問題，
+         但要明確關掉「自動升級到最新 TFM」的任何嘗試。 -->
+    <RollForward>LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.0.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.5" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http" Version="3.3.0" />
+
+    <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.1" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="host.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="local.settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

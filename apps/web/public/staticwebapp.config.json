@@ -1,5 +1,5 @@
 {
-  "trailingSlash": "always",
+  "trailingSlash": "auto",
   "platform": {
     "apiRuntime": "dotnet-isolated:9.0"
   },
