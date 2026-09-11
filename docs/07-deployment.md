@@ -21,7 +21,7 @@
      │    ┌──────────────────────────────────────┐
      │    │  Azure Static Web Apps（Free）        │
      │    │  · 預渲染 HTML 約 950 頁（nuxt generate）│
-     │    │  · /admin/* 後台 SPA（ssr: false）    │
+     │    │  · /admin/* 後台 SPA（apps/admin）    │
      │    │  · /api/fallback ← 約 770 條 301（§2） │
      │    │      唯一的 Managed Function          │
      │    └──────────────────┬───────────────────┘
@@ -49,7 +49,11 @@
 
 ⚠️ **跨來源的連帶影響：SWA 內建驗證的 `x-ms-client-principal` 到不了外部 Function App。** 認證與五種角色本來就規劃在 Function 內自行驗證（[02](02-backend-cms.md) §4），維持該作法即可，但 token 要用 **Bearer** 帶，不要指望跨來源 cookie。
 
-**前端框架：Nuxt 3，純靜態模式（`nuxt generate`）**，2026-08-10 定案。輸出目錄是 **`.output/public`**（不是 `dist`）。同一份程式碼用 Nuxt 的 route rules 切成兩種渲染模式：公開頁 `prerender: true`、`/admin/**` 設 `ssr: false` 產生純前端 SPA。
+**前端框架：Nuxt 3，純靜態模式（`nuxt generate`）**，2026-08-10 定案。輸出目錄是 **`.output/public`**（不是 `dist`）。公開頁 `prerender: true`，建置期產生實體 HTML。
+
+⚠️ **前後台是兩個套件，不是同一份程式碼**（2026-09-11 改，pnpm workspace）：前台 `apps/web/`（Nuxt 純靜態）、後台 `apps/admin/`（Vite ＋ Vue 3 的 SPA）。後台的 build 產物直接寫進 `apps/web/public/admin/`，隨 `nuxt generate` 一起打包 —— **部署形態不變**（同一個 SWA、同一個網域、後台掛在 `/admin/`），變的只是建置期的組織方式。
+**建置有順序相依：先 admin 後 web**（`pnpm --filter admin build && pnpm --filter web build`）。
+> 舊敘述「同一份程式碼用 Nuxt 的 route rules 切成兩種渲染模式、`/admin/**` 設 `ssr: false`」已作廢。改的理由是與 NTI 專案的目錄結構一致，兩案共用同一套心智模型。
 
 ⚠️ **不使用 Nuxt 的 SSR 模式。** SWA 的框架設定表把 Nuxt 3 SSR 的 `api_location` 指向 `.output/server` —— 那個位置要留給 `/api/fallback` 這支 Managed Function，兩者互斥。`nuxt generate` 產出的 `.output/server` **不要上傳**。
 
@@ -219,10 +223,14 @@
 ## 5. 部署：兩條 GitHub Actions workflow
 
 ```
-frontend/          Nuxt 3（前台預渲染 ＋ /admin SPA，同一份程式碼）
-  public/staticwebapp.config.json   ← 原樣複製到 .output/public 根目錄
-  nuxt.config.ts                    ← routeRules 決定哪些路由預渲染、哪些是 SPA
-  .output/public/                   ← 建置產物，上傳的就是這一包
+pnpm-workspace.yaml                 ← packages = apps/*
+apps/
+  web/             Nuxt 3 純靜態前台（21 個模板、約 950 頁預渲染）
+    public/staticwebapp.config.json ← 原樣複製到 .output/public 根目錄
+    public/admin/                   ← apps/admin 的建置產物，不進版控
+    .output/public/                 ← 建置產物，上傳的就是這一包
+  admin/           Vite ＋ Vue 3 的後台 SPA，base = /admin/
+                   build.outDir 直接指向 ../web/public/admin，沒有複製步驟
 api/               SWA Managed Function —— 只有 fallback 這一支（.NET 9，Dapper only）
 functions/         獨立 Azure Functions App —— 應用程式 API（.NET 10，EF Core ＋ Dapper）
   Data/            DbContext、Entity、Migrations —— schema 的真實來源
@@ -230,6 +238,10 @@ functions/         獨立 Azure Functions App —— 應用程式 API（.NET 10�
   deploy-site.yml  前台 ＋ api/（SWA）
   deploy-api.yml   functions/（獨立 Function App）＋ 資料庫遷移
 ```
+
+⚠️ **`deploy-site.yml` 的建置順序是「先 admin 後 web」**：
+`pnpm --filter admin build && pnpm --filter web build`。
+反過來的話 `nuxt generate` 會打包到上一次的後台產物，症狀是「後台改了卻沒上線」。
 
 ### 技術棧與資料存取分工
 
@@ -254,7 +266,7 @@ functions/         獨立 Azure Functions App —— 應用程式 API（.NET 10�
 
 範本在 [templates/](templates/)。**認證需要兩組**：SWA 用 `AZURE_STATIC_WEB_APPS_API_TOKEN`，Function App 建議用 **OIDC 服務主體**（`azure/login@v2`），不要用發布設定檔。
 
-- **`deploy-site.yml`**：從 SQL 產生 `staticwebapp.config.json`／`sitemap.xml`／`llms.txt` → `nuxt generate`（預渲染 950 頁）→ 大小檢查 → 上傳 `.output/public` ＋ `api/` → smoke test。觸發：push 到 `main`、`repository_dispatch`（後台發布內容時由 API 觸發）。
+- **`deploy-site.yml`**：從 SQL 產生 `staticwebapp.config.json`／`sitemap.xml`／`llms.txt` → **`pnpm --filter admin build`** → `nuxt generate`（預渲染 950 頁）→ 大小檢查 → 上傳 `.output/public` ＋ `api/` → smoke test。觸發：push 到 `main`、`repository_dispatch`（後台發布內容時由 API 觸發）。
 - **`deploy-api.yml`**：build → test → **資料庫遷移** → publish → smoke test。只在 `functions/**` 有變更時跑，**與內容重建完全無關** —— 發 100 篇文章不會動到 API 一次。
 
 ### 資料庫遷移

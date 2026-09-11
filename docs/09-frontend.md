@@ -1,6 +1,6 @@
 # 09 — 前端技術架構（前台 ＋ 後台）
 
-> 範圍：`frontend/` 這一個 Nuxt 3 專案。它同時產出**前台約 950 頁預渲染 HTML** 與**後台 `/admin/` 的純 SPA**（[07-deployment.md](07-deployment.md) §1、§5）。
+> 範圍：`apps/` 底下的兩個套件 —— 前台 `apps/web/`（Nuxt 3 純靜態，約 950 頁預渲染 HTML）與後台 `apps/admin/`（Vite ＋ Vue 3 的 SPA，掛在 `/admin/`）。pnpm workspace，見 [07-deployment.md](07-deployment.md) §1、§5。
 >
 > 設計來源是 `mockup/`（方向 A，客戶 2026-08-27 選定）。切版一律以 mockup 為準，不做視覺重新詮釋。
 >
@@ -8,17 +8,30 @@
 
 ---
 
-## 1. 一份 Nuxt 專案，兩種產物
+## 1. 兩個套件，一個部署
 
-| | 前台 | 後台 |
+| | 前台 `apps/web/` | 後台 `apps/admin/` |
 |---|---|---|
-| 路由 | `/` 以下全部 | `/admin/**` |
-| 渲染 | `prerender: true` —— 建置期產生實體 HTML | `ssr: false` —— 純前端 SPA |
+| 框架 | Nuxt 3，`nuxt generate` | Vite ＋ Vue 3，`base: '/admin/'` |
+| 路由 | 檔案路由，`/` 以下全部 | vue-router，`createWebHistory('/admin/')` |
+| 渲染 | 建置期產生實體 HTML | 純前端 SPA，不預渲染 |
 | 資料 | **建置期烤進 HTML**，執行期不打 API（三個例外見 §4） | 執行期一律打 `api.20skin.tw` |
-| 索引 | 要被 Google 與 AI 爬蟲讀到 | `X-Robots-Tag: noindex, nofollow`（範本已含） |
-| 部署 | 同一個 SWA、同一個網域 | 同上，掛在 `/admin/` |
+| 索引 | 要被 Google 與 AI 爬蟲讀到 | `noindex, nofollow` |
+| 產物 | `.output/public/` ← **上傳的就是這一包** | `apps/web/public/admin/` ← 被上一格打包進去 |
 
-**不拆成兩個 repo、兩個 SWA。** SWA Free 的自訂網域額度只有 2 個，已被 `20skin.tw` 與 `www.20skin.tw` 用滿（[07](07-deployment.md) §1）；而且後台與前台共用設計 token、元件與字型子集，拆開等於維護兩份。
+**兩個套件，但只有一個部署單位。** 後台的 `build.outDir` 直接指向 `../web/public/admin`，沒有複製步驟；`nuxt generate` 把它一起打包。最後仍是同一個 SWA、同一個網域、後台掛在 `/admin/`。
+
+⚠️ **建置有順序相依：先 admin 後 web。**
+
+```bash
+pnpm --filter admin build && pnpm --filter web build
+```
+
+反過來的話 `nuxt generate` 打包到的是上一次的後台產物，症狀是「後台改了卻沒上線」—— 而且不會有任何錯誤訊息。
+
+**不拆成兩個 repo、兩個 SWA。** SWA Free 的自訂網域額度只有 2 個，已被 `20skin.tw` 與 `www.20skin.tw` 用滿（[07](07-deployment.md) §1）。
+
+> 2026-09-11 改。原本是「同一個 Nuxt 專案用 route rules 切兩種渲染模式」，改成雙套件是為了與 NTI 專案的目錄結構一致，兩案共用同一套心智模型。**部署形態完全沒變。**
 
 ⚠️ **`/admin/*` 必須在 `staticwebapp.config.json` 有自己的 `rewrite`**，否則後台的深層連結（`/admin/articles/123`）沒有實體檔案，會掉進 `navigationFallback` → `/api/fallback` → 查 301 對照表 → 404。範本已含，見 [templates/](templates/)。
 
@@ -29,25 +42,40 @@
 ## 2. 目錄結構
 
 ```
-frontend/
-├── nuxt.config.ts          # routeRules：哪些預渲染、哪些是 SPA
-├── public/
-│   └── staticwebapp.config.json   # ★ 必須在這裡，Nuxt 會原樣複製到 .output/public 根目錄
-├── app/
-│   ├── pages/              # 21 個模板（§5）
-│   ├── components/         # 由 mockup/ 的區塊拆出
-│   ├── composables/        # useSeo / useJsonLd / useBreadcrumb
-│   ├── assets/             # site.css（mockup 原檔）、字型子集
-│   └── admin/              # 後台 SPA（§8）
-├── content/                # ★ 建置期資料快照（§3），不進版控
-└── scripts/
-    ├── export-content.*    # SQL → content/*.json
-    ├── build-sitemap.*     # sitemap index ＋ 5 個分檔
-    ├── build-llms.*        # llms.txt / llms-full.txt / faq.json
-    └── build-swa-config.*  # 高流量 301 寫進 staticwebapp.config.json（檢查 20 KB）
+pnpm-workspace.yaml         # packages = apps/*
+apps/
+├── web/                    # 前台
+│   ├── nuxt.config.ts
+│   ├── public/
+│   │   ├── staticwebapp.config.json  # ★ 必須在這裡，Nuxt 原樣複製到 .output/public 根目錄
+│   │   ├── assets/         # ← mockup/assets 的逐 byte 複製，不進版控
+│   │   └── admin/          # ← apps/admin 的建置產物，不進版控
+│   ├── app/
+│   │   ├── pages/          # 21 個模板（§5）
+│   │   ├── components/     # Site{Header,Footer,Consult}，標記照抄 mockup
+│   │   ├── composables/    # usePageHead / breadcrumbJsonLd
+│   │   └── data/           # 暫時的內容來源，形狀對齊 docs/08 的欄位
+│   ├── content/            # ★ 建置期資料快照（§3），不進版控
+│   └── scripts/
+│       ├── sync-mockup.mjs     # mockup/assets → public/assets
+│       ├── verify-css.mjs      # 驗收閘：樣式照抄
+│       ├── verify-links.mjs    # 驗收閘：站內連結無斷鏈
+│       ├── postbuild.mjs       # 404.html ＋ 產物大小閘
+│       ├── export-content.*    # SQL → content/*.json（未實作）
+│       ├── build-sitemap.*     # sitemap index ＋ 5 個分檔（未實作）
+│       ├── build-llms.*        # llms.txt / llms-full.txt / faq.json（未實作）
+│       └── build-swa-config.*  # 高流量 301 寫進設定檔（檢查 20 KB，未實作）
+└── admin/                  # 後台（§8）
+    ├── vite.config.ts      # base=/admin/、outDir=../web/public/admin
+    └── src/
+        ├── units/          # 九個內容模型的單元宣告
+        ├── components/     # ListPage / EditPage 等通用元件
+        ├── pages/          # 儀表板／登入／清單／編輯
+        └── api/client.ts   # 唯一的資料存取門面
 ```
 
-`site.css` 與 `app.js` 的動效系統（`.js-anim` 載入序列 ＋ `IntersectionObserver` 顯影）是**客戶指定保留的部分**（2026-08-19）。移植進 Nuxt 時照搬，不要換成別的動效庫。
+`base.css` 與 `app.js` 的動效系統是**客戶指定保留的部分**（2026-08-19）。移植進 Nuxt 時照搬，不要換成別的動效庫。
+**後台不載入 `app.js`**，但沿用 `base.css` 的設計 token（`index.html` 直接 `<link>` 公開站那份 `/assets/base.css`）。
 
 ---
 
@@ -57,7 +85,7 @@ frontend/
 
 ```
 deploy-site.yml
-  ① scripts/export-content  ── Dapper／唯讀連線 ──▶ frontend/content/*.json
+  ① scripts/export-content  ── Dapper／唯讀連線 ──▶ apps/web/content/*.json
   ② scripts/build-sitemap / build-llms / build-swa-config（吃同一份 JSON）
   ③ nuxt generate            ── 只讀 content/*.json ──▶ .output/public（約 950 頁）
   ④ 產物大小檢查（180 MB 警告 / 230 MB 擋下）
@@ -139,10 +167,10 @@ AND (UnpublishAt IS NULL OR UnpublishAt >  @now)
 
 | 要求 | 落地 |
 |---|---|
-| 每頁 Title／Meta／canonical／OG | `useSeo()` composable 讀 `SeoMeta`；留空時由內容自動組出（規則與後台的預覽一致） |
+| 每頁 Title／Meta／canonical／OG | `usePageHead()` composable 讀 `SeoMeta`；留空時由內容自動組出（規則與後台的預覽一致） |
 | **AI 摘要放頁面最上方** | `SeoMeta.AiSummary`（40–60 字）渲染成第一段可見文字，**同時**輸出至結構化資料。不是只放進 meta |
-| 8 類 JSON-LD | `useJsonLd()`，一個模板一種 schema 型別（[03](03-seo-geo.md) §2）。`StructuredDataOverride` 有值時整段取代 |
-| BreadcrumbList | 全站麵包屑元件由 `UrlPath` 推導層級 |
+| 8 類 JSON-LD | `usePageHead({ jsonLd })`，一個模板一種 schema 型別（[03](03-seo-geo.md) §2）。`StructuredDataOverride` 有值時整段取代 |
+| BreadcrumbList | `breadcrumbJsonLd()`；麵包屑元件由 `UrlPath` 推導層級 |
 | `NoIndex` | 逐頁 meta robots。⚠️ 與 `IncludeInSitemap` 是兩件事，標籤頁兩者都要設（[08](08-database.md) §B-4） |
 | sitemap 分檔、`llms.txt`、`faq.json` | **建置期腳本產生**，不是前端渲染，也不走 API（[07](07-deployment.md) §4） |
 | CWV：LCP < 2.5s、INP < 200ms、CLS < 0.1 | §7 |
@@ -187,12 +215,16 @@ AND (UnpublishAt IS NULL OR UnpublishAt >  @now)
 九個模型的 CRUD 形狀完全一樣（列表／編輯／排序／上下架／送審／版本／SEO 區塊），差別只在欄位。**做成一組通用的 `ListPage`／`EditPage` ＋ 一份「單元宣告」**，各模型只宣告自己的欄位、清單欄與上傳提示：
 
 ```
-app/admin/units/treatment.ts   # 欄位、清單欄、關聯選擇器、上傳尺寸提示
-app/admin/units/doctor.ts
+apps/admin/src/units/treatment.ts     # 欄位、清單欄、關聯選擇器、上傳尺寸提示
+apps/admin/src/units/doctor.ts
 ...
-app/admin/pages/ListPage.vue   # 分頁 20 筆、關鍵字、狀態／分類篩選、批次上下架、拖曳排序
-app/admin/pages/EditPage.vue   # 左側本文、底部共用 SEO 區塊、右側工作流側欄
+apps/admin/src/components/ListPage.vue  # 分頁 20 筆、關鍵字、狀態／分類篩選、批次上下架、排序
+apps/admin/src/components/EditPage.vue  # 左側本文、底部共用 SEO 區塊、右側工作流側欄
+apps/admin/src/router.ts               # /、/login、/:unit、/:unit/:id（base 已是 /admin/）
 ```
+
+⚠️ **vue-router 的路徑不要再帶 `/admin`。** Vite 的 `base: '/admin/'` 已經吃掉那一段，
+路由寫 `/:unit` 而不是 `/admin/:unit`，否則會變成 `/admin/admin/xxx`。
 
 這麼做的理由是 18 個畫面（9 模型 × 列表＋編輯）不該有 18 份 CRUD 程式碼 —— 要改「送審後不可編輯」這種規則時，改一處而不是九處。**共用 SEO 區塊**尤其如此：[02](02-backend-cms.md) §1 要求它統一內嵌在每一筆內容的編輯畫面底部。
 

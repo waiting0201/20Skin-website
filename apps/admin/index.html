@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <!-- 正式站：後台與公開站同源，直接指到公開站那份 /assets/base.css。
+         dev：scripts/link-assets.mjs 把 public/assets 連到 mockup/assets，這個路徑一樣吃得到。 -->
+    <link rel="stylesheet" href="/assets/base.css" />
+    <title>20SKIN 後台管理</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

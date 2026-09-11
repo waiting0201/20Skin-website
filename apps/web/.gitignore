@@ -1,0 +1,11 @@
+node_modules
+.nuxt
+.output
+.data
+dist
+
+# mockup/assets 的同步產物，由 pnpm sync:assets 重建（11 MB，不進版控）
+public/assets
+
+# apps/admin 的建置產物直接寫進這裡（先 admin 後 web），不進版控
+public/admin

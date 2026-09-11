@@ -2,8 +2,10 @@
 
 20SKIN 美醫集團（四季診所／二林四季皮膚科）網站改版的**規劃專案**。
 
-**這個 repo 沒有正式站的原始碼。** 產出是規劃文件、客戶交付的 PDF，以及兩份靜態設計 mockup。
-正式網站的程式碼不在此處。
+產出有四類：規劃文件（`docs/`）、客戶交付的 PDF（`output/`）、三份靜態設計 mockup，
+以及 **2026-09-11 起進場的正式站原始碼**（`apps/web` 前台、`apps/admin` 後台）。
+
+> 舊敘述「這個 repo 沒有正式站的原始碼」已作廢。
 
 分析對象：https://www.20skin.tw/index2.php（現行線上網站，PHP）
 
@@ -13,6 +15,15 @@
 
 ```
 CLAUDE.md              ← 你在這裡。專案索引與工作慣例
+pnpm-workspace.yaml    packages = apps/*
+apps/
+  web/                 前台：Nuxt 3 純靜態（21 個模板、約 950 頁預渲染）
+                       樣式照抄 mockup/，由 pnpm verify 把關
+  admin/               後台：Vite ＋ Vue 3 的 SPA，base=/admin/
+                       build 產物直接寫進 apps/web/public/admin/
+                       ⚠️ 建置順序：先 admin 後 web
+tools/sync-public.sh   master → public 分支（去除 reference/ output/），推 GitHub 前執行
+.githooks/pre-push     安全網：擋下含非公開路徑或過大檔案的 ref 推向 Remote_GitHub
 docs/                  工程端文件（真實來源）
   README.md            文件索引與快速數字
   00-site-audit.md     現況診斷
@@ -24,7 +35,7 @@ docs/                  工程端文件（真實來源）
   06-page-inventory.md 頁面清點與工程量估算
   07-deployment.md     部署架構與 CI/CD（Azure SWA ＋ Functions ＋ SQL）
   08-database.md       資料庫規劃（以功能單元劃分，38 張表）
-  09-frontend.md       前端技術架構（Nuxt 3 前台 ＋ /admin SPA）
+  09-frontend.md       前端技術架構（apps/web 前台 ＋ apps/admin 後台）
   10-api.md            API 契約（端點、信封、錯誤碼、權限碼）
   11-backend-design.md 後端施工標準（分層、路由授權、EF＋Dapper、工作流狀態機）
   research/
@@ -77,6 +88,12 @@ scripts/
 ## 常用指令
 
 ```bash
+# 前後台建置（⚠️ 順序不可顛倒：先 admin 後 web）
+pnpm --filter admin build && pnpm --filter web build
+
+# 驗收閘（改完前台一定要跑）
+pnpm --filter web verify      # verify:css 樣式照抄 ＋ verify:links 站內連結
+
 # 重新產出 PDF（改完 output/*.html 之後）
 ./scripts/build-pdf.sh
 
@@ -175,6 +192,7 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    **只有正式環境 —— 不設 staging，也不設 PR 預覽環境**（2026-08-10 定案）。前台與 API 都是 `main` 合併即上線。上線前的驗收對**尚未切 DNS 的正式環境**（`*.azurestaticapps.net`／`*.azurewebsites.net`）做；上線後沒有預演，靠 `main` 分支保護 ＋ CI 檢查 ＋ 部署後 smoke test 三道攔截。**不要在文件裡寫回 PR 預覽或 staging。**
    由平台限制逼出來的例外，**不要當成可以靠設定繞過**：約 770 條 301 由 `/api/fallback` 查 SQL 對照表（SWA 設定檔上限 20 KB）、上傳檔案放 Blob（單一環境 250 MB）。見 [docs/07-deployment.md](docs/07-deployment.md)
 6. **前端框架 = Nuxt 3 純靜態（`nuxt generate`）**，2026-08-10 定案。產物在 **`.output/public`**（不是 `dist`）。
+   **前後台是兩個 pnpm workspace 套件**（2026-09-11 改，比照 NTI）：`apps/web`（Nuxt 靜態前台）、`apps/admin`（Vite ＋ Vue 3 的 SPA）。後台 build 產物寫進 `apps/web/public/admin/`，**建置順序先 admin 後 web**。部署形態不變 —— 同一個 SWA、同一個網域、後台掛 `/admin/`。原本「同一個 Nuxt 專案用 route rules 切兩種模式」的寫法已作廢。
    **不用 Nuxt SSR 模式** —— SWA 會把它的 `api_location` 指向 `.output/server`，與 `/api/fallback` 互斥。
    **Next.js Hybrid 已評估並排除，不要重新提案**：官方文件明列不支援 navigation fallback，而 770 條 301 全靠它。見 [docs/07-deployment.md](docs/07-deployment.md) §1
 7. **API 分兩處，這是最容易搞錯的地方**（2026-08-10 定案）：

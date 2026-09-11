@@ -1,0 +1,6 @@
+packages:
+  - 'apps/*'
+
+# esbuild 要跑安裝腳本才會取得平台原生二進位檔（Vite 相依）。
+onlyBuiltDependencies:
+  - esbuild

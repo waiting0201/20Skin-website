@@ -1,0 +1,5 @@
+node_modules
+dist
+*.tsbuildinfo
+# dev 用的素材 symlink，由 scripts/link-assets.mjs 重建
+public/assets
