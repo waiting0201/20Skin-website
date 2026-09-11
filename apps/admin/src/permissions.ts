@@ -34,13 +34,24 @@ function unitPerm(unit: UnitKey, action: PermissionAction): PermissionCode {
  * ⚠️ `term.delete` 刻意不在這裡——刪除分類會動到 URL 結構與 301 對照表，
  * 限超級管理員（docs/10-api.md §3.3），見下方 canDeleteTerm()。
  */
-const EDITOR_PERMISSIONS: PermissionCode[] = UNIT_KEYS.flatMap((u) => [
-  unitPerm(u, 'view'),
-  unitPerm(u, 'edit'),
-  unitPerm(u, 'submit'),
-  ...(u === 'term' ? [] : [unitPerm(u, 'delete')]),
-  unitPerm(u, 'seo'),
-])
+const EDITOR_PERMISSIONS: PermissionCode[] = [
+  ...UNIT_KEYS.flatMap((u) => [
+    unitPerm(u, 'view'),
+    unitPerm(u, 'edit'),
+    unitPerm(u, 'submit'),
+    ...(u === 'term' ? [] : [unitPerm(u, 'delete')]),
+    unitPerm(u, 'seo'),
+  ]),
+  // 系統類（docs/10-api.md §3.4）。⚠️ 首頁版位編排走送審、不直接發布，
+  // 所以只有 edit 與 submit，沒有 home.publish。
+  'media.view',
+  'media.edit',
+  'home.view',
+  'home.edit',
+  'home.submit',
+  'question.view',
+  'question.edit',
+]
 
 /** 醫師：doctor.edit／article.edit（僅 OwnerUserId=自己，資料列層級判定見 checkOwnership）＋ review.decide（指派的醫學審閱）。 */
 const DOCTOR_PERMISSIONS: PermissionCode[] = [
@@ -49,12 +60,20 @@ const DOCTOR_PERMISSIONS: PermissionCode[] = [
   unitPerm('article', 'view'),
   unitPerm('article', 'edit'),
   'review.decide',
+  // 編輯自己的內容時要能換圖
+  'media.view',
+  'media.edit',
 ]
 
 /** 行銷：全單元 view ＋ {unit}.seo ＋ FAQ 的 faq.edit。沒有其他 edit。 */
 const MARKETING_PERMISSIONS: PermissionCode[] = [
   ...UNIT_KEYS.flatMap((u) => [unitPerm(u, 'view'), unitPerm(u, 'seo')]),
   unitPerm('faq', 'edit'),
+  // SEO 區塊有 OG 分享圖，所以要能上傳與挑圖
+  'media.view',
+  'media.edit',
+  'question.view',
+  'home.view',
 ]
 
 /** 審核者：全單元 view ＋ review.decide ＋ {unit}.publish。 */
@@ -62,6 +81,10 @@ const REVIEWER_PERMISSIONS: PermissionCode[] = [
   ...UNIT_KEYS.flatMap((u) => [unitPerm(u, 'view'), unitPerm(u, 'publish')]),
   'review.view',
   'review.decide',
+  'media.view',
+  'home.view',
+  'home.publish',
+  'question.view',
 ]
 
 /** 非九個單元的系統類端點（docs/10-api.md §3.4）。超級管理員以外都拿不到。 */
@@ -77,6 +100,9 @@ export const SUPERADMIN_ONLY_PERMISSIONS: PermissionCode[] = [
   'redirect.view',
   'redirect.edit',
   'redirect.export',
+  // 全站重建是維運動作；一般發布本來就會自動觸發（docs/11 §10），
+  // 手動那一顆限超管，避免有人把它當重新整理在按。
+  'rebuild.trigger',
   unitPerm('term', 'edit'), // 新增／刪除分類；新增標籤是 term.edit 本身給 Editor，這裡特判在 checkTermMutation
 ]
 

@@ -6,7 +6,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { currentUser, logout } from '@/auth'
-import { can } from '@/permissions'
+import { can, hasPermission } from '@/permissions'
 import { UNIT_REGISTRY } from '@/units'
 import { ROLE_LABEL, type UnitKey } from '@/types'
 
@@ -19,8 +19,6 @@ interface NavItem {
   label: string
   href: string
   visible: boolean
-  /** 下一輪才做的畫面（docs/06 §5 的其餘 13 個），先留位置不留連結。 */
-  comingSoon?: boolean
 }
 
 const unitNavItems = computed<NavItem[]>(() =>
@@ -31,29 +29,29 @@ const unitNavItems = computed<NavItem[]>(() =>
   })),
 )
 
-// 下一輪畫面：架構（權限碼、路由慣例、資料層）已經留好，這裡先用灰階項目
-// 標示位置，避免點進 404，也讓審閱的人看得出 31 個畫面的全貌（docs/06 §5）。
-const comingSoonItems: NavItem[] = [
-  { label: '審核佇列', href: '/review', visible: true, comingSoon: true },
-  { label: '媒體庫', href: '/media', visible: true, comingSoon: true },
-  { label: '未命中題目清單', href: '/questions', visible: true, comingSoon: true },
-  { label: 'sitemap 設定', href: '/sitemap', visible: true, comingSoon: true },
-  { label: '301 轉址管理', href: '/redirects', visible: true, comingSoon: true },
-  { label: 'FAQ／語料匯出', href: '/export', visible: true, comingSoon: true },
-  { label: '首頁版位編排', href: '/home-sections', visible: true, comingSoon: true },
-  { label: '導覽選單與頁尾', href: '/menu', visible: true, comingSoon: true },
-  { label: '全站設定', href: '/settings', visible: true, comingSoon: true },
-  { label: '帳號管理', href: '/users', visible: true, comingSoon: true },
-  { label: '角色權限設定', href: '/roles', visible: true, comingSoon: true },
+// 系統類畫面（docs/06-page-inventory.md §5 的其餘 11 個）。
+// 顯示與否一律照權限碼判斷，與 router.ts 的 SYSTEM_SCREENS 一一對應。
+// ⚠️ 兩處的權限碼要一致 —— 選單看得到卻進不去，比選單不顯示更難查。
+const SYSTEM_NAV: { label: string; href: string; permission: string }[] = [
+  { label: '審核佇列', href: '/review', permission: 'review.view' },
+  { label: '媒體庫', href: '/media', permission: 'media.view' },
+  { label: '未命中題目清單', href: '/questions', permission: 'question.view' },
+  { label: 'sitemap 設定', href: '/sitemap', permission: 'setting.view' },
+  { label: '301 轉址管理', href: '/redirects', permission: 'redirect.view' },
+  { label: 'FAQ／語料匯出', href: '/export', permission: 'setting.view' },
+  { label: '首頁版位編排', href: '/home-sections', permission: 'home.view' },
+  { label: '導覽選單與頁尾', href: '/menu', permission: 'menu.view' },
+  { label: '全站設定', href: '/settings', permission: 'setting.view' },
+  { label: '帳號管理', href: '/users', permission: 'user.view' },
+  { label: '角色權限設定', href: '/roles', permission: 'role.view' },
 ]
 
-const visibleComingSoon = computed(() =>
-  comingSoonItems.filter((item) => {
-    if (item.href === '/users' || item.href === '/roles' || item.href === '/settings' || item.href === '/menu') {
-      return Boolean(user.value?.isSuperAdmin)
-    }
-    return true
-  }),
+const systemNavItems = computed<NavItem[]>(() =>
+  SYSTEM_NAV.map((item) => ({
+    label: item.label,
+    href: item.href,
+    visible: hasPermission(permCtx.value, item.permission),
+  })),
 )
 
 const breadcrumb = computed(() => {
@@ -115,22 +113,22 @@ function onLogout() {
           </div>
 
           <div class="adm-nav__group">
-            <p class="adm-nav__label">下一輪（架構已留位置）</p>
-            <span
-              v-for="item in visibleComingSoon"
-              :key="item.href"
-              class="adm-nav__link"
-              style="opacity:.45;cursor:not-allowed"
-              :title="`${item.label}：docs/06-page-inventory.md §5，本輪未實作`"
-            >
-              {{ item.label }}
-              <span class="adm-nav__badge">later</span>
-            </span>
+            <p class="adm-nav__label">系統</p>
+            <template v-for="item in systemNavItems" :key="item.href">
+              <RouterLink
+                v-if="item.visible"
+                class="adm-nav__link"
+                :to="item.href"
+                :class="{ 'is-active': route.path.startsWith(item.href) }"
+              >
+                {{ item.label }}
+              </RouterLink>
+            </template>
           </div>
         </nav>
 
         <div class="adm-sidebar__foot">
-          docs/06 §5：31 個後台畫面，本輪完成 9 個內容模型 ＋ 儀表板 ＋ 登入。
+          docs/06 §5：31 個後台畫面。
         </div>
       </aside>
 

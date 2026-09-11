@@ -1,0 +1,372 @@
+<script setup lang="ts">
+// 帳號管理（/users）—— 規格見 docs/02 §4、docs/08 §A、docs/10 §3.4。
+//
+// 🔴 沒有雙因素（2026-09-11 院方決定）。這個畫面刻意不出現任何 2FA 相關 UI，
+// 而是把連帶後果講清楚：帳密是唯一憑證、登入次數限制是唯一防線、
+// 種子密碼 Admin@123 上線前必須更換（STATUS.md §八、docs/02 §4、docs/08 §A-5）。
+//
+// ⚠️ UI 的權限判斷只管看不看得到，不是安全邊界（docs/09 §8）——真正擋得住的
+// 是 API 端對 user.* 的驗證。這裡的權限碼只決定按鈕出不出現。
+import { computed, reactive, ref, onMounted } from 'vue'
+import { adminApi, ApiError } from '@/api/client'
+import { currentUser } from '@/auth'
+import { hasPermission } from '@/permissions'
+import type { RoleCode } from '@/types'
+import { ROLE_LABEL } from '@/types'
+import type { AccountRecord } from '@/api/account'
+
+const user = currentUser()
+const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
+const canEdit = computed(() => hasPermission(permCtx, 'user.edit'))
+
+const ALL_ROLE_CODES = Object.keys(ROLE_LABEL) as RoleCode[]
+
+const accounts = ref<AccountRecord[]>([])
+const loading = ref(true)
+const keyword = ref('')
+
+const filtered = computed(() => {
+  const kw = keyword.value.trim().toLowerCase()
+  if (!kw) return accounts.value
+  return accounts.value.filter(
+    (a) => a.userName.toLowerCase().includes(kw) || a.displayName.toLowerCase().includes(kw),
+  )
+})
+
+async function load() {
+  loading.value = true
+  accounts.value = await adminApi.account.user.list()
+  loading.value = false
+}
+onMounted(load)
+
+// ── 醫師綁定：doctorId 選項，走 taxonomy.unitOptions（不直接碰 client.ts 的 Db，
+// 這裡透過已經對外開放的門面查詢，跟 EditPage 的關聯選單走同一支）──────────
+const doctorOptions = ref<{ value: string; label: string }[]>([])
+onMounted(async () => {
+  doctorOptions.value = await adminApi.taxonomy.unitOptions('doctor')
+})
+
+// ── 新增／編輯表單（同一份表單模型，用 mode 分流）──────────────────────
+type FormMode = 'create' | 'edit'
+const formOpen = ref(false)
+const formMode = ref<FormMode>('create')
+const editingId = ref<number | null>(null)
+const form = reactive({
+  userName: '',
+  displayName: '',
+  notifyEmail: '',
+  roles: [] as RoleCode[],
+  doctorId: '' as string | number,
+  password: '',
+})
+const formError = ref('')
+const submitting = ref(false)
+
+function resetForm() {
+  form.userName = ''
+  form.displayName = ''
+  form.notifyEmail = ''
+  form.roles = []
+  form.doctorId = ''
+  form.password = ''
+  formError.value = ''
+}
+
+function openCreate() {
+  resetForm()
+  formMode.value = 'create'
+  editingId.value = null
+  formOpen.value = true
+}
+
+function openEdit(record: AccountRecord) {
+  resetForm()
+  formMode.value = 'edit'
+  editingId.value = record.id
+  form.userName = record.userName
+  form.displayName = record.displayName
+  form.notifyEmail = record.notifyEmail ?? ''
+  form.roles = [...record.roles]
+  form.doctorId = record.doctorId ?? ''
+  formOpen.value = true
+}
+
+function closeForm() {
+  formOpen.value = false
+  resetForm()
+}
+
+async function submitForm() {
+  submitting.value = true
+  formError.value = ''
+  try {
+    if (formMode.value === 'create') {
+      await adminApi.account.user.create({
+        userName: form.userName,
+        displayName: form.displayName,
+        notifyEmail: form.notifyEmail || null,
+        roles: form.roles,
+        doctorId: form.doctorId ? Number(form.doctorId) : null,
+        password: form.password,
+      })
+    } else if (editingId.value !== null) {
+      await adminApi.account.user.update(editingId.value, {
+        displayName: form.displayName,
+        notifyEmail: form.notifyEmail || null,
+        roles: form.roles,
+        doctorId: form.doctorId ? Number(form.doctorId) : null,
+      })
+    }
+    await load()
+    closeForm()
+  } catch (e) {
+    formError.value = e instanceof ApiError ? e.message : '儲存失敗。'
+  } finally {
+    submitting.value = false
+  }
+}
+
+// ── 停用／啟用 ──────────────────────────────────────────────────────────
+const toggling = ref<number | null>(null)
+async function toggleActive(record: AccountRecord) {
+  if (record.id === user?.id && record.isActive) {
+    window.alert('無法停用自己目前登入中的帳號。')
+    return
+  }
+  const next = !record.isActive
+  if (next === false && !window.confirm(`確定要停用「${record.displayName}」嗎？停用不會刪除這個帳號，內容的建立紀錄仍會保留。`)) return
+  toggling.value = record.id
+  try {
+    await adminApi.account.user.setActive(record.id, next)
+    await load()
+  } finally {
+    toggling.value = null
+  }
+}
+
+// ── 重設密碼 ──────────────────────────────────────────────────────────
+const resettingId = ref<number | null>(null)
+const resetForm2 = reactive({ password: '', confirm: '' })
+const resetError = ref('')
+const resetSubmitting = ref(false)
+
+function openReset(record: AccountRecord) {
+  resettingId.value = record.id
+  resetForm2.password = ''
+  resetForm2.confirm = ''
+  resetError.value = ''
+}
+function closeReset() {
+  resettingId.value = null
+}
+async function submitReset() {
+  if (resetForm2.password !== resetForm2.confirm) {
+    resetError.value = '兩次輸入的密碼不一致。'
+    return
+  }
+  resetSubmitting.value = true
+  resetError.value = ''
+  try {
+    await adminApi.account.user.resetPassword(resettingId.value!, resetForm2.password)
+    await load()
+    closeReset()
+  } catch (e) {
+    resetError.value = e instanceof ApiError ? e.message : '重設失敗。'
+  } finally {
+    resetSubmitting.value = false
+  }
+}
+
+function fmtDate(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleString('zh-TW') : '—'
+}
+</script>
+
+<template>
+  <section class="adm-page">
+    <div class="adm-page__head">
+      <div>
+        <h1 class="adm-page__title">帳號管理</h1>
+        <p class="adm-page__desc">共 {{ accounts.length }} 個帳號</p>
+      </div>
+      <div class="adm-page__actions">
+        <button v-if="canEdit" type="button" class="btn btn--primary" @click="openCreate">＋ 新增帳號</button>
+      </div>
+    </div>
+
+    <p class="adm-workflow__note users-security-note">
+      🔴 <strong>後台安全防線只剩登入次數限制這一道。</strong>
+      雙因素不做（2026-09-11 院方決定）、IP 白名單不做（2026-08-13 決定），
+      而後台路徑 <code>/admin/</code> 是客戶指定、公開可猜。帳號密碼是唯一憑證——
+      種子密碼（<code>sa</code> 的 <code>Admin@123</code> 等）<strong>上線前必須全部更換</strong>，
+      下表「密碼」欄標示為種子密碼的帳號都還沒換過。
+    </p>
+
+    <div class="adm-filters">
+      <input v-model="keyword" type="search" placeholder="搜尋帳號或顯示名稱">
+    </div>
+
+    <div v-if="loading" class="adm-empty">載入中…</div>
+    <div v-else-if="!filtered.length" class="adm-empty">沒有符合的帳號。</div>
+
+    <div v-else class="adm-table-wrap">
+      <table class="adm-table">
+        <thead>
+          <tr>
+            <th>帳號（登入用，非 email）</th>
+            <th>顯示名稱</th>
+            <th>角色</th>
+            <th>通知信箱（選填）</th>
+            <th>醫師綁定</th>
+            <th>狀態</th>
+            <th>密碼</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="a in filtered" :key="a.id">
+            <td><code>{{ a.userName }}</code></td>
+            <td>{{ a.displayName }}</td>
+            <td>{{ a.roles.map((r) => ROLE_LABEL[r]).join('、') }}</td>
+            <td>{{ a.notifyEmail || '（未填）' }}</td>
+            <td>{{ a.doctorId ? `#${a.doctorId}` : '—' }}</td>
+            <td>
+              <span class="u-badge" :class="a.isActive ? 'u-badge--on' : 'u-badge--off'">
+                {{ a.isActive ? '啟用中' : '已停用' }}
+              </span>
+            </td>
+            <td>
+              <span v-if="a.usesSeedPassword" class="u-badge u-badge--warn" title="建置期預設密碼，上線前必須更換">種子密碼未換</span>
+              <span v-else class="adm-muted">已更換（{{ fmtDate(a.passwordUpdatedAt) }}）</span>
+            </td>
+            <td class="adm-table__actions">
+              <button v-if="canEdit" type="button" class="btn btn--line btn--sm" @click="openEdit(a)">編輯</button>
+              <button v-if="canEdit" type="button" class="btn btn--line btn--sm" @click="openReset(a)">重設密碼</button>
+              <button
+                v-if="canEdit"
+                type="button"
+                class="btn btn--line btn--sm"
+                :disabled="toggling === a.id || (a.id === user?.id && a.isActive)"
+                :title="a.id === user?.id && a.isActive ? '無法停用自己目前登入中的帳號' : ''"
+                @click="toggleActive(a)"
+              >
+                {{ a.isActive ? '停用' : '啟用' }}
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 新增／編輯表單 -->
+    <div v-if="formOpen" class="adm-card users-panel">
+      <h2 class="adm-card__title">{{ formMode === 'create' ? '新增帳號' : `編輯帳號：${form.userName}` }}</h2>
+      <form class="adm-form" @submit.prevent="submitForm">
+        <div class="adm-field-grid">
+          <div class="adm-field">
+            <label class="adm-field__label">帳號名稱<span class="adm-field__required">＊</span></label>
+            <input v-model="form.userName" class="adm-input" :disabled="formMode === 'edit'" placeholder="例如 editor2">
+            <p class="adm-field__hint">登入識別，不是 email。僅可使用英數字與 . _ - @，建立後不可更改。</p>
+          </div>
+          <div class="adm-field">
+            <label class="adm-field__label">顯示名稱<span class="adm-field__required">＊</span></label>
+            <input v-model="form.displayName" class="adm-input" placeholder="後台顯示用">
+          </div>
+          <div class="adm-field">
+            <label class="adm-field__label">通知信箱</label>
+            <input v-model="form.notifyEmail" class="adm-input" placeholder="選填，僅供通知，非登入用途">
+            <p class="adm-field__hint">選填、不唯一、可留空——不是登入識別，也不用來寄送登入相關通知。</p>
+          </div>
+          <div class="adm-field" v-if="form.roles.includes('Doctor')">
+            <label class="adm-field__label">醫師綁定</label>
+            <select v-model="form.doctorId" class="adm-select">
+              <option value="">（未綁定——僅能靠人工比對姓名）</option>
+              <option v-for="opt in doctorOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+            <p class="adm-field__hint">「醫師」角色要對上自己的個人頁，才能判斷「自己的內容」。</p>
+          </div>
+          <div class="adm-field adm-field--span2">
+            <label class="adm-field__label">角色<span class="adm-field__required">＊</span></label>
+            <div class="users-role-checks">
+              <label v-for="code in ALL_ROLE_CODES" :key="code" class="adm-checkbox">
+                <input type="checkbox" :value="code" v-model="form.roles"> {{ ROLE_LABEL[code] }}
+              </label>
+            </div>
+          </div>
+          <div v-if="formMode === 'create'" class="adm-field adm-field--span2">
+            <label class="adm-field__label">初始密碼<span class="adm-field__required">＊</span></label>
+            <input v-model="form.password" type="text" class="adm-input" placeholder="至少 8 碼，需同時包含英文字母與數字">
+            <p class="adm-field__hint">建立後這組密碼視同「種子密碼」，畫面會提醒使用者比照 <code>Admin@123</code> 盡快更換。</p>
+          </div>
+        </div>
+
+        <p v-if="formError" class="adm-field__error">{{ formError }}</p>
+
+        <div class="adm-workflow__actions">
+          <button type="submit" class="btn btn--primary" :disabled="submitting">{{ formMode === 'create' ? '建立帳號' : '儲存變更' }}</button>
+          <button type="button" class="btn btn--ghost" @click="closeForm">取消</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 重設密碼 -->
+    <div v-if="resettingId !== null" class="adm-card users-panel">
+      <h2 class="adm-card__title">重設密碼</h2>
+      <form class="adm-form" @submit.prevent="submitReset">
+        <div class="adm-field-grid">
+          <div class="adm-field">
+            <label class="adm-field__label">新密碼<span class="adm-field__required">＊</span></label>
+            <input v-model="resetForm2.password" type="text" class="adm-input" placeholder="至少 8 碼，需同時包含英文字母與數字">
+          </div>
+          <div class="adm-field">
+            <label class="adm-field__label">再輸入一次<span class="adm-field__required">＊</span></label>
+            <input v-model="resetForm2.confirm" type="text" class="adm-input">
+          </div>
+        </div>
+        <p v-if="resetError" class="adm-field__error">{{ resetError }}</p>
+        <p class="adm-field__hint">
+          重設後這個帳號的「密碼種子狀態」會清除，下次登入視系統設定要求先變更密碼。
+          沒有雙因素，這組新密碼就是這個帳號唯一的憑證，請避免使用常見字串。
+        </p>
+        <div class="adm-workflow__actions">
+          <button type="submit" class="btn btn--primary" :disabled="resetSubmitting">重設</button>
+          <button type="button" class="btn btn--ghost" @click="closeReset">取消</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.users-security-note {
+  margin-bottom: var(--sp-4);
+  border-left: 3px solid var(--danger, #b5442e);
+}
+.users-panel {
+  margin-top: var(--sp-4);
+}
+.users-role-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3, 12px);
+}
+.u-badge {
+  display: inline-block;
+  padding: 0.2em 0.7em;
+  border-radius: 999px;
+  font-size: var(--fs-eyebrow, 0.8em);
+  border: 1px solid var(--ink-15, #ccc);
+}
+.u-badge--on {
+  color: var(--ink);
+}
+.u-badge--off {
+  color: var(--ink-50, #888);
+}
+.u-badge--warn {
+  color: #a9410f;
+  border-color: #a9410f;
+  background: rgba(169, 65, 15, 0.08);
+}
+</style>

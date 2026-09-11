@@ -13,9 +13,9 @@
 
 **規劃全部完成，前台切版與後台地基已落地，但資料庫、API 與 Azure 資源一個都還沒開。**
 
-`apps/web` 的 21 個模板全數完成（220 條預渲染路由），`apps/admin` 完成 20／31 個畫面
-（九個內容模型的清單與編輯、登入、儀表板）。**後台目前接的是 localStorage mock，
-內容是從 `mockup/` 抽出來的真實文案** —— 客戶打開看得懂那是自己的東西，但那不是資料庫。
+`apps/web` 的 21 個模板全數完成（220 條預渲染路由），`apps/admin` **31／31 個畫面全數完成**。
+**後台目前接的是 localStorage mock，內容是從 `mockup/` 抽出來的真實文案** ——
+客戶打開看得懂那是自己的東西，但那不是資料庫。
 
 下一步是 `functions/`（API）與 EF Core migrations，兩者都還沒開工。
 
@@ -41,7 +41,7 @@
 | UI/UX 設計定稿 | ✅ | `mockup/` 方向 A，客戶 2026-08-27 選定。21 個模板全數完成 |
 | 技術架構與規格 | ✅ | [07](docs/07-deployment.md) 部署、[08](docs/08-database.md) 資料庫、[09](docs/09-frontend.md) 前端、[10](docs/10-api.md) API 契約、[11](docs/11-backend-design.md) 後端施工標準 |
 | **前台開發** | 🟡 | 21 個模板切版完成、SEO 與 JSON-LD 落地；**內容仍是 `app/data/*.ts`，未接資料庫**（§二） |
-| **後台開發** | 🟡 | 20／31 畫面；接 mock，未接 API（§三） |
+| **後台開發** | 🟡 | **31／31 畫面完成**；接 mock，未接 API（§三） |
 | **資料模型與 migrations** | ⬜ | schema 設計完成（37 張表），**一行 migration 都還沒寫**（§四） |
 | **API** | ⬜ | 契約與施工標準已定，`functions/` 目錄尚不存在（§五） |
 | 部署與 CI/CD | ⬜ | 範本在 [`docs/templates/`](docs/templates/)，**Azure 資源未開、workflow 未進 repo**（§六） |
@@ -96,24 +96,23 @@ Nuxt 3 純靜態，21 個模板 → **220 條預渲染路由、106 頁 HTML**。
 Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/admin/`。
 ⚠️ **建置順序：先 admin 後 web。**
 
-### ✅ 已完成（20／31 畫面）
+### ✅ 已完成（31／31 畫面）
 
 | 群組 | 畫面 | 數 |
 |---|---|---|
 | 內容模型 | 九個模型 ×（列表＋編輯），共用 `ListPage`／`EditPage` ＋ 單元宣告 | 18 |
-| 帳號 | 登入（單段帳密） | 1 |
-| 系統 | 儀表板（純聚合查詢，含「我的退件」） | 1 |
+| 帳號 | 登入（單段帳密）、帳號管理、角色權限設定 | 3 |
+| 工作流 | 審核佇列 | 1 |
+| 資產 | 媒體庫 | 1 |
+| FAQ 題庫 | 未命中題目清單 | 1 |
+| SEO | sitemap 設定、301 轉址管理、FAQ／語料匯出 | 3 |
+| 系統 | 儀表板、全站設定、首頁版位編排、導覽選單與頁尾 | 4 |
 
 機制面已實作：工作流四態（**「已排程」是推導狀態，不是第五種**）、發布權與編輯權分離、
 醫師只能改自己的內容、行銷只能改 SEO 區塊、共用 SEO 區塊、版本歷程與還原、
-送審時掃高風險字詞、權限矩陣（五角色 × `{unit}.{action}`）、發布聚合重建示意。
-
-### ⬜ 未做（11 畫面，側邊選單已列成灰階佔位）
-
-審核佇列、媒體庫、未命中題目清單、sitemap 設定、301 轉址管理、FAQ／語料匯出、
-首頁版位編排、導覽選單與頁尾、全站設定、帳號管理、角色權限設定。
-
-> `adminApi` 已預先做出 `review.*`、`rebuild.status` 等資料層函式，下一輪直接呼叫即可。
+送審時掃高風險字詞、權限矩陣（五角色 × `{unit}.{action}`，畫面上的矩陣由
+`permissions.ts` **推導**而非另抄一份）、發布聚合重建示意、301 的 CSV 匯入匯出
+與衝突／迴圈檢查、robots.txt 的 `Disallow: /admin` 防呆、NAP 一致性比對。
 
 ### 🟡 有缺口
 
@@ -124,6 +123,10 @@ Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/ad
 | 富文本 | 等寬文字框模擬，未接區塊編輯器 |
 | 拖曳排序 | 現為上／下移動按鈕 |
 | slug 唯一性 | mock 只檢查單元內；正式是全站 `UrlPath` 唯一索引 |
+| **首頁版位的送審不進共用審核佇列** | mock 的各區 store 是分開的，而審核佇列的資料在 `client.ts` 裡。審核者要直接在首頁版位頁面核准／退回。**接上真 API 後自然消失**（後端本來就是同一張 `ContentReviews`） |
+| **登入帳密與帳號管理是兩份資料** | `client.ts` 的 `auth.login()` 讀 `MOCK_USERS`，帳號管理操作自己的 store。在後台停用帳號不影響那組帳密還能不能登入。同上，接 API 後合一 |
+| 301 種子約 772 筆，其中約 689 筆是合成佔位 | 文章內頁的舊網址型態**尚未確認**（[07](docs/07-deployment.md) §2 的 🔴 待補資料）。功能是真的，但**不要拿這份 mock 當「已核對清單」** |
+| NAP 一致性用名稱字串比對 | 不是外鍵。據點名稱打錯字會誤判成「找不到對應據點」而非「不一致」。正式 API 上線後建議改 FK |
 
 **mock 帳號**：`sa`／`Admin@123`、`editor1`／`Editor@123`、`doctor1`／`Doctor@123`、
 `marketing1`／`Marketing@123`、`reviewer1`／`Reviewer@123`
@@ -217,6 +220,8 @@ Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/ad
 | 圖片衍生尺寸誰產 | 瀏覽器端上傳前轉檔 vs Function 端 sharp（[07](docs/07-deployment.md) §3） |
 | 301 對照表是否改建置期烤 `redirects.json` | 可省掉 SWA 上唯一的明文密鑰（[07](docs/07-deployment.md) §2） |
 | 機器人驗證供應商 | reCAPTCHA v3 或 Turnstile，**介面不要帶供應商名稱** |
+| **301 的「命中次數」放不進架構** | 後台原本想用命中次數排出「哪幾條值得寫進 `staticwebapp.config.json` 快速路徑」，但 [`Redirects`](docs/08-database.md) §H **沒有這個欄位，而且放不了**：`/api/fallback` 對這張表只做單筆 seek 不做寫入，它那組唯讀 SQL 使用者**只能 SELECT 這一張表**。<br>已改為顯示「目前已寫進設定檔的 7 條」（人工挑定，與 `apps/web/public/staticwebapp.config.json` 一致）。<br>若真的要命中次數，唯一不牴觸架構的作法是 **Application Insights 的請求記錄離線彙總**，需另案評估。 |
+| **醫師的「醫學審閱」無法實作** | [02](docs/02-backend-cms.md) §4 寫醫師「可對**指派**內容執行醫學審閱」，但 ①「醫師」角色只有 `review.decide`、沒有 `review.view`，進不了審核佇列；② [`ContentReviews`](docs/08-database.md) §B-3 **沒有「指派給誰」的欄位**，做不出「只看指派給我的」。<br>唯一現成的線索是 `Articles.ReviewerDoctorId`（審閱醫師），**但只有文章有**，療程與案例都沒有。<br>三個選項：**(a)** 醫學審閱只涵蓋文章，用 `ReviewerDoctorId` 篩選；**(b)** 為 `ContentReviews` 加 `AssignedReviewerId`（**新增欄位，與 [08](docs/08-database.md) §0 決策二「不預留未定案的欄位」相衝，需明確定案**）；**(c)** 拿掉醫師的審閱職責，只留「編輯自己的內容」。<br>⚠️ **在定案之前不要自行加欄位。** |
 | `RefreshTokens` vs 短效 JWT ＋ `SecurityStamp` | 二選一，不要兩套都做 |
 
 ### 🔴 安全防線只剩一道

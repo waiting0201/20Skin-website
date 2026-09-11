@@ -45,6 +45,14 @@ import {
   type SeedRelation,
 } from './mock-seed'
 
+import { ApiError } from './errors'
+import { mediaApi } from './media'
+import { redirectApi } from './redirect'
+import { seoApi } from './seo'
+import { questionApi } from './question'
+import { siteApi } from './site'
+import { accountApi } from './account'
+
 // ── 內部型別 ──────────────────────────────────────────────────────────
 
 interface StoredRecord {
@@ -334,13 +342,7 @@ export function resetMockDb() {
 
 // ── 錯誤：形狀貼近 docs/10-api.md §2 的錯誤碼，方便日後直接對應真正的 API 錯誤 ──
 
-export class ApiError extends Error {
-  code: string
-  constructor(code: string, message: string) {
-    super(message)
-    this.code = code
-  }
-}
+
 
 // ── 共用查找 ──────────────────────────────────────────────────────────
 
@@ -919,13 +921,11 @@ const dashboard = {
 // 這裡刻意讓它明確失敗（而不是假裝成功），EditPage 的上傳欄位改用「貼上
 // 圖片網址」當示意替代方案，見 src/components 內圖片欄位的註解。
 
-const media = {
-  async requestUploadSas(_fileName: string, _contentType: string): Promise<never> {
-    throw new ApiError('INTERNAL', 'TODO：尚未串接 api.20skin.tw，媒體直傳流程待實作（docs/09-frontend.md §9）。')
-  },
-}
-
 // ── 對外門面 ──────────────────────────────────────────────────────────
+
+export { ApiError } from './errors'
+
+
 
 export const adminApi = {
   auth,
@@ -934,7 +934,13 @@ export const adminApi = {
   review,
   rebuild,
   dashboard,
-  media,
+  // ── 第二輪的系統類畫面（docs/06 §5）。各區實作在 src/api/<area>.ts ──
+  media: mediaApi,
+  redirect: redirectApi,
+  seo: seoApi,
+  question: questionApi,
+  site: siteApi,
+  account: accountApi,
 }
 
 export type AdminApi = typeof adminApi

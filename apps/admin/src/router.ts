@@ -6,7 +6,8 @@
 // 程式裡任何要組路徑字串的地方（router.push、RouterLink、redirect）都不要
 // 再帶 `/admin` 前綴，否則會變成 `/admin/admin/xxx`。
 import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
-import { isAuthenticated } from '@/auth'
+import { currentUser, isAuthenticated } from '@/auth'
+import { hasPermission } from '@/permissions'
 import { getUnitDefinition } from '@/units'
 
 const Dashboard = () => import('@/pages/Dashboard.vue')
@@ -14,10 +15,28 @@ const Login = () => import('@/pages/Login.vue')
 const UnitList = () => import('@/pages/UnitList.vue')
 const UnitEdit = () => import('@/pages/UnitEdit.vue')
 
+// 系統類畫面（docs/06-page-inventory.md §5）。九個內容模型走上面的通用
+// /:unit 路由，這些各有各的形狀，所以一個畫面一支元件。
+const SYSTEM_SCREENS: { path: string; name: string; permission: string; component: () => Promise<unknown> }[] = [
+  { path: '/review',        name: 'review',        permission: 'review.view',   component: () => import('@/pages/Review.vue') },
+  { path: '/media',         name: 'media',         permission: 'media.view',    component: () => import('@/pages/Media.vue') },
+  { path: '/questions',     name: 'questions',     permission: 'question.view', component: () => import('@/pages/Questions.vue') },
+  { path: '/sitemap',       name: 'sitemap',       permission: 'setting.view',  component: () => import('@/pages/SitemapSettings.vue') },
+  { path: '/redirects',     name: 'redirects',     permission: 'redirect.view', component: () => import('@/pages/Redirects.vue') },
+  { path: '/export',        name: 'export',        permission: 'setting.view',  component: () => import('@/pages/Export.vue') },
+  { path: '/home-sections', name: 'home-sections', permission: 'home.view',     component: () => import('@/pages/HomeSections.vue') },
+  { path: '/menu',          name: 'menu',          permission: 'menu.view',     component: () => import('@/pages/Menu.vue') },
+  { path: '/settings',      name: 'settings',      permission: 'setting.view',  component: () => import('@/pages/Settings.vue') },
+  { path: '/users',         name: 'users',         permission: 'user.view',     component: () => import('@/pages/Users.vue') },
+  { path: '/roles',         name: 'roles',         permission: 'role.view',     component: () => import('@/pages/Roles.vue') },
+]
+
 declare module 'vue-router' {
   interface RouteMeta {
     /** false＝不套 AdminLayout（目前只有登入頁），省略＝套用。 */
     layout?: false
+    /** 進入這個畫面需要的權限碼。⚠️ 這是體驗層的守門，不是安全邊界（見下方 beforeEach）。 */
+    permission?: string
   }
 }
 
@@ -31,6 +50,14 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'dashboard', component: Dashboard },
     { path: '/login', name: 'login', component: Login, meta: { layout: false } },
+    // ⚠️ 系統類畫面必須排在 /:unit 之前 —— 否則 /review 會被當成 unit 名稱，
+    // 而 requireValidUnit 找不到該單元就把人導回儀表板（症狀是「點了沒反應」）。
+    ...SYSTEM_SCREENS.map((s) => ({
+      path: s.path,
+      name: s.name,
+      component: s.component as never,
+      meta: { permission: s.permission },
+    })),
     { path: '/:unit', name: 'unit-list', component: UnitList, beforeEnter: requireValidUnit },
     { path: '/:unit/:id', name: 'unit-edit', component: UnitEdit, beforeEnter: requireValidUnit },
   ],
@@ -50,6 +77,14 @@ router.beforeEach((to) => {
   if (to.path === '/login') return true
   if (!isAuthenticated()) {
     return { path: '/login', query: { redirect: to.fullPath } }
+  }
+  // 權限不足就導回儀表板。同樣是體驗層 —— 真正擋得住的是 API 端的權限檢查
+  // （docs/11 §5.3 預設拒絕），這裡只是別讓人點進一個必然打不通的畫面。
+  const required = to.meta.permission
+  if (required) {
+    const u = currentUser()
+    const ctx = u ? { roles: u.roles, isSuperAdmin: u.isSuperAdmin } : null
+    if (!hasPermission(ctx, required)) return { path: '/' }
   }
   return true
 })

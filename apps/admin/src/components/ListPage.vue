@@ -172,7 +172,12 @@ const newTagTermType = ref('1')
         <input v-model="query.keyword" type="search" placeholder="關鍵字（標題）">
         <select v-model="query.status">
           <option value="">全部狀態</option>
-          <option v-for="(label, value) in STATUS_LABEL" :key="value" :value="value">{{ label }}</option>
+          <!-- ⚠️ 必須 Number(value)：STATUS_LABEL 是物件，v-for 給出的 key 一律是**字串**，
+               直接綁上去 query.status 會變成 "3"，而 client.ts 是 `r.status === query.status`
+               （數字），比對永遠 false —— 症狀是選了狀態就一筆都不剩，而且不會報錯。
+               上面 `status: '' as '' | ContentStatus` 的型別斷言在這種情況下是假的，
+               typecheck 也擋不下來。 -->
+          <option v-for="(label, value) in STATUS_LABEL" :key="value" :value="Number(value)">{{ label }}</option>
         </select>
         <select v-if="def.categoryTermType" v-model="query.categoryId">
           <option value="">全部分類</option>
