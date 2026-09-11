@@ -103,15 +103,33 @@ deploy-site.yml
 
 匯出範圍就是 [08-database.md](08-database.md) §0 決策一說的那一個查詢 —— `ContentItems` 主幹 join 九張 TPT 子表、`SeoMeta`、`ContentRelations`、`MediaUsages`。**共用主幹表的價值在這裡兌現**：一次撈完，不是九個 union。
 
-⚠️ **只匯出已發布且在時間窗內的內容。** 可見性判定式只能有一份，與 API 共用同一段條件（[11-backend-design.md](11-backend-design.md) §7）：
+🔴 **匯出讀的是「已核准的那一版快照」，不是 `ContentItems` 的即時欄位。**
 
 ```
-Status = 3（已發布）
+ContentVersions.Snapshot  WHERE Id = ContentItems.PublishedVersionId
+```
+
+⚠️ **這一點做錯的後果是二選一的災難**，而且兩種都比沒做還糟：
+
+| 做法 | 後果 |
+|---|---|
+| 讀即時欄位 ＋ 可見性看 `Status = 3` | 編輯一個已上線的療程頁，它會**從網站上消失（404）**，直到重新核准 |
+| 讀即時欄位 ＋ 可見性不看 `Status` | **未經審核的編輯直接上線** —— 醫療內容的審核閘形同虛設 |
+| **讀已核准的快照 ＋ 可見性看 `PublishedVersionId`** | ✅ 編輯期間頁面照常在線上顯示舊版，核准後才換新版 |
+
+可見性判定式與 API 共用同一段（[11-backend-design.md](11-backend-design.md) §6.4）：
+
+```
+PublishedVersionId IS NOT NULL
+AND Status <> 4（已下架）
 AND (PublishAt   IS NULL OR PublishAt   <= @now)
 AND (UnpublishAt IS NULL OR UnpublishAt >  @now)
 ```
 
 條件寫兩份遲早會分岔，症狀是「列表看得到、點進去 404」。
+
+> ⚠️ 本節初版寫「只匯出 `Status = 3` 的即時欄位」，與 [11](11-backend-design.md) §7 規則 2
+> 相衝，**2026-09-11 更正**。
 
 ⚠️ **`_payload.json` 要一起量。** Nuxt 預渲染會為每條路由額外產出一份 payload，950 條路由就是 950 個檔案，[07](07-deployment.md) §3 的 90 MB 估算沒有計入這一項。壓不下來時可在 `nuxt.config` 關掉 `renderJsonPayloads`，代價是首次導航多打一次資料。
 

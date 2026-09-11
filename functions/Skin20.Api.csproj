@@ -24,6 +24,10 @@
     <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.0.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.5" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Http.AspNetCore" Version="2.0.2" />
+    <!-- 排程：Azure SQL 沒有 Agent Job，三支維護工作一律走 Functions Timer（docs/11 §11）。
+         ⚠️ Managed Functions（SWA 的 api/）不支援 Timer trigger —— 那是這個 App
+            必須獨立存在的原因之一（docs/07 §4）。 -->
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Timer" Version="4.3.1" />
 
     <!-- Managed Identity 連 SQL 與 Blob，執行期沒有任何密鑰（docs/07 §6） -->
     <PackageReference Include="Azure.Identity" Version="1.14.2" />

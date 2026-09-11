@@ -270,13 +270,22 @@ public sealed class ArticleReadService(ISqlConnectionFactory factory) : IArticle
 ```csharp
 // Common/Visibility.cs
 public const string PublicFilter = """
-    ci.Status = 3
+    ci.PublishedVersionId IS NOT NULL
+    AND ci.Status <> 4
     AND (ci.PublishAt   IS NULL OR ci.PublishAt   <= @Now)
     AND (ci.UnpublishAt IS NULL OR ci.UnpublishAt >  @Now)
     """;
 ```
 
 ⚠️ **建置期的內容匯出腳本必須用同一段條件**（[09](09-frontend.md) §3）。寫兩份遲早分岔，症狀是「列表看得到、點進去 404」，而且只在上線後才發現。
+
+🔴 **可見性不綁在編輯狀態上。** 判定的是「**有沒有一版已核准的內容**」（`PublishedVersionId IS NOT NULL`），不是「工作副本現在是什麼狀態」。
+
+> 這個區分是必要的，不是潔癖。編輯一個已上線的療程頁時，工作副本會回到草稿、送審時會變成送審中 —— **如果可見性看 `Status = 3`，那一頁就會在編輯期間從網站上消失（404）**，等重新核准才回來。醫療內容的審核閘是為了擋住「未經審核的新內容上線」，不是為了把已經審過的頁面下架。
+>
+> ⚠️ 本節初版寫的是 `ci.Status = 3`，與上述情境相衝，**2026-09-11 更正**。
+
+唯一會讓頁面消失的是**明確下架**（`Status = 4`）與時間窗。
 
 ### 6.5 collation
 
@@ -308,6 +317,10 @@ public const string PublicFilter = """
    >
    > ⚠️ [templates/ScheduledPublish.cs](templates/ScheduledPublish.cs) 目前寫的是 Timer 翻狀態、且出現了 schema 沒有的 `Scheduled`／`Archived` 值。**該範本需依本節同步**，見 §16。
 2. **已發布的內容被編輯時，前台看到的仍是 `PublishedVersionId` 指的那一版。** 編輯產生新的草稿版本，核准後才改寫 `PublishedVersionId`。沒有這條，編輯到一半的療程頁會在下一次重建時上線。
+   > ⚠️ 這條成立的前提是**兩件事**，缺一不可：
+   > ① 建置期匯出讀的是 `PublishedVersionId` 的快照，**不是 `ContentItems` 的即時欄位**（[09](09-frontend.md) §3）；
+   > ② 可見性判定不看 `Status`（§6.4）。
+   > 只做一半的話，不是「未審核的編輯直接上線」，就是「編輯期間頁面 404」—— 兩種都比沒做還糟。
 3. **退回必須填原因**（`ContentReviews.DecisionNote`，`Status = 3` 時必填），**且不寄信** —— 帳號沒有必填 email，退回通知改由儀表板待辦清單呈現（[08](08-database.md) §B-3）。
 
 ### 送審時掃高風險字詞

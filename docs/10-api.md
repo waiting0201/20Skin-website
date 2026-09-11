@@ -110,20 +110,20 @@
 
 | 端點 | 權限碼 | 說明 |
 |---|---|---|
-| `GET /admin/{unit}` | `{unit}.view` | 清單。共同參數 `page`／`pageSize`／`status`／`categoryId`／`keyword` |
-| `GET /admin/{unit}/{id}` | `{unit}.view` | 單筆（含 `SeoMeta`、關聯、`BodyBlocks`） |
-| `POST /admin/{unit}` | `{unit}.edit` | 新增 |
-| `PUT /admin/{unit}/{id}` | `{unit}.edit` | 更新本文 |
-| `PUT /admin/{unit}/{id}/seo` | **`{unit}.seo`** | **只寫 `SeoMeta`。** 行銷角色的落點 —— 可改全站 SEO 欄位，不可改醫療敘述本文（[02](02-backend-cms.md) §4） |
-| `PUT /admin/{unit}/{id}/relations` | `{unit}.edit` | 關聯（療程↔困擾↔文章↔FAQ↔醫師），寫 `ContentRelations` |
-| `POST /admin/{unit}/{id}/submit` | `{unit}.submit` | 送審，建立 `ContentReviews` 一筆並附 `RiskFlags` |
-| `PATCH /admin/{unit}/{id}/schedule` | `{unit}.publish` | 設定 `PublishAt`／`UnpublishAt` |
-| `PATCH /admin/{unit}/{id}/publish` | `{unit}.publish` | 直接發布／下架（僅具發布權的角色） |
-| `PUT /admin/{unit}/sort` | `{unit}.edit` | 批次排序 |
-| `DELETE /admin/{unit}/{id}` | `{unit}.delete` | 刪除。`IsSystemLocked` 者回 409 `CONFLICT_LOCKED` |
-| `GET /admin/{unit}/{id}/versions` | `{unit}.view` | 版本清單 |
-| `GET /admin/{unit}/{id}/versions/{no}` | `{unit}.view` | 單一版本快照（供差異比對） |
-| `POST /admin/{unit}/{id}/versions/{no}/restore` | `{unit}.edit` | 還原為草稿，**不直接上線** |
+| `GET /admin/{unit}` | 登入即可 | 清單。共同參數 `page`／`pageSize`／`status`／`categoryId`／`keyword` |
+| `GET /admin/{unit}/{id}` | 登入即可 | 單筆（含 `SeoMeta`、關聯、`BodyBlocks`） |
+| `POST /admin/{unit}` | `content.{unit}.edit` | 新增 |
+| `PUT /admin/{unit}/{id}` | `content.{unit}.edit` | 更新本文 |
+| `PUT /admin/{unit}/{id}/seo` | **`seo.edit`** | **只寫 `SeoMeta`。** 行銷角色的落點 —— 可改全站 SEO 欄位，不可改醫療敘述本文（[02](02-backend-cms.md) §4） |
+| `PUT /admin/{unit}/{id}/relations` | `content.{unit}.edit` | 關聯（療程↔困擾↔文章↔FAQ↔醫師），寫 `ContentRelations` |
+| `POST /admin/{unit}/{id}/submit` | `content.submit` | 送審，建立 `ContentReviews` 一筆並附 `RiskFlags` |
+| `PATCH /admin/{unit}/{id}/schedule` | `content.{unit}.publish` | 設定 `PublishAt`／`UnpublishAt` |
+| `PATCH /admin/{unit}/{id}/publish` | `content.{unit}.publish` | 直接發布／下架（僅具發布權的角色） |
+| `PUT /admin/{unit}/sort` | `content.{unit}.edit` | 批次排序 |
+| `DELETE /admin/{unit}/{id}` | `content.{unit}.edit` | 刪除。`IsSystemLocked` 者回 409 `CONFLICT_LOCKED` |
+| `GET /admin/{unit}/{id}/versions` | `content.{unit}.edit` | 版本清單 |
+| `GET /admin/{unit}/{id}/versions/{no}` | `content.{unit}.edit` | 單一版本快照（供差異比對） |
+| `POST /admin/{unit}/{id}/versions/{no}/restore` | `content.{unit}.edit` | 還原為草稿，**不直接上線** |
 
 三個逐單元的例外：
 
@@ -135,23 +135,23 @@
 
 | 端點 | 權限碼 | 說明 |
 |---|---|---|
-| `GET /admin/review` | `review.view` | 審核佇列，查 `ContentReviews WHERE Status=1`，依 `SubmittedAt` |
-| `POST /admin/review/{id}/approve` | `review.decide` | 核准。核准即進入發布判定（[11](11-backend-design.md) §7） |
-| `POST /admin/review/{id}/reject` | `review.decide` | 退回，**`decisionNote` 必填** |
+| `GET /admin/review` | `review.approve` | 審核佇列，查 `ContentReviews WHERE Status=1`，依 `SubmittedAt` |
+| `POST /admin/review/{id}/approve` | `review.approve` | 核准。核准即進入發布判定（[11](11-backend-design.md) §7） |
+| `POST /admin/review/{id}/reject` | `review.reject` | 退回，**`decisionNote` 必填** |
 | `GET /admin/dashboard` | 登入即可 | 聚合查詢，**無專屬資料表**。含「我的退件」＝ `ContentReviews WHERE Status=3 AND SubmittedByUserId=@me` |
-| `POST /admin/media/sas` | `media.edit` | 取短效寫入 SAS（限定容器與 blob 名稱、write only） |
-| `GET|POST|DELETE /admin/media` | `media.*` | 媒體清單／回報寫入／刪除。刪除前檢查 `MediaUsages` |
-| `GET|PUT /admin/home-section` | `home.*` | 首頁版位編排。**只能引用既有內容，不收自由文案** |
-| `GET|PUT /admin/menu` | `menu.*` | 導覽選單與頁尾（限超級管理員） |
-| `GET|PUT /admin/setting` | `setting.*` | 全站設定（限超級管理員），含 AI FAQ 開關 |
-| `GET|POST|PUT|DELETE /admin/redirect` | `redirect.*` | 301 對照表（約 770 條） |
-| `GET|POST /admin/redirect/export|import` | `redirect.export` | CSV 匯入匯出。**約 770 條不可能手工維護** |
-| `GET|PATCH|DELETE /admin/question` | `question.*` | 未命中題目清單；`PATCH` 可標記為已建立並回填 `LinkedFaqContentItemId` |
-| `GET|POST|PUT|DELETE /admin/user` | `user.*` | 帳號管理（限超級管理員） |
-| `PUT /admin/user/{id}/password` | `user.edit` | 重設密碼 |
-| `GET /admin/role`、`PUT /admin/role/{id}/permissions` | `role.*` | 角色權限設定（限超級管理員） |
-| `POST /admin/rebuild` | `rebuild.trigger` | 手動觸發全站重建。**有聚合窗口**，見 [11](11-backend-design.md) §10 |
-| `GET /admin/export/preview` | `setting.view` | 預覽 `faq.json`／`llms.txt` 的內容。**實際產物在建置期產生**，此端點只供後台畫面預覽（[07](07-deployment.md) §4） |
+| `POST /admin/media/sas` | `media.manage` | 取短效寫入 SAS（限定容器與 blob 名稱、write only） |
+| `GET|POST|DELETE /admin/media` | `media.manage` | 媒體清單／回報寫入／刪除。刪除前檢查 `MediaUsages` |
+| `GET|PUT /admin/home-section` | `home.arrange` | 首頁版位編排。**只能引用既有內容，不收自由文案** |
+| `GET|PUT /admin/menu` | `menu.edit` | 導覽選單與頁尾（限超級管理員） |
+| `GET|PUT /admin/setting` | `settings.edit` | 全站設定（限超級管理員），含 AI FAQ 開關 |
+| `GET|POST|PUT|DELETE /admin/redirect` | `redirect.manage` | 301 對照表（約 770 條） |
+| `GET|POST /admin/redirect/export|import` | `redirect.manage` | CSV 匯入匯出。**約 770 條不可能手工維護** |
+| `GET|PATCH|DELETE /admin/question` | `content.faq.edit` | 未命中題目清單；`PATCH` 可標記為已建立並回填 `LinkedFaqContentItemId` |
+| `GET|POST|PUT|DELETE /admin/user` | `account.manage` | 帳號管理（限超級管理員） |
+| `PUT /admin/user/{id}/password` | `account.manage` | 重設密碼 |
+| `GET /admin/role`、`PUT /admin/role/{id}/permissions` | `account.manage` | 角色權限設定（限超級管理員） |
+| `POST /admin/rebuild` | `settings.edit` | 手動觸發全站重建。**有聚合窗口**，見 [11](11-backend-design.md) §10 |
+| `GET /admin/export/{kind}` | `settings.edit` | 預覽 `faq.json`／`llms.txt`／`llms-full.txt`。**實際產物在建置期產生**，此端點只供後台畫面預覽（[07](07-deployment.md) §4） |
 
 **未列於上表的 `/admin/*` 路徑一律拒絕（403）。** 新增後台端點時必須同步補進路由表與權限表兩處（[11](11-backend-design.md) §5.3）。
 
@@ -159,15 +159,37 @@
 
 ## 4. 權限碼與五種角色
 
-權限碼格式 **`{unit}.{action}`**，`action` 值域：`view`／`edit`／`seo`／`submit`／`publish`／`delete`／`export`／`decide`／`trigger`。
+🔴 **權限碼的權威是 [08-database.md](08-database.md) §A-2**，種子在 `functions/Data/Seed/SeedData.cs`（31 列）。
 
-| 角色 | 大致範圍（權威為 [02](02-backend-cms.md) §4） |
+> ⚠️ 本節初版寫成 `{unit}.{action}`（如 `treatment.edit`／`treatment.publish`），
+> 與 08 §A-2 相衝，**已於 2026-09-11 更正為下表**。
+> 若在任何地方看到 `{unit}.view`／`{unit}.delete`／`review.decide`／`user.*`／`role.*`／
+> `question.*`／`rebuild.trigger`，那是舊命名。
+> **`apps/admin/src/permissions.ts` 目前仍是舊命名**，接上真 API 前必須同步（見 STATUS.md §八）。
+
+31 個權限碼：
+
+| 群組 | 權限碼 |
 |---|---|
-| **超級管理員** | 全部。`setting.*`／`menu.*`／`user.*`／`role.*`／`redirect.*`／`term` 的新增刪除／法務頁，**限此角色** |
-| **內容編輯** | 九個單元的 `view`／`edit`／`submit`／`delete`／`seo`／關聯與排序。**沒有任何 `publish`** |
-| **醫師** | `doctor.edit`／`article.edit`（**僅 `OwnerUserId = 自己`**）＋ `review.decide`（指派的醫學審閱） |
-| **行銷** | 全單元 `view` ＋ **`{unit}.seo`** ＋ FAQ 的 `faq.edit`。**沒有其他 `edit`** |
-| **審核者** | 全單元 `view` ＋ `review.decide` ＋ `{unit}.publish` |
+| 內容 | `content.{unit}.edit`、`content.{unit}.publish`（九個單元各一對，共 18）、`content.submit` |
+| 工作流 | `review.approve`、`review.reject` |
+| SEO | `seo.edit`、`redirect.manage` |
+| 分類與標籤 | `taxonomy.tag.create`、`taxonomy.category.manage` |
+| 頁面 | `page.legal.edit` |
+| 站台編排 | `home.arrange`、`menu.edit`、`settings.edit` |
+| 系統 | `account.manage`、`media.manage` |
+
+⚠️ **沒有獨立的 `view` 權限碼。** 讀取端點是「登入即可」—— 能編輯就看得到，
+行銷與審核者靠 `seo.edit`／`content.*.publish` 進來。**刪除用 `content.{unit}.edit`**，
+不另設 `delete`（docs/08 §A-2 的 31 列裡沒有這兩種）。
+
+| 角色 | 權限 |
+|---|---|
+| **超級管理員** | 全部 31 個 |
+| **內容編輯** | 九個 `content.{unit}.edit` ＋ `content.submit` ＋ `seo.edit` ＋ `taxonomy.tag.create` ＋ `home.arrange` ＋ `media.manage`。**沒有任何 `publish`** |
+| **醫師** | `content.doctor.edit`／`content.article.edit`（**僅 `OwnerUserId` 是自己的**）＋ `content.submit` ＋ `review.approve`／`review.reject` ＋ `media.manage` |
+| **行銷** | `seo.edit` ＋ `content.faq.edit` ＋ `media.manage`。**沒有其他 `edit`** |
+| **審核者** | 九個 `content.{unit}.publish` ＋ `review.approve`／`review.reject` |
 
 ⚠️ **發布權與編輯權必須分離。** 這是三段式工作流的前提，也是 [02](02-backend-cms.md) §5 兩層防護的第一層 —— 療程、案例、FAQ 三類內容不得跳過審核直接上線。
 

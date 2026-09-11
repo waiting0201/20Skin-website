@@ -11,11 +11,23 @@ using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Azure.Functions.Worker;
 using Skin20.Api.Data;
+using Skin20.Api.Handlers;
+using Skin20.Api.Middleware;
+using Skin20.Api.Routing;
+using Skin20.Api.Services;
+using Skin20.Api.Services.Dapper;
 
 var builder = FunctionsApplication.CreateBuilder(args);
 
+// ⚠️ 用 ConfigureFunctionsWebApplication（ASP.NET Core Integration），
+//    **不是** ConfigureFunctionsWorkerDefaults ——後者的 Handler 收到的是
+//    HttpRequestData 而不是 HttpRequest，整套程式碼的形狀都不一樣（docs/11 §1）。
 builder.ConfigureFunctionsWebApplication();
+
+// 例外處理包住整個 Function 執行（docs/11 §4）
+builder.UseMiddleware<ExceptionMiddleware>();
 
 // ── 連線字串 ──────────────────────────────────────────────
 // Authentication=Active Directory Default 會走 DefaultAzureCredential：
@@ -23,10 +35,15 @@ builder.ConfigureFunctionsWebApplication();
 //   · 本機開發   → 開發者的 az login 身分
 // 兩邊都不需要帳號密碼。資料庫端需先建立對應的 Entra 使用者，
 // 見 docs/07-deployment.md §6。
+// ⚠️ 本機開發的逃生門：docker 的 SQL Server 沒有 Entra，連不上 Active Directory Default。
+//    設了 SQL_CONNECTION_STRING 就整條用它，否則走下面的 Managed Identity 版本。
+//    **正式環境不要設這個變數** —— 設了就等於把無密鑰的設計繞掉。
 var sqlConnectionString =
-    $"Server=tcp:{Environment.GetEnvironmentVariable("SQL_SERVER")},1433;" +
-    $"Database={Environment.GetEnvironmentVariable("SQL_DATABASE")};" +
-    "Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;";
+    Environment.GetEnvironmentVariable("SQL_CONNECTION_STRING") is { Length: > 0 } local
+        ? local
+        : $"Server=tcp:{Environment.GetEnvironmentVariable("SQL_SERVER")},1433;" +
+          $"Database={Environment.GetEnvironmentVariable("SQL_DATABASE")};" +
+          "Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;";
 
 // ── EF Core：寫入與領域邏輯 ────────────────────────────────
 // 審核工作流、版本歷程這類「有規則、要留軌跡」的操作走這裡。
@@ -53,6 +70,62 @@ builder.Services.AddSingleton(new BlobServiceClient(
     new DefaultAzureCredential()));
 
 builder.Services.AddHttpClient();
+
+// ── JSON：★ 兩處都要設，少一處就會半邊 PascalCase ──────────
+// Configure<JsonOptions> 管 IActionResult 的序列化、ConfigureHttpJsonOptions 管
+// ReadFromJsonAsync 的反序列化。docs/10 §2：請求與回應一律 camelCase。
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.JsonOptions>(o =>
+{
+    o.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    o.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+});
+builder.Services.ConfigureHttpJsonOptions(o =>
+{
+    o.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    o.SerializerOptions.PropertyNameCaseInsensitive = true;
+});
+
+// ── 服務（docs/11 §3.1 的生命週期慣例）────────────────────
+// Singleton：只讀設定、無 per-request 狀態
+builder.Services.AddSingleton<IJwtService, JwtService>();
+builder.Services.AddSingleton<IEmailService, EmailService>();
+builder.Services.AddSingleton<IBlobStorageService, BlobStorageService>();
+builder.Services.AddSingleton<IBotCheckService, BotCheckService>();
+
+// Scoped：碰 Skin20DbContext 或連線的一切
+builder.Services.AddScoped<IRateLimitService, RateLimitService>();
+builder.Services.AddScoped<IRebuildService, RebuildService>();
+
+// ── Handler（docs/10 §3）──────────────────────────────────
+// ⚠️ 全部 Scoped。把碰 DB 的東西設成 Singleton 會捕獲已釋放的 DbContext，
+//    而且錯誤只在高併發下浮現（docs/11 §3.1）。沒有例外。
+builder.Services.AddScoped<HealthHandler>();
+builder.Services.AddScoped<AuthHandler>();
+builder.Services.AddScoped<FormHandler>();
+builder.Services.AddScoped<SettingHandler>();
+builder.Services.AddScoped<DashboardHandler>();
+builder.Services.AddScoped<ContentHandler>();
+builder.Services.AddScoped<ReviewHandler>();
+builder.Services.AddScoped<MediaHandler>();
+builder.Services.AddScoped<HomeSectionHandler>();
+builder.Services.AddScoped<MenuHandler>();
+builder.Services.AddScoped<RedirectHandler>();
+builder.Services.AddScoped<ExportHandler>();
+builder.Services.AddScoped<QuestionHandler>();
+builder.Services.AddScoped<AccountHandler>();
+builder.Services.AddScoped<RebuildHandler>();
+
+// ── Dapper ReadService（純讀，docs/11 §2）────────────────
+// ⚠️ 全部 Scoped：它們持有 ISqlConnectionFactory，而連線本身不是執行緒安全的。
+builder.Services.AddScoped<IAuthReadService, AuthReadService>();
+builder.Services.AddScoped<ISiteSettingReadService, SiteSettingReadService>();
+builder.Services.AddScoped<IAccountReadService, AccountReadService>();
+builder.Services.AddScoped<IQuestionReadService, QuestionReadService>();
+builder.Services.AddScoped<IRedirectReadService, RedirectReadService>();
+builder.Services.AddScoped<IExportReadService, ExportReadService>();
+
+builder.Services.AddScoped<AppRouter>();
+builder.Services.AddHttpContextAccessor();
 
 // ⚠️ 不要用 MemoryCache 存速率限制或聚合窗口的狀態 —— Flex Consumption 是多執行個體，
 //    記憶體計數形同虛設（docs/11-backend-design.md §5.2、§10）。

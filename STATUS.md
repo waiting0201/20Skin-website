@@ -17,8 +17,11 @@
 **資料庫 schema 也完成了** —— 37 張表的 EF Core migration 已在真的 SQL Server 2022 上
 實測建立成功，種子資料 165 列。
 
-**但前後台接的仍是 localStorage mock**：`functions/` 只有資料層，**API 端點一支都還沒寫**。
-下一步是 `RouterFunction` 與各單元的 Handler。
+**API 也完成了** —— 37 張表 ＋ 全部端點 ＋ 三支 Timer，已在本機對真的 SQL Server 2022
+跑過端到端驗證（登入、首登強制改密碼、預設拒絕授權、九個內容單元的清單）。
+
+**但前後台接的仍是 localStorage mock** —— 前端還沒接上 API。下一步是把
+`apps/admin/src/api/client.ts` 換成打真 API，以及建置期的內容匯出腳本。
 
 ---
 
@@ -44,7 +47,7 @@
 | **前台開發** | 🟡 | 21 個模板切版完成、SEO 與 JSON-LD 落地；**內容仍是 `app/data/*.ts`，未接資料庫**（§二） |
 | **後台開發** | 🟡 | **31／31 畫面完成**；接 mock，未接 API（§三） |
 | **資料模型與 migrations** | ✅ | 37 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四） |
-| **API** | 🟡 | 專案骨架與資料層完成；**端點一支都還沒寫**（§五） |
+| **API** | ✅ | 端點、服務、三支 Timer 完成，**已對真 SQL Server 端到端驗證**（§五） |
 | 部署與 CI/CD | ⬜ | 範本在 [`docs/templates/`](docs/templates/)，**Azure 資源未開、workflow 未進 repo**（§六） |
 | 內容遷移（約 800 篇） | ⬜ | 需先有資料庫 |
 | 療程內容（27 項，12 項從零寫） | 🔴 | **需醫師投入，Phase 1 最大瓶頸** |
@@ -201,27 +204,64 @@ schema 的真實來源是 `functions/Data/Migrations/`（docs/07 §5）。
 
 ---
 
-## 五、API 🟡
+## 五、API ✅
 
-**專案骨架與資料層完成，端點一支都還沒寫。**
+`functions/`（.NET 10 isolated ＋ EF Core 10 ＋ Dapper）。**已在本機對真的 SQL Server 2022 跑起來。**
 
-✅ 已完成：`Skin20.Api.csproj`（.NET 10 isolated ＋ EF Core 10 ＋ Dapper）、`Program.cs`
-（Managed Identity 連 SQL／Blob，**執行期無密鑰**）、`Skin20DbContext` ＋ 37 張表的
-Configuration ＋ migration ＋ 種子、`ISqlConnectionFactory`（Dapper 讀取路徑）、
-`Skin20DbContextFactory`（設計期，供 `dotnet ef`）。
+### ✅ 端到端驗證過的（不是只有 build 過）
 
-⬜ 未做：`RouterFunction` catch-all ＋ `AppRouter` 集中式分派與預設拒絕授權、
-各單元 Handler、Dapper ReadService、`ApiResponse` 信封與 `ExceptionMiddleware`、
-JWT 與登入次數限制、Timer Function（排程發布／版本修剪／計數清理）、
-`openapi.yaml`。施工標準見 [11](docs/11-backend-design.md)。
+| 驗證 | 結果 |
+|---|---|
+| `GET /health` | 200，統一信封 |
+| 前台白名單以外的路由 | **404**（當成不存在，不是 401 —— 新端點忘了補白名單會在開發階段就現形） |
+| `/admin/*` 未帶憑證 | 401 |
+| **未登記於權限表的 `/admin/*`** | **403「此端點未登記於權限表」** —— 預設拒絕生效 |
+| 首登（種子密碼） | 200 ＋ `mustChangePassword: true`，**token 照發** |
+| 首登後打後台 | **403 `AUTH_MUST_CHANGE_PASSWORD`** |
+| 改密碼 → 重新登入 | 旗標清除，後台可用 |
+| 九個內容單元的清單 | 全部 200；`term` 13 筆、`page` 17 筆（與種子相符） |
+| `GET /site-settings/public` | 200，`aiFaqEnabled = false`（與種子相符） |
 
-兩處 API 的分工是全篇最容易搞錯的地方：
+### ✅ 組成
 
-| | `functions/` → `api.20skin.tw` | `api/` → SWA Managed Function |
-|---|---|---|
-| 內容 | 全部應用程式端點 | **只有 `/api/fallback`**，約 770 條 301 |
-| 框架 | .NET 10 ＋ EF Core ＋ Dapper | **最高 net9.0**，**Dapper only** |
-| 狀態 | ⬜ | ⬜（範本已寫：[`docs/templates/Fallback.cs`](docs/templates/Fallback.cs)） |
+| 層 | 內容 |
+|---|---|
+| `Common/` | `ApiResponse` ＋ `Paging`（上限 100）、`ErrorCodes` ＋ `AppException`、`Clock`、**`Visibility`**、`Constants` |
+| `Middleware/` | `ExceptionMiddleware` —— SQL 547／2601／2627 翻成 409 |
+| `Functions/` | `RouterFunction` catch-all ＋ **三支 Timer**（排程發布／版本修剪／登入計數清理） |
+| `Routing/` | `AppRouter` 三個 partial：分派、前台白名單（**只有四支**）、後台權限表（**預設拒絕**） |
+| `Handlers/` | 15 支，涵蓋 docs/10 §3 的全部端點 |
+| `Services/` | JWT（手刻 HS256）、登入次數限制（DB 版、雙維度）、通知信、機器人驗證、Blob SAS、重建 |
+| `Services/Dapper/` | 10 支純讀 ReadService |
+
+### ⚠️ 整合時修掉的六個問題
+
+| 問題 | 說明 |
+|---|---|
+| 🔴 **種子帳號永遠登不進去** | 登入在 `MustChangePassword` 時回 403 不發 token，但改密碼端點需要 token —— **死結**。改為照發 token ＋ 旗標，由 Router 擋下其餘端點 |
+| 🔴 **`must_change_password` claim 沒有被還原** | token 發得出來、端點也打得通，那道閘**靜默失效**。只有實際跑過才發現 |
+| 🔴 **可見性綁在編輯狀態上** | 編輯已上線的療程頁會讓它從網站消失（404）。見下方「架構更正」 |
+| **TPT 的 `term.Title`** | `Title` 在父表 `ContentItems`，join `Terms` 讀不到 |
+| **沒有分類欄位的單元** | `term`／`page` 沒有 `term` 別名，SELECT 仍寫 `term.Title` → 無法繫結 |
+| **路由漏傳 `req`** | `DELETE /admin/user/{id}` 拿不到目前登入者，「不可停用自己」做不出來 |
+
+### 🔴 架構更正：可見性與編輯狀態分開
+
+原本 `docs/11` §6.4 寫可見性是 `Status = 3`，`docs/09` §3 寫匯出讀即時欄位 —— 兩者相衝，而且兩種修法都是災難：
+
+| 做法 | 後果 |
+|---|---|
+| 讀即時欄位 ＋ 可見性看 `Status = 3` | 編輯已上線的療程頁 → **該頁 404**，直到重新核准 |
+| 讀即時欄位 ＋ 可見性不看 `Status` | **未經審核的編輯直接上線** —— 醫療內容的審核閘形同虛設 |
+| ✅ **讀已核准的快照 ＋ 可見性看 `PublishedVersionId`** | 編輯期間照常顯示舊版，核准後才換新版 |
+
+`docs/09` §3 與 `docs/11` §6.4／§7 已於 2026-09-11 更正。
+
+### ⬜ 未做
+
+`openapi.yaml`（手寫，catch-all 路由下自動產生器內省不出端點）、
+**首頁版位的送審整合**（目前直接寫入，未走草稿／送審／核准；`docs/08` §G-2 要求掛在
+`SystemKey='home'` 的 ContentItem 上）、單元測試（至少要涵蓋權限判定表與可見性判定式）。
 
 ---
 
@@ -280,7 +320,9 @@ JWT 與登入次數限制、Timer Function（排程發布／版本修剪／計�
 | 機器人驗證供應商 | reCAPTCHA v3 或 Turnstile，**介面不要帶供應商名稱** |
 | **301 的「命中次數」放不進架構** | 後台原本想用命中次數排出「哪幾條值得寫進 `staticwebapp.config.json` 快速路徑」，但 [`Redirects`](docs/08-database.md) §H **沒有這個欄位，而且放不了**：`/api/fallback` 對這張表只做單筆 seek 不做寫入，它那組唯讀 SQL 使用者**只能 SELECT 這一張表**。<br>已改為顯示「目前已寫進設定檔的 7 條」（人工挑定，與 `apps/web/public/staticwebapp.config.json` 一致）。<br>若真的要命中次數，唯一不牴觸架構的作法是 **Application Insights 的請求記錄離線彙總**，需另案評估。 |
 | **醫師的「醫學審閱」無法實作** | [02](docs/02-backend-cms.md) §4 寫醫師「可對**指派**內容執行醫學審閱」，但 ①「醫師」角色只有 `review.decide`、沒有 `review.view`，進不了審核佇列；② [`ContentReviews`](docs/08-database.md) §B-3 **沒有「指派給誰」的欄位**，做不出「只看指派給我的」。<br>唯一現成的線索是 `Articles.ReviewerDoctorId`（審閱醫師），**但只有文章有**，療程與案例都沒有。<br>三個選項：**(a)** 醫學審閱只涵蓋文章，用 `ReviewerDoctorId` 篩選；**(b)** 為 `ContentReviews` 加 `AssignedReviewerId`（**新增欄位，與 [08](docs/08-database.md) §0 決策二「不預留未定案的欄位」相衝，需明確定案**）；**(c)** 拿掉醫師的審閱職責，只留「編輯自己的內容」。<br>⚠️ **在定案之前不要自行加欄位。** |
-| `RefreshTokens` vs 短效 JWT ＋ `SecurityStamp` | 二選一，不要兩套都做 |
+| ~~`RefreshTokens` vs 短效 JWT ＋ `SecurityStamp`~~ | ✅ **已定案（2026-09-11）：採 `RefreshTokens` ＋ rotation**。後台只剩一道防線，「停用帳號要能**即時**失效」比省一張表重要，短效 JWT 仍有空窗 |
+| **`llms.txt` 的內容範圍** | [03](docs/03-seo-geo.md) §4 ④ 說它是全站核心資訊 ＋ 頁面索引，[04](docs/04-ai-faq.md) §3 只定義了 FAQ 專屬的 `faq.json`／`llms-full.txt` —— **兩份文件對 `llms.txt` 沒有交集的權威定義**。目前實作比照 sitemap 的資料來源、依型別分組各取前 20 筆，**是假設不是規格** |
+| **後台密碼強度與輪替規則** | [02](docs/02-backend-cms.md) §4 註明待訂。目前用 ≥8 碼的保守底線。🔴 沒有雙因素，帳密是唯一憑證 —— 這條不該一直待訂 |
 
 ### 🔴 安全防線只剩一道
 
@@ -297,6 +339,20 @@ JWT 與登入次數限制、Timer Function（排程發布／版本修剪／計�
 現行 `/admin/` 功能清單、Mod_Security 規則、**兩組 SQL 使用者 ＋ 一組唯讀連線字串 ＋ 防火牆放行**、
 `api.20skin.tw` 的 CORS、`reference/banner1-L.jpg` 原始檔、兩個院區的**真實地址與電話**
 （目前是 `04-XXX-XXXX`／`○○路○○號` 佔位值，連 JSON-LD 的 `geo` 都輸出不了）。
+
+### 🔴 後台 SPA 的權限碼與 API 對不上（接真 API 前必須修）
+
+`apps/admin/src/permissions.ts` 用的是 `{unit}.{action}`（`treatment.edit`／`review.decide`／
+`user.view`⋯），但 **API 與資料庫用的是 [08](docs/08-database.md) §A-2 的 31 列**
+（`content.treatment.edit`／`review.approve`／`account.manage`⋯）。
+
+起因是我在寫 [10-api.md](docs/10-api.md) §4 時自創了一套命名，沒有對齊先前就存在的
+`docs/08` §A-2。**`docs/10` 已於 2026-09-11 更正**，程式碼（種子、`Common/Constants.cs`、
+`AppRouter.Admin.cs`）從一開始就跟著 `docs/08`，所以**只有後台 SPA 那一份是舊的**。
+
+⚠️ 目前後台接 mock，還看不出問題；**接上真 API 的那一刻，權限判斷會全部失效**
+（JWT 的 `permissions` claim 對不上任何一個 UI 判斷）。修法是把 `permissions.ts` 的
+矩陣改成 31 列，並把 `can(unit, action)` 的呼叫端一併換掉。
 
 ### ⚠️ 技術債
 
