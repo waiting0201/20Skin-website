@@ -14,7 +14,6 @@ public sealed class ArticleConfiguration : IEntityTypeConfiguration<Article>
             "CK_Articles_SourceSite", "[SourceSite] BETWEEN 1 AND 2"));
 
         b.Property(x => x.AuthorName).HasMaxLength(100);
-        b.Property(x => x.Summary).HasMaxLength(500);
         b.Property(x => x.SourceSite).HasColumnType("tinyint");
         // BodyBlocks：JSON 區塊陣列，nvarchar(max)。
 

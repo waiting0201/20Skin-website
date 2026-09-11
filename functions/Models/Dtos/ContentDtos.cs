@@ -36,6 +36,8 @@ public sealed record ContentDetailDto(
     string? Slug,
     string? UrlPath,
     string Title,
+    /// <summary>一句話導言（docs/08 §B-1）。⚠️ 不是 <c>Seo.AiSummary</c>。</summary>
+    string? Summary,
     byte Status,
     string StatusName,
     string EffectiveStatus,

@@ -45,6 +45,7 @@ export class ApiClient {
   get = (p) => this.#send('GET', p)
   post = (p, b) => this.#send('POST', p, b)
   put = (p, b) => this.#send('PUT', p, b)
+  patch = (p, b) => this.#send('PATCH', p, b)
 
   /**
    * ⚠️ 種子帳號帶 MustChangePassword，登入**照發 token** 但除了改密碼以外全部 403
@@ -65,15 +66,35 @@ export class ApiClient {
     return data
   }
 
-  /** 取某個單元的全部內容，回傳 slug → 摘要。用來認出種子已經建好的資料列，不重複建。 */
-  async indexBySlug(unit) {
-    const map = new Map()
+  /** 取某個單元的全部內容（清單摘要）。用來認出種子已經建好的資料列，不重複建。 */
+  async list(unit) {
+    const items = []
     for (let page = 1; ; page++) {
       const res = await this.get(`/admin/${unit}?page=${page}&pageSize=100`)
-      for (const item of res.items) map.set(item.slug, item)
+      items.push(...res.items)
       if (page >= res.totalPages || res.items.length === 0) break
     }
-    return map
+    return items
+  }
+
+  /** 取某個單元的全部內容，回傳 slug → 摘要。 */
+  async indexBySlug(unit) {
+    return new Map((await this.list(unit)).map((i) => [i.slug, i]))
+  }
+
+  detail = (unit, id) => this.get(`/admin/${unit}/${id}`)
+
+  /**
+   * 確保這筆內容是「已發布」。
+   *
+   * 🔴 **建立與發布不是原子的**：建立成功、發布失敗，會留下一筆草稿；下次重跑時
+   * 「已存在就跳過」的邏輯會讓它**永遠停在草稿**，而建置期匯出只讀已發布的快照
+   * （docs/09 §3）—— 那一頁就這樣從網站上消失了，而且沒有任何錯誤訊息。
+   * 所以每一次都要確認狀態，不是只在新建時發布。
+   */
+  async ensurePublished(unit, item) {
+    if (item.status === 3) return item
+    return this.publish(unit, item.id)
   }
 
   /**
@@ -90,7 +111,8 @@ export class ApiClient {
     return item
   }
 
-  publish = (unit, id) => this.post(`/admin/${unit}/${id}/publish`, { action: 'publish' })
+  /** ⚠️ 發布是 PATCH 不是 POST（docs/10 §3.3 的路由表）。 */
+  publish = (unit, id) => this.patch(`/admin/${unit}/${id}/publish`, { action: 'publish' })
   seo = (unit, id, body) => this.put(`/admin/${unit}/${id}/seo`, body)
   relations = (unit, id, body) => this.put(`/admin/${unit}/${id}/relations`, body)
 }

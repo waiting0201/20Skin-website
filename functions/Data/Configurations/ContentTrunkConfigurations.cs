@@ -34,6 +34,7 @@ public sealed class ContentItemConfiguration : IEntityTypeConfiguration<ContentI
         b.Property(x => x.ContentType).HasColumnType("tinyint");
         b.Property(x => x.Status).HasColumnType("tinyint").HasDefaultValue(ContentStatus.Draft);
         b.Property(x => x.Title).HasMaxLength(200).IsRequired();
+        b.Property(x => x.Summary).HasMaxLength(500);
         b.Property(x => x.IncludeInSitemap).HasDefaultValue(true);
         b.Property(x => x.IsSystemLocked).HasDefaultValue(false);
 

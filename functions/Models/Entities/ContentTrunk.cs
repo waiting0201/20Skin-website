@@ -34,6 +34,16 @@ public class ContentItem
     /// <summary>FAQ 的「問題」也放這裡。</summary>
     public string Title { get; set; } = string.Empty;
 
+    /// <summary>
+    /// 一句話導言／摘要。列表卡片、Hero 副標、搜尋結果都讀它。
+    /// <para>
+    /// ⚠️ 放在主幹表是刻意的：醫師、困擾、案例、文章、療程的「導言」在前台是同一個東西，
+    /// 各自加一欄會變成五個名字不同、行為相同的欄位（2026-09-11 搬 mockup 內容時定案）。
+    /// </para>
+    /// <para>⚠️ 與 <c>SeoMeta.AiSummary</c> 不同：那是 40–60 字的 GEO 直答段落，用途與字數規範都不一樣。</para>
+    /// </summary>
+    public string? Summary { get; set; }
+
     public ContentStatus Status { get; set; } = ContentStatus.Draft;
 
     /// <summary>

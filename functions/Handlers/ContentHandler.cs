@@ -119,7 +119,7 @@ public sealed class ContentHandler(
         var relationDtos = await ToRelationDtosAsync(relations, ct);
 
         return new ContentDetailDto(
-            entity.Id, unit, (byte)entity.ContentType, entity.Slug, entity.UrlPath, entity.Title,
+            entity.Id, unit, (byte)entity.ContentType, entity.Slug, entity.UrlPath, entity.Title, entity.Summary,
             (byte)entity.Status, StatusName(entity.Status), EffectiveStatus(entity.Status, entity.PublishAt, entity.UnpublishAt),
             entity.PublishAt, entity.UnpublishAt, entity.PublishedVersionId, entity.SortOrder,
             entity.IncludeInSitemap, entity.IsSystemLocked, entity.OwnerUserId,
@@ -142,6 +142,8 @@ public sealed class ContentHandler(
             throw AppException.BadRequest(ErrorCodes.ValidationRequired, "title 為必填欄位。");
         if (title.Length > 200)
             throw AppException.BadRequest(ErrorCodes.ValidationRange, "title 長度不可超過 200 字。");
+
+        var summary = ReadSummary(body);
 
         var slug = NormalizeAndValidateSlug(JStr(body, "slug"), required: true);
 
@@ -182,6 +184,7 @@ public sealed class ContentHandler(
 
         entity.ContentType = contentType;
         entity.Title = title;
+        entity.Summary = summary;
         entity.Slug = slug;
         entity.Status = ContentStatus.Draft;
         entity.SortOrder = JInt(body, "sortOrder") ?? 0;
@@ -245,6 +248,8 @@ public sealed class ContentHandler(
             if (title.Length > 200) throw AppException.BadRequest(ErrorCodes.ValidationRange, "title 長度不可超過 200 字。");
             entity.Title = title;
         }
+
+        if (body.TryGetProperty("summary", out _)) entity.Summary = ReadSummary(body);
 
         var oldUrlPath = entity.UrlPath;
         var wasPublished = entity.Status == ContentStatus.Published;
@@ -748,6 +753,7 @@ public sealed class ContentHandler(
             if (slug is not null) entity.Slug = slug;
         }
 
+        if (root.TryGetProperty("summary", out _)) entity.Summary = JStr(root, "summary");
         entity.SortOrder = JInt(root, "sortOrder") ?? entity.SortOrder;
         entity.IncludeInSitemap = JBool(root, "includeInSitemap") ?? entity.IncludeInSitemap;
 
@@ -852,6 +858,7 @@ public sealed class ContentHandler(
             slug = entity.Slug,
             urlPath = entity.UrlPath,
             title = entity.Title,
+            summary = entity.Summary,
             sortOrder = entity.SortOrder,
             includeInSitemap = entity.IncludeInSitemap,
             ownerUserId = entity.OwnerUserId,
@@ -1183,6 +1190,17 @@ public sealed class ContentHandler(
         return "published";
     }
 
+    /// <summary>
+    /// 主幹的一句話導言（docs/08 §B-1）。⚠️ 不是 <c>SeoMeta.AiSummary</c> —— 那是 40–60 字的 GEO 直答段落。
+    /// </summary>
+    private static string? ReadSummary(JsonElement body)
+    {
+        var summary = JStr(body, "summary");
+        if (summary is { Length: > 500 })
+            throw AppException.BadRequest(ErrorCodes.ValidationRange, "summary 長度不可超過 500 字。");
+        return summary;
+    }
+
     private static int ParseId(string id)
         => int.TryParse(id, out var n) ? n : throw AppException.BadRequest(ErrorCodes.ValidationFormat, "識別碼格式錯誤。");
 
@@ -1480,7 +1498,6 @@ public sealed class ContentHandler(
         ["reviewedOn"] = a.ReviewedOn?.ToString("yyyy-MM-dd"),
         ["displayDate"] = a.DisplayDate,
         ["cover"] = ImageFields(a.Cover),
-        ["summary"] = a.Summary,
         ["bodyBlocks"] = a.BodyBlocks,
         ["readingMinutes"] = a.ReadingMinutes,
         ["sourceSite"] = (byte)a.SourceSite,
@@ -1500,13 +1517,6 @@ public sealed class ContentHandler(
         else if (isCreate) a.DisplayDate = Clock.UtcNow; // 新建文章：對外顯示日期預設為現在（docs/08 §C-4）
 
         if (f.TryGetProperty("cover", out _)) a.Cover = JImage(f, "cover");
-
-        if (f.TryGetProperty("summary", out _))
-        {
-            var summary = JStr(f, "summary");
-            if (summary is { Length: > 500 }) throw AppException.BadRequest(ErrorCodes.ValidationRange, "summary 長度不可超過 500 字。");
-            a.Summary = summary;
-        }
 
         if (f.TryGetProperty("bodyBlocks", out var bodyEl))
             a.BodyBlocks = bodyEl.ValueKind == JsonValueKind.Null ? null : bodyEl.GetRawText();

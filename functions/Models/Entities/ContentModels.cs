@@ -186,7 +186,6 @@ public sealed class Article : ContentItem
     public DateTime DisplayDate { get; set; }
 
     public UploadedImage? Cover { get; set; }
-    public string? Summary { get; set; }
 
     /// <summary>區塊編輯器內容（JSON 區塊陣列）。</summary>
     public string? BodyBlocks { get; set; }
