@@ -207,6 +207,10 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    **資源已於 2026-09-11 建立**：訂閱 CSP、區域 `westus2`、資源群組 **`rg-20skin-web-prod`**。
    ⚠️ **SWA 方案由 Free 改為 Standard**（2026-09-11）—— 不是改變主意，是**訂閱裡的 Free 配額已被既有專案用滿**。連帶把單一環境儲存上限從 250 MB 拉到 500 MB。
    🔴 **不要把資源建進 `rg-20skin-prod`** —— 那是**線上預約系統**的正式環境（`booking.20skin.tw`），正是決策 4 排除在本專案外的系統。部署進去會弄壞診所營運中的預約。
+   🔴 **儲存體帳戶的名字差一個字，踩到就是寫進預約系統**（2026-09-11 實際踩到）：
+   本專案是 **`st20skinweb`**（`rg-20skin-web-prod`）；**`st20skinprod`** 是**預約系統的**（`rg-20skin-prod`）。
+   `functions/local.settings.example.json` 原本寫的是後者，照著設定的人整台機器的上傳都會打進預約系統的儲存體。
+   正式環境的 app setting 一直是對的，錯的只有本機範本 —— 這種錯**不會有任何錯誤訊息**，SAS 照簽、上傳照成功。
    交付範圍 **SWA ＋ Functions ＋ Blob ＋ 資料庫 schema**（資料庫執行個體由院方自建，見第 8 條）。
    **只有正式環境 —— 不設 staging，也不設 PR 預覽環境**（2026-08-10 定案）。前台與 API 都是 `main` 合併即上線。上線前的驗收對**尚未切 DNS 的正式環境**（`*.azurestaticapps.net`／`*.azurewebsites.net`）做；上線後沒有預演，靠 `main` 分支保護 ＋ CI 檢查 ＋ 部署後 smoke test 三道攔截。**不要在文件裡寫回 PR 預覽或 staging。**
    由平台限制逼出來的例外，**不要當成可以靠設定繞過**：約 770 條 301 由 `/api/fallback` 查 SQL 對照表（SWA 設定檔上限 20 KB）、上傳檔案放 Blob（單一環境 250 MB）。見 [docs/07-deployment.md](docs/07-deployment.md)

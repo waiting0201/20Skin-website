@@ -297,14 +297,24 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 （後者是簽 user delegation SAS 必要的），執行期不需要儲存體金鑰。
 `Jwt__Secret` 已產生並只存在 Azure 的應用程式設定裡。
 
-### 🔴 兩件必須知道的事
+### 🔴 三件必須知道的事
 
 **① 不要把資源建進 `rg-20skin-prod`。**
 那是**線上預約系統**的正式環境，正在服務 `booking.20skin.tw` —— `swa-20skin-customer-prod`
 （Standard）、`swa-20skin-admin-prod`、`func-20skin-api-prod`（`ApiRouter` ＋ `SmsReminder`）。
 而預約系統正是 CLAUDE.md 決策 4 明文排除在本專案外的東西。部署進去會**弄壞診所營運中的預約**。
 
-**② SWA 由 Free 改為 Standard。**
+**② 儲存體帳戶只差一個字，本機範本指錯到預約系統。**
+`st20skinweb`（`rg-20skin-web-prod`）是本專案的；**`st20skinprod`（`rg-20skin-prod`）是線上預約系統的**。
+`functions/local.settings.example.json` 原本寫成後者，2026-09-11 已修。
+正式環境的 app setting 一直是對的（`st20skinweb`），錯的只有本機範本 ——
+**這種錯不會有任何錯誤訊息**：SAS 照簽、上傳照成功，只是檔案寫進了診所營運中的系統。
+⚠️ 查這件事時 `az functionapp config appsettings list` 連帶印出了
+`DEPLOYMENT_STORAGE_CONNECTION_STRING` 的帳戶金鑰明文，**建議輪替**
+（`az storage account keys renew -g rg-20skin-web-prod -n st20skinweb --key key1`，
+輪替後要更新該 app setting）。
+
+**③ SWA 由 Free 改為 Standard。**
 不是改變主意 —— `az staticwebapp create --sku Free` 直接回
 `This subscription has too many static sites with SKU: Free`，配額已被既有專案用滿。
 連帶影響（`docs/07` §3 已全面更新）：單一環境儲存 **250 MB → 500 MB**、自訂網域 2 → 5、

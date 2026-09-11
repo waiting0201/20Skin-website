@@ -25,7 +25,7 @@
     "SQL_SERVER": "localhost",
     "SQL_DATABASE": "Skin20_Dev",
     "//storage": "本機可用 Azurite；沒開的話上傳端點會失敗，其餘端點不受影響。",
-    "STORAGE_ACCOUNT": "st20skinprod",
+    "STORAGE_ACCOUNT": "st20skinweb",
     "BLOB_PUBLIC_CONTAINER": "media",
     "BLOB_PRIVATE_CONTAINER": "media-private",
     "//jwt": "⚠️ 正式環境請用夠長的隨機值。沒有雙因素，token 簽章是唯一的憑證保護。",
