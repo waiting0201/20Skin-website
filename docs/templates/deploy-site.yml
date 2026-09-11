@@ -1,0 +1,144 @@
+# → .github/workflows/deploy-site.yml
+#
+# 前台 ＋ api/（SWA Managed Function，只有 fallback 這一支）。
+# SWA Free 方案下這兩者是同一個部署單位，無法分開 —— 只改 api/ 也會重傳整包前端產物。
+#
+# ⚠️ 應用程式 API 不在這裡，在 functions/，由 deploy-api.yml 獨立部署。
+#    兩條 workflow 的 paths 過濾必須互斥且完整。見 docs/07-deployment.md §5。
+#
+# repository_dispatch 由後台「發布」動作與排程發布的 Timer trigger 觸發。
+# 需調整：node/pnpm 版本、NUXT_* 變數、build 逾時、大小門檻。
+#
+# 前端為 Nuxt 3 純靜態（nuxt generate），產物在 frontend/.output/public。
+# ⚠️ 不要把 .output/server 指給 api_location —— 那裡是 fallback 那支 Managed Function。
+
+name: Deploy to Azure Static Web Apps
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'api/**'
+      - '.github/workflows/deploy-site.yml'
+  # CMS 發布內容時由 Managed Function 呼叫 GitHub API 觸發
+  repository_dispatch:
+    types: [content-published]
+  workflow_dispatch:
+
+# ⚠️ 不設 PR 預覽環境（2026-08-10 定案）。push 到 main 就是上線，沒有預演。
+#    因此 main 的分支保護與下方的 build 檢查是唯一的攔截點。見 docs/07-deployment.md §5。
+
+# 連續發布不該疊出多個全站 build。同一 ref 只留最新一個。
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    name: Build and deploy
+    # 950 頁預渲染，逾時放寬
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      # api/ 是 .NET —— 但目標框架受 SWA 限制，最高 net9.0（見下方 Build API）
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install deps
+        run: pnpm --dir frontend install --frozen-lockfile
+
+      # 建置期產物：SWA 路由設定、sitemap、llms.txt。
+      # 這些一律在建置期產生，不走執行期 API —— 產物直接進 .output/public，
+      # 對 SEO/GEO 也比執行期產生更好。
+      # ⚠️ staticwebapp.config.json 上限 20 KB，腳本須自行檢查並在超過時 fail。
+      - name: Generate config, sitemap, llms.txt from DB
+        run: |
+          pnpm --dir frontend run gen:swa-config
+          pnpm --dir frontend run gen:sitemap
+          pnpm --dir frontend run gen:llms
+        env:
+          BUILD_DB_CONNECTION: ${{ secrets.BUILD_DB_CONNECTION }}
+          SITE_URL: ${{ vars.SITE_URL }}
+
+      # nuxt generate：公開頁 routeRules.prerender、/admin/** 為 ssr:false 的 SPA shell
+      - name: Build (nuxt generate)
+        run: pnpm --dir frontend run generate
+        env:
+          NUXT_PUBLIC_SITE_URL: ${{ vars.SITE_URL }}
+          # API 在另一個網域，網址在建置期就烤進產物裡
+          NUXT_PUBLIC_API_BASE: ${{ vars.API_BASE_URL }}
+          BUILD_DB_CONNECTION: ${{ secrets.BUILD_DB_CONNECTION }}
+
+      # 🔴 Free 方案單一環境 250 MB。超過會部署失敗，且失敗訊息不見得指向大小。
+      # 沒有預覽環境可以先撞牆，這個檢查就是唯一的攔截點 —— 不要拿掉。
+      - name: Check size limits
+        run: |
+          OUT=frontend/.output/public
+          SIZE_KB=$(du -sk "$OUT" | cut -f1)
+          echo "output size: $((SIZE_KB / 1024)) MB"
+          if [ "$SIZE_KB" -gt 230000 ]; then
+            echo "::error::產物超過 230 MB，逼近 SWA Free 單一環境 250 MB 上限"
+            exit 1
+          fi
+          if [ "$SIZE_KB" -gt 180000 ]; then
+            echo "::warning::產物已達 $((SIZE_KB / 1024)) MB，請檢視圖片是否誤入 build 產物、字型是否已子集化"
+          fi
+          # Nuxt 每條預渲染路由各產一份 _payload.json，950 條路由不可忽略
+          PAYLOAD_KB=$(find "$OUT" -name '_payload.json' -exec du -ck {} + 2>/dev/null | tail -1 | cut -f1)
+          echo "_payload.json 合計: $(( ${PAYLOAD_KB:-0} / 1024 )) MB（$(find "$OUT" -name '_payload.json' | wc -l) 個檔案）"
+          CONFIG_BYTES=$(wc -c < "$OUT/staticwebapp.config.json")
+          echo "staticwebapp.config.json: ${CONFIG_BYTES} bytes"
+          if [ "$CONFIG_BYTES" -gt 20480 ]; then
+            echo "::error::staticwebapp.config.json 超過 20 KB 上限（301 規則過多，請確認只保留高流量規則）"
+            exit 1
+          fi
+
+      # ⚠️ api/ 只有 fallback 這一支 function。應用程式 API 在 functions/，
+      #    由 deploy-api.yml 以 .NET 10 部署到獨立 Function App。
+      #    這裡受 SWA 的 apiRuntime 限制，最高 dotnet-isolated:9.0。
+      #    staticwebapp.config.json 的 apiRuntime 要與 csproj 的 TargetFramework 一致。
+      - name: Build API (fallback function)
+        run: dotnet publish api/Skin20.Swa.Api.csproj -c Release -o api/publish
+
+      # 404 頁由前台建置產出，fallback function 未命中時要送它
+      - name: Copy 404 page into API output
+        run: cp frontend/.output/public/404.html api/publish/404.html
+
+      - name: Deploy to SWA
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: frontend/.output/public
+          api_location: api/publish
+          skip_app_build: true
+          skip_api_build: true
+
+      # 上線後這一步失敗＝正式站已經壞了。要有人看到。
+      - name: Smoke test
+        run: |
+          BASE="${{ vars.SITE_URL }}"
+          for P in "/" "/treatments/laser/" "/admin/"; do
+            CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 --retry 3 --retry-delay 5 "$BASE$P")
+            echo "GET $BASE$P → $CODE"
+            [ "$CODE" = "200" ] || { echo "::error::$P 回應 $CODE"; exit 1; }
+          done
+          # 301 走 /api/fallback，是最容易在部署後壞掉的一條路徑
+          CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$BASE/index2.php")
+          echo "GET $BASE/index2.php → $CODE"
+          [ "$CODE" = "301" ] || { echo "::error::301 fallback 回應 $CODE，應為 301"; exit 1; }

@@ -1,0 +1,231 @@
+# 20SKIN 網站改版專案
+
+20SKIN 美醫集團（四季診所／二林四季皮膚科）網站改版的**規劃專案**。
+
+**這個 repo 沒有正式站的原始碼。** 產出是規劃文件、客戶交付的 PDF，以及兩份靜態設計 mockup。
+正式網站的程式碼不在此處。
+
+分析對象：https://www.20skin.tw/index2.php（現行線上網站，PHP）
+
+---
+
+## 目錄結構
+
+```
+CLAUDE.md              ← 你在這裡。專案索引與工作慣例
+docs/                  工程端文件（真實來源）
+  README.md            文件索引與快速數字
+  00-site-audit.md     現況診斷
+  01-sitemap.md        資訊架構
+  02-backend-cms.md    後台規劃
+  03-seo-geo.md        SEO / GEO 策略
+  04-ai-faq.md         AI FAQ
+  05-roadmap.md        導入時程（含內部風險備註）
+  06-page-inventory.md 頁面清點與工程量估算
+  07-deployment.md     部署架構與 CI/CD（Azure SWA ＋ Functions ＋ SQL）
+  08-database.md       資料庫規劃（以功能單元劃分，38 張表）
+  09-frontend.md       前端技術架構（Nuxt 3 前台 ＋ /admin SPA）
+  10-api.md            API 契約（端點、信封、錯誤碼、權限碼）
+  11-backend-design.md 後端施工標準（分層、路由授權、EF＋Dapper、工作流狀態機）
+  research/
+    site-audit-raw.md  原始抓取數據與待補資料清單
+  templates/           部署範本（GitHub Actions、staticwebapp.config.json）
+output/                客戶交付物
+  *.html               PDF 來源（樣式在此）
+  *.pdf                交付的 PDF
+mockup/                ★ 客戶選定 —— 設計方向 A：**21 個模板全數完成**（＝ docs/06 §1 的 21 個前台模板）
+                       左右分欄、藝廊圖錄感，有暖金 --accent。頁面編號對應模板編號：
+                       index=首頁　02 困擾細節　03 療程分類　04 療程細節　05 醫師個人
+                       06 文章列表　07 文章內頁　08 據點細節　09 品牌理念　10 長版故事
+                       11 醫師列表　12 療程總覽　13 困擾總覽　14 案例列表　15 案例內頁
+                       16 FAQ　17 據點列表　18 聯絡我們　19 搜尋結果　20 404　21 法務頁
+mockup2/               （落選）設計方向 B —— 只有首頁，月洞門開光、純藍白無暖色、亮底
+mockup3/               （落選）設計方向 C —— 只有首頁，滿版置中壓字、玻璃卡、大圓角，輔色淡青瓷
+reference/             設計樣板與院方提供的原始照片
+scripts/
+  build-pdf.sh         HTML → PDF
+  build-mockup-fonts.sh   中文襯線字型子集
+  build-mockup3-hero.py   mockup3 Hero 底圖（只裁切，不調色）
+```
+
+---
+
+## 兩份東西，不要搞混
+
+| | `docs/` | `output/` |
+|---|---|---|
+| 對象 | 內部工程與規劃 | 客戶 |
+| 格式 | Markdown | HTML → PDF |
+| 內容 | 完整，含風險、原始數據、待辦 | 刻意精簡 |
+
+**客戶版刻意省略的內容**（改動時不要加回去）：
+
+| 省略項 | 原因 |
+|---|---|
+| 「緊急止血」階段 | 四個阻斷級問題不列入報價，建置時一併處理 |
+| 風險與控管章節 | 內部參考，改放 [docs/05-roadmap.md](docs/05-roadmap.md) 末段 |
+| 結語 | — |
+| 301 執行三原則 | 客戶版只留對照表，執行細節屬內部作業 |
+| **醫療廣告法遵（原 2-3 整節）** | 客戶版單純講網頁，不談法規。仍保留在 [docs/02-backend-cms.md](docs/02-backend-cms.md) §5 |
+
+醫療廣告法遵移除後，客戶版連帶調整的措辭（勿改回）：審核工作流、版本歷程、審核者角色、案例揭露欄位、FAQ 費用類註記 —— 一律改為中性的「內容確認／審核」說法，不提法規、法遵、醫療法、衛福部。
+
+`docs/` 是真實來源。改了數字或結論，兩邊都要同步。
+
+---
+
+## 常用指令
+
+```bash
+# 重新產出 PDF（改完 output/*.html 之後）
+./scripts/build-pdf.sh
+
+# 重新產出中文襯線字型子集（改完 mockup/ 或 mockup2/ 的文案之後一定要跑）
+./scripts/build-mockup-fonts.sh
+
+# 重新產出 mockup3 的 Hero 底圖（調色參數改了才需要跑）
+python3 scripts/build-mockup3-hero.py
+```
+
+⚠️ **2026-08-27 客戶已選定方向 A（`mockup/`）** —— 見下方「已定案的決策」第 11 條。
+下表保留作對照記錄，B／C 不再更新。
+
+三份 mockup 的區隔（原本併陳比稿時的區隔，改 `mockup/` 之前仍可參考）：
+
+⚠️ mockup（A）與 mockup3（C）都有輪播，但不是同一件事，不要因此把兩版拉近：
+A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版底圖淡入淡出**、
+文字固定不動。兩者共用 `app.js` 的 `[data-slider]`，只有樣式不同。
+
+⚠️ **mockup3 Hero 輪播的第一張是素材庫的意象圖，不是院方實景**（2026-08-20，
+客戶指定「去網路找一張可以代表新中式美學的圖」）。竹影白牆，Unsplash License，
+來源與授權見 [reference/hero-bamboo-source.txt](reference/hero-bamboo-source.txt)。
+換掉的原因是解析度：`banner1-L.jpg` 只有 1260×800，可用區裁出 840×460 之後
+要放大 2.9 倍才填得滿 Hero。**正式上線前要請院方確認這張圖的去留。**
+舊的實景仍留在 `mockup3/assets/img/hero-clinic.jpg`，配方在 build 腳本檔頭。
+
+| | mockup（A） | mockup2（B） | mockup3（C） |
+|---|---|---|---|
+| 參考 | website-template.jpg | template2＋template3 | **template4** |
+| Hero | 白底左右分欄、裱框輪播 | 亮底、正圓月洞門 | **滿版輪播、置中壓字在玻璃卡上** |
+| Hero 底圖 | 院方實景 | 院方實景 | **兩張輪播：意象圖＋診所外觀** |
+| 形狀 | 直角＋細框 | 2px 近方正＋開光異形 | **大圓角、膠囊、正圓頭像** |
+| 輔色 | 暖金 `--accent` | 無（純藍白） | **淡青瓷 `--aqua`** |
+| 小標 | — | 直排兩字中文 | **uppercase 英文 eyebrow** |
+| Footer | 一般 | 滿版＋上緣大圓弧 | **內縮的圓角深藍卡片** |
+
+三份共用同一支字型子集與 `app.js` 的動效系統（`.js-anim` 載入序列 ＋ `IntersectionObserver` 顯影）——
+動效是客戶指定保留的部分（2026-08-19），改版時不要動它。
+
+產出後**務必目視確認 PDF**：Chrome headless 若 CJK 字型 fallback 失敗會出現空白或豆腐字，這是唯一無法靠指令驗證的風險點。用 Read 工具帶 `pages` 參數看幾頁即可。
+
+---
+
+## 抓取現行網站的注意事項
+
+**`curl` 會被擋。** 主機的 Mod_Security 對非瀏覽器 User-Agent 一律回 **HTTP 406**，連 `robots.txt` 都拿不到。
+
+要抓線上網站請用 **WebFetch**（一般瀏覽器 UA，正常回 200）。
+
+這個現象本身是重要發現 —— 它意味著 AI 爬蟲極可能也被擋，是整份規劃優先級最高的技術項。見 [docs/03-seo-geo.md](docs/03-seo-geo.md) §1。
+
+**但 `curl` 帶瀏覽器 User-Agent 是可以抓的**（2026-08-18 實測 HTTP 200）。被擋的是預設 UA。
+抓圖片再加 `-e https://www.20skin.tw/share.php` 當 Referer 更穩。
+
+抓圖時的實測結論（做 mockup 用得到）：
+
+| 位置 | 解析度 |
+|---|---|
+| `images/banner/banner*-s.jpg` | 320×220，**沒有大圖版本**（`-b`／`-l`／無後綴皆 404） |
+| `images/index/in_*_1200p*.png` | 檔名騙人，**實際只有 250×250** |
+| `admin/goods_pic/*.jpg`（文章內頁） | **1200–1800px**，但多半壓了中文標題字或是研討會隨手拍，要裁切才能用 |
+
+⚠️ 裁圖**不要用 `sips --cropOffset`** —— 它是相對「中心」的偏移，超出範圍會靜默失效或補黑邊。
+本機有 Python PIL，用 `Image.crop((l,u,r,lo))` 才可靠。
+
+---
+
+## 專案關鍵數字
+
+改任何跟數量有關的敘述前，先看 [docs/06-page-inventory.md](docs/06-page-inventory.md)。
+
+| 項目 | 數量 | 備註 |
+|---|---|---|
+| 前台模板 | 21 | 工程計價單位 |
+| URL 實例 | 約 950 | 文章佔 84% |
+| 後台畫面 | 約 31 | 9 個內容模型 ＋ 首頁版位 ＋ 導覽選單。**不做操作日誌**（2026-09-11 定案），原本的 32 是舊數字 |
+| 療程項目 | **27** | 其中 **12 項無站內內容，需從零撰寫** |
+| 文章 | **約 800** | 主站 694–730 ＋ blog 站 101 |
+| 團隊成員 | 14 | **13 位醫師 ＋ 1 位藝術總監**。安喬（許媖琄）兼執行長與「新中式美學」創始人，不是醫師 —— 寫「14 位醫師」是錯的。現行全擠在 `doctor.php` 單頁 |
+| 301 規則 | **約 770** | 主站。**下限**，孤兒頁面尚未盤點。blog 站 103 條不在範圍內 |
+
+> ⚠️ 規劃書 v1.0 曾寫「250+ 篇文章」，該數字只來自「醫美新知」單一分類，**低估約 3 倍**。若在任何文件看到 250 這個數字，那是舊資料。
+
+---
+
+## 已定案的決策
+
+由客戶確認，不要重新提案：
+
+1. **全新改版重建**，不是修補現有 PHP 站
+2. **`20skinblog.com` 整併進主站 `/blog/`**，保留原 slug。**本專案只負責抓回 101 篇的內文與圖片**；跨網域 301 不在範圍內，由院方自行處置（見 [docs/01-sitemap.md](docs/01-sitemap.md) 決策三）
+3. 後台範圍 = **CMS ＋ 權限帳號 ＋ AI FAQ 管理**（不含數據報表模組）
+4. **不含線上購物與線上預約** —— `20skinshop.com` 與 `booking.20skin.tw` 僅以外部導流連結存在，不納入 sitemap、不納入後台、不納入內容策略
+5. **部署在 Azure**：**Static Web Apps（Free）＋ 獨立 Azure Functions（Flex Consumption）＋ Blob ＋ Azure SQL**，GitHub Actions **兩條 workflow**。沒有 CDN／WAF 中間層。
+   交付範圍 **SWA ＋ Functions ＋ Blob ＋ 資料庫 schema**（資料庫執行個體由院方自建，見第 8 條）。
+   **只有正式環境 —— 不設 staging，也不設 PR 預覽環境**（2026-08-10 定案）。前台與 API 都是 `main` 合併即上線。上線前的驗收對**尚未切 DNS 的正式環境**（`*.azurestaticapps.net`／`*.azurewebsites.net`）做；上線後沒有預演，靠 `main` 分支保護 ＋ CI 檢查 ＋ 部署後 smoke test 三道攔截。**不要在文件裡寫回 PR 預覽或 staging。**
+   由平台限制逼出來的例外，**不要當成可以靠設定繞過**：約 770 條 301 由 `/api/fallback` 查 SQL 對照表（SWA 設定檔上限 20 KB）、上傳檔案放 Blob（單一環境 250 MB）。見 [docs/07-deployment.md](docs/07-deployment.md)
+6. **前端框架 = Nuxt 3 純靜態（`nuxt generate`）**，2026-08-10 定案。產物在 **`.output/public`**（不是 `dist`）。
+   **不用 Nuxt SSR 模式** —— SWA 會把它的 `api_location` 指向 `.output/server`，與 `/api/fallback` 互斥。
+   **Next.js Hybrid 已評估並排除，不要重新提案**：官方文件明列不支援 navigation fallback，而 770 條 301 全靠它。見 [docs/07-deployment.md](docs/07-deployment.md) §1
+7. **API 分兩處，這是最容易搞錯的地方**（2026-08-10 定案）：
+   - **`functions/` → 獨立 Azure Functions App（`api.20skin.tw`）**：**.NET 10 isolated ＋ EF Core（寫入）＋ Dapper（讀取）**。前後台共用的應用程式 API 全在這裡，瀏覽器跨網域直接呼叫，**CORS 由院方自行設定**。獨立部署，不隨內容重建。有 Timer trigger（排程發布）、Managed Identity（連 SQL／Blob，無密鑰）。HTTP 上限 **230 秒**。**前後台共用這一個 App，不拆 `api-admin`／`api-public`**（2026-08-13，見第 10 條）。
+   - **`api/` → SWA Managed Function，只有 `fallback` 一支**：`navigationFallback` 只能 rewrite 到站內路徑、指不到外部網址，所以 770 條 301 必須留在這裡。**目標框架最高 net9.0**。**只用 Dapper，不要載入 EF Core** —— 冷啟動直接影響遷移期的 301 回應速度。SWA `/api` 上限 **45 秒**。
+   ⚠️ **`api/` 停在 .NET 9 是平台限制，不是疏漏，已查證。** SWA managed functions 不支援 .NET 10，`apiRuntime` 上限 `dotnet-isolated:9.0`。唯一解法是升 Standard ＋ BYOF，**已評估、因月費而不採用（2026-08-10）**，不要重新提案，也不要把 `api/` 改成 net10.0（會部署失敗）。細節與 Standard 的附帶好處記在 [docs/07-deployment.md](docs/07-deployment.md) §1。
+   **不要把應用程式 API 寫進 `api/`**，也**不要用 SWA 的 Bring-your-own-API 串接**（需 Standard 方案，且無法連 PR 預覽環境）。
+   PHP 不在 Azure Functions 支援清單內，不要提案沿用舊站語言。
+8. **資料庫 schema 由 EF Core migrations 管理，是本專案的產出**（2026-08-10 定案）。院方只提供資料庫執行個體與身分／網路設定。舊敘述「資料庫由院方自建，沒有 migration workflow」**已作廢**。
+   三個不可退讓的原則：**絕不在執行期呼叫 `Database.Migrate()`**（走 CI 的 `efbundle`）、**遷移必須向後相容**（先遷移後部署，中間有一段新 schema 配舊程式）、**遷移身分與執行期身分是兩個不同的 SQL 使用者**（前者要 DDL，後者只要 DML）。見 [docs/07-deployment.md](docs/07-deployment.md) §5、§6
+9. **上傳檔案一律存 Azure Blob**，由**瀏覽器直傳**（後台向 API 取短效 SAS，不讓檔案流經 Function）。SAS 以 **Managed Identity** 簽發（user delegation key），不存放儲存體金鑰。全架構剩下的唯一明文密鑰是 SWA 上給 `/api/fallback` 用的 SQL 唯讀連線字串。見 [docs/07-deployment.md](docs/07-deployment.md) §3、§6
+10. **前後台同一個 SWA、同一個網域**：`20skin.tw` 前台、**`20skin.tw/admin` 後台**（Nuxt `ssr: false` 的 SPA）。API 則在另一個網域 `api.20skin.tw`，見第 7 條。
+   後台路徑 `/admin/` 為客戶指定（2026-08-10），**不要再提案改成非預設路徑** —— 早期文件曾寫 `/manage/`，那是舊版。
+   **後台 IP 白名單不做**（院方決定，2026-08-13）—— 技術上做得到（獨立 Function App 支援入站 IP 限制），是院方選擇不採用，**不要重新提案**。因此登入防護只剩**雙因素驗證**與**登入次數限制**兩項，兩項都要做紮實（次數限制需帳號＋來源 IP 雙維度計數）。連帶確定 API 不拆成兩個 Function App。見 [docs/02-backend-cms.md](docs/02-backend-cms.md) §4、[docs/07-deployment.md](docs/07-deployment.md) §2
+11. **設計方向 = `mockup/`（方向 A）**，2026-08-27 客戶選定。白底左右分欄、版面裡的裱框輪播、直角＋細框、暖金 `--accent`，參考 `website-template.jpg`。
+   **`mockup2/`（B）與 `mockup3/`（C）落選** —— 檔案保留在 repo 供日後對照，但**不再更新，也不要再提案**。之後所有視覺、切版、元件的討論一律以 `mockup/` 為準。
+   動效系統（`.js-anim` 載入序列 ＋ `IntersectionObserver` 顯影）仍是客戶指定保留的部分（2026-08-19），不要動。
+12. **單一語系（繁中），不做多語系**，2026-09-11 確認。沒有英文站、沒有語系切換、
+   **不要先建架子**：不建 `{Entity}I18n` 側表、不加 `Lang` 欄位或 `(Lang, Slug)` 複合唯一鍵、
+   API 不收 `?lang=`、前台不輸出 `hreflang`。日後真要做，是一次獨立改版，不是現在預留幾個欄位就能省下的事
+   （對照 [08-database.md](docs/08-database.md) §0 決策二「不預留未定案的欄位」）。
+   見 [10-api.md](docs/10-api.md) §2、[09-frontend.md](docs/09-frontend.md) §11。
+
+---
+
+## 待客戶或主機商提供
+
+這些拿到之前，相關結論都是估算：
+
+- **`reference/banner1-L.jpg` 的原始檔** —— 它是唯一拍到「新中式美學」刻字牆的照片，
+  但只有 1260×800；同一批的 banner2／3 都是 7900px，原檔幾乎確定存在。
+  拿到之前 `mockup2/` 的 Hero 月洞門直徑必須壓在 **440px** 以內（2026-08-19 實測：
+  避開天花板彩色燈箱與紅色裝飾後，唯一乾淨的區域是 x 250–1260 / y 250–800，
+  **高度 550 是硬上限**，最大乾淨正方形 550×550；440px 顯示等於 Retina 1.6 倍取樣，
+  已經是銳利度換份量的極限）。
+  拿到原檔後圓可以直接放大，Hero 的結構不用改
+- 完整 `product*.php` 檔案清單 → 找出孤兒頁面，補完 301
+- Search Console 近 12 個月 URL 曝光匯出
+- Access log
+- 現行 `/admin/` 後台功能清單
+- Mod_Security 規則設定檔
+- **Azure SQL：兩組資料庫使用者**（Function App 的 Managed Identity ＝ DML；GitHub Actions 服務主體 ＝ DDL，供遷移用）、**一組給 `/api/fallback` 的唯讀連線字串**、建置期唯讀連線字串、**防火牆放行（含授權 CI 動態開關 runner IP）**。見 [docs/07-deployment.md](docs/07-deployment.md) §6
+- **`api.20skin.tw` 的 CORS 設定**（院方自行設定，2026-08-10 確認）與 Storage 帳戶的 CORS —— 兩套各自獨立
+
+清單見 [docs/research/site-audit-raw.md](docs/research/site-audit-raw.md) 末段。
+
+---
+
+## 寫作慣例
+
+- 繁體中文，台灣用語
+- 數字要有來源。寫「約 800 篇」時，`docs/research/` 要查得到怎麼算的
+- 估算與實數分開標示。實數寫「實數」，估算給範圍
+- 醫療廣告法規相關敘述一律附註「請以主管機關函釋及院方法務意見為準」

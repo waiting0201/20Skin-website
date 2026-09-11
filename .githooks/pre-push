@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# 安全網：絕不讓不該公開的內容推向 Remote_GitHub。
+#
+# 沿用 /Users/tim/webapps/NTI/.githooks/pre-push（同一套雙 remote 機制）。
+#
+# 兩道檢查：
+#   1. 路徑：reference/ output/ mockup/ mockup2/ mockup3/ .wrangler/
+#      —— 必須涵蓋「歷史上出現過的路徑」，不只是現在的樹
+#   2. 體積：兩層，各防各的失效模式。路徑清單可能漏，體積不會。
+#      MAX_BLOB_MB  單一檔案 —— 素材目錄的特徵就是「少數幾個巨大的二進位檔」
+#      MAX_PACK_MB  封包總量 —— 對應 GitHub 的 2GB 單次推送上限
+#      量的是封包後而非未壓縮總和（後者把每個檔案的每一版都算一次全文，差可到 7 倍，
+#      會被原始碼的正常成長先撐爆）。與 tools/sync-public.sh 的上限保持一致。
+#
+# ⚠️ 重新 clone 之後必須執行 `git config core.hooksPath .githooks`，否則這道網不生效。
+remote="$1"
+[ "$remote" = "Remote_GitHub" ] || exit 0
+
+MAX_PACK_MB=50    # 封包總量
+MAX_BLOB_MB=2     # 單一檔案
+
+z40=0000000000000000000000000000000000000000
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$z40" ] && continue
+
+    hit=$(git rev-list --objects "$local_sha" \
+          | grep -E ' (reference|output|mockup|mockup2|mockup3|\.wrangler)(/|$)' \
+          | head -3 || true)
+    if [ -n "$hit" ]; then
+        echo "" >&2
+        echo "pre-push 拒絕：$local_ref 的歷史含不應公開的路徑。" >&2
+        echo "$hit" | sed 's/^[0-9a-f]* /    /' >&2
+        echo "  請用 tools/sync-public.sh 產生 public 分支後再推。" >&2
+        echo "" >&2
+        exit 1
+    fi
+
+    big=$(git rev-list --objects "$local_sha" \
+          | git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' 2>/dev/null \
+          | awk -v max="$((MAX_BLOB_MB * 1048576))" '$1=="blob" && $3+0>max {
+                p=""; for (i=4; i<=NF; i++) p = p (i>4 ? " " : "") $i
+                if (p == "") p = "(無路徑)"
+                printf "%8.2f MB  %s\n", $3/1048576, p
+            }' | sort -rn | head -5)
+    if [ -n "$big" ]; then
+        echo "" >&2
+        echo "pre-push 拒絕：$local_ref 的歷史含超過 ${MAX_BLOB_MB} MB 的檔案。" >&2
+        echo "$big" >&2
+        echo "  請檢查 tools/sync-public.sh 的 EXCLUDE 是否漏了歷史目錄。" >&2
+        echo "" >&2
+        exit 1
+    fi
+
+    mb=$(git rev-list --objects "$local_sha" | awk '{print $1}' \
+         | git pack-objects --stdout 2>/dev/null | wc -c \
+         | awk '{printf "%.0f", $1/1048576}')
+    if [ "${mb:-0}" -gt "$MAX_PACK_MB" ]; then
+        echo "" >&2
+        echo "pre-push 拒絕：$local_ref 封包後 ${mb} MB，超過 ${MAX_PACK_MB} MB 上限。" >&2
+        echo "  單檔都在上限內卻總量過大，代表混進了大量檔案而不是單一大檔。" >&2
+        echo "" >&2
+        exit 1
+    fi
+done
+exit 0

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/build-pdf.sh)",
+      "Bash(./scripts/build-pdf.sh:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(mkdir:*)",
+      "WebFetch(domain:www.20skin.tw)",
+      "WebFetch(domain:20skin.tw)",
+      "WebFetch(domain:20skinblog.com)"
+    ]
+  }
+}

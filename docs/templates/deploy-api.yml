@@ -1,0 +1,135 @@
+# → .github/workflows/deploy-api.yml
+#
+# 獨立的 Azure Functions App（api.20skin.tw）—— 前後台共用的應用程式 API。
+# .NET 10 isolated worker，Flex Consumption 方案。
+# 與前台完全分離：發布 100 篇文章不會觸發這條 workflow 一次。
+#
+# ⚠️ 路徑過濾要與 deploy-site.yml 互斥且完整。新增目錄時兩邊都要補，
+#    否則會出現「改了程式卻沒部署」這種很難查的狀況。見 docs/07-deployment.md §5。
+#
+# 認證用 OIDC 服務主體，不要用發布設定檔（publish profile）——
+# 發布設定檔是長期有效的密鑰，OIDC 是每次執行才換發的短效權杖。
+#
+# ⚠️ 沒有 staging，所以 test 與 migration 檢查步驟不可以跳過或設 continue-on-error。
+#    它們跟 smoke test 是這條 workflow 僅有的關卡。
+
+name: Deploy API (Azure Functions .NET)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-api-${{ github.ref }}
+  cancel-in-progress: false # 資料庫遷移進行中不可以被中斷
+
+permissions:
+  id-token: write # OIDC
+  contents: read
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  PROJECT: functions/Skin20.Api.csproj
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore ${{ env.PROJECT }}
+
+      - name: Build
+        run: dotnet build ${{ env.PROJECT }} -c Release --no-restore
+
+      - name: Test
+        run: dotnet test functions/Skin20.Api.Tests -c Release --no-build --verbosity normal
+
+      # ── 資料庫遷移 ───────────────────────────────────────────
+      - name: Install EF Core tools
+        run: dotnet tool install --global dotnet-ef
+
+      # 模型改了卻忘了 add migration，是這個組合最常見的錯誤。
+      # 執行期 Migrate() 在 EF Core 9+ 會直接丟例外，這裡先擋下來。
+      - name: Check for pending model changes
+        run: dotnet ef migrations has-pending-model-changes -p ${{ env.PROJECT }}
+
+      # 產生「可人工檢閱」的冪等 SQL 當成建置產物留存。
+      # 不是拿來執行的 —— 執行走下面的 bundle，但出事時要有東西可以看、可以交給 DBA。
+      - name: Generate idempotent SQL script (artifact)
+        run: dotnet ef migrations script --idempotent -p ${{ env.PROJECT }} -o migrations.sql
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: migrations-sql-${{ github.sha }}
+          path: migrations.sql
+          retention-days: 90
+
+      # bundle 是單一執行檔，交易與錯誤處理行為比直接跑 SQL 腳本一致，
+      # 且 EF Core 9+ 會自動取得資料庫層級的遷移鎖。
+      - name: Build migration bundle
+        run: dotnet ef migrations bundle --self-contained -r linux-x64 -p ${{ env.PROJECT }} -o efbundle --force
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # GitHub runner 的 IP 是浮動的，「允許 Azure 服務存取」也涵蓋不到它
+      # （runner 不是 Azure 資源）。開一條當次執行專用的規則，最後一定要收掉。
+      - name: Open SQL firewall for this runner
+        id: fw
+        run: |
+          IP=$(curl -s https://api.ipify.org)
+          RULE="gha-${{ github.run_id }}"
+          echo "rule=$RULE" >> "$GITHUB_OUTPUT"
+          az sql server firewall-rule create \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --server "${{ vars.SQL_SERVER_NAME }}" \
+            --name "$RULE" --start-ip-address "$IP" --end-ip-address "$IP"
+
+      # 連線同樣不用密碼：azure/login 已建立 OIDC 登入，
+      # Active Directory Default 會沿用該身分。服務主體需先在 DB 建立使用者
+      # 並具備 DDL 權限 —— 這與執行期身分是「兩個不同的身分」，見 docs/07-deployment.md §6。
+      - name: Apply migrations
+        run: |
+          ./efbundle \
+            --connection "Server=tcp:${{ vars.SQL_SERVER_NAME }}.database.windows.net,1433;Database=${{ vars.SQL_DATABASE }};Authentication=Active Directory Default;Encrypt=True;"
+
+      - name: Close SQL firewall
+        if: always() # 上一步失敗也要收掉，否則會留下一條長期開放的規則
+        run: |
+          az sql server firewall-rule delete \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --server "${{ vars.SQL_SERVER_NAME }}" \
+            --name "${{ steps.fw.outputs.rule }}" || true
+
+      # ── 部署 ─────────────────────────────────────────────────
+      # 順序是「先遷移、後部署」，所以遷移必須向後相容：
+      # 遷移完成到新版程式上線之間，舊版程式仍在跑。見 docs/07-deployment.md §5。
+      - name: Publish
+        run: dotnet publish ${{ env.PROJECT }} -c Release --no-build -o ./publish
+
+      - uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ vars.FUNCTION_APP_NAME }}
+          package: ./publish
+          sku: flexconsumption
+
+      - name: Smoke test
+        run: |
+          BASE="${{ vars.API_BASE_URL }}"
+          CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 --retry 3 --retry-delay 10 "$BASE/health")
+          echo "GET $BASE/health → $CODE"
+          [ "$CODE" = "200" ] || { echo "::error::健康檢查失敗（$CODE）"; exit 1; }

@@ -1,0 +1,7 @@
+node_modules
+.nuxt
+.output
+.data
+dist
+# mockup/assets 的同步產物，由 pnpm sync:assets 重建（11 MB，不進版控）
+public/assets

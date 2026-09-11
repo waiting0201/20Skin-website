@@ -1,0 +1,23 @@
+.DS_Store
+.wrangler/
+node_modules/
+
+# Claude Code 的本機狀態（settings.json 進版控，供協作者共用設定）
+.claude/projects/
+.claude/settings.local.json
+
+# ── 設計稿 ────────────────────────────────────────────────────────────
+# 三份 mockup 都不進版控（2026-09-11 決定）。體積 13M／2.7M／4.1M，
+# 且內含院方提供的實景照片。
+#
+# ⚠️ 連帶後果要知情：frontend/ 的建置與驗收**相依於 mockup/**——
+#    `pnpm sync:assets` 從 mockup/assets 複製樣式、`pnpm verify:css` 拿
+#    mockup 的 CSS 與 HTML 當比對基準。**在沒有 mockup/ 的機器上 clone 下來
+#    是 build 不起來的**，CI 也一樣。要在別台機器或 CI 上建置，得另外把
+#    mockup/ 取得到（從 NAS 複製，或日後改成獨立的素材來源）。
+mockup/
+mockup2/
+mockup3/
+
+# ── frontend ─────────────────────────────────────────────────────────
+# 其餘規則在 frontend/.gitignore（.nuxt／.output／public/assets 等產物）
