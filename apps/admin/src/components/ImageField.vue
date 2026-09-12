@@ -7,6 +7,10 @@
 //
 // ⚠️ 移除是**真的會刪檔**，不是只解除引用——存檔之後那個網址就是 404，
 // 版本還原也救不回來。按鈕文案要照實說，不要寫成「取消選取」。
+//
+// ⚠️ **沒有「貼上圖片網址」這條路**。圖片值一定要帶 blobPath，否則換圖時找不到
+// 舊檔可刪（docs/11 §9），API 會直接擋下沒有 blobPath 的圖片值。網址只能由
+// `POST /admin/upload/commit` 產生。
 
 import { ref } from 'vue'
 import { adminApi, ApiError } from '../api/client'
@@ -57,14 +61,6 @@ function setAlt(value: string) {
 function remove() {
   emit('update:modelValue', null)
 }
-
-// ⚠️ 示意用途，接上 API 之後整段拿掉：mock 沒有真的上傳流程，
-// 所以先讓人能貼一個網址把版面與存檔流程走完（blobPath 留空，正式站不接受）。
-function setMockUrl(url: string) {
-  emit('update:modelValue', url
-    ? { blobPath: '', url, alt: props.modelValue?.alt ?? null, width: null, height: null, variants: null }
-    : null)
-}
 </script>
 
 <template>
@@ -93,17 +89,6 @@ function setMockUrl(url: string) {
       :disabled="disabled"
       @input="setAlt(($event.target as HTMLInputElement).value)"
     >
-
-    <div class="adm-upload__row">
-      <input
-        class="adm-input"
-        type="text"
-        placeholder="示意用：貼上圖片網址（mock 尚未串接直傳）"
-        :value="modelValue?.url ?? ''"
-        :disabled="disabled"
-        @input="setMockUrl(($event.target as HTMLInputElement).value)"
-      >
-    </div>
 
     <p v-if="error" class="adm-upload__todo">{{ error }}</p>
     <p v-if="modelValue" class="adm-upload__todo">

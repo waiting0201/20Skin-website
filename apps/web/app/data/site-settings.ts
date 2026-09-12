@@ -17,4 +17,16 @@ export const SITE_SETTINGS = {
    * 院方在後台按一下就能開關，不必改程式重新部署。
    */
   aiFaqEnabled: SITE['aifaq.enabled'] === 'true',
+
+  /**
+   * 面板文案與轉真人出口。
+   *
+   * ⚠️ 這幾個值在執行期會被 `GET /site-settings/public` 覆蓋
+   * （見 `~/composables/usePublicSiteSettings`）—— 這裡的值是**預渲染時的初始值**，
+   * 存在的理由是讓 hydration 之前畫面上就有正確的文字，不是唯一來源。
+   */
+  aiFaqPanelTitle: SITE['aifaq.panelTitle'] ?? 'AI 線上諮詢',
+  aiFaqWelcomeText: SITE['aifaq.welcomeText'] ?? '',
+  aiFaqHandoffBookingUrl: SITE['aifaq.handoffBookingUrl'] ?? '',
+  aiFaqHandoffLineUrl: SITE['aifaq.handoffLineUrl'] ?? '',
 }

@@ -72,7 +72,7 @@ public sealed partial class AppRouter
             ("GET" or "PUT", ["admin", "setting"]) => PermissionCodes.SettingsEdit,
 
             // ── SEO 與 301 ───────────────────────────────────────────
-            ("GET" or "POST", ["admin", "redirect", "export" or "import"])
+            ("GET" or "POST", ["admin", "redirect", "export" or "import" or "stats"])
                 => PermissionCodes.RedirectManage,
             ("GET" or "POST", ["admin", "redirect"]) => PermissionCodes.RedirectManage,
             ("PUT" or "DELETE", ["admin", "redirect", _]) => PermissionCodes.RedirectManage,
@@ -90,7 +90,12 @@ public sealed partial class AppRouter
             ("PUT", ["admin", "role", _, "permissions"]) => PermissionCodes.AccountManage,
 
             // ── 手動重建 ─────────────────────────────────────────────
+            // ⚠️ 讀狀態與觸發是兩種權限：內容編輯要看得到「發布中」，但不該能自己觸發建置。
+            ("GET", ["admin", "rebuild"]) => null,
             ("POST", ["admin", "rebuild"]) => PermissionCodes.SettingsEdit,
+
+            // ── 高風險字詞（編輯器的即時提示來源，不是閘門，docs/02 §5）──
+            ("GET", ["admin", "risk-term"]) => null,
 
             // 🔴 未列出的 /admin/* 一律拒絕
             _ => DenySentinel,
@@ -138,6 +143,7 @@ public sealed partial class AppRouter
             ("PUT", ["admin", "redirect", var id]) => Wrap(redirect.UpdateAsync(req, id)),
             ("DELETE", ["admin", "redirect", var id]) => Wrap(redirect.DeleteAsync(id)),
             ("GET", ["admin", "redirect", "export"]) => Wrap(redirect.ExportAsync()),
+            ("GET", ["admin", "redirect", "stats"]) => Wrap(redirect.StatsAsync()),
             ("POST", ["admin", "redirect", "import"]) => Wrap(redirect.ImportAsync(req)),
             ("GET", ["admin", "export", var kind]) => Wrap(export.PreviewAsync(kind)),
 
@@ -155,7 +161,10 @@ public sealed partial class AppRouter
             ("GET", ["admin", "role"]) => Wrap(account.ListRolesAsync()),
             ("PUT", ["admin", "role", var id, "permissions"]) => Wrap(account.UpdateRolePermissionsAsync(req, id)),
 
+            ("GET", ["admin", "rebuild"]) => Wrap(rebuild.GetStatusAsync()),
             ("POST", ["admin", "rebuild"]) => Wrap(rebuild.TriggerAsync()),
+
+            ("GET", ["admin", "risk-term"]) => Wrap(content.ListRiskTermsAsync()),
 
             _ => Task.FromResult<IActionResult?>(null),
         };

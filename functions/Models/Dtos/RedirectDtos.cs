@@ -16,6 +16,27 @@ public sealed class RedirectDto
     public DateTime CreatedAt { get; set; }
 }
 
+/// <summary>
+/// 後台清單上方的統計卡（docs/10 §3.4）。
+/// <para>⚠️ 逐一欄位而不是 <c>Dictionary&lt;byte,int&gt;</c>：Dapper 映射不到字典，
+/// 而來源只有三種、是列舉不是開放集合（docs/08 §H）。</para>
+/// </summary>
+public sealed class RedirectStatsDto
+{
+    public int TotalCount { get; set; }
+    public int ActiveCount { get; set; }
+    public int VerifiedCount { get; set; }
+
+    /// <summary>Source=1 遷移工具產生。</summary>
+    public int MigrationCount { get; set; }
+
+    /// <summary>Source=2 人工新增。</summary>
+    public int ManualCount { get; set; }
+
+    /// <summary>Source=3 系統自動（例如改 slug 時自動補的那一筆）。</summary>
+    public int SystemCount { get; set; }
+}
+
 /// <summary>新增一筆轉址（單筆，非 CSV 匯入）。</summary>
 public sealed class RedirectCreateRequest
 {
@@ -52,6 +73,15 @@ public sealed class RedirectImportRequest
     /// <c>StatusCode</c>／<c>IsActive</c>／<c>Source</c>。只有 <c>FromPath</c>／<c>ToPath</c> 為必填。
     /// </summary>
     public string? Csv { get; set; }
+
+    /// <summary>
+    /// 來源路徑已存在時，改成更新那一筆而不是當成錯誤跳過。
+    /// <para>
+    /// ⚠️ 預設 <c>false</c>。約 770 條的對照表重匯一次是常態作業，
+    /// 預設覆蓋等於讓一次誤操作蓋掉所有人工修正過的目標路徑。
+    /// </para>
+    /// </summary>
+    public bool OverwriteExisting { get; set; }
 }
 
 /// <summary>單一列的匯入結果（成功列不逐一列出，只計數；失敗列附原因）。</summary>
@@ -62,6 +92,10 @@ public sealed class RedirectImportResult
 {
     public int TotalRows { get; set; }
     public int Imported { get; set; }
+
+    /// <summary>因 <c>overwriteExisting</c> 而被更新的既有規則筆數。</summary>
+    public int Updated { get; set; }
+
     public int Skipped { get; set; }
     public IReadOnlyList<RedirectImportRowError> Errors { get; set; } = [];
 }

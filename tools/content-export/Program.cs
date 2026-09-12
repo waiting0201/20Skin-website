@@ -102,33 +102,54 @@ foreach (var group in grouped)
 }
 
 // 首頁版位與導覽選單不走 ContentItems（docs/08 §G-2、§G-3），各自輸出一份。
-var homeSections = await db.QueryAsync<HomeSectionRow>(
-    "SELECT Id, SectionKey, Title, Subtitle, IsEnabled, SortOrder, Settings FROM HomeSections ORDER BY SortOrder, Id;");
-
-var homeItems = (await db.QueryAsync<HomeItemRow>(
+//
+// 🔴 **版位要讀「首頁那筆 Page 已核准的版本快照」，不是 HomeSections 即時表。**
+//    docs/08 §G-2、docs/11 §8：版位編排的送審與版本歷程掛在 SystemKey='home' 的
+//    ContentItem 上，快照時把版位序列化進 ContentVersions.Snapshot。
+//    HomeSections 那兩張表是**工作副本**（還沒送審的草稿）——直接讀它等於
+//    「編輯者拖一拖版位、還沒送審，下一次建置就上線了」，核准這道關卡完全被繞過。
+//    ⚠️ 這與九個內容單元的規則是同一條（CLAUDE.md 決策 14）：匯出一律讀已核准的快照。
+var homeSnapshotJson = await db.QuerySingleOrDefaultAsync<string>(
     """
-    SELECT hi.HomeSectionId, hi.ContentItemId, hi.SortOrder,
-           ci.ContentType, ci.Slug, ci.UrlPath, ci.Title, ci.Status
-    FROM HomeSectionItems hi
-    INNER JOIN ContentItems ci ON ci.Id = hi.ContentItemId
-    ORDER BY hi.SortOrder, hi.Id;
-    """)).ToLookup(i => i.HomeSectionId);
+    SELECT cv.Snapshot
+    FROM ContentItems ci
+    INNER JOIN Pages p ON p.Id = ci.Id
+    INNER JOIN ContentVersions cv ON cv.Id = ci.PublishedVersionId
+    WHERE p.SystemKey = 'home';
+    """);
+
+var homeSections = ReadHomeSectionsFromSnapshot(homeSnapshotJson);
+
+// 版位「引用了哪幾筆內容」同樣來自快照；每一筆的顯示欄位（網址、標題、狀態）
+// 則要用**現在**的值 —— 快照裡的標題是核准當下那一份，內容後來改了標題、
+// 改了網址（會自動補 301）都必須跟著走，否則首頁會出現連到舊網址的卡片。
+var referencedIds = homeSections.SelectMany(s => s.ItemIds).Distinct().ToArray();
+var referencedById = referencedIds.Length == 0
+    ? new Dictionary<int, HomeItemRow>()
+    : (await db.QueryAsync<HomeItemRow>(
+        """
+        SELECT ci.Id, ci.ContentType, ci.Slug, ci.UrlPath, ci.Title, ci.Status
+        FROM ContentItems ci
+        WHERE ci.Id IN @Ids;
+        """, new { Ids = referencedIds })).ToDictionary(i => i.Id);
 
 var homeArray = new JsonArray();
 foreach (var section in homeSections)
 {
     var items = new JsonArray();
+    var sortOrder = 0;
     // ⚠️ 只輸出已發布的引用 —— 版位勾了一筆草稿時，前台不該渲染出一個連到 404 的卡片。
-    foreach (var item in homeItems[section.Id].Where(i => i.Status == 3))
+    foreach (var id in section.ItemIds)
     {
+        if (!referencedById.TryGetValue(id, out var item) || item.Status != 3) continue;
         items.Add(new JsonObject
         {
-            ["contentItemId"] = item.ContentItemId,
+            ["contentItemId"] = item.Id,
             ["contentType"] = item.ContentType,
             ["slug"] = item.Slug,
             ["urlPath"] = item.UrlPath,
             ["title"] = item.Title,
-            ["sortOrder"] = item.SortOrder,
+            ["sortOrder"] = sortOrder++,
         });
     }
 
@@ -187,13 +208,66 @@ Console.WriteLine($"  {"site",-12} {settingsObject.Count,4} 項 → {Path.Combin
 
 Console.WriteLine($"\n匯出完成：{total} 筆內容（只含已發布且在上下架時間窗內的）。");
 
+/// <summary>
+/// 從首頁那筆 Page 的已核准快照裡取出版位編排。
+///
+/// <para>
+/// ⚠️ 快照沒有版位資料時回**空清單**，不是回退去讀 <c>HomeSections</c> 即時表。
+/// 回退看起來比較「安全」（首頁不會變空），實際上是把未經核准的編排直接推上線 ——
+/// 而且沒有任何徵兆。首頁版位空掉是看得見的問題，會有人去按發布；
+/// 悄悄上線未核准的編排不會有人發現。
+/// </para>
+/// <para>
+/// 快照形狀見 <c>functions/Models/Dtos/ContentDtos.cs</c> 末段的說明：
+/// <c>homeSections</c> 只有在 <c>unit="page"</c> 且 <c>SystemKey="home"</c> 時才非 null。
+/// </para>
+/// </summary>
+static IReadOnlyList<HomeSectionRow> ReadHomeSectionsFromSnapshot(string? snapshotJson)
+{
+    if (string.IsNullOrWhiteSpace(snapshotJson)) return [];
+
+    using var doc = JsonDocument.Parse(snapshotJson);
+    if (!doc.RootElement.TryGetProperty("homeSections", out var sections)
+        || sections.ValueKind != JsonValueKind.Array)
+    {
+        return [];
+    }
+
+    var rows = new List<HomeSectionRow>();
+    foreach (var section in sections.EnumerateArray())
+    {
+        var itemIds = new List<int>();
+        if (section.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in items.EnumerateArray())
+            {
+                if (item.TryGetProperty("contentItemId", out var id) && id.TryGetInt32(out var value))
+                    itemIds.Add(value);
+            }
+        }
+
+        rows.Add(new HomeSectionRow(
+            section.GetProperty("sectionKey").GetString() ?? string.Empty,
+            section.TryGetProperty("title", out var t) ? t.GetString() ?? string.Empty : string.Empty,
+            section.TryGetProperty("subtitle", out var sub) && sub.ValueKind == JsonValueKind.String ? sub.GetString() : null,
+            !section.TryGetProperty("isEnabled", out var en) || en.GetBoolean(),
+            section.TryGetProperty("sortOrder", out var so) && so.TryGetInt32(out var sov) ? sov : 0,
+            section.TryGetProperty("settings", out var st) && st.ValueKind == JsonValueKind.String ? st.GetString() : null,
+            itemIds));
+    }
+
+    return [.. rows.OrderBy(r => r.SortOrder)];
+}
+
 internal sealed record ContentRow(int Id, byte ContentType, string? Slug, string? UrlPath,
     int SortOrder, bool IncludeInSitemap, DateTime UpdatedAt, string Snapshot);
 
 internal sealed record TargetRow(int Id, byte ContentType, string? Slug, string? UrlPath, string Title, byte Status);
 
-internal sealed record HomeSectionRow(int Id, string SectionKey, string Title, string? Subtitle, bool IsEnabled, int SortOrder, string? Settings);
+internal sealed record HomeSectionRow(
+    string SectionKey, string Title, string? Subtitle, bool IsEnabled, int SortOrder, string? Settings,
+    IReadOnlyList<int> ItemIds);
 
-internal sealed record HomeItemRow(int HomeSectionId, int ContentItemId, int SortOrder, byte ContentType, string? Slug, string? UrlPath, string Title, byte Status);
+internal sealed record HomeItemRow(int Id, byte ContentType, string? Slug, string? UrlPath, string Title, byte Status);
 
 internal sealed record MenuRow(int Id, string MenuKey, int? ParentId, string Label, byte LinkKind, int? ContentItemId, string? Url, string? RelAttr, bool OpenInNewTab, int SortOrder);

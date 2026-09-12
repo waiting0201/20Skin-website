@@ -11,6 +11,17 @@ public sealed class ContactRequest
     public string? Name { get; set; }
     public string? Phone { get; set; }
     public string? Email { get; set; }
+
+    /// <summary>
+    /// 想詢問的院區（表單上的下拉選單）。
+    /// <para>⚠️ 與 <see cref="Topic"/> 一樣<b>只進通知信</b>，不落庫 —— 它們是聯絡意圖的一部分，
+    /// 不是題庫語料。少了它們，院方收到的信會少掉「要找誰、問什麼類別」這兩個最關鍵的分流資訊。</para>
+    /// </summary>
+    public string? Site { get; set; }
+
+    /// <summary>詢問主題（表單上的下拉選單）。同 <see cref="Site"/>，只進通知信。</summary>
+    public string? Topic { get; set; }
+
     public string? Message { get; set; }
 
     /// <summary>是否勾選同意隱私權政策。同意時間只寫進通知信文字，不入庫（docs/10 §3.1）。</summary>

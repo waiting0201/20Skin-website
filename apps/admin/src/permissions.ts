@@ -1,147 +1,109 @@
-// 權限碼 × 五種角色。與 docs/10-api.md §4 逐條對齊。
+// 權限碼 × 畫面。與 docs/10-api.md §4 的 31 個權限碼逐條對齊。
 //
 // ⚠️⚠️ UI 的權限判斷只管「看不看得到」，不是安全邊界。⚠️⚠️
 // 五種角色的授權一律在 API 內驗證（docs/11-backend-design.md §5.3：授權集中在
 // Router，預設拒絕）。這裡的 hasPermission() 只決定畫面要不要出現某個按鈕或
-// 某條路由要不要導去 403 頁——前端藏起來的按鈕，後端還是要擋。之後接上真的
-// api.20skin.tw 時，這份表格要跟後端的 GetRequiredPermission() 保持同步，
-// 但**不能拿它取代**後端驗證。
+// 某條路由要不要導去 403 頁——前端藏起來的按鈕，後端還是要擋。
+//
+// 🔴 **權限碼的權威來源是 API，不是這個檔案。**
+//    登入時 `POST /auth/login` 會回傳這位使用者實際擁有的權限碼（docs/10 §3.2），
+//    hasPermission() 直接查那一份。本檔案**不再有「角色 → 權限」的推導表** ——
+//    理由：後台的角色權限是可以在畫面上改的（`PUT /admin/role/{id}/permissions`），
+//    前端推導表在那一刻就過期了，而且不會有任何徵兆。
+//
+// ⚠️ 2026-09-12 全面改為 docs/10 §4 的新命名。若在任何地方看到
+//    `{unit}.view`／`{unit}.delete`／`review.decide`／`user.*`／`role.*`／
+//    `question.*`／`rebuild.trigger`／`setting.*`／`home.edit`，那是接上真 API 之前的舊命名。
 
 import type { RoleCode, UnitKey } from './types'
-import { UNIT_KEYS } from './types'
+import { currentPermissionCodes } from './api/client'
 
-export type PermissionAction =
-  | 'view'
-  | 'edit'
-  | 'seo'
-  | 'submit'
-  | 'publish'
-  | 'delete'
-  | 'export'
-  | 'decide'
-  | 'trigger'
-
-/** `{unit}.{action}` 或系統類端點（review／home／menu／setting／redirect／question／user／role／rebuild）。 */
+/** docs/10-api.md §4 的 31 個權限碼之一。 */
 export type PermissionCode = string
 
-function unitPerm(unit: UnitKey, action: PermissionAction): PermissionCode {
-  return `${unit}.${action}`
-}
-
 /**
- * 內容編輯：view／edit／submit／delete／seo／關聯與排序（走 `{unit}.edit`）。
- * ⚠️ 沒有任何 `{unit}.publish`——這是三段式工作流的前提（docs/02 §4）。
- * ⚠️ `term.delete` 刻意不在這裡——刪除分類會動到 URL 結構與 301 對照表，
- * 限超級管理員（docs/10-api.md §3.3），見下方 canDeleteTerm()。
+ * 內容單元上的動作 → 權限碼。
+ *
+ * ⚠️ **沒有 `view`、沒有 `delete`。** 讀取是「登入即可」（能編輯就看得到，行銷與
+ * 審核者靠 `seo.edit`／`content.*.publish` 進來）；刪除用 `content.{unit}.edit`。
+ * docs/08 §A-2 的 31 列裡本來就沒有這兩種 —— 不要因為畫面上有「刪除」按鈕就發明一個。
  */
-const EDITOR_PERMISSIONS: PermissionCode[] = [
-  ...UNIT_KEYS.flatMap((u) => [
-    unitPerm(u, 'view'),
-    unitPerm(u, 'edit'),
-    unitPerm(u, 'submit'),
-    ...(u === 'term' ? [] : [unitPerm(u, 'delete')]),
-    unitPerm(u, 'seo'),
-  ]),
-  // 系統類（docs/10-api.md §3.4）。⚠️ 首頁版位編排走送審、不直接發布，
-  // 所以只有 edit 與 submit，沒有 home.publish。
-  'upload.file',
-  'home.view',
-  'home.edit',
-  'home.submit',
-  'question.view',
-  'question.edit',
-]
+export type PermissionAction = 'view' | 'edit' | 'seo' | 'submit' | 'publish' | 'delete'
 
-/** 醫師：doctor.edit／article.edit（僅 OwnerUserId=自己，資料列層級判定見 checkOwnership）＋ review.decide（指派的醫學審閱）。 */
-const DOCTOR_PERMISSIONS: PermissionCode[] = [
-  unitPerm('doctor', 'view'),
-  unitPerm('doctor', 'edit'),
-  unitPerm('article', 'view'),
-  unitPerm('article', 'edit'),
-  'review.decide',
-  // 編輯自己的內容時要能換圖
-  'upload.file',
-]
-
-/** 行銷：全單元 view ＋ {unit}.seo ＋ FAQ 的 faq.edit。沒有其他 edit。 */
-const MARKETING_PERMISSIONS: PermissionCode[] = [
-  ...UNIT_KEYS.flatMap((u) => [unitPerm(u, 'view'), unitPerm(u, 'seo')]),
-  unitPerm('faq', 'edit'),
-  // SEO 區塊有 OG 分享圖，所以要能上傳
-  'upload.file',
-  'question.view',
-  'home.view',
-]
-
-/** 審核者：全單元 view ＋ review.decide ＋ {unit}.publish。 */
-const REVIEWER_PERMISSIONS: PermissionCode[] = [
-  ...UNIT_KEYS.flatMap((u) => [unitPerm(u, 'view'), unitPerm(u, 'publish')]),
-  'review.view',
-  'review.decide',
-  'home.view',
-  'home.publish',
-  'question.view',
-]
-
-/** 非九個單元的系統類端點（docs/10-api.md §3.4）。超級管理員以外都拿不到。 */
-export const SUPERADMIN_ONLY_PERMISSIONS: PermissionCode[] = [
-  'setting.view',
-  'setting.edit',
-  'menu.view',
-  'menu.edit',
-  'user.view',
-  'user.edit',
-  'role.view',
-  'role.edit',
-  'redirect.view',
-  'redirect.edit',
-  'redirect.export',
-  // 全站重建是維運動作；一般發布本來就會自動觸發（docs/11 §10），
-  // 手動那一顆限超管，避免有人把它當重新整理在按。
-  'rebuild.trigger',
-  unitPerm('term', 'edit'), // 新增／刪除分類；新增標籤是 term.edit 本身給 Editor，這裡特判在 checkTermMutation
-]
-
-const ROLE_PERMISSIONS: Record<Exclude<RoleCode, 'SuperAdmin'>, PermissionCode[]> = {
-  Editor: EDITOR_PERMISSIONS,
-  Doctor: DOCTOR_PERMISSIONS,
-  Marketing: MARKETING_PERMISSIONS,
-  Reviewer: REVIEWER_PERMISSIONS,
-}
+export const PERMISSION_CODES = {
+  contentEdit: (unit: UnitKey) => `content.${unit}.edit`,
+  contentPublish: (unit: UnitKey) => `content.${unit}.publish`,
+  contentSubmit: 'content.submit',
+  reviewApprove: 'review.approve',
+  reviewReject: 'review.reject',
+  seoEdit: 'seo.edit',
+  redirectManage: 'redirect.manage',
+  tagCreate: 'taxonomy.tag.create',
+  categoryManage: 'taxonomy.category.manage',
+  legalPageEdit: 'page.legal.edit',
+  homeArrange: 'home.arrange',
+  menuEdit: 'menu.edit',
+  settingsEdit: 'settings.edit',
+  accountManage: 'account.manage',
+  uploadFile: 'upload.file',
+} as const
 
 export interface PermissionContext {
   roles: RoleCode[]
   isSuperAdmin: boolean
 }
 
-/** 超級管理員永遠通過（docs/11 §5.3：`is_superadmin = true` 自動通過）。 */
+/**
+ * 超級管理員永遠通過（docs/11 §5.3：`is_superadmin = true` 自動通過）。
+ *
+ * ⚠️ `ctx` 現在只用來判斷「有沒有登入」與「是不是超管」，權限碼本身查的是
+ * 登入時 API 發下來的那一份。保留這個參數是為了不動 30 個呼叫端的寫法。
+ */
 export function hasPermission(ctx: PermissionContext | null | undefined, code: PermissionCode): boolean {
   if (!ctx) return false
   if (ctx.isSuperAdmin) return true
-  return ctx.roles.some((role) => (ROLE_PERMISSIONS[role as Exclude<RoleCode, 'SuperAdmin'>] ?? []).includes(code))
+  return currentPermissionCodes().includes(code)
 }
 
 export function can(ctx: PermissionContext | null | undefined, unit: UnitKey, action: PermissionAction): boolean {
-  return hasPermission(ctx, unitPerm(unit, action))
+  if (!ctx) return false
+  switch (action) {
+    // 讀取沒有獨立權限碼 —— 登入即可（docs/10 §4）。
+    case 'view':
+      return true
+    case 'edit':
+    // 刪除用 edit，不另設 delete（docs/10 §4）。
+    case 'delete':
+      return hasPermission(ctx, PERMISSION_CODES.contentEdit(unit))
+    case 'publish':
+      return hasPermission(ctx, PERMISSION_CODES.contentPublish(unit))
+    case 'submit':
+      return hasPermission(ctx, PERMISSION_CODES.contentSubmit)
+    case 'seo':
+      return hasPermission(ctx, PERMISSION_CODES.seoEdit)
+    default:
+      return false
+  }
 }
 
 /**
- * docs/10-api.md §3.3：`term` 的 POST／DELETE 限超級管理員（動 URL 結構與
- * 301 對照表）；新增標籤屬 term.edit（Editor 就有）。
- * `page`：系統頁不可新增／刪除／改 slug；法務三頁限超級管理員。
- * 這兩條是「單元宣告」表達不了的逐單元例外，集中寫在這裡，
- * ListPage／EditPage 呼叫，不要在畫面元件裡各寫一份判斷。
+ * docs/10-api.md §3.3 的逐單元例外：
+ * `term` 的新增「分類」（TermType 1–3）動到 URL 結構與 301 對照表，屬
+ * `taxonomy.category.manage`（種子只給超管）；新增「標籤」（TermType 4）屬
+ * `taxonomy.tag.create`（內容編輯就有）。
  */
 export function canCreateTerm(ctx: PermissionContext | null | undefined, isTag: boolean): boolean {
-  if (ctx?.isSuperAdmin) return true
-  if (isTag) return can(ctx, 'term', 'edit')
-  return false
+  return hasPermission(ctx, isTag ? PERMISSION_CODES.tagCreate : PERMISSION_CODES.categoryManage)
 }
+
+/** 刪除分類／標籤同樣動到 URL 結構與 301，走 `taxonomy.category.manage`。 */
 export function canDeleteTerm(ctx: PermissionContext | null | undefined): boolean {
-  return Boolean(ctx?.isSuperAdmin)
+  return hasPermission(ctx, PERMISSION_CODES.categoryManage)
 }
+
+/** 法務三頁（隱私權、服務條款、醫療免責聲明）限有 `page.legal.edit` 的人。 */
 export function canEditLegalPage(ctx: PermissionContext | null | undefined): boolean {
-  return Boolean(ctx?.isSuperAdmin)
+  return hasPermission(ctx, PERMISSION_CODES.legalPageEdit)
 }
 
 /**
@@ -149,7 +111,10 @@ export function canEditLegalPage(ctx: PermissionContext | null | undefined): boo
  * 權限碼表達不了。這裡是**前端顯示用**的鏡像判斷（例如要不要出現「編輯」
  * 按鈕）；真正擋得住的判定在 API 的 `RequireOwnership`。
  */
-export function ownsRecord(user: { isSuperAdmin: boolean; roles: RoleCode[]; id: number } | null | undefined, ownerUserId: number | null): boolean {
+export function ownsRecord(
+  user: { isSuperAdmin: boolean; roles: RoleCode[]; id: number } | null | undefined,
+  ownerUserId: number | null,
+): boolean {
   if (!user) return false
   if (user.isSuperAdmin) return true
   if (!user.roles.includes('Doctor')) return true // 非醫師角色不受此限制（權限碼本身已經夠用）

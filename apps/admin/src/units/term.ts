@@ -24,6 +24,7 @@ export const termUnit: UnitDefinition = {
       label: '型別',
       type: 'select',
       readOnly: true, // 建立後不可改型別
+      settableOnCreate: true, // …但新增時必須給（API 必填）
       group: '基本資料',
       options: [
         { value: '1', label: '療程分類' },

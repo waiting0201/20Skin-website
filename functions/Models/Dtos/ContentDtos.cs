@@ -26,7 +26,17 @@ public sealed record ContentListItemDto(
     int? OwnerUserId,
     int? CategoryTermId,
     string? CategoryTitle,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    /// <summary>
+    /// 分類／標籤的引用筆數。<b>只有 <c>term</c> 單元有值</b>，其餘為 <c>null</c> ——
+    /// 它是四個相關子查詢，對有約 800 筆的文章單元不值得每次清單都算一遍，而那些畫面也沒有這一欄。
+    /// </summary>
+    int? UsageCount = null,
+    /// <summary>
+    /// 逐單元的清單顯示欄位（職稱、地址、看診日期…）。鍵名與後台 <c>listColumns</c> 逐字對應。
+    /// <para>⚠️ 這<b>不是</b>完整的 <see cref="ContentDetailDto.Fields"/> —— 清單只取畫面上那幾欄。</para>
+    /// </summary>
+    Dictionary<string, object?>? Fields = null);
 
 /// <summary>單筆內容詳情（docs/10 §3.3 GET /admin/{unit}/{id}）。</summary>
 public sealed record ContentDetailDto(
@@ -80,7 +90,22 @@ public sealed class SeoSaveRequest
     public string? AiSummary { get; set; }
 }
 
-/// <summary>一筆關聯，正向與反向查詢共用（docs/08 §D）。</summary>
+/// <summary>
+/// 一筆關聯，正向與反向查詢共用（docs/08 §D）。
+///
+/// <para>
+/// 🔴 <b><c>To*</c> 永遠是「對方」，不是資料表裡的 <c>ToContentItemId</c>。</b>
+/// docs/08 §D 的「雙向關聯一律單向存」意味著每一種關聯只有一端存得到資料 ——
+/// 另一端（例如醫師個人頁要顯示「有哪些療程指到我」）查的是 <c>ToContentItemId = 我</c>，
+/// 這時對方在 <c>FromContentItemId</c>。為了讓前端不必分兩種形狀處理，
+/// 反向的那幾筆<b>把 From 端填進這裡的 To 欄位</b>，並把 <see cref="IsReverse"/> 設為 true。
+/// </para>
+/// <para>
+/// ⚠️ 所以 <see cref="IsReverse"/> 為 true 時<b>不可以</b>拿 <see cref="ToContentItemId"/>
+/// 去寫回 <c>ContentRelations</c> —— 那會建出一筆方向相反的重複關聯。反向關聯的編輯入口
+/// 在對方的編輯畫面（docs/08 §D）。
+/// </para>
+/// </summary>
 public sealed record RelationItemDto(
     int ToContentItemId,
     byte ToContentType,
@@ -88,7 +113,8 @@ public sealed record RelationItemDto(
     int SortOrder,
     string? Note,
     string? ToTitle,
-    string? ToUrlPath);
+    string? ToUrlPath,
+    bool IsReverse = false);
 
 /// <summary><c>PUT /admin/{unit}/{id}/relations</c> 的單筆請求項。</summary>
 public sealed class RelationSaveItem

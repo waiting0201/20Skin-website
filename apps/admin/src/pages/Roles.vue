@@ -17,16 +17,15 @@ import { currentUser } from '@/auth'
 import { hasPermission } from '@/permissions'
 import type { RoleCode } from '@/types'
 import { ROLE_LABEL } from '@/types'
-import { ALL_ROLES, EDITABLE_ROLES, type PermissionGroup, type RolePermissionMatrix } from '@/api/account'
+import { ALL_ROLES, EDITABLE_ROLES, type PermissionGroup } from '@/api/account'
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
-const canEditRoles = computed(() => hasPermission(permCtx, 'role.edit'))
+const canEditRoles = computed(() => hasPermission(permCtx, 'account.manage'))
 
 const loading = ref(true)
 const groups = ref<PermissionGroup[]>([])
 const saved = ref<Record<RoleCode, string[]>>({} as Record<RoleCode, string[]>)
-const termSpecialRules = ref<RolePermissionMatrix['termSpecialRules']>([])
 // draft：畫面上正在編輯、尚未儲存的狀態，用 Set 方便切換
 const draft = reactive<Record<RoleCode, Set<string>>>({} as Record<RoleCode, Set<string>>)
 
@@ -37,7 +36,6 @@ async function load() {
   const matrix = await adminApi.account.role.matrix()
   groups.value = matrix.groups
   saved.value = matrix.granted
-  termSpecialRules.value = matrix.termSpecialRules
   for (const role of ALL_ROLES) draft[role] = new Set(matrix.granted[role] ?? [])
   loading.value = false
 }
@@ -78,18 +76,39 @@ async function save(role: Exclude<RoleCode, 'SuperAdmin'>) {
     savingRole.value = null
   }
 }
-async function resetToDefault(role: Exclude<RoleCode, 'SuperAdmin'>) {
-  const defaults = await adminApi.account.role.resetRoleToDefault(role)
-  draft[role] = new Set(defaults)
-  saved.value = { ...saved.value, [role]: defaults }
+/** 把 draft 丟回上一次存檔的狀態。⚠️ 這只是丟掉畫面上的變更，不會動到資料庫。 */
+function discard(role: RoleCode) {
+  draft[role] = new Set(saved.value[role] ?? [])
 }
+
+// ⚠️ 沒有「還原預設值」：權限的預設值是種子資料（`SeedData.cs` 的 31 列 ＋ 授權表），
+// 一旦上線就可能已經被刻意調整過。API 沒有這支端點，前端也不該自己記一份「預設值」——
+// 那份一定會跟種子分岔，而且分岔時沒有人會發現。要回到種子值請重跑種子。
+
+/**
+ * 分類與標籤的三條逐單元例外（docs/10 §3.3）。
+ * ⚠️ 這是從目前勾選的權限碼**推導**出來的，不是另一份表 —— 勾掉
+ * `taxonomy.category.manage` 之後這張表要立刻跟著變，才看得出改動的後果。
+ */
+const termSpecialRules = computed(() =>
+  ALL_ROLES.map((role) => {
+    const codes = draft[role] ?? new Set<string>()
+    const isSuper = role === 'SuperAdmin'
+    return {
+      role,
+      canCreateCategory: isSuper || codes.has('taxonomy.category.manage'),
+      canCreateTag: isSuper || codes.has('taxonomy.tag.create') || codes.has('taxonomy.category.manage'),
+      canDeleteCategory: isSuper || codes.has('taxonomy.category.manage'),
+    }
+  }),
+)
 
 // ── 三條「畫面上要看得出來」的規則，對著目前 draft 即時驗證 ─────────────
 // docs/02 §4：內容編輯沒有任何 {unit}.publish。
 const editorHasPublish = computed(() => [...(draft.Editor ?? [])].some((c) => c.endsWith('.publish')))
 // docs/02 §4：行銷只有 {unit}.seo，沒有其他 edit（除了 faq.edit）。
 const marketingHasExtraEdit = computed(() =>
-  [...(draft.Marketing ?? [])].some((c) => c.endsWith('.edit') && c !== 'faq.edit'),
+  [...(draft.Marketing ?? [])].some((c) => c.endsWith('.edit') && c !== 'content.faq.edit' && c !== 'seo.edit'),
 )
 </script>
 
@@ -127,8 +146,8 @@ const marketingHasExtraEdit = computed(() =>
           >
             儲存
           </button>
-          <button type="button" class="btn btn--sm btn--ghost" :disabled="!canEditRoles" @click="resetToDefault(role)">
-            還原成程式碼預設值
+          <button type="button" class="btn btn--sm btn--ghost" :disabled="!isDirty(role)" @click="discard(role)">
+            捨棄未存的變更
           </button>
         </div>
       </div>

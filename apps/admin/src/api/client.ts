@@ -1,17 +1,16 @@
 // 資料來源門面。
 //
-// docs/09-frontend.md §8 要求：「一個門面，現在後面接 mock（localStorage
-// 或記憶體皆可），之後換成打 api.20skin.tw。上層畫面只認這個門面，
-// 不知道資料從哪來」。
+// docs/09-frontend.md §8：「一個門面，上層畫面只認這個門面，不知道資料從哪來」。
+// 2026-09-12 起門面後面接的是真的 api.20skin.tw（在此之前是 localStorage mock）。
 //
-// ⚠️ 這是本輪唯一允許塞「假邏輯」的地方。ListPage／EditPage／dashboard
-// 等畫面一律呼叫 `adminApi.xxx()`，不得直接碰 localStorage 或本檔案以外
-// 的任何狀態。日後接上真的 API，只需要重寫這個檔案內部實作，呼叫端一行都
-// 不用改——如果哪天發現某個畫面繞過這個門面直接讀資料，那就是要修的地方。
+// 🔴 **畫面不得繞過這個門面直接 fetch。** 所有 HTTP 細節（信封、錯誤碼、Bearer、
+//    401 自動換發）都在 ./http.ts 收斂；若哪天發現某個畫面自己打 API，那就是要修的地方。
 //
-// 為什麼形狀盡量貼近 docs/10-api.md 的契約（分頁 { items, totalCount,
-// page, pageSize, totalPages }、camelCase、錯誤碼字串)：等後端做好之後，
-// 這裡的每一個函式都應該只是換成一次 fetch，回傳形狀不用重新設計。
+// ⚠️ **這裡不做授權判斷。** 畫面上的 hasPermission() 只決定按鈕出不出現，
+//    擋得住的授權在 API 的 AppRouter（docs/11 §5.3，預設拒絕）。
+//
+// ⚠️ **這裡不做欄位驗證。** 必填、字數範圍、案例的四個法規揭露欄位，
+//    一律由 API 把關（docs/11 §3）。前端再寫一份只會有兩份各自漂移的規則。
 
 import type {
   AdminRecord,
@@ -21,47 +20,56 @@ import type {
   PagedResult,
   RelationItem,
   ReviewItem,
+  RoleCode,
   SeoMeta,
   UnitKey,
 } from '../types'
 import { emptySeo, UNIT_KEYS } from '../types'
-import type { RelationType } from '../unit-schema'
 import { UNIT_REGISTRY } from '../units'
-import {
-  MOCK_RISK_TERMS,
-  MOCK_USERS,
-  SEED_ARTICLES,
-  SEED_CASES,
-  SEED_CLINICS,
-  SEED_CONCERNS,
-  SEED_DOCTORS,
-  SEED_FAQS,
-  SEED_PAGES,
-  SEED_RELATIONS,
-  SEED_TERMS,
-  SEED_TREATMENTS,
-  type MockUserRecord,
-  type SeedRecord,
-  type SeedRelation,
-} from './mock-seed'
+import type { UnitField } from '../unit-schema'
 
 import { ApiError } from './errors'
-import { uploadApi } from './upload'
+import { clampPageSize, fetchAllPages, normalizePaged, request, setTokens, type ServerPaged } from './http'
+import { fieldsFromServer, fieldsToServer } from './content-fields'
+import { uploadApi, type UploadedImage } from './upload'
 import { redirectApi } from './redirect'
 import { seoApi } from './seo'
 import { questionApi } from './question'
 import { siteApi } from './site'
 import { accountApi } from './account'
 
-// ── 內部型別 ──────────────────────────────────────────────────────────
+// ── API 回傳形狀（docs/10-api.md §3.3 的 DTO，camelCase）──────────────
 
-interface StoredRecord {
+interface ServerSeo {
+  seoTitle: string | null
+  metaDescription: string | null
+  ogImage: UploadedImage | null
+  canonicalOverride: string | null
+  noIndex: boolean
+  structuredDataOverride: string | null
+  aiSummary: string | null
+}
+
+interface ServerRelation {
+  toContentItemId: number
+  toContentType: number
+  relationType: number
+  sortOrder: number
+  note: string | null
+  toTitle: string | null
+  toUrlPath: string | null
+  /** true＝「別人指著我」。這一端唯讀，編輯入口在對方的畫面（docs/08 §D）。 */
+  isReverse: boolean
+}
+
+interface ServerDetail {
   id: number
-  contentType: UnitKey
+  unit: UnitKey
   slug: string | null
   urlPath: string | null
   title: string
-  status: ContentStatus
+  summary: string | null
+  status: number
   publishAt: string | null
   unpublishAt: string | null
   sortOrder: number
@@ -72,816 +80,554 @@ interface StoredRecord {
   updatedByUserId: number | null
   createdAt: string
   updatedAt: string
-  fields: Record<string, unknown>
-  seo: SeoMeta
+  fields: Record<string, unknown> | null
+  seo: ServerSeo | null
+  relations: ServerRelation[] | null
 }
 
-interface RelationRow {
-  id: number
-  fromId: number
-  fromType: UnitKey
-  toId: number
-  toType: UnitKey
-  relationType: RelationType
-  sortOrder: number
-  note: string | null
-}
-
-interface VersionRow {
+interface ServerListItem {
   id: number
   unit: UnitKey
-  contentItemId: number
-  versionNo: number
   title: string
-  snapshot: StoredRecord
-  note: string | null
-  createdByUserId: number
-  createdAt: string
+  slug: string | null
+  urlPath: string | null
+  status: number
+  publishAt: string | null
+  unpublishAt: string | null
+  sortOrder: number
+  includeInSitemap: boolean
+  isSystemLocked: boolean
+  ownerUserId: number | null
+  categoryTermId: number | null
+  categoryTitle: string | null
+  updatedAt: string
+  usageCount: number | null
+  fields: Record<string, unknown> | null
 }
 
-interface RebuildState {
-  pending: boolean
-  lastRequestedAt: string | null
-  lastCompletedAt: string | null
-}
+// ── 形狀轉換 ──────────────────────────────────────────────────────────
 
-interface Db {
-  version: number
-  nextId: number
-  nextRelationId: number
-  nextReviewId: number
-  nextVersionId: number
-  records: Record<UnitKey, StoredRecord[]>
-  relations: RelationRow[]
-  reviews: ReviewItem[]
-  versions: VersionRow[]
-  riskTerms: string[]
-  rebuild: RebuildState
-}
-
-const STORAGE_KEY = '20skin-admin-mock-db-v1'
-const DB_VERSION = 1
-
-let db: Db | null = null
-
-function emptyRecordsByUnit(): Record<UnitKey, StoredRecord[]> {
-  return Object.fromEntries(UNIT_KEYS.map((u) => [u, []])) as unknown as Record<UnitKey, StoredRecord[]>
-}
-
-// ── 種子資料載入：把 SeedRecord 的 seedKey 換算成真正的數字 Id ──────────
-
-function resolveSeedKeysDeep(node: unknown, map: Map<string, number>): unknown {
-  if (Array.isArray(node)) return node.map((n) => resolveSeedKeysDeep(n, map))
-  if (node && typeof node === 'object') {
-    const out: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-      if (/SeedKey$/.test(k) && typeof v === 'string' && v) {
-        out[k] = map.has(v) ? String(map.get(v)) : ''
-      } else {
-        out[k] = resolveSeedKeysDeep(v, map)
-      }
-    }
-    return out
-  }
-  return node
-}
-
-function buildSeedDb(): Db {
-  const records = emptyRecordsByUnit()
-  const seedKeyToId = new Map<string, number>()
-  const seedKeyToUnit = new Map<string, UnitKey>()
-  let nextId = 1
-  const now = new Date().toISOString()
-
-  const groups: [UnitKey, SeedRecord[]][] = [
-    ['term', SEED_TERMS],
-    ['doctor', SEED_DOCTORS],
-    ['treatment', SEED_TREATMENTS],
-    ['concern', SEED_CONCERNS],
-    ['article', SEED_ARTICLES],
-    ['case', SEED_CASES],
-    ['faq', SEED_FAQS],
-    ['clinic', SEED_CLINICS],
-    ['page', SEED_PAGES],
-  ]
-
-  // 第一遍：分配 Id（先做這一遍，relation 與跨單元參照才有東西可查）
-  for (const [unit, seeds] of groups) {
-    for (const seed of seeds) {
-      const id = nextId++
-      seedKeyToId.set(seed.seedKey, id)
-      seedKeyToUnit.set(seed.seedKey, unit)
-    }
-  }
-
-  // 第二遍：組出 StoredRecord，欄位裡的 *SeedKey 換成真正 Id（字串）
-  for (const [unit, seeds] of groups) {
-    for (const seed of seeds) {
-      const id = seedKeyToId.get(seed.seedKey)!
-      const resolvedFields = resolveSeedKeysDeep(seed.fields, seedKeyToId) as Record<string, unknown>
-      const producesUrl = UNIT_REGISTRY[unit].producesUrl
-      const slug = seed.slug ?? null
-      records[unit].push({
-        id,
-        contentType: unit,
-        slug,
-        urlPath: producesUrl && slug ? `/${unitUrlSegment(unit)}/${slug}/` : null,
-        title: seed.title,
-        status: seed.status,
-        publishAt: null,
-        unpublishAt: null,
-        sortOrder: seed.sortOrder,
-        includeInSitemap: seed.includeInSitemap ?? true,
-        isSystemLocked: seed.isSystemLocked ?? false,
-        ownerUserId: seed.ownerUserId ?? null,
-        createdByUserId: 1,
-        updatedByUserId: 1,
-        createdAt: now,
-        updatedAt: now,
-        fields: resolvedFields,
-        seo: { ...emptySeo(), ...(seed.seo ?? {}) },
-      })
-    }
-  }
-
-  const relations: RelationRow[] = []
-  let nextRelationId = 1
-  for (const rel of SEED_RELATIONS as SeedRelation[]) {
-    const fromId = seedKeyToId.get(rel.fromKey)
-    const toId = seedKeyToId.get(rel.toKey)
-    const fromType = seedKeyToUnit.get(rel.fromKey)
-    const toType = seedKeyToUnit.get(rel.toKey)
-    if (!fromId || !toId || !fromType || !toType) continue
-    relations.push({
-      id: nextRelationId++,
-      fromId,
-      fromType,
-      toId,
-      toType,
-      relationType: rel.relationType,
-      sortOrder: rel.sortOrder,
-      note: rel.note ?? null,
-    })
-  }
-
+function toSeo(seo: ServerSeo | null): SeoMeta {
+  if (!seo) return emptySeo()
   return {
-    version: DB_VERSION,
-    nextId,
-    nextRelationId,
-    nextReviewId: 1,
-    nextVersionId: 1,
-    records,
-    relations,
-    reviews: seedReviews(records),
-    versions: [],
-    riskTerms: [...MOCK_RISK_TERMS],
-    rebuild: { pending: false, lastRequestedAt: null, lastCompletedAt: now },
+    seoTitle: seo.seoTitle,
+    metaDescription: seo.metaDescription,
+    ogImage: seo.ogImage,
+    canonicalOverride: seo.canonicalOverride,
+    noIndex: seo.noIndex,
+    structuredDataOverride: seo.structuredDataOverride,
+    aiSummary: seo.aiSummary,
   }
-}
-
-/** 種一筆送審中與一筆已退回，讓審核佇列與「我的退件」在示範時不是空的。 */
-function seedReviews(records: Record<UnitKey, StoredRecord[]>): ReviewItem[] {
-  const out: ReviewItem[] = []
-  const submittedArticle = records.article.find((r) => r.status === 2)
-  if (submittedArticle) {
-    out.push({
-      id: 1,
-      contentItemId: submittedArticle.id,
-      unit: 'article',
-      title: submittedArticle.title,
-      submittedByUserId: 3,
-      submittedByName: '示範醫師一',
-      submittedAt: new Date().toISOString(),
-      status: 1,
-      decidedByUserId: null,
-      decidedAt: null,
-      decisionNote: null,
-      riskFlags: scanRiskTermsInternal(submittedArticle.fields.bodyBlocks as string, MOCK_RISK_TERMS),
-    })
-  }
-  const submittedFaq = records.faq.find((r) => r.status === 2)
-  if (submittedFaq) {
-    out.push({
-      id: 2,
-      contentItemId: submittedFaq.id,
-      unit: 'faq',
-      title: submittedFaq.title,
-      submittedByUserId: 2,
-      submittedByName: '編輯｜阿雅',
-      submittedAt: new Date().toISOString(),
-      status: 1,
-      decidedByUserId: null,
-      decidedAt: null,
-      decisionNote: null,
-      riskFlags: [],
-    })
-  }
-  return out
-}
-
-function unitUrlSegment(unit: UnitKey): string {
-  const map: Partial<Record<UnitKey, string>> = {
-    treatment: 'treatments',
-    doctor: 'team',
-    concern: 'concerns',
-    article: 'blog',
-    case: 'cases',
-    clinic: 'clinics',
-    page: '',
-    term: '',
-  }
-  return map[unit] ?? unit
-}
-
-function scanRiskTermsInternal(text: string | undefined, terms: string[]): string[] {
-  if (!text) return []
-  return terms.filter((t) => text.includes(t))
-}
-
-// ── 持久化：localStorage（沒有就退回純記憶體，例如 SSR 或私密瀏覽） ────
-
-function loadDb(): Db {
-  if (db) return db
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as Db
-        if (parsed.version === DB_VERSION) {
-          db = parsed
-          return db
-        }
-      }
-    } catch {
-      // 壞掉的本機資料，直接視為沒有，重新種子
-    }
-  }
-  db = buildSeedDb()
-  persist()
-  return db
-}
-
-function persist() {
-  if (!db) return
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(db))
-    } catch {
-      // 存滿了或私密瀏覽模式擋寫入——mock 資料掉了不影響正式功能，忽略即可
-    }
-  }
-}
-
-/** 開發用：清空 mock 資料庫，下次讀取會重新種子。目前沒有畫面呼叫，保留給除錯用。 */
-export function resetMockDb() {
-  db = null
-  if (typeof window !== 'undefined' && window.localStorage) {
-    window.localStorage.removeItem(STORAGE_KEY)
-  }
-}
-
-// ── 錯誤：形狀貼近 docs/10-api.md §2 的錯誤碼，方便日後直接對應真正的 API 錯誤 ──
-
-
-
-// ── 共用查找 ──────────────────────────────────────────────────────────
-
-function findStored(unit: UnitKey, id: number): StoredRecord {
-  const rec = loadDb().records[unit]?.find((r) => r.id === id)
-  if (!rec) throw new ApiError('NOT_FOUND', `${UNIT_REGISTRY[unit].labelSingular}不存在。`)
-  return rec
-}
-
-function findAnyById(id: number): { unit: UnitKey; record: StoredRecord } | undefined {
-  const d = loadDb()
-  for (const unit of UNIT_KEYS) {
-    const record = d.records[unit].find((r) => r.id === id)
-    if (record) return { unit, record }
-  }
-  return undefined
-}
-
-function titleOf(id: number): string {
-  return findAnyById(id)?.record.title ?? `#${id}`
-}
-
-function relationsForRecord(unit: UnitKey, id: number): Record<string, RelationItem[]> {
-  const def = UNIT_REGISTRY[unit]
-  const out: Record<string, RelationItem[]> = {}
-  const d = loadDb()
-  for (const field of def.relations ?? []) {
-    const rows = field.editable
-      ? d.relations.filter((r) => r.fromId === id && r.fromType === unit && r.relationType === field.relationType)
-      : d.relations.filter((r) => r.toId === id && r.toType === unit && r.relationType === field.relationType)
-    const sorted = [...rows].sort((a, b) => a.sortOrder - b.sortOrder)
-    out[field.key] = sorted.map((r) => {
-      const otherId = field.editable ? r.toId : r.fromId
-      return { id: otherId, title: titleOf(otherId), sortOrder: r.sortOrder, note: r.note }
-    })
-  }
-  return out
 }
 
 /**
- * relation-single 欄位（例如 CategoryTermId）在儲存層只是一個數字 Id，
- * 清單頁想直接顯示分類名稱而不是一串數字。這裡在讀取時順手算出
- * `${key}__label` 這個平行鍵——EditPage 的表單只認 `field.key` 本身，
- * 多出來的 `__label` 鍵不會干擾編輯，只有 ListPage 的欄位渲染會用到它。
- */
-function withResolvedLabels(stored: StoredRecord): Record<string, unknown> {
-  const def = UNIT_REGISTRY[stored.contentType]
-  const fields: Record<string, unknown> = { ...stored.fields }
-  for (const f of def.fields) {
-    if (f.type === 'relation-single') {
-      const raw = fields[f.key]
-      const idNum = Number(raw)
-      if (raw && !Number.isNaN(idNum)) fields[`${f.key}__label`] = titleOf(idNum)
-    } else if (f.type === 'select' && f.options?.length) {
-      // 靜態 select（例如 Pages.PageKind、Terms.TermType）：清單頁顯示選項文字
-      // 而不是存起來的原始值，跟 relation-single 的 __label 是同一套機制。
-      const raw = String(fields[f.key] ?? '')
-      const opt = f.options.find((o) => o.value === raw)
-      if (opt) fields[`${f.key}__label`] = opt.label
-    }
-  }
-  return fields
-}
-
-function toAdminRecord(stored: StoredRecord): AdminRecord {
-  const fields = withResolvedLabels(stored)
-  // Terms.usageCount 沒有對應的儲存欄位，是讀取時的聚合查詢（docs/10-api.md §3.3：
-  // 刪除前回報 usageCount）。順便算進來，清單頁與編輯頁都不用另外呼叫一支 API。
-  if (stored.contentType === 'term') fields.usageCount = countTermUsage(stored.id)
-  return {
-    ...stored,
-    fields,
-    relations: relationsForRecord(stored.contentType, stored.id),
-  }
-}
-
-function touch(stored: StoredRecord, userId: number) {
-  stored.updatedAt = new Date().toISOString()
-  stored.updatedByUserId = userId
-}
-
-function snapshotVersion(unit: UnitKey, stored: StoredRecord, userId: number, note?: string) {
-  const d = loadDb()
-  const existing = d.versions.filter((v) => v.unit === unit && v.contentItemId === stored.id)
-  const versionNo = existing.length ? Math.max(...existing.map((v) => v.versionNo)) + 1 : 1
-  d.versions.push({
-    id: d.nextVersionId++,
-    unit,
-    contentItemId: stored.id,
-    versionNo,
-    title: stored.title,
-    snapshot: structuredCloneRecord(stored),
-    note: note ?? null,
-    createdByUserId: userId,
-    createdAt: new Date().toISOString(),
-  })
-  // docs/11-backend-design.md §8：每筆保留最近 30 版，mock 縮小到 10 版即可示意同一機制
-  const capped = d.versions.filter((v) => v.unit === unit && v.contentItemId === stored.id)
-  if (capped.length > 10) {
-    const toRemove = capped.sort((a, b) => a.versionNo - b.versionNo).slice(0, capped.length - 10)
-    d.versions = d.versions.filter((v) => !toRemove.includes(v))
-  }
-}
-
-function structuredCloneRecord(stored: StoredRecord): StoredRecord {
-  return JSON.parse(JSON.stringify(stored)) as StoredRecord
-}
-
-// ── Auth（mock）────────────────────────────────────────────────────────
-
-/**
- * docs/11-backend-design.md §5.2：帳號與來源 IP 雙維度計數。mock 只做帳號維度示意。
+ * 攤平的關聯清單 → 依單元宣告分組的 `Record<relationKey, RelationItem[]>`。
  *
- * 🔴 **這是後台唯一的防線。** 雙因素不做（2026-09-11 院方決定）、IP 白名單不做
- * （2026-08-13），而後台路徑 /admin/ 是客戶指定、公開可猜。正式實作時
- * 次數限制不可打折，且狀態要存 DB（Flex Consumption 多執行個體，記憶體計數無效）。
+ * ⚠️ 同一個 `relationType` 在兩個單元上各有一個欄位，一個可編輯、一個唯讀
+ * （例如 RelationType=1 在療程是「關聯醫師」、在醫師是「關聯療程」），
+ * 靠 `isReverse` 分辨：可編輯的欄位收正向那幾筆，唯讀的欄位收反向那幾筆。
+ * 只看 relationType 不看方向的話，醫師頁會把自己指出去的關聯也列進來。
  */
-const loginFailures = new Map<string, { count: number; lockedUntil: number | null }>()
-const MAX_ATTEMPTS = 5
-const LOCK_MS = 60_000
-
-function toCurrentUser(u: MockUserRecord): CurrentUser {
-  const { credential: _credential, ...rest } = u
-  return rest
+function groupRelations(unit: UnitKey, relations: ServerRelation[] | null): Record<string, RelationItem[]> {
+  const out: Record<string, RelationItem[]> = {}
+  const defs = UNIT_REGISTRY[unit].relations ?? []
+  for (const def of defs) {
+    out[def.key] = (relations ?? [])
+      .filter((r) => r.relationType === def.relationType && r.isReverse === !def.editable)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((r) => ({
+        id: r.toContentItemId,
+        title: r.toTitle ?? `#${r.toContentItemId}`,
+        sortOrder: r.sortOrder,
+        note: r.note,
+      }))
+  }
+  return out
 }
 
-function requireNoLockout(userName: string) {
-  const state = loginFailures.get(userName)
-  if (state?.lockedUntil && state.lockedUntil > Date.now()) {
-    const seconds = Math.ceil((state.lockedUntil - Date.now()) / 1000)
-    throw new ApiError('RATE_LIMITED', `登入嘗試次數過多，請 ${seconds} 秒後再試。`)
+function toAdminRecord(unit: UnitKey, dto: ServerDetail): AdminRecord {
+  return {
+    id: dto.id,
+    contentType: unit,
+    slug: dto.slug,
+    urlPath: dto.urlPath,
+    title: dto.title,
+    status: dto.status as ContentStatus,
+    publishAt: dto.publishAt,
+    unpublishAt: dto.unpublishAt,
+    sortOrder: dto.sortOrder,
+    includeInSitemap: dto.includeInSitemap,
+    isSystemLocked: dto.isSystemLocked,
+    ownerUserId: dto.ownerUserId,
+    createdByUserId: dto.createdByUserId,
+    updatedByUserId: dto.updatedByUserId,
+    createdAt: dto.createdAt,
+    updatedAt: dto.updatedAt,
+    fields: fieldsFromServer(unit, dto.fields, dto.summary),
+    relations: groupRelations(unit, dto.relations),
+    seo: toSeo(dto.seo),
   }
 }
 
-function recordFailure(userName: string) {
-  const state = loginFailures.get(userName) ?? { count: 0, lockedUntil: null }
-  state.count += 1
-  if (state.count >= MAX_ATTEMPTS) {
-    state.lockedUntil = Date.now() + LOCK_MS
-    state.count = 0
+/**
+ * 清單一列 → AdminRecord。
+ *
+ * ⚠️ **清單的 `fields` 只有畫面上那幾欄**（見 ContentReadService.ListExtras），
+ * 不是完整詳情。清單頁只用它渲染 `listColumns`；任何需要完整欄位的地方
+ * 一律走 `content.get()`。
+ */
+function listItemToAdminRecord(unit: UnitKey, row: ServerListItem): AdminRecord {
+  const fields: Record<string, unknown> = { ...(row.fields ?? {}) }
+  if (row.categoryTitle !== null) fields.categoryTitle = row.categoryTitle
+  if (row.categoryTermId !== null) fields.categoryTermId = row.categoryTermId
+  if (row.usageCount !== null) fields.usageCount = row.usageCount
+  applySelectLabels(unit, fields)
+
+  return {
+    id: row.id,
+    contentType: unit,
+    slug: row.slug,
+    urlPath: row.urlPath,
+    title: row.title,
+    status: row.status as ContentStatus,
+    publishAt: row.publishAt,
+    unpublishAt: row.unpublishAt,
+    sortOrder: row.sortOrder,
+    includeInSitemap: row.includeInSitemap,
+    isSystemLocked: row.isSystemLocked,
+    ownerUserId: row.ownerUserId,
+    createdByUserId: null,
+    updatedByUserId: null,
+    createdAt: row.updatedAt,
+    updatedAt: row.updatedAt,
+    fields,
+    relations: {},
+    seo: emptySeo(),
   }
-  loginFailures.set(userName, state)
 }
 
-function clearFailures(userName: string) {
-  loginFailures.delete(userName)
+/**
+ * select 欄位在清單上要顯示中文標籤而不是數字（`termType: 1` → 「療程分類」）。
+ * ListPage 會優先讀 `${key}__label`，所以這裡補上。
+ */
+function applySelectLabels(unit: UnitKey, fields: Record<string, unknown>) {
+  for (const field of UNIT_REGISTRY[unit].fields) {
+    if (field.type !== 'select' || !field.options) continue
+    const raw = fields[field.key]
+    if (raw === undefined || raw === null) continue
+    const match = field.options.find((o) => o.value === String(raw))
+    if (match) fields[`${field.key}__label`] = match.label
+  }
+}
+
+// ── 認證 ──────────────────────────────────────────────────────────────
+
+interface TokenResponse {
+  accessToken: string
+  refreshToken: string
+  userId: number
+  userName: string
+  doctorId: number | null
+  displayName: string
+  roles: string[]
+  permissions: string[]
+  isSuperAdmin: boolean
+  mustChangePassword: boolean
+}
+
+let permissionCodes: string[] = []
+
+/**
+ * 目前登入者實際擁有的權限碼，由 API 在登入時發給（docs/10 §3.2 的 `permissions`）。
+ *
+ * 🔴 **權威在後端。** 前端不再自己用角色推導權限 —— 那份推導表與後端的
+ * `RolePermissions` 是兩份會各自漂移的規則，而後台的角色權限是可以在畫面上改的
+ * （`PUT /admin/role/{id}/permissions`），改完前端那份推導表就過期了。
+ */
+export function currentPermissionCodes(): string[] {
+  return permissionCodes
+}
+
+function toCurrentUser(res: TokenResponse): CurrentUser {
+  return {
+    id: res.userId,
+    userName: res.userName,
+    displayName: res.displayName,
+    roles: res.roles as RoleCode[],
+    isSuperAdmin: res.isSuperAdmin,
+    doctorId: res.doctorId,
+    mustChangePassword: res.mustChangePassword,
+  }
 }
 
 const auth = {
-  /** 單段驗證：帳密通過就登入，沒有第二因素（docs/10-api.md §3.2）。 */
+  /**
+   * 單段驗證：帳密通過就登入，沒有第二因素（docs/10 §3.2，2026-09-11 院方決定）。
+   *
+   * ⚠️ 首登尚未改密碼時**登入仍然成功、token 照發** —— 不發 token 的話使用者永遠
+   * 改不了密碼。回傳的 `mustChangePassword` 為 true 時，除了改密碼與登出以外
+   * 每一支端點都會回 403，呼叫端要據此導向改密碼畫面。
+   */
   async login(userName: string, password: string): Promise<CurrentUser> {
-    requireNoLockout(userName)
-    const record = MOCK_USERS.find((u) => u.userName.toLowerCase() === userName.toLowerCase())
-    // ⚠️ docs/10-api.md §2：不區分「帳號不存在」與「密碼錯誤」
-    if (!record || record.credential.password !== password) {
-      recordFailure(userName)
-      throw new ApiError('AUTH_INVALID_CREDENTIALS', '帳號或密碼錯誤。')
-    }
-    if (!record.isActive) throw new ApiError('AUTH_ACCOUNT_INACTIVE', '帳號已停用。')
-    clearFailures(userName)
-    if (record.mustChangePassword) throw new ApiError('AUTH_MUST_CHANGE_PASSWORD', '首次登入請先變更密碼。')
-    return toCurrentUser(record)
+    const res = await request<TokenResponse>('/auth/login', {
+      method: 'POST',
+      body: { userName, password },
+      auth: false,
+    })
+    setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken })
+    permissionCodes = res.permissions ?? []
+    return toCurrentUser(res)
+  },
+
+  /** 首登強制改密碼。改完要重新登入，因為權限與旗標都變了。 */
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await request<null>('/auth/change-password', {
+      method: 'POST',
+      body: { currentPassword, newPassword },
+    })
   },
 
   async logout() {
-    // mock：沒有真的 refresh token 可撤銷，這裡只是保留呼叫端形狀一致
+    try {
+      await request<null>('/auth/logout', { method: 'POST', body: {} })
+    } catch {
+      // 登出失敗不該把使用者留在後台裡。本機憑證照樣清掉 ——
+      // 最壞的情況是伺服器上那個 refresh token 留到自然過期。
+    }
+    setTokens(null)
+    permissionCodes = []
   },
 }
 
 // ── 分類與標籤／關聯目標的選項來源 ───────────────────────────────────
 
 const taxonomy = {
-  /** 給 relation-single（optionsFromTermType）用：某個 TermType 底下的分類選項。 */
+  /** 某個 TermType 底下的分類選項（療程分類、文章分類、FAQ 分類、文章標籤）。 */
   async termOptions(termType: number): Promise<{ value: string; label: string }[]> {
-    return loadDb()
-      .records.term.filter((r) => (r.fields.termType as number) === termType)
-      .sort((a, b) => a.sortOrder - b.sortOrder)
+    const rows = await fetchAllPages<ServerListItem>(async (page, pageSize) =>
+      normalizePaged(await request<ServerPaged<ServerListItem>>('/admin/term', { query: { page, pageSize } })),
+    )
+    return rows
+      .filter((r) => Number((r.fields ?? {}).termType) === termType)
       .map((r) => ({ value: String(r.id), label: r.title }))
   },
 
-  /** 給 relation-single（optionsFromUnit）與關聯選擇器用：某個單元的候選項目。 */
+  /**
+   * 某個單元的候選項目，給 relation-single 與關聯選擇器用。
+   *
+   * ⚠️ 有關鍵字就交給 API 在 SQL 層過濾（docs/10 §2）。沒有關鍵字時才整份抓 ——
+   * 文章有約 800 筆，那是 8 趟往返，所以關聯選擇器一律應該帶關鍵字進來。
+   */
   async unitOptions(unit: UnitKey, keyword?: string): Promise<{ value: string; label: string }[]> {
-    const list = loadDb().records[unit] ?? []
-    const filtered = keyword ? list.filter((r) => r.title.includes(keyword)) : list
-    return filtered.map((r) => ({ value: String(r.id), label: r.title }))
+    assertUnit(unit)
+    if (keyword) {
+      const paged = normalizePaged(
+        await request<ServerPaged<ServerListItem>>(`/admin/${unit}`, { query: { keyword, page: 1, pageSize: 100 } }),
+      )
+      return paged.items.map((r) => ({ value: String(r.id), label: r.title }))
+    }
+    const rows = await fetchAllPages<ServerListItem>(async (page, pageSize) =>
+      normalizePaged(await request<ServerPaged<ServerListItem>>(`/admin/${unit}`, { query: { page, pageSize } })),
+    )
+    return rows.map((r) => ({ value: String(r.id), label: r.title }))
   },
 
+  /**
+   * 編輯器的高風險字詞即時提示（docs/02 §5）。
+   * ⚠️ 這是提示不是閘門 —— 掃到字詞不影響能不能送審，送審時 API 會自己再掃一次。
+   */
   async riskTerms(): Promise<string[]> {
-    return [...loadDb().riskTerms]
+    return (await request<string[]>('/admin/risk-term')) ?? []
   },
 }
 
 // ── 內容 CRUD ─────────────────────────────────────────────────────────
 
-function applyDefaults(unit: UnitKey, input: Partial<StoredRecord>, userId: number): StoredRecord {
-  const d = loadDb()
-  const id = d.nextId++
-  const now = new Date().toISOString()
-  const siblingCount = d.records[unit].length
-  return {
-    id,
-    contentType: unit,
-    slug: (input.slug as string | undefined) ?? null,
-    urlPath: null, // 由 recomputeUrlPath 統一計算，見下方
-    title: input.title ?? '未命名',
-    status: 1,
-    publishAt: null,
-    unpublishAt: null,
-    sortOrder: input.sortOrder ?? siblingCount,
-    includeInSitemap: input.includeInSitemap ?? true,
-    isSystemLocked: false,
-    ownerUserId: input.ownerUserId ?? null,
-    createdByUserId: userId,
-    updatedByUserId: userId,
-    createdAt: now,
-    updatedAt: now,
-    fields: input.fields ?? {},
-    seo: emptySeo(),
-  }
-}
-
-function recomputeUrlPath(unit: UnitKey, stored: StoredRecord) {
-  const def = UNIT_REGISTRY[unit]
-  if (!def.producesUrl || !stored.slug) {
-    stored.urlPath = null
-    return
-  }
-  if (unit === 'treatment') {
-    const catId = Number(stored.fields.categoryTermSeedKey)
-    const cat = findAnyById(catId)
-    const catSlug = cat?.record.slug ?? 'uncategorized'
-    stored.urlPath = `/treatments/${catSlug}/${stored.slug}/`
-    return
-  }
-  stored.urlPath = `/${unitUrlSegment(unit)}/${stored.slug}/`
-}
-
 function assertUnit(unit: string): asserts unit is UnitKey {
   if (!UNIT_KEYS.includes(unit as UnitKey)) throw new ApiError('NOT_FOUND', `未知的單元：${unit}`)
 }
 
-function assertBodyEditable(stored: StoredRecord) {
-  // docs/11-backend-design.md §7：送審中本文鎖定，只有審核者能動（走 approve/reject，不走這裡）
-  if (stored.status === 2) {
-    throw new ApiError('CONFLICT_STATE', '送審中，本文已鎖定。如需修改請先請審核者退回。')
+/** 建立／更新本文共用的請求體。 */
+function buildBody(
+  unit: UnitKey,
+  payload: { title?: string; slug?: string; sortOrder?: number; includeInSitemap?: boolean; ownerUserId?: number; fields?: Record<string, unknown> },
+  isCreate = false,
+) {
+  const body: Record<string, unknown> = {}
+  if (payload.title !== undefined) body.title = payload.title
+  if (payload.slug !== undefined) body.slug = payload.slug
+  if (payload.sortOrder !== undefined) body.sortOrder = payload.sortOrder
+  if (payload.includeInSitemap !== undefined) body.includeInSitemap = payload.includeInSitemap
+  if (payload.ownerUserId !== undefined) body.ownerUserId = payload.ownerUserId
+  if (payload.fields) {
+    const mapped = fieldsToServer(unit, payload.fields, isCreate)
+    body.fields = mapped.fields
+    if (mapped.summary !== undefined) body.summary = mapped.summary
   }
-  if (stored.isSystemLocked) {
-    // 系統頁／系統分類仍可編內文，只是不可刪、不可改 slug；這裡不擋，交給呼叫端個別欄位判斷
-  }
+  return body
 }
 
 const content = {
   async list(unit: UnitKey, query: ListQuery & { ownerUserId?: number } = {}): Promise<PagedResult<AdminRecord>> {
     assertUnit(unit)
     const page = Math.max(1, query.page ?? 1)
-    const pageSize = Math.min(100, Math.max(1, query.pageSize ?? 20)) // docs/10 §2：pageSize 上限 100
-    let items = [...loadDb().records[unit]]
-    if (query.keyword) items = items.filter((r) => r.title.includes(query.keyword!))
-    if (query.status) items = items.filter((r) => r.status === query.status)
-    if (query.categoryId) {
-      items = items.filter((r) => Number(r.fields.categoryTermSeedKey) === query.categoryId)
+    const pageSize = clampPageSize(query.pageSize)
+    const paged = normalizePaged(
+      await request<ServerPaged<ServerListItem>>(`/admin/${unit}`, {
+        query: {
+          page,
+          pageSize,
+          keyword: query.keyword,
+          status: query.status,
+          categoryId: query.categoryId,
+          ownerUserId: query.ownerUserId,
+        },
+      }),
+    )
+    return {
+      items: paged.items.map((row) => listItemToAdminRecord(unit, row)),
+      totalCount: paged.totalCount,
+      page: paged.page,
+      pageSize: paged.pageSize,
+      totalPages: paged.totalPages,
     }
-    if (query.ownerUserId) items = items.filter((r) => r.ownerUserId === query.ownerUserId)
-    items.sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
-    const totalCount = items.length
-    const start = (page - 1) * pageSize
-    const pageItems = items.slice(start, start + pageSize).map(toAdminRecord)
-    return { items: pageItems, totalCount, page, pageSize, totalPages: Math.max(1, Math.ceil(totalCount / pageSize)) }
   },
 
   async get(unit: UnitKey, id: number): Promise<AdminRecord> {
     assertUnit(unit)
-    return toAdminRecord(findStored(unit, id))
+    return toAdminRecord(unit, await request<ServerDetail>(`/admin/${unit}/${id}`))
   },
 
-  async create(unit: UnitKey, payload: Partial<StoredRecord>, userId: number): Promise<AdminRecord> {
+  /** @param _userId 由 token 決定，不從前端帶。保留參數是為了不動 30 個呼叫端。 */
+  async create(
+    unit: UnitKey,
+    payload: { title?: string; slug?: string; sortOrder?: number; includeInSitemap?: boolean; ownerUserId?: number; fields?: Record<string, unknown> },
+    _userId: number,
+  ): Promise<AdminRecord> {
     assertUnit(unit)
-    const d = loadDb()
-    if (d.records[unit].some((r) => r.slug && payload.slug && r.slug === payload.slug)) {
-      throw new ApiError('CONFLICT_DUPLICATE', `這個網址已被「${d.records[unit].find((r) => r.slug === payload.slug)?.title}」使用。`)
-    }
-    const stored = applyDefaults(unit, payload, userId)
-    recomputeUrlPath(unit, stored)
-    d.records[unit].push(stored)
-    snapshotVersion(unit, stored, userId, '建立')
-    persist()
-    return toAdminRecord(stored)
+    return toAdminRecord(unit, await request<ServerDetail>(`/admin/${unit}`, { method: 'POST', body: buildBody(unit, payload, true) }))
   },
 
-  async update(unit: UnitKey, id: number, payload: { title?: string; slug?: string; sortOrder?: number; includeInSitemap?: boolean; fields?: Record<string, unknown> }, userId: number): Promise<AdminRecord> {
+  async update(
+    unit: UnitKey,
+    id: number,
+    payload: { title?: string; slug?: string; sortOrder?: number; includeInSitemap?: boolean; fields?: Record<string, unknown> },
+    _userId: number,
+  ): Promise<AdminRecord> {
     assertUnit(unit)
-    const stored = findStored(unit, id)
-    assertBodyEditable(stored)
-    if (stored.isSystemLocked && payload.slug !== undefined && payload.slug !== stored.slug) {
-      throw new ApiError('CONFLICT_LOCKED', '系統頁與系統分類不可改 slug。')
-    }
-    if (payload.title !== undefined) stored.title = payload.title
-    if (payload.slug !== undefined && !stored.isSystemLocked) stored.slug = payload.slug
-    if (payload.sortOrder !== undefined) stored.sortOrder = payload.sortOrder
-    if (payload.includeInSitemap !== undefined) stored.includeInSitemap = payload.includeInSitemap
-    if (payload.fields) stored.fields = { ...stored.fields, ...payload.fields }
-    recomputeUrlPath(unit, stored)
-    touch(stored, userId)
-    snapshotVersion(unit, stored, userId)
-    persist()
-    return toAdminRecord(stored)
+    return toAdminRecord(unit, await request<ServerDetail>(`/admin/${unit}/${id}`, { method: 'PUT', body: buildBody(unit, payload) }))
   },
 
-  async updateSeo(unit: UnitKey, id: number, seo: Partial<SeoMeta>, userId: number): Promise<AdminRecord> {
+  /**
+   * 只寫 SEO 區塊 —— 行銷角色的落點（權限碼是 `seo.edit`，不是 `content.*.edit`）。
+   * ⚠️ SEO 即使在送審中也可以改（docs/11 §7），這是刻意的，不要比照本文加鎖。
+   */
+  async updateSeo(unit: UnitKey, id: number, seo: Partial<SeoMeta>, _userId: number): Promise<AdminRecord> {
     assertUnit(unit)
-    const stored = findStored(unit, id)
-    // ⚠️ SEO 區塊即使在送審中也可以改（docs/11-backend-design.md §7）——不呼叫 assertBodyEditable
-    stored.seo = { ...stored.seo, ...seo }
-    touch(stored, userId)
-    persist()
-    return toAdminRecord(stored)
+    await request<ServerSeo>(`/admin/${unit}/${id}/seo`, { method: 'PUT', body: seo })
+    return content.get(unit, id)
   },
 
-  async updateRelations(unit: UnitKey, id: number, relationKey: string, items: { id: number; sortOrder: number; note?: string | null }[], userId: number): Promise<AdminRecord> {
+  /**
+   * ⚠️ **`PUT .../relations` 是整筆取代**：它會刪掉這筆內容所有正向關聯，再寫入送出去的那一份。
+   * 所以只改一個關聯欄位時，其餘欄位也必須一起送 —— 少送就是刪掉。
+   * 這裡先讀一次現況再合併，呼叫端仍然只需要傳自己那一個 key。
+   */
+  async updateRelations(
+    unit: UnitKey,
+    id: number,
+    relationKey: string,
+    items: { id: number; sortOrder: number; note?: string | null }[],
+    _userId: number,
+  ): Promise<AdminRecord> {
     assertUnit(unit)
-    const stored = findStored(unit, id)
-    const def = UNIT_REGISTRY[unit]
-    const field = def.relations?.find((r) => r.key === relationKey)
-    if (!field) throw new ApiError('NOT_FOUND', `找不到關聯欄位：${relationKey}`)
-    if (!field.editable) throw new ApiError('FORBIDDEN', '這個關聯由對方的編輯畫面維護，這裡唯讀。')
-    const d = loadDb()
-    d.relations = d.relations.filter((r) => !(r.fromId === id && r.fromType === unit && r.relationType === field.relationType))
-    for (const item of items) {
-      d.relations.push({
-        id: d.nextRelationId++,
-        fromId: id,
-        fromType: unit,
-        toId: item.id,
-        toType: field.targetUnit,
-        relationType: field.relationType,
-        sortOrder: item.sortOrder,
-        note: item.note ?? null,
+    const defs = UNIT_REGISTRY[unit].relations ?? []
+    const target = defs.find((r) => r.key === relationKey)
+    if (!target) throw new ApiError('NOT_FOUND', `找不到關聯欄位：${relationKey}`)
+    if (!target.editable) throw new ApiError('FORBIDDEN', '這個關聯由對方的編輯畫面維護，這裡唯讀。')
+
+    const current = await content.get(unit, id)
+    const payload: { relationType: number; toContentItemId: number; sortOrder: number; note: string | null }[] = []
+
+    for (const def of defs) {
+      // 唯讀（反向）欄位不送 —— 那些關聯存在對方那筆內容上，送過來等於幫對方改資料。
+      if (!def.editable) continue
+      const source = def.key === relationKey ? items : current.relations[def.key] ?? []
+      source.forEach((item, index) => {
+        payload.push({
+          relationType: def.relationType,
+          toContentItemId: item.id,
+          sortOrder: item.sortOrder ?? index,
+          note: item.note ?? null,
+        })
       })
     }
-    touch(stored, userId)
-    persist()
-    return toAdminRecord(stored)
+
+    await request<null>(`/admin/${unit}/${id}/relations`, { method: 'PUT', body: payload })
+    return content.get(unit, id)
   },
 
-  /** docs/10-api.md §3.3：送審，建立 ContentReviews 並附高風險字詞掃描結果。 */
-  async submit(unit: UnitKey, id: number, userId: number, userName: string): Promise<{ riskFlags: string[] }> {
+  /** 送審。回傳的 riskFlags 是**伺服器**掃出來的，與編輯器的即時提示可能不完全一致。 */
+  async submit(unit: UnitKey, id: number, _userId: number, _userName: string): Promise<{ riskFlags: string[] }> {
     assertUnit(unit)
-    const stored = findStored(unit, id)
-    if (stored.status !== 1) throw new ApiError('CONFLICT_STATE', '只有草稿可以送審。')
-    const def = UNIT_REGISTRY[unit]
-    const d = loadDb()
-    const riskFlags = new Set<string>()
-    for (const field of def.fields.filter((f) => f.riskScan)) {
-      const value = stored.fields[field.key]
-      if (typeof value === 'string') {
-        for (const hit of scanRiskTermsInternal(value, d.riskTerms)) riskFlags.add(hit)
-      }
-    }
-    stored.status = 2
-    touch(stored, userId)
-    snapshotVersion(unit, stored, userId, '送審')
-    d.reviews.push({
-      id: d.nextReviewId++,
-      contentItemId: id,
-      unit,
-      title: stored.title,
-      submittedByUserId: userId,
-      submittedByName: userName,
-      submittedAt: new Date().toISOString(),
-      status: 1,
-      decidedByUserId: null,
-      decidedAt: null,
-      decisionNote: null,
-      riskFlags: [...riskFlags],
+    const res = await request<{ riskFlags: string[] | null }>(`/admin/${unit}/${id}/submit`, { method: 'POST', body: {} })
+    return { riskFlags: res?.riskFlags ?? [] }
+  },
+
+  /** 直接發布／下架（僅具發布權的角色；權限由 API 擋，前端只決定按鈕出不出現）。 */
+  async setPublishState(unit: UnitKey, id: number, status: Extract<ContentStatus, 3 | 4>, _userId: number): Promise<AdminRecord> {
+    assertUnit(unit)
+    await request<ServerDetail>(`/admin/${unit}/${id}/publish`, {
+      method: 'PATCH',
+      body: { action: status === 3 ? 'publish' : 'unpublish' },
     })
-    persist()
-    return { riskFlags: [...riskFlags] }
-  },
-
-  /** docs/10-api.md §3.3：直接發布／下架（僅具發布權的角色，權限檢查在呼叫端）。 */
-  async setPublishState(unit: UnitKey, id: number, status: Extract<ContentStatus, 3 | 4>, userId: number): Promise<AdminRecord> {
-    assertUnit(unit)
-    const stored = findStored(unit, id)
-    stored.status = status
-    touch(stored, userId)
-    snapshotVersion(unit, stored, userId, status === 3 ? '發布' : '下架')
-    requestRebuild()
-    persist()
-    return toAdminRecord(stored)
+    return content.get(unit, id)
   },
 
   /** ⚠️ 排程時間是「最早生效時間」，不是精確時間（docs/11 §7）。 */
-  async schedule(unit: UnitKey, id: number, publishAt: string | null, unpublishAt: string | null, userId: number): Promise<AdminRecord> {
+  async schedule(unit: UnitKey, id: number, publishAt: string | null, unpublishAt: string | null, _userId: number): Promise<AdminRecord> {
     assertUnit(unit)
-    const stored = findStored(unit, id)
-    stored.publishAt = publishAt
-    stored.unpublishAt = unpublishAt
-    touch(stored, userId)
-    persist()
-    return toAdminRecord(stored)
+    await request<ServerDetail>(`/admin/${unit}/${id}/schedule`, { method: 'PATCH', body: { publishAt, unpublishAt } })
+    return content.get(unit, id)
   },
 
-  async sort(unit: UnitKey, orderedIds: number[], userId: number): Promise<void> {
+  async sort(unit: UnitKey, orderedIds: number[], _userId: number): Promise<void> {
     assertUnit(unit)
-    const d = loadDb()
-    orderedIds.forEach((id, index) => {
-      const stored = d.records[unit].find((r) => r.id === id)
-      if (stored) {
-        stored.sortOrder = index
-        touch(stored, userId)
-      }
+    await request<null>(`/admin/${unit}/sort`, {
+      method: 'PUT',
+      body: orderedIds.map((id, index) => ({ id, sortOrder: index })),
     })
-    persist()
   },
 
   async remove(unit: UnitKey, id: number): Promise<void> {
     assertUnit(unit)
-    const stored = findStored(unit, id)
-    if (stored.isSystemLocked) throw new ApiError('CONFLICT_LOCKED', '系統頁與系統分類不可刪除。')
-    if (unit === 'term') {
-      const usage = countTermUsage(id)
-      if (usage > 0) throw new ApiError('CONFLICT_STATE', `仍有 ${usage} 筆內容引用，無法刪除。`)
-    }
-    const d = loadDb()
-    d.records[unit] = d.records[unit].filter((r) => r.id !== id)
-    d.relations = d.relations.filter((r) => !(r.fromId === id || r.toId === id))
-    persist()
+    await request<null>(`/admin/${unit}/${id}`, { method: 'DELETE' })
   },
 
   async versions(unit: UnitKey, id: number): Promise<{ versionNo: number; title: string; note: string | null; createdAt: string; createdByUserId: number }[]> {
     assertUnit(unit)
-    return loadDb()
-      .versions.filter((v) => v.unit === unit && v.contentItemId === id)
+    const rows = (await request<{ versionNo: number; title: string; note: string | null; createdAt: string; createdByUserId: number | null }[]>(
+      `/admin/${unit}/${id}/versions`,
+    )) ?? []
+    return rows
+      .map((v) => ({ ...v, createdByUserId: v.createdByUserId ?? 0 }))
       .sort((a, b) => b.versionNo - a.versionNo)
-      .map(({ versionNo, title, note, createdAt, createdByUserId }) => ({ versionNo, title, note, createdAt, createdByUserId }))
   },
 
-  async restoreVersion(unit: UnitKey, id: number, versionNo: number, userId: number): Promise<AdminRecord> {
+  /** 還原成**草稿**，不直接上線（docs/10 §3.3）。 */
+  async restoreVersion(unit: UnitKey, id: number, versionNo: number, _userId: number): Promise<AdminRecord> {
     assertUnit(unit)
-    const d = loadDb()
-    const version = d.versions.find((v) => v.unit === unit && v.contentItemId === id && v.versionNo === versionNo)
-    if (!version) throw new ApiError('NOT_FOUND', '找不到這個版本。')
-    const stored = findStored(unit, id)
-    // 還原是整筆還原成草稿，不直接上線（docs/10-api.md §3.3）
-    stored.title = version.snapshot.title
-    stored.fields = { ...version.snapshot.fields }
-    stored.seo = { ...version.snapshot.seo }
-    stored.status = 1
-    touch(stored, userId)
-    snapshotVersion(unit, stored, userId, `還原自版本 ${versionNo}`)
-    persist()
-    return toAdminRecord(stored)
+    await request<ServerDetail>(`/admin/${unit}/${id}/versions/${versionNo}/restore`, { method: 'POST', body: {} })
+    return content.get(unit, id)
   },
 }
 
-function countTermUsage(termId: number): number {
-  const d = loadDb()
-  let count = 0
-  for (const unit of UNIT_KEYS) {
-    for (const rec of d.records[unit]) {
-      const catKey = rec.fields.categoryTermSeedKey
-      if (catKey !== undefined && Number(catKey) === termId) count++
-    }
-  }
-  count += d.relations.filter((r) => r.toId === termId && r.relationType === 11).length
-  return count
+// ── 審核佇列 ──────────────────────────────────────────────────────────
+
+interface ServerReviewItem {
+  id: number
+  contentItemId: number
+  unit: UnitKey
+  title: string
+  urlPath: string | null
+  versionId: number
+  versionNo: number
+  submittedByUserId: number
+  submittedByName: string | null
+  submittedAt: string
+  riskFlags: string[] | null
 }
 
-// ── 審核佇列（下一輪才做完整畫面，這裡先把資料層立好）───────────────
+function toReviewItem(row: ServerReviewItem): ReviewItem {
+  return {
+    id: row.id,
+    contentItemId: row.contentItemId,
+    unit: row.unit,
+    title: row.title,
+    submittedByUserId: row.submittedByUserId,
+    submittedByName: row.submittedByName ?? `#${row.submittedByUserId}`,
+    submittedAt: row.submittedAt,
+    // 佇列查的就是 Status=1（待審），docs/10 §3.4。
+    status: 1,
+    decidedByUserId: null,
+    decidedAt: null,
+    decisionNote: null,
+    riskFlags: row.riskFlags ?? [],
+  }
+}
 
 const review = {
   async pending(): Promise<ReviewItem[]> {
-    return loadDb()
-      .reviews.filter((r) => r.status === 1)
-      .sort((a, b) => a.submittedAt.localeCompare(b.submittedAt))
+    const paged = normalizePaged(await request<ServerPaged<ServerReviewItem>>('/admin/review', { query: { page: 1, pageSize: 100 } }))
+    return paged.items.map(toReviewItem)
   },
 
-  async myRejected(userId: number): Promise<ReviewItem[]> {
-    return loadDb().reviews.filter((r) => r.status === 3 && r.submittedByUserId === userId)
+  /** 「我的退件」沒有獨立端點，它是儀表板聚合查詢的一部分（docs/10 §3.4）。 */
+  async myRejected(_userId: number): Promise<ReviewItem[]> {
+    const summary = await request<ServerDashboard>('/admin/dashboard')
+    return (summary.myRejectedItems ?? []).map((r, index) => ({
+      id: index,
+      contentItemId: r.contentItemId,
+      unit: r.unit,
+      title: r.title,
+      submittedByUserId: 0,
+      submittedByName: '',
+      submittedAt: r.decidedAt ?? '',
+      status: 3,
+      decidedByUserId: null,
+      decidedAt: r.decidedAt,
+      decisionNote: r.decisionNote,
+      riskFlags: [],
+    }))
   },
 
-  async approve(reviewId: number, userId: number): Promise<void> {
-    const d = loadDb()
-    const item = d.reviews.find((r) => r.id === reviewId)
-    if (!item) throw new ApiError('NOT_FOUND', '找不到這筆送審紀錄。')
-    item.status = 2
-    item.decidedByUserId = userId
-    item.decidedAt = new Date().toISOString()
-    // docs/11-backend-design.md §7：核准即 Status=3，不管 PublishAt 有沒有到
-    const stored = findStored(item.unit, item.contentItemId)
-    stored.status = 3
-    touch(stored, userId)
-    snapshotVersion(item.unit, stored, userId, '審核核准')
-    requestRebuild()
-    persist()
+  async approve(reviewId: number, _userId: number): Promise<void> {
+    await request<null>(`/admin/review/${reviewId}/approve`, { method: 'POST', body: {} })
   },
 
-  async reject(reviewId: number, decisionNote: string, userId: number): Promise<void> {
-    if (!decisionNote.trim()) throw new ApiError('VALIDATION_REQUIRED', '退回原因為必填。')
-    const d = loadDb()
-    const item = d.reviews.find((r) => r.id === reviewId)
-    if (!item) throw new ApiError('NOT_FOUND', '找不到這筆送審紀錄。')
-    item.status = 3
-    item.decidedByUserId = userId
-    item.decidedAt = new Date().toISOString()
-    item.decisionNote = decisionNote
-    const stored = findStored(item.unit, item.contentItemId)
-    stored.status = 1 // 退回 → 草稿
-    touch(stored, userId)
-    persist()
+  /** 退回原因必填（docs/08 §B-3 的 CHECK 約束，不只是前端規則）。 */
+  async reject(reviewId: number, decisionNote: string, _userId: number): Promise<void> {
+    await request<null>(`/admin/review/${reviewId}/reject`, { method: 'POST', body: { decisionNote } })
   },
 }
 
-// ── 重建聚合（docs/11-backend-design.md §10 的簡化示意：3–5 分鐘聚合窗口）──
+// ── 重建狀態 ──────────────────────────────────────────────────────────
 
-let rebuildTimer: ReturnType<typeof setTimeout> | null = null
-
-function requestRebuild() {
-  const d = loadDb()
-  d.rebuild.pending = true
-  d.rebuild.lastRequestedAt = new Date().toISOString()
-  persist()
-  if (rebuildTimer) clearTimeout(rebuildTimer)
-  // 示意用途，非真正 3–5 分鐘聚合窗口——demo 縮短成幾秒，讓「發布中→已上線」看得到變化
-  rebuildTimer = setTimeout(() => {
-    const latest = loadDb()
-    latest.rebuild.pending = false
-    latest.rebuild.lastCompletedAt = new Date().toISOString()
-    persist()
-  }, 8000)
+export interface RebuildState {
+  pending: boolean
+  lastRequestedAt: string | null
+  lastCompletedAt: string | null
 }
 
 const rebuild = {
+  /**
+   * ⚠️ 這是「重建請求送出去了沒有」，**不是建置進度**。`repository_dispatch` 是射後不理，
+   * API 不知道 GitHub Actions 跑到哪裡 —— 所以「已上線」是樂觀顯示，不是部署成功的證據。
+   */
   async status(): Promise<RebuildState> {
-    return { ...loadDb().rebuild }
+    const res = await request<{ pending: boolean; pendingSince: string | null; lastDispatchedAt: string | null }>('/admin/rebuild')
+    return {
+      pending: res.pending,
+      lastRequestedAt: res.pendingSince ?? res.lastDispatchedAt,
+      lastCompletedAt: res.lastDispatchedAt,
+    }
+  },
+
+  /** 手動觸發全站重建（限超管）。一般發布本來就會自動觸發（docs/11 §10）。 */
+  async trigger(): Promise<void> {
+    await request<null>('/admin/rebuild', { method: 'POST', body: {} })
   },
 }
 
-// ── 儀表板：沒有專屬資料表，全部是聚合查詢（docs/08 §K）─────────────
+// ── 儀表板 ────────────────────────────────────────────────────────────
+
+interface ServerDashboard {
+  pendingReviewCount: number
+  myRejectedCount: number
+  contentCountsByUnit: Record<string, { draft: number; inReview: number; published: number; unpublished: number }>
+  recentPendingReviews: ServerReviewItem[] | null
+  myRejectedItems: { contentItemId: number; unit: UnitKey; title: string; urlPath: string | null; decisionNote: string | null; decidedAt: string | null }[] | null
+}
 
 export interface DashboardSummary {
   statusCounts: Record<UnitKey, Record<ContentStatus, number>>
@@ -892,42 +638,55 @@ export interface DashboardSummary {
 }
 
 const dashboard = {
-  async summary(userId: number): Promise<DashboardSummary> {
-    const d = loadDb()
+  async summary(_userId: number): Promise<DashboardSummary> {
+    // ⚠️ 兩支端點，一次往返各一。不要為了「少一次請求」把重建狀態塞進儀表板端點 ——
+    //    編輯畫面也要輪詢重建狀態，它必須是獨立的一支。
+    const [server, rebuildState] = await Promise.all([
+      request<ServerDashboard>('/admin/dashboard'),
+      rebuild.status(),
+    ])
+
     const statusCounts = {} as Record<UnitKey, Record<ContentStatus, number>>
     let totalRecords = 0
     for (const unit of UNIT_KEYS) {
-      const counts: Record<ContentStatus, number> = { 1: 0, 2: 0, 3: 0, 4: 0 }
-      for (const rec of d.records[unit]) {
-        counts[rec.status]++
-        totalRecords++
+      const counts = server.contentCountsByUnit?.[unit]
+      const mapped: Record<ContentStatus, number> = {
+        1: counts?.draft ?? 0,
+        2: counts?.inReview ?? 0,
+        3: counts?.published ?? 0,
+        4: counts?.unpublished ?? 0,
       }
-      statusCounts[unit] = counts
+      statusCounts[unit] = mapped
+      totalRecords += mapped[1] + mapped[2] + mapped[3] + mapped[4]
     }
+
     return {
       statusCounts,
-      pendingReviewCount: d.reviews.filter((r) => r.status === 1).length,
-      myRejected: d.reviews.filter((r) => r.status === 3 && r.submittedByUserId === userId),
-      rebuild: { ...d.rebuild },
+      pendingReviewCount: server.pendingReviewCount,
+      myRejected: (server.myRejectedItems ?? []).map((r, index) => ({
+        id: index,
+        contentItemId: r.contentItemId,
+        unit: r.unit,
+        title: r.title,
+        submittedByUserId: 0,
+        submittedByName: '',
+        submittedAt: r.decidedAt ?? '',
+        status: 3 as const,
+        decidedByUserId: null,
+        decidedAt: r.decidedAt,
+        decisionNote: r.decisionNote,
+        riskFlags: [],
+      })),
+      rebuild: rebuildState,
       totalRecords,
     }
   },
 }
 
-// ── 上傳：瀏覽器直傳 Blob 的流程先做出來，實際上傳留 TODO ─────────────
-//
-// docs/09-frontend.md §9：「欄位內選檔 → POST /admin/upload/sas 取短效 SAS →
-// 瀏覽器直接 PUT 到 Blob → POST /admin/upload/commit 回報」。現在沒有 API，
-// 這裡刻意讓它明確失敗（而不是假裝成功），圖片欄位改用「貼上圖片網址」當
-// 示意替代方案，見 src/components/ImageField.vue 的註解。
-//
-// ⚠️ 沒有 media 門面了 —— 不做媒體庫（2026-09-11 定案），沒有清單與刪除端點。
-
 // ── 對外門面 ──────────────────────────────────────────────────────────
 
 export { ApiError } from './errors'
-
-
+export type { UnitField }
 
 export const adminApi = {
   auth,
@@ -936,7 +695,6 @@ export const adminApi = {
   review,
   rebuild,
   dashboard,
-  // ── 第二輪的系統類畫面（docs/06 §5）。各區實作在 src/api/<area>.ts ──
   upload: uploadApi,
   redirect: redirectApi,
   seo: seoApi,

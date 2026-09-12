@@ -17,8 +17,8 @@ import type { ChangeFreq, SeoConsistencyIssue, SitemapFileConfig, SitemapFileKey
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
-const canView = computed(() => hasPermission(permCtx, 'setting.view'))
-const canEdit = computed(() => hasPermission(permCtx, 'setting.edit'))
+const canView = computed(() => hasPermission(permCtx, 'settings.edit'))
+const canEdit = computed(() => hasPermission(permCtx, 'settings.edit'))
 
 // ── 內容快照：跨九個單元撈一次，同時餵「分檔預估筆數」與「矛盾清單」用 ──
 

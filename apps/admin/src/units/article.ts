@@ -10,15 +10,15 @@ export const articleUnit: UnitDefinition = {
   ownershipRestricted: true, // 醫師角色只能編輯自己署名的文章（AuthorDoctorId → OwnerUserId）
   listColumns: [
     { key: 'title', label: '標題' },
-    { key: 'categoryTermSeedKey', label: '分類', render: 'text' },
+    { key: 'categoryTitle', label: '分類', render: 'text' },
     { key: 'displayDate', label: '顯示日期', render: 'date' },
     { key: 'status', label: '狀態', render: 'status' },
   ],
   fields: [
-    { key: 'categoryTermSeedKey', label: '文章分類', type: 'relation-single', required: true, optionsFromTermType: 2, group: '基本資料' },
-    { key: 'authorDoctorSeedKey', label: '作者（醫師）', type: 'relation-single', optionsFromUnit: 'doctor', group: '基本資料', hint: '作者為團隊成員時選這一欄。' },
+    { key: 'categoryTermId', label: '文章分類', type: 'relation-single', required: true, optionsFromTermType: 2, group: '基本資料' },
+    { key: 'authorDoctorId', label: '作者（醫師）', type: 'relation-single', optionsFromUnit: 'doctor', group: '基本資料', hint: '作者為團隊成員時選這一欄。' },
     { key: 'authorName', label: '作者署名', type: 'text', group: '基本資料', hint: '作者非團隊成員時填寫；與「作者（醫師）」擇一。' },
-    { key: 'reviewerDoctorSeedKey', label: '審閱醫師', type: 'relation-single', optionsFromUnit: 'doctor', group: '基本資料' },
+    { key: 'reviewerDoctorId', label: '審閱醫師', type: 'relation-single', optionsFromUnit: 'doctor', group: '基本資料' },
     { key: 'reviewedOn', label: '審閱日期', type: 'date', group: '基本資料' },
     {
       key: 'displayDate',

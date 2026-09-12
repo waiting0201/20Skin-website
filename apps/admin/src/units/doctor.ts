@@ -59,7 +59,7 @@ export const doctorUnit: UnitDefinition = {
       group: '看診資訊',
       hint: '對應 DoctorSchedules：據點 × 星期 × 時段。',
       repeaterFields: [
-        { key: 'clinicSeedKey', label: '看診據點', type: 'relation-single', relationUnit: 'clinic' },
+        { key: 'clinicId', label: '看診據點', type: 'relation-single', relationUnit: 'clinic' },
         {
           key: 'dayOfWeek',
           label: '星期',

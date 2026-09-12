@@ -44,9 +44,27 @@ public sealed class RedirectHandler(Skin20DbContext db, ISqlConnectionFactory sq
         var pageSize = Paging.PageSize(req.Query["pageSize"]);
         var keyword = req.Query["keyword"].FirstOrDefault();
 
-        var (items, total) = await reads.ListAsync(keyword, page, pageSize, req.HttpContext.RequestAborted);
+        bool? isActive = bool.TryParse(req.Query["isActive"].FirstOrDefault(), out var parsedActive) ? parsedActive : null;
+        byte? source = byte.TryParse(req.Query["source"].FirstOrDefault(), out var parsedSource) ? parsedSource : null;
+        var sortBy = req.Query["sortBy"].FirstOrDefault();
+        // 後台預設「新的在前」。只有明確帶 asc 才升冪。
+        var sortDescending = !string.Equals(req.Query["sortDir"].FirstOrDefault(), "asc", StringComparison.OrdinalIgnoreCase);
+
+        var (items, total) = await reads.ListAsync(
+            keyword, isActive, source, sortBy, sortDescending, page, pageSize, req.HttpContext.RequestAborted);
 
         return new OkObjectResult(ApiResponse.Ok(Paging.Build(items, total, page, pageSize)));
+    }
+
+    /// <summary>
+    /// <c>GET /admin/redirect/stats</c>：清單上方的統計卡。
+    /// <para>⚠️ 獨立一支而不是塞進清單回應 —— 統計是全表的，清單是一頁的，
+    /// 混在同一個回應裡遲早會有人拿分頁結果去加總。</para>
+    /// </summary>
+    public async Task<IActionResult> StatsAsync()
+    {
+        var stats = await reads.StatsAsync();
+        return new OkObjectResult(ApiResponse.Ok(stats));
     }
 
     public async Task<IActionResult> CreateAsync(HttpRequest req)
@@ -183,6 +201,16 @@ public sealed class RedirectHandler(Skin20DbContext db, ISqlConnectionFactory sq
         var errors = new List<RedirectImportRowError>();
         var toInsert = new List<Redirect>();
 
+        // 🔴 覆蓋模式：來源已存在時改成更新那一筆，而不是當成錯誤跳過。
+        //    ⚠️ 只更新 ToPath／StatusCode／IsActive —— **不動 Source 與 IsVerified**。
+        //    重匯一份遷移工具產生的 CSV 不應該把「人工新增」的來源標記改掉，
+        //    更不該把已經人工核對過的規則打回未核對。
+        var overwrite = body.OverwriteExisting;
+        var existingByFromPath = overwrite
+            ? await db.Redirects.Where(r => existingFromPaths.Contains(r.FromPath)).ToDictionaryAsync(r => r.FromPath, ct)
+            : [];
+        var updatedCount = 0;
+
         for (var i = 0; i < rows.Count; i++)
         {
             var rowNumber = i + 2; // 第 1 列是標頭
@@ -206,7 +234,24 @@ public sealed class RedirectHandler(Skin20DbContext db, ISqlConnectionFactory sq
 
             if (existingFromPaths.Contains(fromPath))
             {
-                errors.Add(new RedirectImportRowError(rowNumber, fromPath, "同一來源已存在於資料庫中。"));
+                if (!overwrite || !existingByFromPath.TryGetValue(fromPath, out var existingRow))
+                {
+                    errors.Add(new RedirectImportRowError(rowNumber, fromPath, "同一來源已存在於資料庫中。"));
+                    continue;
+                }
+
+                if (string.Equals(fromPath, normalizedTo, StringComparison.Ordinal))
+                {
+                    errors.Add(new RedirectImportRowError(rowNumber, fromPath, "來源與目標路徑相同，會形成自我迴圈。"));
+                    continue;
+                }
+
+                existingRow.ToPath = toPath;
+                if (TryGet(row, "statuscode", out var rawOverwriteStatus) && short.TryParse(rawOverwriteStatus, out var parsedOverwriteStatus))
+                    existingRow.StatusCode = parsedOverwriteStatus;
+                if (TryGet(row, "isactive", out var rawOverwriteActive))
+                    existingRow.IsActive = ParseBool(rawOverwriteActive, defaultValue: true);
+                updatedCount++;
                 continue;
             }
 
@@ -265,7 +310,7 @@ public sealed class RedirectHandler(Skin20DbContext db, ISqlConnectionFactory sq
             });
         }
 
-        if (toInsert.Count > 0)
+        if (toInsert.Count > 0 || updatedCount > 0)
         {
             // docs/11 §6.1：多列寫入包 execution strategy＋交易；EnableRetryOnFailure 下
             // 直接 BeginTransactionAsync 會被擋下。
@@ -283,11 +328,13 @@ public sealed class RedirectHandler(Skin20DbContext db, ISqlConnectionFactory sq
         {
             TotalRows = rows.Count,
             Imported = toInsert.Count,
+            Updated = updatedCount,
             Skipped = errors.Count,
             Errors = errors,
         };
 
-        return new OkObjectResult(ApiResponse.Ok(result, $"匯入完成：{toInsert.Count} 筆成功、{errors.Count} 筆跳過。"));
+        return new OkObjectResult(ApiResponse.Ok(
+            result, $"匯入完成：{toInsert.Count} 筆新增、{updatedCount} 筆更新、{errors.Count} 筆跳過。"));
     }
 
     // ── 轉址迴圈防護（docs/08 §H）───────────────────────────────────────

@@ -1,24 +1,23 @@
-// sitemap 設定與 FAQ／語料匯出（docs/03 §1、docs/04 §3、docs/06 §6、docs/07 §4、docs/08 §H）
-//
-// ⚠️ 這是 mock 的骨架，由第二輪的畫面實作填滿。
-// 持久化用 ./mock-store 開獨立的 store（理由見該檔案），**不要動 client.ts 的 Db**。
+// sitemap 設定、robots.txt 與 FAQ／語料匯出（docs/03 §1、docs/04 §3、docs/06 §6、docs/07 §4、docs/08 §H）
 //
 // 上層畫面只透過 client.ts 匯出的 adminApi 取用，不直接 import 這個檔。
-// 接上 api.20skin.tw 時整支換掉，畫面不必改（docs/09-frontend.md §8）。
 //
 // ⚠️ 這支刻意不 import client.ts（避免循環相依，見 redirect.ts 檔頭同樣的說明）。
-// 「哪些內容型別／哪些內容項目會進到哪個 sitemap 分檔」這種跨單元的即時統計，
-// 由 SitemapSettings.vue／Export.vue 自己呼叫 adminApi.content.list() 湊資料後
-// 傳進本檔的純函式；本檔只管設定值本身的存讀，以及純文字組裝邏輯。
+// 「哪些內容項目會進到哪個 sitemap 分檔」這種跨單元的即時統計，由 SitemapSettings.vue
+// 自己呼叫 adminApi.content.list() 湊資料後傳進本檔的純函式。
 //
-// ⚠️ docs/08-database.md §H 說得很清楚：sitemap 的 5 個分檔**不需要資料表**，
-// 內容範圍在建置期由 `ContentType ＋ IncludeInSitemap ＋ Status ＋ UrlPath IS NOT NULL`
-// 算出來。這裡持久化的「分檔設定」（是否納入、預設 changefreq／priority）是
-// docs/08 §G-1 `SiteSettings` 底下的一組 JSON 值，不是新表；mock 用獨立
-// store 只是第二輪畫面平行開發的權宜（理由見 mock-store.ts 檔頭）。
+// 🔴 docs/08-database.md §H：sitemap 的 5 個分檔**不需要資料表**，收錄範圍在建置期由
+//    `ContentType ＋ IncludeInSitemap ＋ Status ＋ UrlPath IS NOT NULL` 算出來。
+//    這裡讀寫的「分檔設定」（是否納入、預設 changefreq／priority）是 `SiteSettings`
+//    底下的一個 JSON 值（鍵 `seo.sitemapFiles`），robots.txt 是另一個鍵（`seo.robotsTxt`）。
+//
+// ⚠️ **匯出預覽一律走 API，前端不自己組**。同一份 faq.json／llms.txt 在建置期由
+//    匯出腳本產生，後台這個畫面只是預覽（docs/07 §4）。前端若自己組一份，
+//    就會有兩個產生器、兩套規則，而且**預覽跟正式產物不一樣時沒有人會發現**。
 
-import { createStore } from './mock-store'
 import type { UnitKey } from '../types'
+import { request } from './http'
+import { readSettings, settingJson, settingText, writeSettings } from './settings-client'
 
 // ── Sitemap 分檔設定 ──────────────────────────────────────────────────
 
@@ -66,17 +65,6 @@ Disallow: /search/
 Sitemap: https://www.20skin.tw/sitemap.xml
 `
 
-interface SeoSettingsDb {
-  sitemapFiles: SitemapFileConfig[]
-  robotsTxt: string
-  robotsUpdatedAt: string
-}
-
-function seedSeoSettings(): SeoSettingsDb {
-  return { sitemapFiles: defaultSitemapFiles(), robotsTxt: DEFAULT_ROBOTS_TXT, robotsUpdatedAt: new Date().toISOString() }
-}
-
-const store = createStore<SeoSettingsDb>('seo-settings', seedSeoSettings, 1)
 
 /** robots.txt 裡出現 `Disallow: /admin` 這種寫法時回傳警告文字；沒有問題回傳 null。畫面用來擋一個明知會出問題的存檔，而不是事後才發現。 */
 export function checkRobotsTxt(text: string): string | null {
@@ -126,118 +114,103 @@ export function findSeoConsistencyIssues(items: SeoConsistencyInput[]): SeoConsi
 // 組成字串給畫面「預覽＋下載」，**不會、也不該把結果送到任何地方發布**——
 // 真正的產出時機是 CI 的 nuxt generate，不是這個畫面按一顆按鈕。
 
-export interface FaqExportItem {
-  id: number
-  question: string
-  categoryLabel: string
-  aiSummary: string
-  webAnswer: string
-  urlPath: string | null
-  updatedAt: string
+// ── 匯出預覽 ──────────────────────────────────────────────────────────
+//
+// 🔴 **產生器只有一個，在後端。** faq.json／llms.txt／llms-full.txt 的正式產物由建置期的
+//    匯出腳本產生（docs/07 §4），後台這個畫面只是預覽，所以它必須問同一個產生器 ——
+//    前端自己組一份的話，預覽跟正式產物不一致時不會有任何徵兆。
+//
+// ⚠️ 連帶：這裡**不再匯出** `buildFaqJson`／`buildLlmsTxt`／`buildLlmsFullTxt`
+//    與 `FaqExportItem`／`SiteFactsForExport`。Export.vue 改成直接要預覽全文。
+
+export type ExportKind = 'faq.json' | 'llms.txt' | 'llms-full.txt'
+
+export interface ExportPreview {
+  kind: string
+  itemCount: number
+  generatedAt: string
+  /** 預覽全文（JSON 或純文字，依 kind 而定）。 */
+  content: string
 }
 
-export interface SiteFactsForExport {
-  siteName: string
-  tagline: string
-  keyFacts: string[]
-  /** { 分類標題: [{標題, 網址, 一句話摘要}] }，例如療程、困擾、醫師、據點。 */
-  sections: { title: string; items: { title: string; url: string | null; summary: string }[] }[]
-}
+const SITEMAP_FILES_KEY = 'seo.sitemapFiles'
+const ROBOTS_KEY = 'seo.robotsTxt'
 
-export function buildFaqJson(items: FaqExportItem[]): string {
-  const payload = {
-    '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    generatedNote: '此為後台預覽輸出，正式檔案於建置期（nuxt generate）產生，見 docs/07-deployment.md §4。',
-    mainEntity: items.map((f) => ({
-      '@type': 'Question',
-      name: f.question,
-      url: f.urlPath ?? undefined,
-      dateModified: f.updatedAt,
-      acceptedAnswer: { '@type': 'Answer', text: f.aiSummary },
-    })),
-  }
-  return JSON.stringify(payload, null, 2)
-}
-
-export function buildLlmsTxt(facts: SiteFactsForExport): string {
-  const lines: string[] = [`# ${facts.siteName}`, '', `> ${facts.tagline}`, '']
-  if (facts.keyFacts.length) {
-    lines.push('## 關鍵事實', '')
-    for (const f of facts.keyFacts) lines.push(`- ${f}`)
-    lines.push('')
-  }
-  for (const section of facts.sections) {
-    lines.push(`## ${section.title}`, '')
-    for (const item of section.items) {
-      lines.push(item.url ? `- [${item.title}](${item.url})：${item.summary}` : `- ${item.title}：${item.summary}`)
+/**
+ * 讀回來的分檔設定與程式碼裡的預設合併。
+ *
+ * ⚠️ 以**程式碼的 5 個分檔為準**，資料庫只提供那三個旋鈕的值。
+ * 反過來（以資料庫為準）的話，日後程式碼新增一個分檔，舊資料庫裡沒有那一列，
+ * 畫面上就會少一個分檔而且沒有任何提示。
+ */
+function mergeSitemapFiles(stored: Partial<SitemapFileConfig>[]): SitemapFileConfig[] {
+  return defaultSitemapFiles().map((base) => {
+    const found = stored.find((f) => f.key === base.key)
+    if (!found) return base
+    return {
+      ...base,
+      enabled: found.enabled ?? base.enabled,
+      defaultChangeFreq: found.defaultChangeFreq ?? base.defaultChangeFreq,
+      defaultPriority: found.defaultPriority ?? base.defaultPriority,
     }
-    lines.push('')
-  }
-  return lines.join('\n')
+  })
 }
 
-export function buildLlmsFullTxt(facts: SiteFactsForExport, faqs: FaqExportItem[]): string {
-  const lines: string[] = [facts.siteName, facts.tagline, '', '關鍵事實：', ...facts.keyFacts.map((f) => `- ${f}`), '']
-  for (const section of facts.sections) {
-    lines.push(`# ${section.title}`, '')
-    for (const item of section.items) {
-      lines.push(`## ${item.title}`)
-      if (item.url) lines.push(`網址：${item.url}`)
-      lines.push(item.summary, '')
-    }
-  }
-  if (faqs.length) {
-    lines.push('# 常見問題', '')
-    for (const f of faqs) {
-      lines.push(`## ${f.question}`, `分類：${f.categoryLabel}　最後更新：${f.updatedAt.slice(0, 10)}`, f.webAnswer, '')
-    }
-  }
-  return lines.join('\n')
+async function loadSitemapFiles(): Promise<SitemapFileConfig[]> {
+  const settings = await readSettings()
+  return mergeSitemapFiles(settingJson<Partial<SitemapFileConfig>[]>(settings, SITEMAP_FILES_KEY, []))
 }
 
-// ── 對外 API ──────────────────────────────────────────────────────────
+async function saveSitemapFiles(files: SitemapFileConfig[]): Promise<void> {
+  await writeSettings({ [SITEMAP_FILES_KEY]: JSON.stringify(files) })
+}
 
 export const seoApi = {
   sitemap: {
     async list(): Promise<SitemapFileConfig[]> {
-      return [...store.read().sitemapFiles]
+      return loadSitemapFiles()
     },
-    async update(key: SitemapFileKey, patch: Partial<Pick<SitemapFileConfig, 'enabled' | 'defaultChangeFreq' | 'defaultPriority'>>): Promise<SitemapFileConfig> {
-      return store.mutate((d) => {
-        const file = d.sitemapFiles.find((f) => f.key === key)
-        if (!file) throw new Error(`未知的 sitemap 分檔：${key}`)
-        Object.assign(file, patch)
-        return { ...file }
-      })
+
+    async update(
+      key: SitemapFileKey,
+      patch: Partial<Pick<SitemapFileConfig, 'enabled' | 'defaultChangeFreq' | 'defaultPriority'>>,
+    ): Promise<SitemapFileConfig> {
+      // ⚠️ 整份讀 → 改一個 → 整份寫回。這個鍵的值是一個 JSON 陣列，
+      //    資料庫層面沒有「只改其中一筆」這回事。
+      const files = await loadSitemapFiles()
+      const target = files.find((f) => f.key === key)
+      if (!target) throw new Error(`未知的 sitemap 分檔：${key}`)
+      Object.assign(target, patch)
+      await saveSitemapFiles(files)
+      return { ...target }
     },
+
     async resetDefaults(): Promise<SitemapFileConfig[]> {
-      return store.mutate((d) => {
-        d.sitemapFiles = defaultSitemapFiles()
-        return [...d.sitemapFiles]
-      })
+      const files = defaultSitemapFiles()
+      await saveSitemapFiles(files)
+      return files
     },
   },
 
   robots: {
     async get(): Promise<{ text: string; updatedAt: string }> {
-      const d = store.read()
-      return { text: d.robotsTxt, updatedAt: d.robotsUpdatedAt }
+      const settings = await readSettings()
+      return {
+        text: settingText(settings, ROBOTS_KEY, DEFAULT_ROBOTS_TXT),
+        updatedAt: settings.get(ROBOTS_KEY)?.updatedAt ?? '',
+      }
     },
+
     async update(text: string): Promise<{ text: string; updatedAt: string }> {
-      return store.mutate((d) => {
-        d.robotsTxt = text
-        d.robotsUpdatedAt = new Date().toISOString()
-        return { text: d.robotsTxt, updatedAt: d.robotsUpdatedAt }
-      })
+      await writeSettings({ [ROBOTS_KEY]: text })
+      return seoApi.robots.get()
     },
+
     async resetDefault(): Promise<{ text: string; updatedAt: string }> {
-      return store.mutate((d) => {
-        d.robotsTxt = DEFAULT_ROBOTS_TXT
-        d.robotsUpdatedAt = new Date().toISOString()
-        return { text: d.robotsTxt, updatedAt: d.robotsUpdatedAt }
-      })
+      await writeSettings({ [ROBOTS_KEY]: DEFAULT_ROBOTS_TXT })
+      return seoApi.robots.get()
     },
+
     check: checkRobotsTxt,
   },
 
@@ -246,8 +219,12 @@ export const seoApi = {
   },
 
   export: {
-    buildFaqJson,
-    buildLlmsTxt,
-    buildLlmsFullTxt,
+    /**
+     * `GET /admin/export/{kind}`：預覽全文。
+     * ⚠️ **只是預覽**，按下去不會發布任何東西 —— 正式產物在建置期產生（docs/07 §4）。
+     */
+    async preview(kind: ExportKind): Promise<ExportPreview> {
+      return request<ExportPreview>(`/admin/export/${encodeURIComponent(kind)}`)
+    },
   },
 }

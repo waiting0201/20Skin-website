@@ -19,10 +19,12 @@ public sealed class MenuReadService(ISqlConnectionFactory factory)
         using var connection = factory.Create();
 
         const string sql = """
-            SELECT Id, MenuKey, ParentId, Depth, Label, LinkKind, ContentItemId, Url,
-                   IsExternal, RelAttr, OpenInNewTab, SortOrder
-            FROM MenuItems
-            ORDER BY MenuKey, ParentId, SortOrder
+            SELECT m.Id, m.MenuKey, m.ParentId, m.Depth, m.Label, m.LinkKind, m.ContentItemId, m.Url,
+                   m.IsExternal, m.RelAttr, m.OpenInNewTab, m.SortOrder,
+                   ci.ContentType, ci.Title AS ContentTitle
+            FROM MenuItems m
+            LEFT JOIN ContentItems ci ON ci.Id = m.ContentItemId
+            ORDER BY m.MenuKey, m.ParentId, m.SortOrder
             """;
 
         var rows = (await connection.QueryAsync<Row>(new CommandDefinition(sql, cancellationToken: ct))).AsList();
@@ -41,7 +43,7 @@ public sealed class MenuReadService(ISqlConnectionFactory factory)
             .OrderBy(r => r.SortOrder)
             .Select(r => new MenuNodeDto(
                 r.Id, r.Label, (MenuLinkKind)r.LinkKind, r.ContentItemId, r.Url, r.RelAttr, r.OpenInNewTab,
-                BuildChildren(r.Id)))
+                BuildChildren(r.Id), r.ContentType, r.ContentTitle))
             .ToList();
 
         return BuildChildren(null);
@@ -64,5 +66,6 @@ public sealed class MenuReadService(ISqlConnectionFactory factory)
 
     private sealed record Row(
         int Id, string MenuKey, int? ParentId, byte Depth, string Label, byte LinkKind,
-        int? ContentItemId, string? Url, bool IsExternal, string? RelAttr, bool OpenInNewTab, int SortOrder);
+        int? ContentItemId, string? Url, bool IsExternal, string? RelAttr, bool OpenInNewTab, int SortOrder,
+        byte? ContentType, string? ContentTitle);
 }

@@ -18,6 +18,19 @@ namespace Skin20.Api.Handlers;
 /// </summary>
 public sealed class RebuildHandler(IRebuildService rebuild)
 {
+    /// <summary>
+    /// <c>GET /admin/rebuild</c>：聚合窗口狀態。
+    /// <para>
+    /// ⚠️ 權限是「登入即可」而不是 <c>settings.edit</c> —— 內容編輯發布完要看到
+    /// 「發布中」這個狀態字，但他們沒有（也不該有）設定權限。觸發重建仍然要 <c>settings.edit</c>。
+    /// </para>
+    /// </summary>
+    public async Task<IActionResult> GetStatusAsync()
+    {
+        var status = await rebuild.GetStatusAsync();
+        return new OkObjectResult(ApiResponse.Ok(status));
+    }
+
     public async Task<IActionResult> TriggerAsync()
     {
         // RebuildService 內部自己做聚合判斷、自己吞掉失敗（docs/11 §10）——

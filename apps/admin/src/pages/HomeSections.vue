@@ -34,9 +34,9 @@ import RelationPicker from '@/components/RelationPicker.vue'
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
 
-const canEditBase = computed(() => hasPermission(permCtx, 'home.edit'))
-const canSubmit = computed(() => hasPermission(permCtx, 'home.submit'))
-const canPublish = computed(() => hasPermission(permCtx, 'home.publish'))
+const canEditBase = computed(() => hasPermission(permCtx, 'home.arrange'))
+const canSubmit = computed(() => hasPermission(permCtx, 'content.submit'))
+const canPublish = computed(() => hasPermission(permCtx, 'content.page.publish'))
 
 const loading = ref(true)
 const saving = ref(false)
@@ -94,40 +94,6 @@ function onItemsChange(section: HomeSection, items: RelationItem[]) {
   section.items = fromRelationItems(items)
 }
 
-// ── 一次性把預設內容連到既有內容（mock 示範用，docs/08 §G-2 的「只能挑選
-// 已存在內容」在這裡落實：預設值也是查出來的既有內容 id，不是憑空編號）──
-const DEFAULT_TITLES: Partial<Record<HomeSectionKey, string[]>> = {
-  specialties: ['痘痘・粉刺', '敏感肌'],
-  'featured-treatments': ['皮秒雷射（示意）'],
-  'latest-articles': ['（示意）淺談皮秒雷射的適應症'],
-  doctors: ['示範醫師一', '示範醫師二', '示範藝術總監'],
-  clinics: ['四季診所', '二林四季皮膚科'],
-  'brand-story': ['品牌理念'],
-}
-
-async function seedDefaultsIfNeeded(current: HomeSectionsState) {
-  if (current.defaultItemsSeeded) return
-  const targetUnits = new Set<UnitKey>()
-  for (const s of current.sections) if (s.targetUnit) targetUnits.add(s.targetUnit)
-  await Promise.all([...targetUnits].map(loadTitleCache))
-
-  const itemsByKey: Partial<Record<HomeSectionKey, HomeSectionItemRef[]>> = {}
-  for (const section of current.sections) {
-    if (!section.targetUnit) continue
-    const wantedTitles = DEFAULT_TITLES[section.sectionKey] ?? []
-    const idsByTitle = titleCache[section.targetUnit] ?? {}
-    const resolved: HomeSectionItemRef[] = []
-    for (const title of wantedTitles) {
-      const entry = Object.entries(idsByTitle).find(([, label]) => label === title)
-      if (entry) resolved.push({ contentItemId: Number(entry[0]), sortOrder: resolved.length })
-    }
-    itemsByKey[section.sectionKey] = resolved
-  }
-  const heroSettings = current.sections.find((s) => s.sectionKey === 'hero')?.heroSettings as HomeHeroSettings
-  const next = await adminApi.site.home.seedDefaultItems(itemsByKey, heroSettings)
-  applyState(next)
-}
-
 function applyState(next: HomeSectionsState) {
   state.value = next
   sections.splice(0, sections.length, ...next.sections.map((s) => JSON.parse(JSON.stringify(s))))
@@ -140,8 +106,7 @@ async function load() {
     const targetUnits = new Set<UnitKey>()
     for (const s of current.sections) if (s.targetUnit) targetUnits.add(s.targetUnit)
     await Promise.all([...targetUnits].map(loadTitleCache))
-    await seedDefaultsIfNeeded(current)
-    applyState(await adminApi.site.home.get())
+    applyState(current)
   } finally {
     loading.value = false
   }
@@ -190,12 +155,6 @@ async function submit() {
   const next = await adminApi.site.home.submit(user!.id)
   applyState(next)
   actionNotice.value = '已送出審核，請等待審核者核准。'
-}
-
-async function withdraw() {
-  const next = await adminApi.site.home.withdraw(user!.id)
-  applyState(next)
-  actionNotice.value = '已撤回，改回草稿，可以繼續編輯。'
 }
 
 async function approve() {
@@ -352,7 +311,9 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布
 
             <div class="adm-workflow__actions">
               <button v-if="canSubmit && state.status === 1" type="button" class="btn btn--primary btn--block" @click="submit">送出審核</button>
-              <button v-if="canSubmit && state.status === 2" type="button" class="btn btn--line btn--block" @click="withdraw">撤回（改回草稿）</button>
+              <!-- ⚠️ 沒有「撤回」：docs/11 §7 的工作流是送審 → 核准／退回，沒有送審者自己收回這一步。
+                   送錯了要請審核者退回（退回會附原因，也留得下紀錄）。 -->
+              <p v-if="state.status === 2" class="adm-muted">已送審，等待審核者處理。送錯了請聯絡審核者退回。</p>
             </div>
 
             <template v-if="canPublish && state.status === 2">

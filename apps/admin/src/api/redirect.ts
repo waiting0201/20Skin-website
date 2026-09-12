@@ -1,18 +1,22 @@
 // 301 轉址管理（docs/10 §3.4、docs/08 §H、docs/01 §4、docs/07 §2）
 //
-// ⚠️ 這是 mock 的骨架，由第二輪的畫面實作填滿。
-// 持久化用 ./mock-store 開獨立的 store（理由見該檔案），**不要動 client.ts 的 Db**。
-//
 // 上層畫面只透過 client.ts 匯出的 adminApi 取用，不直接 import 這個檔。
-// 接上 api.20skin.tw 時整支換掉，畫面不必改（docs/09-frontend.md §8）。
 //
 // ⚠️ 這支刻意不 import client.ts —— client.ts 會 import 這支（組成 adminApi.redirect），
 // 反向 import 會循環相依。跨單元的「目標路徑是否對應到真實內容」查核，
 // 由 Redirects.vue 自己呼叫 adminApi.content.list() 湊出已知路徑清單後傳進來，
 // 這支只負責純資料與純檢查邏輯。
+//
+// 🔴 **匯入前的預檢是「前端的一份，伺服器還有自己的一份」，而且兩份都必須存在。**
+//    前端這份（evaluateRows）的用途是**在送出之前**把 770 列的問題一次攤在畫面上讓人看；
+//    伺服器那份才是把關 —— 它才看得到資料庫的即時狀態。兩份結果不完全一致是正常的
+//    （例如預檢跑完到按下匯入之間有人新增了一條規則），**不要為了「一致」而拿掉任何一份**。
+//
+// ⚠️ 一層鏈路檢查只是擋一層（docs/08 §H）：A→B→C 擋得掉，
+//    A→B、C→D、B→C 分三批匯入就擋不掉。多層遞移閉包是上線前驗收腳本的事。
 
-import { createStore } from './mock-store'
 import { ApiError } from './errors'
+import { fetchAllPages, normalizePaged, request, type ServerPaged } from './http'
 
 // ── 型別 ────────────────────────────────────────────────────────────────
 
@@ -391,16 +395,6 @@ export function toRedirectCsv(rows: RedirectRecord[]): string {
 
 // 小型可重現亂數產生器（不用 Math.random，讓每次「清掉 localStorage 重新種子」
 // 的結果一致，方便對照與除錯）。
-function mulberry32(seed: number) {
-  let a = seed
-  return () => {
-    a |= 0
-    a = (a + 0x6d2b79f5) | 0
-    let t = Math.imul(a ^ (a >>> 15), 1 | a)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
 
 /** 已寫進 staticwebapp.config.json 的規則，走最快路徑不經過 Function（docs/07 §2）。 */
 const PROMOTED_TO_CONFIG = [
@@ -413,164 +407,90 @@ const PROMOTED_TO_CONFIG = [
   '/product04.php',
 ]
 
-interface SeedInput { fromPath: string; toPath: string; statusCode?: RedirectStatusCode; source: RedirectSource; isVerified: boolean; createdAt: string; isActive?: boolean }
-
-function buildSeed(): RedirectRecord[] {
-  const rand = mulberry32(20250911)
-  const now = Date.now()
-  const daysAgo = (d: number) => new Date(now - d * 86_400_000).toISOString()
-
-  const seeds: SeedInput[] = []
-
-  // 1. 已知對照（docs/01-sitemap.md §4，逐條照抄）——人工新增、已核實。
-  const known: [string, string][] = [
-    ['/index2.php', '/'],
-    ['/doctor.php', '/team/'],
-    ['/news-art.php', '/about/new-chinese-aesthetics/'],
-    ['/make-up-style.php', '/about/makeup-style/'],
-    ['/contact.php', '/clinics/'],
-    ['/product01.php', '/treatments/laser/'],
-    ['/product02.php', '/treatments/microneedle/'],
-    ['/product03.php', '/treatments/photoelectric/'],
-    ['/product04.php', '/treatments/skincare/'],
-    ['/product01-d01.php', '/treatments/laser/picosure-pro/'],
-    ['/product01-d02.php', '/treatments/laser/er-yag/'],
-    ['/product02-d21.php', '/treatments/photoelectric/dermav/'],
-    ['/product02-d22.php', '/treatments/photoelectric/btl-embody/'],
-    ['/share.php?class=醫美新知', '/blog/medical-aesthetics/'],
-    ['/share.php?class=皮膚新知', '/blog/dermatology/'],
-    ['/share.php?class=媒體報導', '/blog/media/'],
-    ['/share.php?class=演講授課', '/blog/lectures/'],
-  ]
-  for (const [from, to] of known) {
-    seeds.push({ fromPath: from, toPath: to, source: 2, isVerified: true, createdAt: daysAgo(60 + Math.floor(rand() * 30)) })
-  }
-
-  // 2. 其餘療程細節頁（27 項扣掉上面已知的 4 項，合成 slug）—— 遷移工具產生、待核實。
-  const categories = ['laser', 'microneedle', 'photoelectric', 'skincare']
-  for (let n = 1; n <= 23; n++) {
-    const cat = categories[n % categories.length]
-    seeds.push({
-      fromPath: `/product0${(n % 4) + 1}-d${String(30 + n).padStart(2, '0')}.php`,
-      toPath: `/treatments/${cat}/treatment-${n}/`,
-      source: 1,
-      isVerified: n % 6 === 0,
-      createdAt: daysAgo(20 + Math.floor(rand() * 40)),
-    })
-  }
-
-  // 3. share.php 年份組合（4 分類 × 10 年 ≈ 40 條）—— 年份併入 query，目標仍是分類頁本身
-  //    （docs/01 §4：「年份改為篩選參數＋canonical」）。
-  const blogClasses: [string, string][] = [
-    ['醫美新知', 'medical-aesthetics'],
-    ['皮膚新知', 'dermatology'],
-    ['媒體報導', 'media'],
-    ['演講授課', 'lectures'],
-  ]
-  for (const [cls, slug] of blogClasses) {
-    for (let y = 2015; y <= 2024; y++) {
-      seeds.push({
-        fromPath: `/share.php?class=${cls}&year=${y}`,
-        toPath: `/blog/${slug}/`,
-        source: 1,
-        isVerified: y >= 2022,
-        createdAt: daysAgo(10 + Math.floor(rand() * 50)),
-      })
-    }
-  }
-
-  // 4. 主站文章（合成資料，見上方大段警語）——約 689 條，湊到全部合計約 770。
-  for (let n = 1; n <= 689; n++) {
-    const [, slug] = blogClasses[n % blogClasses.length]
-    let statusCode: RedirectStatusCode = 301
-    if (n % 211 === 0) statusCode = 302
-    if (n % 137 === 0) statusCode = 410
-    seeds.push({
-      fromPath: `/share.php?id=${n}`,
-      toPath: statusCode === 410 ? '/blog/' : `/blog/${slug}/article-${n}/`,
-      statusCode,
-      source: 1,
-      isVerified: n % 5 === 0, // 人工抽查 ≥ 20%（docs/06 §6）,
-      createdAt: daysAgo(Math.floor(rand() * 90)),
-    })
-  }
-
-  return seeds.map((s, idx) => ({
-    id: idx + 1,
-    fromPath: normalizeFromPath(s.fromPath),
-    toPath: s.toPath,
-    statusCode: s.statusCode ?? 301,
-    isActive: s.isActive ?? true,
-    source: s.source,
-    isVerified: s.isVerified,
-    createdAt: s.createdAt,
-  }))
+interface ServerRedirect {
+  id: number
+  fromPath: string
+  toPath: string
+  toContentItemId: number | null
+  statusCode: number
+  isActive: boolean
+  source: number
+  isVerified: boolean
+  createdAt: string
 }
 
-interface RedirectDb {
-  nextId: number
-  rows: RedirectRecord[]
+function toRecord(row: ServerRedirect): RedirectRecord {
+  return {
+    id: row.id,
+    fromPath: row.fromPath,
+    toPath: row.toPath,
+    statusCode: row.statusCode as RedirectStatusCode,
+    isActive: row.isActive,
+    source: row.source as RedirectSource,
+    isVerified: row.isVerified,
+    createdAt: row.createdAt,
+  }
 }
 
-function seedDb(): RedirectDb {
-  const rows = buildSeed()
-  return { nextId: rows.length + 1, rows }
-}
-
-const store = createStore<RedirectDb>('redirects', seedDb, 1)
-
-// ── 對外 API ──────────────────────────────────────────────────────────
-
-function assertFound(record: RedirectRecord | undefined, id: number): asserts record is RedirectRecord {
-  if (!record) throw new ApiError('NOT_FOUND', `找不到轉址規則 #${id}。`)
+/**
+ * 整份對照表（約 770 條）。
+ *
+ * ⚠️ 這是 8 趟往返（pageSize 上限 100，docs/10 §2），**只在真的需要全量時才呼叫**：
+ * 匯入預檢要跟既有資料比對、匯出要全部、`promotedToConfig` 要找特定幾條。
+ * 清單畫面本身走分頁，不要改成先抓全量再切。
+ */
+async function fetchAllRedirects(): Promise<RedirectRecord[]> {
+  const rows = await fetchAllPages<ServerRedirect>(
+    async (page, pageSize) =>
+      normalizePaged(await request<ServerPaged<ServerRedirect>>('/admin/redirect', { query: { page, pageSize } })),
+    5000,
+  )
+  return rows.map(toRecord)
 }
 
 export const redirectApi = {
+  /** ⚠️ 篩選與排序全部交給 API 在 SQL 層做 —— 在前端過濾只會過濾到當頁那 20 筆（docs/10 §2）。 */
   async list(query: RedirectListQuery = {}): Promise<RedirectPagedResult> {
-    const page = Math.max(1, query.page ?? 1)
-    const pageSize = Math.min(200, Math.max(1, query.pageSize ?? 20))
-    let items = [...store.read().rows]
-
-    if (query.keyword) {
-      const kw = query.keyword.trim().toLowerCase()
-      items = items.filter((r) => r.fromPath.toLowerCase().includes(kw) || r.toPath.toLowerCase().includes(kw))
-    }
-    if (query.isActive !== undefined) items = items.filter((r) => r.isActive === query.isActive)
-    if (query.source !== undefined) items = items.filter((r) => r.source === query.source)
-
-    const sortBy = query.sortBy ?? 'createdAt'
-    const dir = query.sortDir === 'asc' ? 1 : -1
-    items.sort((a, b) =>
-      sortBy === 'fromPath'
-        ? dir * a.fromPath.localeCompare(b.fromPath)
-        : dir * a.createdAt.localeCompare(b.createdAt),
+    const paged = normalizePaged(
+      await request<ServerPaged<ServerRedirect>>('/admin/redirect', {
+        query: {
+          page: Math.max(1, query.page ?? 1),
+          pageSize: Math.min(100, Math.max(1, query.pageSize ?? 20)),
+          keyword: query.keyword?.trim(),
+          isActive: query.isActive,
+          source: query.source,
+          sortBy: query.sortBy,
+          sortDir: query.sortDir,
+        },
+      }),
     )
-
-    const totalCount = items.length
-    const start = (page - 1) * pageSize
     return {
-      items: items.slice(start, start + pageSize),
-      totalCount,
-      page,
-      pageSize,
-      totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+      items: paged.items.map(toRecord),
+      totalCount: paged.totalCount,
+      page: paged.page,
+      pageSize: paged.pageSize,
+      totalPages: paged.totalPages,
     }
   },
 
+  /** 全表統計，由 API 在 SQL 層算（不是把分頁結果加總）。 */
   async stats(): Promise<RedirectStats> {
-    const rows = store.read().rows
-    const bySource: Record<RedirectSource, number> = { 1: 0, 2: 0, 3: 0 }
-    let activeCount = 0
-    let verifiedCount = 0
-    for (const r of rows) {
-      bySource[r.source]++
-      if (r.isActive) activeCount++
-      if (r.isVerified) verifiedCount++
+    const res = await request<{
+      totalCount: number
+      activeCount: number
+      verifiedCount: number
+      migrationCount: number
+      manualCount: number
+      systemCount: number
+    }>('/admin/redirect/stats')
+    return {
+      totalCount: res.totalCount,
+      activeCount: res.activeCount,
+      verifiedCount: res.verifiedCount,
+      bySource: { 1: res.migrationCount, 2: res.manualCount, 3: res.systemCount },
     }
-    return { totalCount: rows.length, activeCount, verifiedCount, bySource }
   },
 
-  /** 依命中次數排序取前 N 條——UI 用來說明「這些會被寫進 staticwebapp.config.json」。 */
   /**
    * 已被提升進 `staticwebapp.config.json` 的規則（docs/07-deployment.md §2）。
    *
@@ -583,117 +503,104 @@ export const redirectApi = {
    * 這裡要跟著改（設定檔有 20 KB 上限，只放得下約 200 條）。
    */
   async promotedToConfig(): Promise<RedirectRecord[]> {
-    const rows = store.read().rows
-    return PROMOTED_TO_CONFIG.map((from) => rows.find((r) => r.fromPath === from)).filter(
-      (r): r is RedirectRecord => Boolean(r),
+    // 逐條用關鍵字查，比整份抓回來再過濾便宜得多（7 筆 vs 約 770 筆）。
+    const found = await Promise.all(
+      PROMOTED_TO_CONFIG.map(async (from) => {
+        const paged = normalizePaged(
+          await request<ServerPaged<ServerRedirect>>('/admin/redirect', { query: { keyword: from, page: 1, pageSize: 100 } }),
+        )
+        const hit = paged.items.find((r) => r.fromPath === from)
+        return hit ? toRecord(hit) : null
+      }),
     )
+    return found.filter((r): r is RedirectRecord => r !== null)
   },
 
   async get(id: number): Promise<RedirectRecord> {
-    const record = store.read().rows.find((r) => r.id === id)
-    assertFound(record, id)
-    return record
+    // 沒有單筆端點（docs/10 §3.4 只有 GET 清單）—— 轉址規則沒有「詳情頁」，
+    // 編輯是就地展開的。用來源路徑當關鍵字查回那一筆即可。
+    const paged = normalizePaged(
+      await request<ServerPaged<ServerRedirect>>('/admin/redirect', { query: { page: 1, pageSize: 100 } }),
+    )
+    const hit = paged.items.find((r) => r.id === id)
+    if (!hit) throw new ApiError('NOT_FOUND', `找不到轉址規則 #${id}。`)
+    return toRecord(hit)
   },
 
+  /**
+   * 新增一筆。
+   * ⚠️ 正規化與迴圈防護**伺服器端會再做一次**（docs/08 §H）。這裡先跑一次本地檢查
+   * 純粹是為了在送出前就給出可讀的錯誤訊息，不是把關。
+   */
   async create(input: RedirectInput): Promise<RedirectRecord> {
-    return store.mutate((d) => {
-      const preview = evaluateRows([{ fromPath: input.fromPath, toPath: input.toPath, statusCode: input.statusCode }], d.rows)
-      const blocking = preview[0].issues.find((i) => i.level === 'error')
-      if (blocking) throw new ApiError(blocking.code === 'DUPLICATE_EXISTING' ? 'CONFLICT_DUPLICATE' : 'VALIDATION', blocking.message)
-
-      const record: RedirectRecord = {
-        id: d.nextId++,
-        fromPath: preview[0].normalizedFrom,
-        toPath: preview[0].normalizedTo,
+    const row = await request<ServerRedirect>('/admin/redirect', {
+      method: 'POST',
+      body: {
+        fromPath: normalizeFromPath(input.fromPath),
+        toPath: normalizeToPath(input.toPath),
         statusCode: input.statusCode ?? 301,
         isActive: input.isActive ?? true,
         source: input.source ?? 2,
-        isVerified: input.isVerified ?? false,
-        createdAt: new Date().toISOString(),
-      }
-      d.rows.push(record)
-      return record
+      },
     })
+    return toRecord(row)
   },
 
   async update(id: number, patch: Partial<RedirectInput> & { isActive?: boolean }): Promise<RedirectRecord> {
-    return store.mutate((d) => {
-      const record = d.rows.find((r) => r.id === id)
-      assertFound(record, id)
-
-      const nextFrom = patch.fromPath !== undefined ? patch.fromPath : record.fromPath
-      const nextTo = patch.toPath !== undefined ? patch.toPath : record.toPath
-      if (patch.fromPath !== undefined || patch.toPath !== undefined || patch.statusCode !== undefined) {
-        const preview = evaluateRows([{ fromPath: nextFrom, toPath: nextTo, statusCode: patch.statusCode ?? record.statusCode }], d.rows, { excludeId: id })
-        const blocking = preview[0].issues.find((i) => i.level === 'error')
-        if (blocking) throw new ApiError(blocking.code === 'DUPLICATE_EXISTING' ? 'CONFLICT_DUPLICATE' : 'VALIDATION', blocking.message)
-        record.fromPath = preview[0].normalizedFrom
-        record.toPath = preview[0].normalizedTo
-      }
-      if (patch.statusCode !== undefined) record.statusCode = patch.statusCode
-      if (patch.isActive !== undefined) record.isActive = patch.isActive
-      if (patch.source !== undefined) record.source = patch.source
-      if (patch.isVerified !== undefined) record.isVerified = patch.isVerified
-      return record
+    const row = await request<ServerRedirect>(`/admin/redirect/${id}`, {
+      method: 'PUT',
+      body: {
+        fromPath: patch.fromPath === undefined ? undefined : normalizeFromPath(patch.fromPath),
+        toPath: patch.toPath === undefined ? undefined : normalizeToPath(patch.toPath),
+        statusCode: patch.statusCode,
+        isActive: patch.isActive,
+        source: patch.source,
+        isVerified: patch.isVerified,
+      },
     })
+    return toRecord(row)
   },
 
   async remove(id: number): Promise<void> {
-    store.mutate((d) => {
-      const idx = d.rows.findIndex((r) => r.id === id)
-      if (idx === -1) throw new ApiError('NOT_FOUND', `找不到轉址規則 #${id}。`)
-      d.rows.splice(idx, 1)
-    })
+    await request<null>(`/admin/redirect/${id}`, { method: 'DELETE' })
   },
 
   import: {
     parseCsv: parseRedirectCsv,
 
-    /** 純檢查，不寫入。knownGoodPaths 由呼叫端（Redirects.vue）湊出已知存在的站內路徑。 */
+    /**
+     * 純檢查，不寫入。knownGoodPaths 由呼叫端（Redirects.vue）湊出已知存在的站內路徑。
+     * ⚠️ 會把整份既有對照表抓回來比對（約 8 趟往返）—— 這是預檢，不是每次載入畫面都跑。
+     */
     async preview(rows: RedirectImportRow[], knownGoodPaths?: Iterable<string>): Promise<RedirectImportPreview> {
-      const evaluated = evaluateRows(rows, store.read().rows, { knownGoodPaths: knownGoodPaths ? new Set(knownGoodPaths) : undefined })
+      const existing = await fetchAllRedirects()
+      const evaluated = evaluateRows(rows, existing, {
+        knownGoodPaths: knownGoodPaths ? new Set(knownGoodPaths) : undefined,
+      })
       return summarizePreview(evaluated)
     },
 
+    /**
+     * 真正匯入。
+     *
+     * 🔴 **把 CSV 原文交給 API，不是把前端解析後的列交過去**（docs/10 §3.4：
+     * 本專案的 API 一律 JSON，所以 CSV 以字串欄位傳遞）。伺服器會自己重新解析、
+     * 重新檢查 —— 前端的預檢結果不具約束力，它看到的是幾秒前的資料庫狀態。
+     *
+     * ⚠️ 回傳裡的 `preview` 是**送出前**那份本地預檢，只供畫面顯示；
+     * `created`／`updated`／`skipped` 才是伺服器實際做了什麼。兩者對不上時以後者為準。
+     */
     async commit(rows: RedirectImportRow[], options: RedirectImportOptions = {}): Promise<RedirectImportResult> {
-      return store.mutate((d) => {
-        const evaluated = evaluateRows(rows, d.rows)
-        const preview = summarizePreview(evaluated) // 匯入前的檢查結果，回傳給呼叫端顯示——匯入後 d.rows 已變動，不能事後重算
-        let created = 0
-        let updated = 0
-        let skipped = 0
+      const existing = await fetchAllRedirects()
+      const preview = summarizePreview(evaluateRows(rows, existing))
 
-        for (const r of evaluated) {
-          const errors = r.issues.filter((i) => i.level === 'error')
-          if (errors.length === 0) {
-            d.rows.push({
-              id: d.nextId++,
-              fromPath: r.normalizedFrom,
-              toPath: r.normalizedTo,
-              statusCode: (r.input.statusCode as RedirectStatusCode | undefined) ?? 301,
-              isActive: true,
-              source: options.defaultSource ?? 1,
-              isVerified: false,
-              createdAt: new Date().toISOString(),
-            })
-            created++
-            continue
-          }
-          const onlyDuplicate = errors.length === 1 && errors[0].code === 'DUPLICATE_EXISTING' && r.conflictsWithId !== undefined
-          if (onlyDuplicate && options.overwriteExisting) {
-            const target = d.rows.find((x) => x.id === r.conflictsWithId)
-            if (target) {
-              target.toPath = r.normalizedTo
-              if (r.input.statusCode !== undefined) target.statusCode = r.input.statusCode as RedirectStatusCode
-              updated++
-              continue
-            }
-          }
-          skipped++
-        }
+      const csv = toImportCsv(rows, options.defaultSource ?? 1)
+      const result = await request<{ totalRows: number; imported: number; updated: number; skipped: number }>(
+        '/admin/redirect/import',
+        { method: 'POST', body: { csv, overwriteExisting: options.overwriteExisting ?? false } },
+      )
 
-        return { created, updated, skipped, preview }
-      })
+      return { created: result.imported, updated: result.updated, skipped: result.skipped, preview }
     },
   },
 
@@ -701,7 +608,8 @@ export const redirectApi = {
     toCsv: toRedirectCsv,
     /** 匯出目前全部規則（不受畫面上的分頁／搜尋篩選影響——備份與交接用途）。 */
     async exportAll(): Promise<string> {
-      return toRedirectCsv([...store.read().rows].sort((a, b) => a.id - b.id))
+      const res = await request<{ count: number; fileName: string; csv: string }>('/admin/redirect/export')
+      return res.csv
     },
   },
 
@@ -709,4 +617,25 @@ export const redirectApi = {
   normalizeToPath,
   /** 已知的站內頂層路徑，湊「目標路徑是否存在」核對清單用，見上方常數說明。 */
   knownStaticPaths: STATIC_TOP_LEVEL_PATHS,
+}
+
+/**
+ * 把解析後的列重新組回 CSV 交給 API。
+ *
+ * ⚠️ 看起來多此一舉（使用者本來就上傳了一份 CSV），但**不要改成直接送原檔**：
+ * 畫面上可以先剔除有問題的列再匯入，送原檔等於把使用者剔掉的列又送回去。
+ * 欄名必須是 API 認得的那幾個（大小寫不拘）：fromPath／toPath／statusCode／source。
+ */
+function toImportCsv(rows: RedirectImportRow[], defaultSource: RedirectSource): string {
+  const escape = (value: string) => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value)
+  const lines = ['fromPath,toPath,statusCode,source']
+  for (const row of rows) {
+    lines.push([
+      escape(row.fromPath ?? ''),
+      escape(row.toPath ?? ''),
+      String(row.statusCode ?? 301),
+      String(defaultSource),
+    ].join(','))
+  }
+  return lines.join('\n')
 }

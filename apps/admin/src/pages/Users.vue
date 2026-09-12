@@ -17,7 +17,7 @@ import type { AccountRecord } from '@/api/account'
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
-const canEdit = computed(() => hasPermission(permCtx, 'user.edit'))
+const canEdit = computed(() => hasPermission(permCtx, 'account.manage'))
 
 const ALL_ROLE_CODES = Object.keys(ROLE_LABEL) as RoleCode[]
 
@@ -237,8 +237,11 @@ function fmtDate(iso: string | null): string {
               </span>
             </td>
             <td>
-              <span v-if="a.usesSeedPassword" class="u-badge u-badge--warn" title="建置期預設密碼，上線前必須更換">種子密碼未換</span>
-              <span v-else class="adm-muted">已更換（{{ fmtDate(a.passwordUpdatedAt) }}）</span>
+              <!-- ⚠️ 這是「首登尚未改密碼」，不是「上一次改密碼是什麼時候」——
+                   Users 沒有 PasswordUpdatedAt 欄位（docs/08 §A-1）。對「種子密碼
+                   上線前必須更換」這個唯一用途來說夠用：建立帳號一律帶這個旗標，改完就清掉。 -->
+              <span v-if="a.mustChangePassword" class="u-badge u-badge--warn" title="尚未改過密碼，上線前必須更換">密碼未更換</span>
+              <span v-else class="adm-muted">已更換</span>
             </td>
             <td class="adm-table__actions">
               <button v-if="canEdit" type="button" class="btn btn--line btn--sm" @click="openEdit(a)">編輯</button>

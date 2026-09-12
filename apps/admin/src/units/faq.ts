@@ -13,13 +13,13 @@ export const faqUnit: UnitDefinition = {
   categoryTermType: 3,
   listColumns: [
     { key: 'title', label: '問題' },
-    { key: 'categoryTermSeedKey', label: '分類', render: 'text' },
+    { key: 'categoryTitle', label: '分類', render: 'text' },
     { key: 'lastReviewedOn', label: '最後更新日', render: 'date' },
     { key: 'status', label: '審核狀態', render: 'status' },
   ],
   fields: [
     {
-      key: 'categoryTermSeedKey',
+      key: 'categoryTermId',
       label: '分類',
       type: 'relation-single',
       required: true,

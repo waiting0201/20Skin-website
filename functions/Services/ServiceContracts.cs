@@ -137,6 +137,15 @@ public interface IRebuildService
     /// <para>⚠️ 與 <see cref="RequestAsync"/> 一樣，失敗不 throw。</para>
     /// </summary>
     Task FlushPendingAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// 目前的聚合窗口狀態，供後台顯示「發布中／已上線」。
+    /// <para>
+    /// ⚠️ 讀不到狀態時<b>不 throw</b>，回一個「沒有積欠」的預設值 —— 理由同上：
+    /// 這只是一個狀態字，不該讓呼叫端的畫面掛掉。
+    /// </para>
+    /// </summary>
+    Task<Models.Dtos.RebuildStatusDto> GetStatusAsync(CancellationToken ct = default);
 }
 
 /// <summary>

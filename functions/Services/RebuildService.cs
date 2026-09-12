@@ -4,6 +4,7 @@ using Azure.Storage.Blobs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Skin20.Api.Common;
+using Skin20.Api.Models.Dtos;
 
 namespace Skin20.Api.Services;
 
@@ -119,6 +120,27 @@ public sealed class RebuildService(
         catch (Exception ex)
         {
             logger.LogError(ex, "送出積欠重建時發生未預期錯誤。");
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<RebuildStatusDto> GetStatusAsync(CancellationToken ct = default)
+    {
+        var cooldown = (int)CooldownWindow.TotalMinutes;
+        try
+        {
+            var containerClient = blobServiceClient.GetBlobContainerClient(StateContainerName);
+            var blobClient = containerClient.GetBlobClient(StateBlobPath);
+            var state = await ReadStateAsync(blobClient, ct).ConfigureAwait(false);
+            return new RebuildStatusDto(state.PendingSince is not null, state.PendingSince, state.LastDispatchedAt, cooldown);
+        }
+        catch (Exception ex)
+        {
+            // ⚠️ 與 RequestAsync 一樣不 throw —— 這支只是後台右上角一個狀態字，
+            // 讀不到窗口狀態不該讓整個編輯畫面掛掉。回「沒有積欠」是安全的預設：
+            // 顯示成「已上線」比顯示成「永遠發布中」誤導性小。
+            logger.LogWarning(ex, "讀取重建窗口狀態失敗，回傳預設值。");
+            return new RebuildStatusDto(false, null, null, cooldown);
         }
     }
 

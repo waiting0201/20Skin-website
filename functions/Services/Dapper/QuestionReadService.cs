@@ -12,7 +12,7 @@ namespace Skin20.Api.Services.Dapper;
 public interface IQuestionReadService
 {
     Task<(IReadOnlyList<QuestionListItemDto> Items, int TotalCount)> ListAsync(
-        byte? status, string? keyword, int page, int pageSize, CancellationToken ct = default);
+        byte? status, byte? source, string? keyword, int page, int pageSize, CancellationToken ct = default);
 
     /// <summary>建題時用來驗證 <c>LinkedFaqContentItemId</c> 真的指向一則 FAQ。</summary>
     Task<bool> IsFaqContentItemAsync(int contentItemId, CancellationToken ct = default);
@@ -22,13 +22,16 @@ public interface IQuestionReadService
 public sealed class QuestionReadService(ISqlConnectionFactory factory) : IQuestionReadService
 {
     public async Task<(IReadOnlyList<QuestionListItemDto> Items, int TotalCount)> ListAsync(
-        byte? status, string? keyword, int page, int pageSize, CancellationToken ct = default)
+        byte? status, byte? source, string? keyword, int page, int pageSize, CancellationToken ct = default)
     {
         using var connection = factory.Create();
 
         var conditions = new List<string>();
         var parameters = new DynamicParameters();
         if (status is not null) { conditions.Add("q.Status = @Status"); parameters.Add("Status", status); }
+        // ⚠️ 來源篩選一定要在 SQL 層 —— 後台那一頁只有 20 筆，在前端過濾等於
+        //    「只在當頁裡搜」，看起來像沒有資料（docs/10 §2）。
+        if (source is not null) { conditions.Add("q.Source = @Source"); parameters.Add("Source", source); }
         if (!string.IsNullOrWhiteSpace(keyword))
         {
             conditions.Add("q.QuestionText LIKE @Keyword");

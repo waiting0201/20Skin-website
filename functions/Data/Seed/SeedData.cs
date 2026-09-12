@@ -446,6 +446,16 @@ public static class SeedData
         // robots.txt 內容放設定，不寫死在建置腳本裡（docs/08 §H 末段）
         // ⚠️ 不要列 Disallow: /admin/ —— 後台實際位於 /admin/，寫進公開檔案等於標示位置。
         //    擋索引由該 route 的 X-Robots-Tag 負責（docs/03 §1）。
+        // sitemap 五個分檔的「設定」（是否納入、預設 changefreq／priority）。
+        // 🔴 不是新表 —— docs/08 §H 說得很清楚：分檔的收錄範圍在建置期由
+        //    ContentType ＋ IncludeInSitemap ＋ Status ＋ UrlPath IS NOT NULL 算出來，
+        //    這裡存的只是那幾個旋鈕（docs/08 §G-1 的一組 JSON 值）。
+        // ⚠️ sourceUnits 純供後台畫面顯示「這個分檔大致收哪些型別」，
+        //    建置期不讀它——改這個欄位不會改變任何一頁的收錄結果。
+        Add("seo.sitemapFiles",
+            @"[{""key"":""pages"",""label"":""固定頁面"",""fileName"":""sitemap-pages.xml"",""sourceUnits"":[""page"",""clinic"",""case"",""faq""],""enabled"":true,""defaultChangeFreq"":""monthly"",""defaultPriority"":0.5},{""key"":""treatments"",""label"":""療程"",""fileName"":""sitemap-treatments.xml"",""sourceUnits"":[""treatment"",""term""],""enabled"":true,""defaultChangeFreq"":""weekly"",""defaultPriority"":0.8},{""key"":""concerns"",""label"":""困擾"",""fileName"":""sitemap-concerns.xml"",""sourceUnits"":[""concern""],""enabled"":true,""defaultChangeFreq"":""weekly"",""defaultPriority"":0.7},{""key"":""doctors"",""label"":""醫師"",""fileName"":""sitemap-doctors.xml"",""sourceUnits"":[""doctor""],""enabled"":true,""defaultChangeFreq"":""monthly"",""defaultPriority"":0.6},{""key"":""blog"",""label"":""文章"",""fileName"":""sitemap-blog.xml"",""sourceUnits"":[""article"",""term""],""enabled"":true,""defaultChangeFreq"":""weekly"",""defaultPriority"":0.6}]",
+            SettingValueType.Json);
+
         Add("seo.robotsTxt",
             "User-agent: *\nAllow: /\nDisallow: /search/\n\nSitemap: https://20skin.tw/sitemap.xml",
             SettingValueType.Text);

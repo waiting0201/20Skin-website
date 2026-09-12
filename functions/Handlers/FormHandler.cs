@@ -73,7 +73,7 @@ public sealed class FormHandler(
         await botCheck.EnsureHumanAsync(body.BotCheckToken, "contact");
         await rateLimit.EnsurePublicQuotaAsync("contact", ip);
 
-        await SendContactNotificationAsync(name, phone, emailAddress, message);
+        await SendContactNotificationAsync(name, phone, emailAddress, body.Site?.Trim(), body.Topic?.Trim(), message);
 
         // 🔴 只取問題文字本身寫入題庫成長清單，姓名／電話／Email 絕不進 DB（docs/08 §F）。
         await RecordQuestionInboxAsync(message, QuestionSource.ContactForm);
@@ -104,7 +104,8 @@ public sealed class FormHandler(
         return new OkObjectResult(ApiResponse.Ok("已記錄。"));
     }
 
-    private async Task SendContactNotificationAsync(string name, string? phone, string? emailAddress, string message)
+    private async Task SendContactNotificationAsync(
+        string name, string? phone, string? emailAddress, string? site, string? topic, string message)
     {
         var recipient = await settingsRead.GetValueAsync("contact.recipientEmail");
         if (string.IsNullOrWhiteSpace(recipient))
@@ -123,6 +124,8 @@ public sealed class FormHandler(
             姓名：{name}
             電話：{phone}
             Email：{emailAddress}
+            詢問院區：{site}
+            詢問主題：{topic}
             內容：
             {message}
 

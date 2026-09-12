@@ -10,14 +10,14 @@ export const treatmentUnit: UnitDefinition = {
   categoryTermType: 1,
   listColumns: [
     { key: 'title', label: '名稱' },
-    { key: 'categoryTermSeedKey', label: '分類', render: 'text' },
+    { key: 'categoryTitle', label: '分類', render: 'text' },
     { key: 'status', label: '狀態', render: 'status' },
     { key: 'sortOrder', label: '排序' },
     { key: 'updatedAt', label: '更新時間', render: 'date' },
   ],
   fields: [
     {
-      key: 'categoryTermSeedKey',
+      key: 'categoryTermId',
       label: '療程分類',
       type: 'relation-single',
       required: true,
@@ -43,8 +43,15 @@ export const treatmentUnit: UnitDefinition = {
       hint: '醫療廣告法遵兩層防護之一：本文送審時會掃描高風險字詞（docs/02 §5）。',
     },
     { key: 'deviceInfo', label: '儀器／原廠資訊', type: 'text', group: '療程內容' },
+    {
+      key: 'facts',
+      label: '規格數據列',
+      type: 'richtext',
+      group: '療程內容',
+      hint: '細節頁照順序整列渲染的規格清單（療程時間、恢復期、麻醉方式、建議次數…）。⚠️ 與上面的「療程時間」「建議次數」重疊是刻意的：那兩欄供列表與結構化資料單獨取用，這一欄是細節頁的完整清單（docs/08 §C-1）。',
+    },
     { key: 'cover', label: '封面圖', type: 'image', group: '圖片', hint: '建議尺寸 1200×900（4:3），上傳走瀏覽器直傳 Blob（docs/09 §9）。' },
-    { key: 'gallery', label: '圖庫', type: 'gallery', group: '圖片', hint: '對應 TreatmentImages，可複選、可排序、可加圖說。' },
+    { key: 'images', label: '圖庫', type: 'gallery', group: '圖片', hint: '對應 TreatmentImages，可複選、可排序、可加圖說。' },
   ],
   relations: [
     { key: 'doctors', label: '關聯醫師', relationType: 1, targetUnit: 'doctor', sortable: true, editable: true },

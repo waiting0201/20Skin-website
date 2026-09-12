@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // 模板 18 —— 聯絡我們（mockup/18-contact.html）
 //
-// 表單送出打 POST /contact（docs/10-api.md §3.1）：只寄通知信、不落庫，且
-// API 還沒上線。這裡把送出行為留成一個明確的 TODO 函式（submitContactForm），
-// 呼叫時就丟錯，畫面上只能顯示「尚未開放送出」，不能假裝成功——這是任務指示
-// 明講的紅線，寧可讓使用者知道要改用電話或線上預約，也不能留下「以為已送出、
-// 其實院方永遠收不到」的信件黑洞。
+// 表單送出打 POST /contact（docs/10-api.md §3.1）：只寄通知信、不落庫。
+//
+// 🔴 **失敗一定要顯示失敗。** 這是一個信件黑洞最容易出現的地方：使用者以為送出了、
+// 院方其實永遠收不到。所以送出結果一律照 API 回的錯誤碼顯示，不吞錯、不假裝成功，
+// 並在錯誤訊息裡給出替代路徑（致電、線上預約）。
 import { CLINIC_NAP } from '~/data/navigation'
 
 usePageHead({
@@ -39,26 +39,74 @@ const form = reactive<ContactPayload>({
   consent: false,
 })
 
-type SubmitStatus = 'idle' | 'sending' | 'error'
+type SubmitStatus = 'idle' | 'sending' | 'sent' | 'error'
 const status = ref<SubmitStatus>('idle')
+const errorMessage = ref('')
 
 /**
- * TODO(docs/10-api.md §3.1)：`POST /contact` 尚未上線。
- * API 就緒後在這裡改成 `$fetch('https://api.20skin.tw/contact', { method: 'POST', body: payload })`，
- * 並處理 429（rate limit）與機器人驗證失敗的錯誤碼（docs/10-api.md §2）。
- * 在那之前，這支函式只能丟出明確的錯誤——不可以回傳假的成功結果。
+ * `POST /contact`（docs/10-api.md §3.1）。
+ *
+ * 🔴 **只寄通知信，不落庫**（docs/02 §2）——姓名、電話、Email 不會進資料庫，
+ *    只有提問內容本身會寫進題庫成長清單（docs/08 §F）。回應也不帶任何內部 Id。
+ *
+ * ⚠️ 這是前台**執行期**唯一會寫入的動作之一。它對公網開放，所以 API 那頭有
+ *    頻率限制與機器人驗證（docs/10 §3.1）——429 與 BOT_CHECK_FAILED 都要照實顯示，
+ *    不能把它們吞掉當成「送出成功」。
+ *
+ * ⚠️ 一律以**錯誤碼**分支，不比對 message 字串（docs/10 §2）。
  */
-async function submitContactForm(_payload: ContactPayload): Promise<void> {
-  throw new Error('POST /contact 尚未串接，見 docs/10-api.md §3.1')
+async function submitContactForm(payload: ContactPayload): Promise<void> {
+  const { public: { apiBaseUrl } } = useRuntimeConfig()
+
+  const response = await $fetch<{ success: boolean; code: string | null; message: string | null }>(
+    `${apiBaseUrl}/contact`,
+    {
+      method: 'POST',
+      body: {
+        name: payload.name,
+        phone: payload.phone,
+        email: payload.email,
+        site: payload.site,
+        topic: payload.topic,
+        message: payload.message,
+        privacyConsent: payload.consent,
+      },
+      // 非 2xx 不要讓 $fetch 直接丟掉回應內容 —— 錯誤碼在 body 裡。
+      ignoreResponseError: true,
+    },
+  )
+
+  if (!response?.success) {
+    throw new Error(errorTextFor(response?.code ?? null, response?.message ?? null))
+  }
+}
+
+/** docs/10-api.md §2 的錯誤碼值域 → 給人看的說明。 */
+function errorTextFor(code: string | null, message: string | null): string {
+  switch (code) {
+    case 'RATE_LIMITED':
+      return '送出太過頻繁，請稍候幾分鐘再試一次。若是急事請直接致電院所。'
+    case 'BOT_CHECK_FAILED':
+      return '自動化驗證未通過，請重新整理頁面後再送出一次。'
+    case 'VALIDATION_REQUIRED':
+    case 'VALIDATION_FORMAT':
+      return message ?? '有欄位未填或格式不正確，請檢查後再送出。'
+    default:
+      return '送出失敗，請稍後再試。若是急事請直接致電院所，或使用下方的「線上預約看診」。'
+  }
 }
 
 async function handleSubmit() {
   status.value = 'sending'
+  errorMessage.value = ''
   try {
     await submitContactForm({ ...form })
-    status.value = 'idle'
-  } catch {
+    status.value = 'sent'
+    // 送出成功後清空，避免使用者重複按送出又送一次同樣的內容。
+    Object.assign(form, { name: '', phone: '', email: '', site: '', topic: '', message: '', consent: false })
+  } catch (e) {
     status.value = 'error'
+    errorMessage.value = e instanceof Error ? e.message : '送出失敗，請稍後再試。'
   }
 }
 </script>
@@ -152,9 +200,13 @@ async function handleSubmit() {
           <span>我已閱讀並同意<a href="/privacy/">隱私權政策</a>，同意 20SKIN 美醫集團為回覆本次詢問之目的蒐集與處理上述個人資料。</span>
         </label>
 
+        <p v-if="status === 'sent'" class="c-note">
+          <span class="c-note__icon" aria-hidden="true">&#10003;</span>
+          已送出，我們會盡快與您聯繫。若是急事請直接致電院所。
+        </p>
         <p v-if="status === 'error'" class="c-note c-note--warn">
           <span class="c-note__icon" aria-hidden="true">&#9888;</span>
-          表單尚未開放線上送出（後端功能建置中）。若需要協助，請直接致電院所，或使用下方的「線上預約看診」。
+          {{ errorMessage }}
         </p>
 
         <div class="contact-actions">

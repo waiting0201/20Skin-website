@@ -511,7 +511,9 @@ CHECK ((RelationType, FromContentType, ToContentType) IN (...合法組合...))
 
 `SettingKey` nvarchar(100) PK, `SettingValue` nvarchar(max), `ValueType` tinyint, `UpdatedByUserId`, `UpdatedAt`
 
-收納：站名、Logo、預設 OG 圖、全站 NAP 主資料、追蹤碼、`/contact/` 收件信箱、頁尾社群連結與版權文案、`robots.txt` 內容、AI FAQ 的啟用開關／面板標題／歡迎文案／轉真人出口網址。
+收納：站名、Logo、預設 OG 圖、全站 NAP 主資料、追蹤碼、`/contact/` 收件信箱、頁尾社群連結與版權文案、`robots.txt` 內容、**sitemap 五個分檔的設定**（`seo.sitemapFiles`，見 §H）、AI FAQ 的啟用開關／面板標題／歡迎文案／轉真人出口網址。
+
+⚠️ **鍵是固定的，不能在執行期新增。** `PUT /admin/setting` 對不存在的 `SettingKey` 回 404 —— 要多一個設定就是一支 migration ＋ 一列種子（`seo.sitemapFiles` 就是 2026-09-12 這樣加的）。
 
 **用 key-value 而非固定欄位**：這組設定會持續增加（AI FAQ 那四項就是後加的），固定欄位每加一項要一次 migration，而**沒有 staging，每次遷移都必須向後相容**（[07](07-deployment.md) §5）。設定類不值得付這個代價。
 
@@ -575,7 +577,10 @@ hero  specialties  featured-treatments  latest-articles  doctors  clinics  brand
 
 ⚠️ **迴圈防護**：新增時檢查 `ToPath` 不得出現在任何 `FromPath`（擋一層）；上線前的驗收另跑一次遞移閉包檢查（擋多層鏈）。這是應用層與驗收腳本的事，不是資料庫約束。
 
-sitemap 的 5 個分檔（pages／treatments／concerns／doctors／blog）**不需要資料表** —— `ContentItems.ContentType` ＋ `IncludeInSitemap` ＋ `Status` ＋ `UrlPath IS NOT NULL` 就足以在建置期分檔。`robots.txt` 內容放 `SiteSettings`。
+sitemap 的 5 個分檔（pages／treatments／concerns／doctors／blog）**不需要資料表** —— `ContentItems.ContentType` ＋ `IncludeInSitemap` ＋ `Status` ＋ `UrlPath IS NOT NULL` 就足以在建置期分檔。`robots.txt` 內容放 `SiteSettings`（鍵 `seo.robotsTxt`）。
+
+後台「sitemap 設定」畫面上的那幾個旋鈕（各分檔是否納入、預設 `changefreq`／`priority`）同樣放 `SiteSettings`，鍵 `seo.sitemapFiles`，值是一個 JSON 陣列 —— **不是新表**。
+⚠️ 合併時以**程式碼裡的 5 個分檔為準**，資料庫只提供那三個旋鈕的值。反過來的話，日後程式碼新增一個分檔，舊資料庫沒有那一列，畫面上就會少一個分檔而且沒有任何提示。
 
 ---
 

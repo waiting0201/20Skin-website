@@ -82,6 +82,17 @@ function hoursFieldValue(key: string): HourRow[] {
   return (bodyForm.fields[key] as HourRow[] | undefined) ?? []
 }
 
+/**
+ * 新增一張圖時的空白列。
+ * ⚠️ 逐張的額外欄位（案例的階段、拍攝日期）要一起給預設值 ——
+ * 少了 `phase` 這一格，整筆案例送出去會被 API 退回（docs/08 §C-5 必填）。
+ */
+function newGalleryItem(field: UnitField): Record<string, unknown> {
+  const row: Record<string, unknown> = { image: null, caption: '' }
+  for (const sub of field.galleryItemFields ?? []) row[sub.key] = ''
+  return row
+}
+
 // resetForms() 會觸發下面的 deep watch（把 record 的值寫進 bodyForm／seoForm）。
 // suppressDirty 讓那一次觸發不算「使用者改的」，避免剛載入就顯示「有未存變更」。
 let suppressDirty = false
@@ -410,12 +421,36 @@ async function restore(versionNo: number) {
                         />
                         <input class="adm-input" type="text" placeholder="圖說" :value="item.caption ?? ''" :disabled="!canEditBody"
                           @input="item.caption = ($event.target as HTMLInputElement).value">
+
+                        <!-- 逐張的額外欄位。⚠️ 案例圖片的「階段」在 API 是必填，
+                             沒有這一段的話案例根本存不起來（docs/08 §C-5）。 -->
+                        <div v-for="sub in field.galleryItemFields ?? []" :key="sub.key" class="adm-field">
+                          <label class="adm-field__label">{{ sub.label }}</label>
+                          <select
+                            v-if="sub.type === 'select'"
+                            class="adm-select"
+                            :value="String(item[sub.key] ?? '')"
+                            :disabled="!canEditBody"
+                            @change="item[sub.key] = ($event.target as HTMLSelectElement).value"
+                          >
+                            <option value="">—</option>
+                            <option v-for="opt in sub.options ?? []" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                          </select>
+                          <input
+                            v-else
+                            class="adm-input"
+                            :type="sub.type === 'date' ? 'date' : sub.type === 'time' ? 'time' : 'text'"
+                            :value="String(item[sub.key] ?? '')"
+                            :disabled="!canEditBody"
+                            @input="item[sub.key] = ($event.target as HTMLInputElement).value"
+                          >
+                        </div>
                       </div>
                       <button type="button" class="btn btn--line btn--sm" :disabled="!canEditBody"
                         @click="(bodyForm.fields[field.key] as unknown[]).splice(idx, 1)">移除</button>
                     </div>
                     <button type="button" class="btn btn--ghost btn--sm" style="align-self:flex-start" :disabled="!canEditBody"
-                      @click="bodyForm.fields[field.key] = [...((bodyForm.fields[field.key] as unknown[]) ?? []), { image: null, caption: '' }]">
+                      @click="bodyForm.fields[field.key] = [...((bodyForm.fields[field.key] as unknown[]) ?? []), newGalleryItem(field)]">
                       ＋ 新增圖片
                     </button>
                   </div>

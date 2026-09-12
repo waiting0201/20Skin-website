@@ -4,113 +4,59 @@
 // ⚠️ docs/07-deployment.md §4：「sitemap.xml／llms.txt 仍在建置期產生，產物
 // 直接進 .output/public。走 API 產生反而更差」。這個畫面**只做預覽與下載**，
 // 不會、也不該把結果發布到任何地方——正式產出時機是 CI 的 nuxt generate，
-// 不是這裡的一顆按鈕。權限只需要 setting.view（唯讀），沒有 setting.edit 的事。
+// 不是這裡的一顆按鈕。
+//
+// 🔴 預覽全文由 **API** 產生（`GET /admin/export/{kind}`），不是前端自己組。
+//    同一份檔案在建置期由匯出腳本產生；前端若自己組一份，就有兩個產生器、兩套規則，
+//    而且「預覽跟正式產物不一樣」不會有任何徵兆。
 import { computed, onMounted, ref } from 'vue'
-import { adminApi } from '@/api/client'
+import { adminApi, ApiError } from '@/api/client'
 import { currentUser } from '@/auth'
 import { hasPermission } from '@/permissions'
-import type { AdminRecord } from '@/types'
-import type { FaqExportItem, SiteFactsForExport } from '@/api/seo'
+import type { ExportKind, ExportPreview } from '@/api/seo'
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
-const canView = computed(() => hasPermission(permCtx, 'setting.view'))
+const canView = computed(() => hasPermission(permCtx, 'settings.edit'))
 
-const loading = ref(true)
-const faqs = ref<FaqExportItem[]>([])
-const facts = ref<SiteFactsForExport>({ siteName: '20SKIN', tagline: '', keyFacts: [], sections: [] })
-const totalFaqCount = ref(0)
-const publishedFaqCount = ref(0)
-
-/** 優先用「AI 摘要」欄位（每單元都有，SeoMeta.aiSummary，docs/03-seo-geo.md GEO 策略欄位）；
- * 目前 mock 內容多半還沒填，退而求其次用單元自己的一個文字欄位頂著，都沒有就老實說沒有。 */
-function summaryFor(item: AdminRecord, fallbackKey?: string): string {
-  if (item.seo.aiSummary) return item.seo.aiSummary
-  const raw = fallbackKey ? item.fields[fallbackKey] : undefined
-  if (typeof raw === 'string' && raw.trim()) {
-    const plain = raw.replace(/\s+/g, ' ').trim()
-    return plain.length > 100 ? `${plain.slice(0, 100)}…` : plain
-  }
-  return '（尚無摘要內容，待補——不編造字數湊版面。）'
-}
-
-async function loadFaqSection() {
-  const res = await adminApi.content.list('faq', { pageSize: 100 })
-  totalFaqCount.value = res.totalCount
-  const published = res.items.filter((i) => i.status === 3)
-  publishedFaqCount.value = published.length
-  faqs.value = published.map((i) => ({
-    id: i.id,
-    question: i.title,
-    categoryLabel: String(i.fields.categoryTermSeedKey__label ?? '未分類'),
-    aiSummary: String(i.fields.aiAnswer ?? ''),
-    webAnswer: String(i.fields.webAnswer ?? ''),
-    urlPath: '/faq/', // FAQ 不產生獨立網址，統一指回 FAQ 主頁（docs/08 §C-6）
-    updatedAt: String(i.fields.lastReviewedOn ?? i.updatedAt),
-  }))
-}
-
-async function loadFacts() {
-  const [treatments, concerns, doctors, clinics] = await Promise.all([
-    adminApi.content.list('treatment', { pageSize: 100 }),
-    adminApi.content.list('concern', { pageSize: 100 }),
-    adminApi.content.list('doctor', { pageSize: 100 }),
-    adminApi.content.list('clinic', { pageSize: 100 }),
-  ])
-  const published = (items: AdminRecord[]) => items.filter((i) => i.status === 3)
-
-  facts.value = {
-    siteName: '20SKIN 美醫集團',
-    tagline: '站內知識庫語料預覽——供 AI FAQ／GEO 用途，內容取自目前已發布的資料。',
-    keyFacts: [
-      `已發布療程 ${published(treatments.items).length} 項`,
-      `困擾說明頁 ${published(concerns.items).length} 則`,
-      `醫師／團隊成員 ${published(doctors.items).length} 位`,
-      `服務據點 ${published(clinics.items).length} 處`,
-      `FAQ 題目 ${publishedFaqCount.value} 則（題庫共 ${totalFaqCount.value} 則，僅已發布會輸出）`,
-    ],
-    sections: [
-      { title: '療程', items: published(treatments.items).map((t) => ({ title: t.title, url: t.urlPath, summary: summaryFor(t, 'subtitle') })) },
-      { title: '困擾', items: published(concerns.items).map((c) => ({ title: c.title, url: c.urlPath, summary: summaryFor(c, 'symptoms') })) },
-      { title: '醫師與團隊', items: published(doctors.items).map((d) => ({ title: d.title, url: d.urlPath, summary: summaryFor(d, 'jobTitle') })) },
-      { title: '據點', items: published(clinics.items).map((c) => ({ title: c.title, url: c.urlPath, summary: summaryFor(c, 'address') })) },
-    ],
-  }
-}
-
-async function loadAll() {
-  loading.value = true
-  // ⚠️ 依序執行，不要用 Promise.all 平行——loadFacts() 的 keyFacts 會讀
-  // publishedFaqCount／totalFaqCount，這兩個由 loadFaqSection() 寫入。
-  await loadFaqSection()
-  await loadFacts()
-  loading.value = false
-}
-
-onMounted(loadAll)
-
-const faqJsonText = computed(() => adminApi.seo.export.buildFaqJson(faqs.value))
-const llmsTxtText = computed(() => adminApi.seo.export.buildLlmsTxt(facts.value))
-const llmsFullTxtText = computed(() => adminApi.seo.export.buildLlmsFullTxt(facts.value, faqs.value))
-
-type TabKey = 'faq.json' | 'llms.txt' | 'llms-full.txt'
-const activeTab = ref<TabKey>('faq.json')
+type TabKey = ExportKind
 const tabs: { key: TabKey; label: string; mime: string }[] = [
   { key: 'faq.json', label: 'faq.json', mime: 'application/json' },
   { key: 'llms.txt', label: 'llms.txt', mime: 'text/plain' },
   { key: 'llms-full.txt', label: 'llms-full.txt', mime: 'text/plain' },
 ]
 
-const activeText = computed(() => {
-  if (activeTab.value === 'faq.json') return faqJsonText.value
-  if (activeTab.value === 'llms.txt') return llmsTxtText.value
-  return llmsFullTxtText.value
-})
+const loading = ref(true)
+const errorMessage = ref('')
+const previews = ref<Partial<Record<TabKey, ExportPreview>>>({})
+const activeTab = ref<TabKey>('faq.json')
+
+async function loadAll() {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const results = await Promise.all(tabs.map((tab) => adminApi.seo.export.preview(tab.key)))
+    const next: Partial<Record<TabKey, ExportPreview>> = {}
+    tabs.forEach((tab, index) => {
+      next[tab.key] = results[index]
+    })
+    previews.value = next
+  } catch (e) {
+    errorMessage.value = e instanceof ApiError ? e.message : '載入預覽失敗。'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadAll)
+
+const activePreview = computed(() => previews.value[activeTab.value])
+const activeText = computed(() => activePreview.value?.content ?? '')
 
 function download(key: TabKey) {
   const tab = tabs.find((t) => t.key === key)
-  if (!tab) return
-  const text = key === 'faq.json' ? faqJsonText.value : key === 'llms.txt' ? llmsTxtText.value : llmsFullTxtText.value
+  const text = previews.value[key]?.content
+  if (!tab || text === undefined) return
   const blob = new Blob([text], { type: `${tab.mime};charset=utf-8;` })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -147,6 +93,8 @@ function download(key: TabKey) {
         </p>
       </div>
 
+      <p v-if="errorMessage" class="adm-empty">{{ errorMessage }}</p>
+
       <div v-if="loading" class="adm-empty">載入中…</div>
 
       <template v-else>
@@ -162,7 +110,9 @@ function download(key: TabKey) {
             {{ tab.label }}
           </button>
           <div class="adm-filters__spacer"></div>
-          <span class="adm-muted">{{ activeText.length.toLocaleString('zh-TW') }} 字元</span>
+          <span class="adm-muted">
+            {{ activeText.length.toLocaleString('zh-TW') }} 字元<template v-if="activePreview">・{{ activePreview.itemCount }} 筆</template>
+          </span>
           <button type="button" class="btn btn--primary btn--sm" @click="download(activeTab)">下載 {{ activeTab }}</button>
         </div>
 

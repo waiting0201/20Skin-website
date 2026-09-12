@@ -218,12 +218,16 @@ AND (UnpublishAt IS NULL OR UnpublishAt >  @now)
 
 ## 8. 後台 SPA
 
-31 個畫面（[06](06-page-inventory.md) §5），全部在 `/admin/**`，`ssr: false`。
+30 個畫面（[06](06-page-inventory.md) §5），全部在 `/admin/**`，`ssr: false`。
+（原本是 31 —— 2026-09-11 定案不做媒體庫，「資產／媒體庫」整個拿掉，CLAUDE.md 決策 13。）
 
 ### 認證與授權
 
 - **Bearer token，不使用跨來源 cookie。** 前台在 `20skin.tw`、API 在 `api.20skin.tw`，兩者不同源（[07](07-deployment.md) §1）
 - **access token 只放記憶體**，refresh 走 [10-api.md](10-api.md) §3.2 的端點。放 `localStorage` 等於把 token 交給任何一次 XSS
+- ⚠️ **refresh token 也只放記憶體**，這不是漏做。正常作法是 httpOnly cookie，但本專案明文不使用跨來源 cookie（[07](07-deployment.md) §1），而後台與 API 不同網域 —— 這條路從架構上就被關掉了。**連帶後果：重新整理分頁就會登出。** 這是已知且刻意的取捨
+- ⚠️ **401 只自動換發並重試一次**，而且併發時只能換一次：refresh 是輪替制（[10](10-api.md) §5），三個請求各自去換發會讓第二、三個拿著已被輪替掉的舊 token，後端判定為重用、撤銷該使用者全部 token，使用者當場被踢出去
+- ⚠️ **權限判斷查的是登入回應帶回來的 `permissions[]`**（[10](10-api.md) §3.2），前端不自己用角色推導 —— 角色權限可以在後台改，推導表在那一刻就過期了
 - **沒有雙因素**（2026-09-11 院方決定）。登入是單段的帳號密碼，**唯一的防護是次數限制**（[02](02-backend-cms.md) §4）—— 前端不要自行加「記住此裝置」之類會放寬判定的東西
 - ⚠️ **UI 的權限判斷只管「看不看得到」，不是安全邊界。** 五種角色的授權**一律在 API 內驗證**（[07](07-deployment.md) §4）。前端藏起來的按鈕，後端還是要擋
 - ⚠️ **不要用 SWA 的 `allowedRoles`。** 那是 SWA 內建驗證，跟 CMS 的五種角色是兩套系統，而且 `x-ms-client-principal` 到不了外部的 Function App

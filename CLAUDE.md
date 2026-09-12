@@ -23,6 +23,7 @@ apps/
   admin/               後台：Vite ＋ Vue 3 的 SPA，base=/admin/
                        build 產物直接寫進 apps/web/public/admin/
                        ⚠️ 建置順序：先 admin 後 web
+tools/api-smoke/       API 煙霧測試（read 唯讀／write 會改資料，見該目錄 README）
 tools/deploy-swa.sh    部署 SWA：前台 ＋ 後台 SPA ＋ /api/fallback（⚠️ 不含獨立 Function App）
 tools/deploy-api.sh    部署獨立 Function App（functions/ → func-20skin-web-api-prod）
                        ⚠️ 尚未對 Azure 實跑驗證，見檔頭
@@ -115,8 +116,18 @@ node tools/content-import/upload-images.mjs /tmp/frontend-data.json  # 圖片 �
 # 前後台建置（⚠️ 順序不可顛倒：先 admin 後 web）
 pnpm --filter admin build && pnpm --filter web build
 
+# 本機開發要指定 API 位址（不設定＝打正式站 https://api.20skin.tw/api/v1）
+#   apps/admin  → VITE_API_BASE_URL        （範本見 apps/admin/.env.example）
+#   apps/web    → NUXT_PUBLIC_API_BASE_URL
+# ⚠️ 換了位址，API 那頭的 CORS allow-list 也要放行你的來源 —— 少了它瀏覽器
+#    只會給一個沒有任何資訊的 network error，看起來像斷線（docs/10 §2）。
+
 # 驗收閘（改完前台一定要跑）
 pnpm --filter web verify      # verify:css 樣式照抄 ＋ verify:links 站內連結
+
+# API 煙霧測試（改完 API 或後台資料層一定要跑，說明見 tools/api-smoke/README.md）
+node tools/api-smoke/read.mjs                  # 唯讀，可對任何環境跑
+node tools/api-smoke/write.mjs                 # 🔴 會真的改資料，只能對用完即丟的資料庫跑
 
 # 重新產出 PDF（改完 output/*.html 之後）
 ./scripts/build-pdf.sh
@@ -259,7 +270,7 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    見 [08-database.md](docs/08-database.md) §0 決策四、[11-backend-design.md](docs/11-backend-design.md) §9、[02-backend-cms.md](docs/02-backend-cms.md) §4。
 
 
-14. **前台內容一律來自資料庫**，2026-09-11 完成搬遷。鏈路是
+14. **前台內容一律來自資料庫**，2026-09-11 完成搬遷；**後台 2026-09-12 接上真 API**（localStorage mock 全部移除）。鏈路是
    `資料庫 →（Dapper 唯讀）→ apps/web/content/*.json →（Vite 建置期內聯）→ 靜態產物`，
    **執行期不查詢、不讀檔**（docs/09 §3）。`apps/web/app/data/*.ts` 從內容本體變成
    **形狀轉接層**：欄位怎麼排、叫什麼名字仍是前台的契約，內容在資料庫。
@@ -271,6 +282,17 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    （`media/{yyyy}/{MM}/{32hex}{ext}`），所以上傳與匯入可以分開跑、重跑安全。
    ⚠️ 搬遷正確性靠 `tools/content-import/golden-diff.sh` 把關 ——
    它比對重建後的 107 頁與搬遷前的黃金樣本。
+   ⚠️ **首頁版位讀的是「首頁那筆 Page 已核准的版本快照」，不是 `HomeSections` 即時表**
+   （docs/08 §G-2、docs/11 §8）。那兩張表是**工作副本** —— 直接讀它等於「編輯者拖一拖版位、
+   還沒送審，下一次建置就上線了」，核准這道關卡整個被繞過。連帶：匯入腳本寫完版位
+   **必須重新發布首頁**，否則快照裡的版位是空的，前台首頁會是「七個版位都在、但每個都沒有內容」。
+15. **後台的權限判斷以 API 發下來的 `permissions[]` 為準**，2026-09-12 定案。
+   `apps/admin/src/permissions.ts` **不再自己用角色推導**一份權限表 ——
+   角色權限可以在後台畫面上改（`PUT /admin/role/{id}/permissions`），
+   前端那份推導表在那一刻就過期了，而且不會有任何徵兆。
+   權限碼一律用 docs/08 §A-2 的 31 列（`content.{unit}.edit` 這種），
+   `{unit}.view`／`review.decide`／`user.*`／`setting.*` 全是舊命名。
+   ⚠️ 這仍然只管「按鈕出不出現」，**不是安全邊界** —— 擋得住的授權在 API 的 `AppRouter`（預設拒絕）。
 
 ---
 

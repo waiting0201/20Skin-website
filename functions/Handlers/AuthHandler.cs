@@ -255,6 +255,9 @@ public sealed class AuthHandler(
         {
             AccessToken = accessToken,
             RefreshToken = refreshToken,
+            UserId = user.UserId,
+            UserName = user.UserName,
+            DoctorId = user.DoctorId,
             DisplayName = user.DisplayName,
             Roles = user.Roles,
             Permissions = user.Permissions,

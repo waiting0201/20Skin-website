@@ -12,6 +12,25 @@ public sealed class TokenResponse
 {
     public string AccessToken { get; set; } = string.Empty;
     public string RefreshToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ⚠️ <b>後台需要它，不要因為「access token 裡已經有 sub」就拿掉。</b>
+    /// 本專案的 access token 是自簽 JWT（<see cref="Services.JwtService"/>），前端若要拿到
+    /// 使用者 Id 就只剩「自己 base64 解 payload」一途 —— 那等於讓前端依賴 token 的內部格式，
+    /// 換簽章方式時會無聲壞掉。回應體直接給，前端不必解 token。
+    /// </summary>
+    public int UserId { get; set; }
+
+    /// <summary>登入識別（docs/08 §A-1）。⚠️ 不是 email。</summary>
+    public string UserName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 「醫師」角色綁定自己的個人頁用（docs/08 §A-1）。非醫師角色為 <c>null</c>。
+    /// 後台用它做「醫師只能改自己的內容」的畫面層提示 —— ⚠️ 真正的把關在 API
+    /// （docs/11 §5.4 的擁有者判定），前端這一份只是少讓使用者白跑一趟。
+    /// </summary>
+    public int? DoctorId { get; set; }
+
     public string DisplayName { get; set; } = string.Empty;
     public IReadOnlyList<string> Roles { get; set; } = [];
     public IReadOnlyList<string> Permissions { get; set; } = [];

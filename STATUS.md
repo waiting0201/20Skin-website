@@ -5,7 +5,7 @@
 > 分工：本檔記錄**狀態**；[`docs/`](docs/README.md) 的十二份文件記錄各領域的**規格與施工標準**；
 > [`CLAUDE.md`](CLAUDE.md) 記錄**專案規範、關鍵數字與已定案決策**。三份不要互相抄，各司其職。
 
-**最後更新**：2026-09-11
+**最後更新**：2026-09-12
 
 ---
 
@@ -30,8 +30,13 @@
 本次補建了 CLAUDE.md 決策 7 當中先前**完全沒有建立**的另一半 API：
 `api/`（SWA Managed Function，`/api/fallback`，約 770 條 301 的落地位置）。
 
-**剩下三個缺口**：前後台接的仍是 localStorage mock（前端還沒接上 API）、
-`Redirects` 表 0 列（真實 301 清單未匯入）、CI workflow 未進 repo（目前靠本機腳本部署）。
+⚠️ **2026-09-12：前後台都接上真 API 了。** 後台 `src/api/` 底下的 localStorage mock 全部移除
+（`mock-store.ts`／`mock-seed.ts` 已刪），改走 `api.20skin.tw`；前台的 `/contact/` 表單與
+AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
+
+**剩下兩個缺口**：`Redirects` 表 0 列（真實 301 清單未匯入）、
+CI workflow 未進 repo（目前靠本機腳本部署）。
+🔴 **正式 Function App 仍是舊組建**，且**有六支遷移尚未套用到正式庫** —— 見 §六。
 
 ---
 
@@ -54,9 +59,9 @@
 | 現況診斷與資訊架構 | ✅ | [00](docs/00-site-audit.md)、[01](docs/01-sitemap.md)。約 950 URL、約 770 條 301 |
 | UI/UX 設計定稿 | ✅ | `mockup/` 方向 A，客戶 2026-08-27 選定。21 個模板全數完成 |
 | 技術架構與規格 | ✅ | [07](docs/07-deployment.md) 部署、[08](docs/08-database.md) 資料庫、[09](docs/09-frontend.md) 前端、[10](docs/10-api.md) API 契約、[11](docs/11-backend-design.md) 後端施工標準 |
-| **前台開發** | 🟡 | 21 個模板切版完成、SEO 與 JSON-LD 落地；**內容仍是 `app/data/*.ts`，未接資料庫**（§二） |
-| **後台開發** | 🟡 | **30／30 畫面完成**；接 mock，未接 API（§三） |
-| **資料模型與 migrations** | ✅ | 35 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四），兩支遷移**都已套用到正式庫**（§六） |
+| **前台開發** | 🟡 | 21 個模板切版完成、SEO 與 JSON-LD 落地；內容全部來自資料庫；`/contact/` 與 AI FAQ 開關已接執行期端點（§二） |
+| **後台開發** | 🟡 | **30／30 畫面完成**，**已接上真 API**（2026-09-12，§三） |
+| **資料模型與 migrations** | ✅ | 35 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四）。⚠️ 共 8 支遷移，正式庫只套到第 2 支，**還有 6 支未套**（§六） |
 | **API** | ✅ | 端點、服務、三支 Timer 完成，**已對真 SQL Server 端到端驗證**（§五） |
 | 部署與 CI/CD | 🟡 | **已部署並實測**（前台 ＋ 後台 ＋ 兩個 API）；workflow 未進 repo，目前靠 `tools/deploy-swa.sh` 本機部署（§六） |
 | 內容遷移（約 800 篇） | ⬜ | 需先有資料庫 |
@@ -113,10 +118,23 @@ Nuxt 3 純靜態，21 個模板 → **220 條預渲染路由、106 頁 HTML**。
 | 🔴 **案例列表從 9 則變成 1 則** | 另外 8 則缺四個法規揭露必填欄位（個案差異聲明、拍攝條件、書面同意、同意書索引，[08](docs/08-database.md) §C-5 全部 NOT NULL）。**捏造是法規紅線**，所以沒有進資料庫。要恢復列表必須由院方補齊那四個欄位 —— 這是內容問題不是程式問題 |
 | **7 個困擾頁只有一句話簡述** | AI 摘要 30–38 字（規範 40–60），沒有為了湊字數編醫療內容 |
 | **服務條款、醫療免責聲明無條文** | 「待院方法務提供」骨架 ＋ `noIndex` |
-| 站內搜尋 | 只有版面與空狀態，建置期索引未做 |
-| `/contact/` 表單 | 只有版面，送出留成 TODO，不假裝成功 |
+| 站內搜尋 | 只有版面與空狀態，建置期索引未做。連帶 `POST /questions/miss`（搜尋無結果回寫題庫）也還沒有呼叫點 —— 端點是好的，只是前台沒有地方觸發它 |
+| ~~`/contact/` 表單~~ | ✅ **2026-09-12 已接上 `POST /contact`**。只寄通知信、不落庫；失敗照實顯示錯誤碼（429／機器人驗證／欄位），不吞錯 |
 | `sitemap.xml`／`llms.txt`／`faq.json` | 建置期腳本未實作 |
-| 237 個 `href="#"` | mockup 遺留的佔位連結，`verify:links` 會列出數量，不會無聲增加 |
+| 208 個 `href="#"` | mockup 遺留的佔位連結，`verify:links` 會列出數量，不會無聲增加 |
+
+### ✅ 執行期端點已接上（2026-09-12）
+
+前台是預渲染靜態站，**執行期只打四支**（docs/09 §4）。目前狀態：
+
+| 端點 | 狀態 |
+|---|---|
+| `GET /health` | ✅ 部署後 smoke test 用 |
+| `POST /contact` | ✅ 已接。`site`（院區）與 `topic`（主題）一併進通知信 —— 少了它們，院方收到的信沒有分流資訊 |
+| `GET /site-settings/public` | ✅ 已接。**AI FAQ 開關改成執行期讀**，院方在後台按一下就生效，不必等下一次建置（docs/08 §J-4 步驟 7 的要求）。讀失敗時退回建置期烤進去的值，不是關掉面板 |
+| `POST /questions/miss` | 🟡 端點正常，但前台還沒有呼叫點（站內搜尋未實作） |
+
+API 位址走 `runtimeConfig.public.apiBaseUrl`（`NUXT_PUBLIC_API_BASE_URL`），預設正式站網址。
 
 ---
 
@@ -138,26 +156,65 @@ Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/ad
 
 機制面已實作：工作流四態（**「已排程」是推導狀態，不是第五種**）、發布權與編輯權分離、
 醫師只能改自己的內容、行銷只能改 SEO 區塊、共用 SEO 區塊、版本歷程與還原、
-送審時掃高風險字詞、權限矩陣（五角色 × `{unit}.{action}`，畫面上的矩陣由
-`permissions.ts` **推導**而非另抄一份）、發布聚合重建示意、301 的 CSV 匯入匯出
+送審時掃高風險字詞、權限矩陣（五角色 × docs/10 §4 的 31 個權限碼，**整份來自
+`GET /admin/role`** —— 這個畫面本身就是用來改那張表的，前端寫死一份等於改完還是顯示舊的）、
+發布聚合狀態、301 的 CSV 匯入匯出
 與衝突／迴圈檢查、robots.txt 的 `Disallow: /admin` 防呆、NAP 一致性比對。
 
-### 🟡 有缺口
+### ✅ 已接上真 API（2026-09-12）
+
+localStorage mock 全部移除 —— `src/api/mock-store.ts` 與 `src/api/mock-seed.ts` **已刪除**。
+`src/api/` 底下每一支都改走 `api.20skin.tw`，畫面元件一律經過 `adminApi` 門面，不自己 fetch。
+
+| 檔案 | 角色 |
+|---|---|
+| `src/api/http.ts` | **新增。** 唯一的 HTTP 出口：信封拆解、錯誤碼、Bearer、401 自動換發、分頁正規化 |
+| `src/api/content-fields.ts` | **新增。** 九個單元的欄位形狀轉接（見下方「兩個一定要知道的坑」） |
+| `src/api/settings-client.ts` | **新增。** `GET\|PUT /admin/setting` 的鍵值層，`site.ts` 與 `seo.ts` 共用 |
+| `client.ts`／`account.ts`／`redirect.ts`／`seo.ts`／`site.ts`／`question.ts`／`upload.ts` | 全部重寫為真 API 呼叫 |
+
+驗收：本機對真的 SQL Server 2022 跑了兩支端到端煙霧測試（已進版控，
+見 [`tools/api-smoke/`](tools/api-smoke/README.md)），**讀取 36 項、寫入 55 項全過** ——
+登入與首登改密碼、九個單元的清單顯示欄位、詳情的欄位鍵名、正反向關聯、
+送審→審核佇列→核准、首頁版位工作流、版本還原、分類引用計數、
+網址改回舊值、轉址匯入覆蓋、題目來源篩選、前台三支公開端點。
+
+⚠️ **型別檢查與 build 抓不到這一類錯誤** —— 少回一個欄位是空白欄、字串沒轉數字是靜默忽略、
+關聯查錯方向看起來像「還沒有資料」。改完 API 或後台資料層請把這兩支跑一遍。
+
+**API 位址**：`VITE_API_BASE_URL`（見 `apps/admin/.env.example`），預設正式站網址。
+⚠️ 本機開發要一併在 API 那頭的 CORS allow-list 放行 `http://localhost:3300`，
+少了它瀏覽器只給一個**沒有任何資訊**的 network error，看起來像斷線。
+
+### ⚠️ 兩個一定要知道的坑
+
+**① 表單元件一律吐字串，API 那頭要數字。**
+`<select>` 與 `<input type="number">` 的 value 是 string，但 `categoryTermId` 要 int、
+`phase` 要 byte。更糟的是**更新時傳字串不會報錯，會被靜靜忽略**（`JInt` 對 JSON 字串回 null）——
+「換分類」按下去回 200、重整後分類沒變。轉型集中在 `content-fields.ts`，
+新增欄位時型別要在單元宣告裡寫對。
+
+**② 讀回來的形狀與寫出去的形狀曾經不對稱。**
+回應把型別欄位包在 `fields` 底下，但寫入端原本只讀頂層 —— 「把讀到的東西改一改再送回去」
+會什麼都沒寫進去。已於 2026-09-12 修正為**兩種都收、巢狀優先**（docs/10 §2）。
+攤平那條路不可移除：遷移期的匯入腳本送的就是攤平的形狀。
+
+### 🟡 還有缺口
 
 | 缺口 | 說明 |
 |---|---|
-| **接的是 mock**（localStorage） | `src/api/client.ts` 是唯一門面，接 API 時只改這一個檔 |
-| 上傳未串接 | `adminApi.upload.upload()` 刻意丟 TODO，不假裝成功。圖片欄位先以「貼上網址」示意（`ImageField.vue`） |
 | 富文本 | 等寬文字框模擬，未接區塊編輯器 |
 | 拖曳排序 | 現為上／下移動按鈕 |
-| slug 唯一性 | mock 只檢查單元內；正式是全站 `UrlPath` 唯一索引 |
-| **首頁版位的送審不進共用審核佇列** | mock 的各區 store 是分開的，而審核佇列的資料在 `client.ts` 裡。審核者要直接在首頁版位頁面核准／退回。**接上真 API 後自然消失**（後端本來就是同一張 `ContentReviews`） |
-| **登入帳密與帳號管理是兩份資料** | `client.ts` 的 `auth.login()` 讀 `MOCK_USERS`，帳號管理操作自己的 store。在後台停用帳號不影響那組帳密還能不能登入。同上，接 API 後合一 |
-| 301 種子約 772 筆，其中約 689 筆是合成佔位 | 文章內頁的舊網址型態**尚未確認**（[07](docs/07-deployment.md) §2 的 🔴 待補資料）。功能是真的，但**不要拿這份 mock 當「已核對清單」**，也**不要匯入正式庫** —— 資料庫的 `Redirects` 目前是 0 列（§六） |
-| NAP 一致性用名稱字串比對 | 不是外鍵。據點名稱打錯字會誤判成「找不到對應據點」而非「不一致」。正式 API 上線後建議改 FK |
+| 「我的退件」只看得到內容與原因 | `GET /admin/review` 只查待審那一批（docs/10 §3.4），已核准／已退回的送審紀錄沒有端點可查 —— 所以畫面上顯示不出「誰在什麼時候送審／核准」。這是契約範圍，不是漏接 |
+| 首頁版位的送審者與時間 | 同上。只在「送審中」時用首頁那筆 Page 的 `updatedAt` 近似顯示 |
+| 「上一次改密碼是什麼時候」 | `Users` 沒有 `PasswordUpdatedAt`（docs/08 §A-1）。畫面改用 `mustChangePassword` 表示「密碼未更換」，對「種子密碼上線前必須更換」這個唯一用途夠用 |
+| 角色權限沒有「還原預設值」 | 預設值是種子資料，上線後可能已被刻意調整。前端不自己記一份 —— 那份一定會跟種子分岔。要回到種子值請重跑種子 |
+| 首頁版位沒有「撤回」 | docs/11 §7 的工作流是送審 → 核准／退回，**沒有送審者自己收回這一步**。原本 mock 有這顆按鈕，是 mock 自己發明的 |
+| NAP 一致性用名稱字串比對 | 不是外鍵。據點名稱打錯字會誤判成「找不到對應據點」而非「不一致」。建議日後改 FK |
+| 301 對照表是空的 | 見 §六。後台功能是真的，但資料庫的 `Redirects` 目前 0 列 |
 
-**mock 帳號**：`sa`／`Admin@123`、`editor1`／`Editor@123`、`doctor1`／`Doctor@123`、
-`marketing1`／`Marketing@123`、`reviewer1`／`Reviewer@123`
+**種子帳號**：`sa@system.local`／`Admin@123`（登入識別**不是** `sa`，也不是 email 格式，docs/08 §A-1）。
+🔴 首登強制改密碼，**上線前必須換掉**。
 
 ---
 
@@ -259,6 +316,44 @@ schema 的真實來源是 `functions/Data/Migrations/`（docs/07 §5）。
 | `Services/` | JWT（手刻 HS256）、登入次數限制（DB 版、雙維度）、通知信、機器人驗證、Blob SAS、重建 |
 | `Services/Dapper/` | 10 支純讀 ReadService |
 
+### ✅ 2026-09-12 後台接線時補齊與修掉的
+
+**新增端點**（已同步 docs/10 §3.4）：
+
+| 端點 | 為什麼需要 |
+|---|---|
+| `GET /admin/rebuild` | 後台的「發布中／已上線」狀態字。權限刻意是「登入即可」—— 內容編輯要看得到，但不該能自己觸發建置 |
+| `GET /admin/risk-term` | 編輯器的高風險字詞即時提示。**是提示不是閘門**，送審時伺服器仍會自己重掃 |
+| `GET /admin/redirect/stats` | 301 清單上方的統計卡。獨立一支而不是塞進清單回應 —— 統計是全表的、清單是一頁的 |
+
+**既有端點補上後台真的會用到的東西**：
+
+| 補了什麼 | 為什麼 |
+|---|---|
+| 登入回應加 `userId`／`userName`／`doctorId` | 否則前端只剩「自己 base64 解 token」一途，等於依賴 token 內部格式 |
+| 清單回 `fields`（逐單元幾個顯示欄位）＋ `categoryTitle` ＋ `usageCount` | 後台清單要顯示職稱、地址、看診日期、分類名稱、引用筆數。⚠️ 不是完整詳情 —— 一頁 20 列撈詳情等於 20 份內文 |
+| 詳情回**反向關聯**（`isReverse`） | 只回正向的話，醫師頁的「關聯療程」永遠是空的 —— 那不是沒有資料，是查錯方向，**沒有錯誤訊息** |
+| 選單節點回 `contentType`／`contentTitle` | 選單編輯器要顯示「站內內容：○○療程」，否則每個節點都要再打一次 API |
+| 301 清單支援 `isActive`／`source`／`sortBy`／`sortDir` | 後台那些篩選與排序是真的 UI。**在前端過濾只會過濾到當頁 20 筆** |
+| 301 匯入支援 `overwriteExisting` | 後台有「覆蓋既有規則」勾選。預設 `false`：770 條重匯一次是常態，預設覆蓋等於一次誤操作蓋掉所有人工修正 |
+| 未命中題目清單支援 `source` 篩選 | 同上，必須在 SQL 層 |
+| 設定新增鍵 `seo.sitemapFiles` | sitemap 分檔設定原本是後台自己的 localStorage。遷移 `20260912091129_AddSitemapFilesSetting` |
+
+**修掉的四個 bug**（都是既有的，不是這次改出來的）：
+
+| 問題 | 後果 |
+|---|---|
+| 🔴 **送審沿用最後一筆既有版本，不重新快照** | `ContentReviews.VersionId` 核准後成為 `PublishedVersionId`，也就是匯出真正讀的那一份。任何不產生版本的編輯路徑（**首頁版位就是**）送審核准之後，上線的是**改動前**的內容，而畫面顯示「已發布」。實測抓到：拖完版位、送審、核准，快照裡仍是拖動前的排列 |
+| 🔴 **匯出讀 `HomeSections` 即時表，不是已核准快照** | 等於「編輯者拖一拖版位、還沒送審，下一次建置就上線了」—— 核准那道關卡完全被繞過。連帶：匯入腳本寫完版位沒有重新發布首頁，正式資料的首頁快照裡版位是空的（已一併修正） |
+| **`PublishedFaqRow` 宣告成 `DateOnly`** | Dapper 對 record 建構式不做 `DateOnly` 轉換，`GET /admin/export/faq.json` 與 `llms-full.txt` 執行期 500。編譯看不出來，而且只有匯出預覽會呼叫 |
+| **改網址時的自動 301 是無條件 `Add`** | slug 或分類改回曾經用過的值（A→B→A）就撞上 `Redirects` 的唯一索引 —— 編輯者拿到一個指向 slug 的 409「這個值已經有人用了」，而且**整筆內容存不進去**。改為 upsert，並把「指向現用網址」的殭屍規則清掉（那會讓 `/api/fallback` 把活著的頁面轉走）。⚠️ 只動 `Source=SystemAuto` 的；人工與遷移工具建立的規則不碰 |
+
+**連帶的行為改變**（不是漏做，是修正）：
+
+- `PUT /admin/home-section` 現在會把首頁那筆 Page **打回草稿**（docs/11 §7 規則 2），而且**不再觸發重建** —— 改的是工作副本，前台沒有變化
+- 版本還原會**連版位一起還原**（版位是首頁上唯一會變的東西）
+- 送審每次都會多一筆版本列。由 `VersionPrune` 收；「核准了卻沒上線」沒有東西收得掉
+
 ### ⚠️ 整合時修掉的六個問題
 
 | 問題 | 說明 |
@@ -345,12 +440,21 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 |---|---|
 | 方案 | **Basic**（2 GB／5 DTU） |
 | 定序 | **`Chinese_Taiwan_Stroke_CI_AS`** ✅（docs/08 §0 決策三） |
-| schema | **35 張表 ＋ 165 列種子已套用**，用 `efbundle`（docs/11 §13）。兩支遷移都已套用，見下方 |
+| schema | **35 張表 ＋ 165 列種子已套用**，用 `efbundle`（docs/11 §13）。⚠️ **只套到第 2 支**，見下方 |
 | 驗證 | `InitialSchema` 當時：表數 37、匿名約束 0、AI FAQ 開關 `false`、外部網域 2 筆 |
 
-### 🟡 第三支遷移 `AddContentFieldsForMigration`（2026-09-11，**尚未套用到正式庫**）
+### 🟡 第 3–8 支遷移（**全部尚未套用到正式庫**）
 
-搬 mockup 內容進資料庫時發現四個欄位無處可放，補上（已對本機 `Skin20_Dev` 實跑）：
+| # | 遷移 | 內容 |
+|---|---|---|
+| 3 | `AddContentFieldsForMigration` | 四個內容欄位，見下表 |
+| 4 | `MoveSummaryToContentTrunk` | `Summary` 移到內容主幹 `ContentItems` |
+| 5 | `AddTreatmentFactsAndConcernIntro` | `Treatments.Facts`、`Concerns.RecommendationIntro` |
+| 6 | `AddDoctorToConcernRelation` | 新的 `RelationType` |
+| 7 | `AddConcernToConcernRelation` | 新的 `RelationType` |
+| 8 | `AddSitemapFilesSetting`（2026-09-12） | 種子加一列 `seo.sitemapFiles`（sitemap 分檔設定）。**只 INSERT 一列，向後相容** |
+
+第 3 支的四個欄位（已對本機 `Skin20_Dev` 實跑）：
 
 | 欄位 | 為什麼非補不可 |
 |---|---|
@@ -561,19 +665,16 @@ STATUS 先前寫的「301 種子約 772 筆」指的是**後台畫面的 mock �
 `api.20skin.tw` 的 CORS、`reference/banner1-L.jpg` 原始檔、兩個院區的**真實地址與電話**
 （目前是 `04-XXX-XXXX`／`○○路○○號` 佔位值，連 JSON-LD 的 `geo` 都輸出不了）。
 
-### 🔴 後台 SPA 的權限碼與 API 對不上（接真 API 前必須修）
+### ✅ 後台 SPA 的權限碼已對齊（2026-09-12 修正）
 
-`apps/admin/src/permissions.ts` 用的是 `{unit}.{action}`（`treatment.edit`／`review.decide`／
-`user.view`⋯），但 **API 與資料庫用的是 [08](docs/08-database.md) §A-2 的 31 列**
-（`content.treatment.edit`／`review.approve`／`account.manage`⋯）。
+`apps/admin/src/permissions.ts` 原本用的是 `{unit}.{action}`（`treatment.edit`／`review.decide`／
+`user.view`⋯），與 API 和資料庫用的 [08](docs/08-database.md) §A-2 那 31 列對不上。
+起因是 [10-api.md](docs/10-api.md) §4 初版自創了一套命名，沒有對齊先前就存在的 `docs/08` §A-2。
 
-起因是我在寫 [10-api.md](docs/10-api.md) §4 時自創了一套命名，沒有對齊先前就存在的
-`docs/08` §A-2。**`docs/10` 已於 2026-09-11 更正**，程式碼（種子、`Common/Constants.cs`、
-`AppRouter.Admin.cs`）從一開始就跟著 `docs/08`，所以**只有後台 SPA 那一份是舊的**。
-
-⚠️ 目前後台接 mock，還看不出問題；**接上真 API 的那一刻，權限判斷會全部失效**
-（JWT 的 `permissions` claim 對不上任何一個 UI 判斷）。修法是把 `permissions.ts` 的
-矩陣改成 31 列，並把 `can(unit, action)` 的呼叫端一併換掉。
+修法不只是改名：**`permissions.ts` 不再自己用角色推導權限**，改成查登入回應帶回來的
+`permissions[]`（docs/10 §3.2）。理由是後台的角色權限**可以在畫面上改**
+（`PUT /admin/role/{id}/permissions`），前端只要自己記一份推導表，改完的那一刻就過期了 ——
+而且不會有任何徵兆。路由表與 30 個畫面的呼叫端一併換成新命名。
 
 ### ⚠️ 技術債
 

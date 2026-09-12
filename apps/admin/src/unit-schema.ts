@@ -52,10 +52,24 @@ export interface UnitField {
   /** relation-single 動態從某個內容單元取值（例如文章的作者、案例的療程）。 */
   optionsFromUnit?: UnitKey
   repeaterFields?: RepeaterSubField[]
+  /**
+   * gallery 每一張圖除了「圖說」以外還要填的欄位。
+   *
+   * ⚠️ 案例圖片<b>一定要有</b>：`phase`（術前／術後）在 API 是必填，少了它整筆存檔會失敗
+   * （docs/08 §C-5 CaseImages.Phase）。療程與據點的圖庫沒有這一層，留空即可。
+   */
+  galleryItemFields?: RepeaterSubField[]
   /** 編輯畫面分組，對應 EditPage 的 fieldset。 */
   group?: string
   /** 唯讀欄位：僅顯示，不可編輯（例如 Pages.SystemKey、Terms 的使用筆數）。 */
   readOnly?: boolean
+  /**
+   * 「建立後不可改，但**新增時必須給**」的欄位（`Terms.TermType`、`Pages.PageKind`）。
+   *
+   * ⚠️ 少了這個旗標，`readOnly` 會讓新增請求整個不帶這一欄，而 API 那頭它是必填 ——
+   * 結果是「新增分類」按下去回 400，而且錯誤訊息指向一個畫面上根本改不了的欄位。
+   */
+  settableOnCreate?: boolean
   /** 高風險字詞即時警示要掃描的欄位（docs/02-backend-cms.md §5）。 */
   riskScan?: boolean
 }

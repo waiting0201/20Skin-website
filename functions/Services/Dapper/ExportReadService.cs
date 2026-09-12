@@ -4,9 +4,20 @@ using Skin20.Api.Data;
 
 namespace Skin20.Api.Services.Dapper;
 
-/// <summary>已發布 FAQ 一列，語料來源是 <c>AiAnswer</c>（docs/04-ai-faq.md §2），不是 <c>WebAnswer</c>。</summary>
+/// <summary>
+/// 已發布 FAQ 一列，語料來源是 <c>AiAnswer</c>（docs/04-ai-faq.md §2），不是 <c>WebAnswer</c>。
+///
+/// <para>
+/// ⚠️ <b><see cref="LastReviewedOn"/> 是 <c>DateTime</c> 而不是實體上的 <c>DateOnly</c>。</b>
+/// SQL 的 <c>date</c> 欄位經由 <c>Microsoft.Data.SqlClient</c> 回來的是 <c>DateTime</c>，
+/// 而 Dapper 對 record 的建構式比對<b>不做 DateOnly 轉換</b> —— 宣告成 DateOnly 會在執行期丟
+/// 「A parameterless default constructor or one matching signature … is required」。
+/// 那是執行期例外，<b>編譯完全看不出來</b>，而這支只有匯出預覽會呼叫，很容易漏測。
+/// 要當 DateOnly 用請在呼叫端轉。
+/// </para>
+/// </summary>
 public sealed record PublishedFaqRow(
-    string Question, string AiAnswer, DateOnly LastReviewedOn, string CategoryTitle, string? CategorySlug);
+    string Question, string AiAnswer, DateTime LastReviewedOn, string CategoryTitle, string? CategorySlug);
 
 /// <summary>用於 <c>llms.txt</c> 預覽的頁面索引一列。</summary>
 public sealed record SitemapEntryRow(byte ContentType, string Title, string UrlPath);

@@ -37,7 +37,11 @@ public sealed class QuestionHandler(Skin20DbContext db, ISqlConnectionFactory sq
         if (byte.TryParse(req.Query["status"].FirstOrDefault(), out var parsedStatus))
             status = parsedStatus;
 
-        var (items, total) = await reads.ListAsync(status, keyword, page, pageSize, req.HttpContext.RequestAborted);
+        byte? source = null;
+        if (byte.TryParse(req.Query["source"].FirstOrDefault(), out var parsedSource))
+            source = parsedSource;
+
+        var (items, total) = await reads.ListAsync(status, source, keyword, page, pageSize, req.HttpContext.RequestAborted);
 
         return new OkObjectResult(ApiResponse.Ok(Paging.Build(items, total, page, pageSize)));
     }

@@ -10,12 +10,12 @@ export const caseUnit: UnitDefinition = {
   producesUrl: true, // /cases/{slug}/
   listColumns: [
     { key: 'title', label: '標題' },
-    { key: 'treatmentSeedKey', label: '對應療程', render: 'text' },
+    { key: 'treatmentTitle', label: '對應療程', render: 'text' },
     { key: 'status', label: '狀態', render: 'status' },
     { key: 'updatedAt', label: '更新時間', render: 'date' },
   ],
   fields: [
-    { key: 'treatmentSeedKey', label: '對應療程', type: 'relation-single', required: true, optionsFromUnit: 'treatment', group: '基本資料' },
+    { key: 'treatmentId', label: '對應療程', type: 'relation-single', required: true, optionsFromUnit: 'treatment', group: '基本資料' },
     { key: 'sessionsText', label: '次數與週期', type: 'text', group: '基本資料' },
     { key: 'narrative', label: '敘述', type: 'richtext', group: '基本資料', riskScan: true },
     {
@@ -35,6 +35,20 @@ export const caseUnit: UnitDefinition = {
       type: 'gallery',
       group: '圖片',
       hint: '對應 CaseImages：術前／術後，可各自標記拍攝日期與排序。',
+      // 🔴 phase 在 API 是必填（docs/08 §C-5）—— 少了它整筆存檔會被退回，
+      //    所以它不是「可以之後再補」的欄位。
+      galleryItemFields: [
+        {
+          key: 'phase',
+          label: '階段',
+          type: 'select',
+          options: [
+            { value: '1', label: '術前' },
+            { value: '2', label: '術後' },
+          ],
+        },
+        { key: 'takenOn', label: '拍攝日期', type: 'date' },
+      ],
     },
   ],
 }

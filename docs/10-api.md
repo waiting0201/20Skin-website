@@ -40,6 +40,9 @@
   ```
 
   **`code` 給程式判斷、`message` 給人看、`errors` 放細節。前端一律以 `code` 分支，不得比對 `message` 字串。**
+- **內容單元的請求體形狀**：型別專屬欄位可以放在巢狀的 `fields` 物件裡，也可以直接攤在頂層；**帶了 `fields` 就只讀 `fields`**，頂層同名欄位一律忽略。
+  ⚠️ **兩種都要收得下，不可以只留一種。** 回應一律把型別欄位包在 `fields` 底下，所以「把讀到的東西改一改再送回去」必須要能寫進去 —— 否則欄位沒帶＝不動該欄位，會**靜靜地什麼都沒寫**（後台 2026-09-12 接上真 API 時踩到）。攤平那條路則是遷移期匯入腳本（`tools/content-import/import.mjs`）在用的，那支工具已經對正式內容跑過。
+  共同欄位（`title`／`slug`／`summary`／`sortOrder`／`includeInSitemap`／`ownerUserId`）**永遠在頂層**。
 - **分頁**：`page` / `pageSize`（預設 20、**上限 100**）。雙模式 —— 帶分頁參數時 `data` 為 `{ items, totalCount, page, pageSize, totalPages }`；不帶時為平面陣列（供下拉選單）。
   ⚠️ **`pageSize` 必須有上限。** 後台清單有約 800 篇文章，一個 `pageSize=99999` 就能拖垮 API 與資料庫。
 - **關鍵字篩選**：後台清單共同支援 `keyword`，**在 SQL 層過濾**。清單一律分頁，在前端過濾只會搜到當頁那 20 筆。
@@ -99,6 +102,11 @@
 | `POST /auth/logout` | 撤銷該 refresh token |
 | `POST /auth/change-password` | 需有效 token，**不需權限碼** —— 首登強制改密碼時使用者還沒有任何權限 |
 
+登入與換發成功的回應體：`accessToken`／`refreshToken`／`userId`／`userName`／`doctorId`／`displayName`／`roles[]`／`permissions[]`／`isSuperAdmin`／`mustChangePassword`。
+
+⚠️ **`userId`／`userName`／`doctorId` 由回應體直接給，前端不解 token。** access token 是自簽 JWT，要前端自己 base64 解 payload 等於讓它依賴 token 的內部格式，換簽章方式時會無聲壞掉。
+⚠️ **`permissions[]` 是前端唯一的權限依據。** 角色權限可以在後台改（`PUT /admin/role/{id}/permissions`），前端若自己用角色推導一份，改完的那一刻就過期了 —— 而且不會有任何徵兆。
+
 🔴 **`POST /auth/login` 的次數限制是後台唯一的防線**，所以它不能打折：**帳號與來源 IP 雙維度計數**（只鎖帳號擋不住撞庫、只鎖 IP 擋不住分散式嘗試），鎖定事件**即時寄出告警信、不留存紀錄**（[02](02-backend-cms.md) §4、[08](08-database.md) §I）。
 原規劃三道防線都不在了：IP 白名單不做（2026-08-13）、**雙因素不做（2026-09-11）**，而後台路徑 `/admin/` 是客戶指定、公開可猜。**帳密成為唯一憑證**，密碼強度與輪替規則需一併訂定。
 
@@ -110,7 +118,7 @@
 
 | 端點 | 權限碼 | 說明 |
 |---|---|---|
-| `GET /admin/{unit}` | 登入即可 | 清單。共同參數 `page`／`pageSize`／`status`／`categoryId`／`keyword` |
+| `GET /admin/{unit}` | 登入即可 | 清單。共同參數 `page`／`pageSize`／`status`／`categoryId`／`keyword`／`ownerUserId` |
 | `GET /admin/{unit}/{id}` | 登入即可 | 單筆（含 `SeoMeta`、關聯、`BodyBlocks`） |
 | `POST /admin/{unit}` | `content.{unit}.edit` | 新增 |
 | `PUT /admin/{unit}/{id}` | `content.{unit}.edit` | 更新本文 |
@@ -124,6 +132,24 @@
 | `GET /admin/{unit}/{id}/versions` | `content.{unit}.edit` | 版本清單 |
 | `GET /admin/{unit}/{id}/versions/{no}` | `content.{unit}.edit` | 單一版本快照（供差異比對） |
 | `POST /admin/{unit}/{id}/versions/{no}/restore` | `content.{unit}.edit` | 還原為草稿，**不直接上線** |
+
+清單一列除了共同欄位，還帶三樣後台畫面要用的東西：
+
+- `categoryTermId` ＋ `categoryTitle` —— 有分類的三個單元（療程／文章／FAQ）。**畫面顯示名稱，不顯示 Id**
+- `usageCount` —— **只有 `term` 有值**，其餘為 `null`。它是四個相關子查詢，對有約 800 筆的文章單元不值得每次清單都算一遍
+- `fields` —— **逐單元的少數幾個顯示欄位**（醫師的職稱、據點的地址電話、文章的顯示日期…），鍵名與後台 `listColumns` 逐字對應。
+  ⚠️ 這**不是**完整的詳情 `fields`：清單一頁 20 列，撈詳情等於 20 份內文與圖片欄位。需要完整欄位一律走 `GET /admin/{unit}/{id}`
+
+關聯（`relations`）**兩個方向都回**，靠 `isReverse` 分辨：
+
+- `isReverse: false` —— 這筆內容指出去的（`FromContentItemId = 自己`），可編輯
+- `isReverse: true` —— 別人指著這筆內容的（`ToContentItemId = 自己`），**唯讀**，編輯入口在對方的畫面
+
+⚠️ 兩種的 `toContentItemId`／`toTitle` **一律是「對方」**，不是資料表裡的 To 欄位 —— 讓前端不必分兩種形狀處理。
+⚠️ 反向的那幾筆**不可以拿去寫回** `PUT .../relations`，那會建出一筆方向相反的重複關聯（docs/08 §D「雙向關聯一律單向存」）。
+⚠️ 只回正向的話，「反向唯讀」欄位（醫師頁的關聯療程、療程頁的駐診據點…）在畫面上會永遠是空的 —— 而那不是沒有資料，是查錯方向，**沒有任何錯誤訊息**。
+
+⚠️ **`PUT /admin/{unit}/{id}/relations` 是整筆取代**：它會刪掉這筆內容**所有**正向關聯，再寫入送出去的那一份。只改一個關聯欄位時其餘欄位也必須一起送，少送就是刪掉。
 
 三個逐單元的例外：
 
@@ -144,13 +170,16 @@
 | `GET|PUT /admin/home-section` | `home.arrange` | 首頁版位編排。**只能引用既有內容，不收自由文案** |
 | `GET|PUT /admin/menu` | `menu.edit` | 導覽選單與頁尾（限超級管理員） |
 | `GET|PUT /admin/setting` | `settings.edit` | 全站設定（限超級管理員），含 AI FAQ 開關 |
-| `GET|POST|PUT|DELETE /admin/redirect` | `redirect.manage` | 301 對照表（約 770 條） |
-| `GET|POST /admin/redirect/export|import` | `redirect.manage` | CSV 匯入匯出。**約 770 條不可能手工維護** |
-| `GET|PATCH|DELETE /admin/question` | `content.faq.edit` | 未命中題目清單；`PATCH` 可標記為已建立並回填 `LinkedFaqContentItemId` |
+| `GET|POST|PUT|DELETE /admin/redirect` | `redirect.manage` | 301 對照表（約 770 條）。清單支援 `keyword`／`isActive`／`source`／`sortBy`（`fromPath`／`createdAt`）／`sortDir`，**全部在 SQL 層** |
+| `GET /admin/redirect/stats` | `redirect.manage` | 清單上方的統計卡（總數／啟用／已核對／三種來源各幾筆）。⚠️ 獨立一支而不是塞進清單回應 —— 統計是全表的、清單是一頁的 |
+| `GET|POST /admin/redirect/export|import` | `redirect.manage` | CSV 匯入匯出。**約 770 條不可能手工維護**。匯入可帶 `overwriteExisting`（預設 `false`）—— 來源已存在時改成更新而不是跳過，但**不動 `Source` 與 `IsVerified`** |
+| `GET|PATCH|DELETE /admin/question` | `content.faq.edit` | 未命中題目清單；清單支援 `status`／`source`／`keyword`；`PATCH` 可標記為已建立並回填 `LinkedFaqContentItemId` |
 | `GET|POST|PUT|DELETE /admin/user` | `account.manage` | 帳號管理（限超級管理員） |
 | `PUT /admin/user/{id}/password` | `account.manage` | 重設密碼 |
 | `GET /admin/role`、`PUT /admin/role/{id}/permissions` | `account.manage` | 角色權限設定（限超級管理員） |
+| `GET /admin/rebuild` | **登入即可** | 聚合窗口狀態。⚠️ 這是「重建請求送出去了沒有」，**不是建置進度** —— `repository_dispatch` 是射後不理。後台的「發布中／已上線」是樂觀顯示，不是部署成功的證據。權限刻意不是 `settings.edit`：內容編輯要看得到這個狀態字，但不該能自己觸發建置 |
 | `POST /admin/rebuild` | `settings.edit` | 手動觸發全站重建。**有聚合窗口**，見 [11](11-backend-design.md) §10 |
+| `GET /admin/risk-term` | **登入即可** | 啟用中的高風險字詞清單，供編輯器即時提示（[02](02-backend-cms.md) §5）。⚠️ **是提示不是閘門** —— 送審時伺服器仍會自己重掃一次，前端掃到什麼不影響能不能送審，兩邊結果不一致也不是錯誤 |
 | `GET /admin/export/{kind}` | `settings.edit` | 預覽 `faq.json`／`llms.txt`／`llms-full.txt`。**實際產物在建置期產生**，此端點只供後台畫面預覽（[07](07-deployment.md) §4） |
 
 **未列於上表的 `/admin/*` 路徑一律拒絕（403）。** 新增後台端點時必須同步補進路由表與權限表兩處（[11](11-backend-design.md) §5.3）。
@@ -166,8 +195,9 @@
 > ⚠️ 本節初版寫成 `{unit}.{action}`（如 `treatment.edit`／`treatment.publish`），
 > 與 08 §A-2 相衝，**已於 2026-09-11 更正為下表**。
 > 若在任何地方看到 `{unit}.view`／`{unit}.delete`／`review.decide`／`user.*`／`role.*`／
-> `question.*`／`rebuild.trigger`，那是舊命名。
-> **`apps/admin/src/permissions.ts` 目前仍是舊命名**，接上真 API 前必須同步（見 STATUS.md §八）。
+> `question.*`／`rebuild.trigger`／`setting.*`／`home.edit`，那是舊命名。
+> `apps/admin/src/permissions.ts` 已於 2026-09-12 同步為下表，**而且不再自己推導**——
+> 它查的是登入回應帶回來的 `permissions[]`（見 §3.2）。
 
 31 個權限碼：
 

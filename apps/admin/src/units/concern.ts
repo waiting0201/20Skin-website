@@ -17,6 +17,13 @@ export const concernUnit: UnitDefinition = {
     { key: 'causes', label: '成因', type: 'textarea', group: '內容' },
     { key: 'selfCheckGuide', label: '自我判斷指引', type: 'textarea', group: '內容' },
     { key: 'whenToSeeDoctor', label: '何時該就醫', type: 'textarea', group: '內容' },
+    {
+      key: 'recommendationIntro',
+      label: '建議療程／諮詢醫師的區段引言',
+      type: 'textarea',
+      group: '內容',
+      hint: '⚠️ 與下方每一筆關聯的「推薦理由」不是同一件事：那是逐筆的，這是整個區段的開場白（docs/08 §C-3）。',
+    },
     { key: 'cover', label: '封面圖', type: 'image', group: '圖片' },
   ],
   relations: [

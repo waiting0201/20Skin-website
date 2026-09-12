@@ -12,7 +12,7 @@ import { UNIT_REGISTRY } from '@/units'
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
-const canDecide = computed(() => hasPermission(permCtx, 'review.decide'))
+const canDecide = computed(() => hasPermission(permCtx, 'review.approve'))
 
 const items = ref<ReviewItem[]>([])
 const loading = ref(true)

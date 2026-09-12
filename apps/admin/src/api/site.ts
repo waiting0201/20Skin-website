@@ -1,25 +1,16 @@
 // 全站設定／導覽選單與頁尾／首頁版位編排（docs/02 §3、docs/08 §G）
 //
 // 上層畫面只透過 client.ts 匯出的 adminApi 取用，不直接 import 這個檔。
-// 接上 api.20skin.tw 時整支換掉，畫面不必改（docs/09-frontend.md §8）。
 //
 // ⚠️ 這支刻意不 import '../api/client'（會與 client.ts 匯入 siteApi 形成循環相依）。
-// 需要 adminApi.content／adminApi.taxonomy 的地方（例如把首頁版位的預設項目
-// 連到既有內容、NAP 與據點頁比對），一律由呼叫端的 Vue 元件取得後傳進來，
-// 這裡只管三塊資料本身的形狀與持久化。
+// 需要 adminApi.content／adminApi.taxonomy 的地方（例如把首頁版位連到既有內容、
+// NAP 與據點頁比對），一律由呼叫端的 Vue 元件取得後傳進來。
 
 import type { UploadedImage } from './upload'
 import type { UnitKey } from '../types'
 import { ApiError } from './errors'
-import { createStore } from './mock-store'
-
-function deepClone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T
-}
-
-function nowIso(): string {
-  return new Date().toISOString()
-}
+import { normalizePaged, request, type ServerPaged } from './http'
+import { readSettings, settingBool, settingJson, settingText, writeSettings } from './settings-client'
 
 // =============================================================================
 // 全站設定（docs/08-database.md §G-1）
@@ -74,53 +65,89 @@ export interface SiteSettingsData {
   updatedByUserId: number | null
 }
 
-function seedSettings(): SiteSettingsData {
-  return {
-    siteName: '20SKIN 美醫集團',
-    logo: { blobPath: '', url: '/assets/logo.jpg', alt: '20SKIN', width: null, height: null, variants: null },
-    defaultOgImage: null,
-    // 與 apps/web/app/data/navigation.ts 的 CLINIC_NAP 相同的佔位值——
-    // 兩邊本來就該來自同一份主資料，這裡刻意抄一致，示範「一致」長什麼樣子。
-    nap: [
-      { name: '四季診所', phone: '04-XXX-XXXX', address: '彰化縣二林鎮○○路○○號' },
-      { name: '二林四季皮膚科', phone: '04-XXX-XXXX', address: '彰化縣二林鎮○○路○○號' },
-    ],
-    trackingCodes: '',
-    contactEmail: '',
-    socialLinks: [
-      { label: '四季診所 Facebook', url: 'https://www.facebook.com/20skin4g88/' },
-      { label: '20SKIN 美醫集團 Facebook', url: 'https://www.facebook.com/20skin.tw' },
-    ],
-    footerCopyright: `© ${new Date().getFullYear()} 20SKIN 美醫集團．All Rights Reserved.`,
-    aiFaq: {
-      // ⚠️ 正式環境種子值是「關閉」（docs/08 §J-4 步驟 7；CLAUDE.md）——Phase 1
-      // 只交付介面，AI 未串接前不對外顯示。不要把這個改成 true 當示範預設。
-      enabled: false,
-      panelTitle: 'AI 諮詢小幫手',
-      welcomeMessage: '您好，我是 20SKIN 的 AI 諮詢小幫手，有什麼可以協助您的嗎？',
-      bookingUrl: 'https://booking.20skin.tw/MainMs/Login',
-      lineUrl: '',
-    },
-    updatedAt: nowIso(),
-    updatedByUserId: null,
-  }
-}
-
-const settingsStore = createStore<SiteSettingsData>('settings', seedSettings)
+// 畫面欄位 → SiteSettings 的鍵（docs/08 §G-1 的種子）。
+//
+// 🔴 **鍵是固定的，不能新增。** API 對不存在的 SettingKey 回 404 —— 要多一個設定
+//    就是一支 migration ＋ 一列種子（`seo.sitemapFiles` 就是這樣加的），
+//    不是在這裡多寫一行。
+//
+// ⚠️ 種子裡的 `site.description` 目前**沒有對應的編輯欄位**。這不是漏接：
+//    它是前台 meta description 的退回值，改它會動到每一頁的 SEO，
+//    要開放編輯應該是「全站 SEO」那一區的事，不是塞進這張表。
+const KEYS = {
+  siteName: 'site.name',
+  logo: 'site.logoImage',
+  defaultOgImage: 'site.defaultOgImage',
+  nap: 'nap.json',
+  trackingCodes: 'tracking.ga4',
+  contactEmail: 'contact.recipientEmail',
+  socialLinks: 'footer.social.json',
+  footerCopyright: 'footer.copyright',
+  aiFaqEnabled: 'aifaq.enabled',
+  aiFaqPanelTitle: 'aifaq.panelTitle',
+  aiFaqWelcome: 'aifaq.welcomeText',
+  aiFaqBookingUrl: 'aifaq.handoffBookingUrl',
+  aiFaqLineUrl: 'aifaq.handoffLineUrl',
+} as const
 
 const settings = {
   async get(): Promise<SiteSettingsData> {
-    return deepClone(settingsStore.read())
+    const map = await readSettings()
+    // 「最後修改」取所有鍵裡最新的那一個 —— 這張表是逐鍵記時間的，
+    // 沒有一個代表整份設定的時間戳。
+    const latest = [...map.values()].map((i) => i.updatedAt).sort().at(-1) ?? ''
+    const latestBy = [...map.values()].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt)).at(-1)
+
+    return {
+      siteName: settingText(map, KEYS.siteName),
+      logo: settingJson<UploadedImage | null>(map, KEYS.logo, null),
+      defaultOgImage: settingJson<UploadedImage | null>(map, KEYS.defaultOgImage, null),
+      nap: settingJson<NapEntry[]>(map, KEYS.nap, []),
+      trackingCodes: settingText(map, KEYS.trackingCodes),
+      contactEmail: settingText(map, KEYS.contactEmail),
+      socialLinks: settingJson<SocialLink[]>(map, KEYS.socialLinks, []),
+      footerCopyright: settingText(map, KEYS.footerCopyright),
+      aiFaq: {
+        // 🔴 預設關閉（docs/04 §4）：AI 未串接前不對外顯示 ——
+        //    一顆點下去沒反應的常駐按鈕比沒有按鈕更糟。
+        enabled: settingBool(map, KEYS.aiFaqEnabled, false),
+        panelTitle: settingText(map, KEYS.aiFaqPanelTitle),
+        welcomeMessage: settingText(map, KEYS.aiFaqWelcome),
+        bookingUrl: settingText(map, KEYS.aiFaqBookingUrl),
+        lineUrl: settingText(map, KEYS.aiFaqLineUrl),
+      },
+      updatedAt: latest,
+      updatedByUserId: latestBy?.updatedByUserId ?? null,
+    }
   },
 
-  /** 儲存即生效，無需送審（docs/02-backend-cms.md §4）。 */
-  async update(patch: Partial<SiteSettingsData>, userId: number): Promise<SiteSettingsData> {
-    return deepClone(
-      settingsStore.mutate((d) => {
-        Object.assign(d, patch, { updatedAt: nowIso(), updatedByUserId: userId })
-        return d
-      }),
-    )
+  /**
+   * 儲存即生效，無需送審（docs/02-backend-cms.md §4）。
+   *
+   * ⚠️ **只送 patch 裡真的有的欄位。** 整份寫回去的話，兩個人同時開著設定畫面時，
+   * 後存的那個人會把前一個人改的欄位一起蓋回舊值 —— 而設定類沒有留痕可以追查
+   * （docs/10 §4 末段）。
+   */
+  async update(patch: Partial<SiteSettingsData>, _userId: number): Promise<SiteSettingsData> {
+    const changes: Record<string, string> = {}
+    if (patch.siteName !== undefined) changes[KEYS.siteName] = patch.siteName
+    if (patch.logo !== undefined) changes[KEYS.logo] = patch.logo ? JSON.stringify(patch.logo) : ''
+    if (patch.defaultOgImage !== undefined) changes[KEYS.defaultOgImage] = patch.defaultOgImage ? JSON.stringify(patch.defaultOgImage) : ''
+    if (patch.nap !== undefined) changes[KEYS.nap] = JSON.stringify(patch.nap)
+    if (patch.trackingCodes !== undefined) changes[KEYS.trackingCodes] = patch.trackingCodes
+    if (patch.contactEmail !== undefined) changes[KEYS.contactEmail] = patch.contactEmail
+    if (patch.socialLinks !== undefined) changes[KEYS.socialLinks] = JSON.stringify(patch.socialLinks)
+    if (patch.footerCopyright !== undefined) changes[KEYS.footerCopyright] = patch.footerCopyright
+    if (patch.aiFaq !== undefined) {
+      changes[KEYS.aiFaqEnabled] = patch.aiFaq.enabled ? 'true' : 'false'
+      changes[KEYS.aiFaqPanelTitle] = patch.aiFaq.panelTitle
+      changes[KEYS.aiFaqWelcome] = patch.aiFaq.welcomeMessage
+      changes[KEYS.aiFaqBookingUrl] = patch.aiFaq.bookingUrl
+      changes[KEYS.aiFaqLineUrl] = patch.aiFaq.lineUrl
+    }
+
+    await writeSettings(changes)
+    return settings.get()
   },
 }
 
@@ -155,8 +182,8 @@ export interface HomeSectionItemRef {
   sortOrder: number
 }
 
-/** 唯一例外：hero 的主視覺與外部導流 CTA 沒有對應的站內內容，放在 Settings JSON 裡
- * （docs/08 §G-2）。圖片此輪比照其他畫面的做法，先用網址輸入示意，不接上傳。 */
+/** 唯一例外：hero 的主視覺與外部導流 CTA 沒有對應的站內內容，放在 `HomeSections.Settings`
+ * 這個 JSON 欄位裡（docs/08 §G-2）。 */
 export interface HomeHeroSettings {
   eyebrow: string
   headline: string
@@ -179,19 +206,25 @@ export interface HomeSection {
   heroSettings: HomeHeroSettings | null
 }
 
-/** 1 草稿（含被退回、或已發布後又被改動）／2 送審中／3 已發布（草稿與上線版相同）。
- * 對齊 docs/11-backend-design.md §7 的三段式工作流，但這是本畫面自己的簡化版狀態機
- * ——見下方「已知缺口」，並未併入 client.ts 共用的 ContentReviews 佇列。 */
+/** 1 草稿（含被退回、或已發布後又被改動）／2 送審中／3 已發布。
+ * 對齊 docs/11-backend-design.md §7 的三段式工作流，走的就是共用的 `ContentReviews` 佇列。 */
 export type HomeWorkflowStatus = 1 | 2 | 3
 
 export interface HomeSectionsState {
+  /**
+   * 🔴 這是**首頁那筆 Page 的狀態**，不是版位自己的狀態機。
+   * docs/08 §G-2、docs/11 §8：版位編排的送審與版本歷程掛在 `SystemKey='home'` 的
+   * ContentItem 上 —— 所以送審走 `POST /admin/page/{homeId}/submit`，核准走共用的審核佇列，
+   * 與其他九個內容單元同一條路。
+   *
+   * ⚠️ 資料庫的狀態有四個（草稿／送審中/已發布／已下架），這裡只用得到前三個：
+   * 首頁不會被下架。真的遇到 Status=4 時當成草稿處理。
+   */
   status: HomeWorkflowStatus
-  /** 目前編輯中的草稿。已發布且未被改動時，內容與 published 相同。 */
+  /** 目前編輯中的草稿（＝ HomeSections 兩張表的內容，它們是工作副本）。 */
   sections: HomeSection[]
-  /** 目前線上使用的版本，唯讀，供比對「草稿跟上線版有什麼不同」。 */
-  published: HomeSection[]
-  /** 是否已完成一次性的預設內容連結（見檔尾 seedDefaultItems 的說明）。 */
-  defaultItemsSeeded: boolean
+  /** 首頁那筆 Page 的 ContentItems.Id，送審與查審核佇列都要用。 */
+  homePageId: number
   submittedByUserId: number | null
   submittedAt: string | null
   publishedByUserId: number | null
@@ -200,6 +233,11 @@ export interface HomeSectionsState {
   decisionNote: string | null
 }
 
+/**
+ * 版位的標題、英文小標與「這個版位收哪個單元」是**版面**，留在前台
+ * （CLAUDE.md 決策 14：「院方會想改它嗎？」）。資料庫的 HomeSections 也有
+ * Title／Subtitle，但那是給匯出用的；後台這個畫面顯示的是這一份。
+ */
 const HOME_SECTION_META: Record<HomeSectionKey, { title: string; subtitle: string; targetUnit: UnitKey | null }> = {
   hero: { title: '主視覺', subtitle: 'WELCOME TO 20SKIN', targetUnit: null },
   specialties: { title: '看皮膚　找四季', subtitle: 'SKIN CONCERNS', targetUnit: 'concern' },
@@ -210,183 +248,198 @@ const HOME_SECTION_META: Record<HomeSectionKey, { title: string; subtitle: strin
   'brand-story': { title: '品牌理念摘要', subtitle: '新中式美學', targetUnit: 'page' },
 }
 
-function seedHomeSection(key: HomeSectionKey, sortOrder: number): HomeSection {
-  const meta = HOME_SECTION_META[key]
+interface ServerHomeSection {
+  id: number
+  sectionKey: string
+  title: string
+  subtitle: string | null
+  isEnabled: boolean
+  sortOrder: number
+  settings: string | null
+  items: { id: number; contentItemId: number; contentTitle: string; contentUrlPath: string | null; contentType: number; sortOrder: number }[]
+}
+
+function defaultHeroSettings(): HomeHeroSettings {
   return {
-    sectionKey: key,
-    title: meta.title,
-    subtitle: meta.subtitle,
-    isEnabled: true,
-    sortOrder,
-    targetUnit: meta.targetUnit,
-    items: [],
-    heroSettings:
-      key === 'hero'
-        ? {
-            eyebrow: 'WELCOME TO 20SKIN',
-            headline: '要自然．找四季',
-            images: [
-              { url: '/assets/img/banner1.jpg', alt: '四季診所院區外觀' },
-              { url: '/assets/img/banner2.jpg', alt: '四季診所大廳品牌牆與候診區' },
-            ],
-            ctaLabel: '立即預約諮詢',
-            ctaUrl: '/contact/',
-            externalCtaLabel: '線上預約掛號',
-            externalCtaUrl: 'https://booking.20skin.tw/MainMs/Login',
-          }
-        : null,
+    eyebrow: 'WELCOME TO 20SKIN',
+    headline: '',
+    images: [],
+    ctaLabel: '',
+    ctaUrl: '',
+    externalCtaLabel: '',
+    externalCtaUrl: '',
   }
 }
 
-function seedHomeState(): HomeSectionsState {
-  const sections = HOME_SECTION_KEYS.map((key, index) => seedHomeSection(key, index))
+function toHomeSection(row: ServerHomeSection): HomeSection {
+  const key = row.sectionKey as HomeSectionKey
+  const meta = HOME_SECTION_META[key]
+  let heroSettings: HomeHeroSettings | null = null
+  if (key === 'hero') {
+    try {
+      heroSettings = row.settings ? { ...defaultHeroSettings(), ...(JSON.parse(row.settings) as HomeHeroSettings) } : defaultHeroSettings()
+    } catch {
+      // settings 是自由 JSON 欄位，壞掉時退回空白設定而不是讓整個畫面開不起來。
+      heroSettings = defaultHeroSettings()
+    }
+  }
   return {
-    status: 3,
+    sectionKey: key,
+    title: meta?.title ?? row.title,
+    subtitle: meta?.subtitle ?? row.subtitle ?? '',
+    isEnabled: row.isEnabled,
+    sortOrder: row.sortOrder,
+    targetUnit: meta?.targetUnit ?? null,
+    items: row.items
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((i) => ({ contentItemId: i.contentItemId, sortOrder: i.sortOrder })),
+    heroSettings,
+  }
+}
+
+/** 找出首頁那筆 Page。⚠️ 靠 `systemKey === 'home'`，不是靠標題或 Id —— 兩者都可能被改。 */
+async function findHomePageId(): Promise<number> {
+  const paged = normalizePaged(
+    await request<ServerPaged<{ id: number; fields: Record<string, unknown> | null }>>('/admin/page', {
+      query: { page: 1, pageSize: 100 },
+    }),
+  )
+  const home = paged.items.find((p) => (p.fields ?? {}).systemKey === 'home')
+  if (!home) throw new ApiError('NOT_FOUND', '找不到首頁那筆系統頁（systemKey=home）。它是種子資料，不該不存在。')
+  return home.id
+}
+
+interface HomePageState {
+  id: number
+  status: number
+  updatedAt: string
+}
+
+async function loadHomePage(): Promise<HomePageState> {
+  const id = await findHomePageId()
+  const detail = await request<{ id: number; status: number; updatedAt: string }>(`/admin/page/${id}`)
+  return { id: detail.id, status: detail.status, updatedAt: detail.updatedAt }
+}
+
+/** 在共用審核佇列裡找出首頁那一筆待審紀錄（核准／退回都要它的 reviewId）。 */
+async function findHomeReviewId(homePageId: number): Promise<number> {
+  const paged = normalizePaged(
+    await request<ServerPaged<{ id: number; contentItemId: number }>>('/admin/review', { query: { page: 1, pageSize: 100 } }),
+  )
+  const hit = paged.items.find((r) => r.contentItemId === homePageId)
+  if (!hit) throw new ApiError('NOT_FOUND', '審核佇列裡找不到首頁的送審紀錄，可能已經被其他人處理掉了。')
+  return hit.id
+}
+
+async function loadHomeState(): Promise<HomeSectionsState> {
+  const [rows, page] = await Promise.all([
+    request<ServerHomeSection[]>('/admin/home-section'),
+    loadHomePage(),
+  ])
+
+  const sections = (rows ?? [])
+    .map(toHomeSection)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+
+  // 資料庫有四個狀態，這個畫面只用前三個（首頁不會被下架）。Status=4 當草稿處理。
+  const status: HomeWorkflowStatus = page.status === 2 ? 2 : page.status === 3 ? 3 : 1
+
+  return {
+    status,
     sections,
-    published: deepClone(sections),
-    defaultItemsSeeded: false,
+    homePageId: page.id,
+    // ⚠️ 送審者／核准者與時間在 `ContentReviews`，只有「待審」那一筆查得到
+    //    （`GET /admin/review` 查的是 Status=1）。已經核准或退回的那幾筆沒有端點
+    //    可以查 —— 這不是漏接，是 docs/10 §3.4 只定義了待審佇列。
+    //    畫面上因此只在「送審中」時顯示送審資訊。
     submittedByUserId: null,
-    submittedAt: null,
+    submittedAt: status === 2 ? page.updatedAt : null,
     publishedByUserId: null,
-    publishedAt: null,
+    publishedAt: status === 3 ? page.updatedAt : null,
     decisionNote: null,
   }
 }
 
-const homeStore = createStore<HomeSectionsState>('home-sections', seedHomeState)
-
-function findSection(state: HomeSectionsState, key: HomeSectionKey): HomeSection {
-  const section = state.sections.find((s) => s.sectionKey === key)
-  if (!section) throw new ApiError('NOT_FOUND', `找不到版位：${key}`)
-  return section
+/** 把目前畫面上的版位整批送回 `PUT /admin/home-section`（那支是整批替換）。 */
+async function putSections(sections: HomeSection[]): Promise<void> {
+  await request<ServerHomeSection[]>('/admin/home-section', {
+    method: 'PUT',
+    body: {
+      sections: sections.map((s, index) => ({
+        sectionKey: s.sectionKey,
+        isEnabled: s.isEnabled,
+        sortOrder: index,
+        // hero 以外的版位沒有自由文案欄位（docs/08 §G-2：schema 本身就沒有），
+        // settings 一律送 null，不要為了「統一」而塞一個空物件進去。
+        settings: s.sectionKey === 'hero' && s.heroSettings ? JSON.stringify(s.heroSettings) : null,
+        items: s.items.map((i, itemIndex) => ({ contentItemId: i.contentItemId, sortOrder: itemIndex })),
+      })),
+    },
+  })
 }
 
 const home = {
   async get(): Promise<HomeSectionsState> {
-    return deepClone(homeStore.read())
+    return loadHomeState()
   },
 
   /**
-   * 一次性把版位的預設項目連到既有內容（mock демо 用途）。因為這支檔案不
-   * import client.ts（避免循環相依），無法自己查內容 id，所以由呼叫端
-   * （HomeSections.vue，本來就會用到 adminApi.taxonomy）查好之後傳進來。
-   * `defaultItemsSeeded` 為 true 之後這支永遠不做事，只呼叫一次即可。
+   * 編輯單一版位。
+   * ⚠️ 送審中不可編輯（docs/11 §7：送審中本文鎖定）—— API 也會擋，這裡先擋是為了少一趟往返。
    */
-  async seedDefaultItems(
-    itemsByKey: Partial<Record<HomeSectionKey, HomeSectionItemRef[]>>,
-    heroSettings: HomeHeroSettings,
-  ): Promise<HomeSectionsState> {
-    return deepClone(
-      homeStore.mutate((d) => {
-        if (d.defaultItemsSeeded) return d
-        d.sections = d.sections.map((s) =>
-          s.sectionKey === 'hero' ? { ...s, heroSettings } : { ...s, items: itemsByKey[s.sectionKey] ?? [] },
-        )
-        d.published = deepClone(d.sections)
-        d.defaultItemsSeeded = true
-        return d
-      }),
-    )
-  },
-
-  /** 編輯版位文案／啟用狀態／挑選的內容（home.edit）。送審中鎖定，需等審核結果。 */
   async updateSection(
     key: HomeSectionKey,
     patch: Partial<Pick<HomeSection, 'title' | 'subtitle' | 'isEnabled' | 'items' | 'heroSettings'>>,
     _userId: number,
   ): Promise<HomeSectionsState> {
-    return deepClone(
-      homeStore.mutate((d) => {
-        if (d.status === 2) throw new ApiError('CONFLICT_STATE', '版位編排送審中，請等待審核結果或撤回後再編輯。')
-        const section = findSection(d, key)
-        Object.assign(section, patch)
-        if (d.status === 3) d.status = 1 // 已發布後再改動，代表草稿與上線版不再相同
-        return d
-      }),
-    )
+    const state = await loadHomeState()
+    if (state.status === 2) throw new ApiError('CONFLICT_STATE', '版位編排送審中，請等待審核結果。')
+    const target = state.sections.find((s) => s.sectionKey === key)
+    if (!target) throw new ApiError('NOT_FOUND', `找不到版位：${key}`)
+    Object.assign(target, patch)
+    await putSections(state.sections)
+    return loadHomeState()
+  },
+
+  async saveDraft(sections: HomeSection[], _userId: number): Promise<HomeSectionsState> {
+    await putSections(sections)
+    return loadHomeState()
+  },
+
+  async reorderSections(orderedKeys: HomeSectionKey[], _userId: number): Promise<HomeSectionsState> {
+    const state = await loadHomeState()
+    const byKey = new Map(state.sections.map((s) => [s.sectionKey, s]))
+    const ordered = orderedKeys.map((k) => byKey.get(k)).filter((s): s is HomeSection => Boolean(s))
+    await putSections(ordered)
+    return loadHomeState()
   },
 
   /**
-   * 一次儲存全部版位（文案、啟用狀態、挑選的內容、彼此間的顯示順序）。畫面用
-   * 這支當「儲存草稿」按鈕的實作，比逐一呼叫 updateSection／reorderSections
-   * 簡單，且不會因為中途某一段失敗而讓畫面狀態半套。
+   * 送審。走的是**首頁那筆 Page** 的送審端點 —— 版位編排會隨版本快照一起帶走
+   * （docs/08 §G-2、docs/11 §8），所以它進的是與其他內容同一個審核佇列。
    */
-  async saveDraft(sections: HomeSection[], _userId: number): Promise<HomeSectionsState> {
-    return deepClone(
-      homeStore.mutate((d) => {
-        if (d.status === 2) throw new ApiError('CONFLICT_STATE', '版位編排送審中，請等待審核結果或撤回後再編輯。')
-        d.sections = sections.map((s, index) => ({ ...s, sortOrder: index }))
-        if (d.status === 3) d.status = 1
-        return d
-      }),
-    )
+  async submit(_userId: number): Promise<HomeSectionsState> {
+    const state = await loadHomeState()
+    if (state.status === 2) throw new ApiError('CONFLICT_STATE', '已經在送審中了。')
+    await request<null>(`/admin/page/${state.homePageId}/submit`, { method: 'POST', body: {} })
+    return loadHomeState()
   },
 
-  /** 版位之間的顯示順序（可排序，不可新增刪除，docs/08 §G-2）。 */
-  async reorderSections(orderedKeys: HomeSectionKey[], _userId: number): Promise<HomeSectionsState> {
-    return deepClone(
-      homeStore.mutate((d) => {
-        if (d.status === 2) throw new ApiError('CONFLICT_STATE', '版位編排送審中，請等待審核結果或撤回後再編輯。')
-        orderedKeys.forEach((key, index) => {
-          findSection(d, key).sortOrder = index
-        })
-        if (d.status === 3) d.status = 1
-        return d
-      }),
-    )
+  async approve(_userId: number): Promise<HomeSectionsState> {
+    const state = await loadHomeState()
+    const reviewId = await findHomeReviewId(state.homePageId)
+    await request<null>(`/admin/review/${reviewId}/approve`, { method: 'POST', body: {} })
+    return loadHomeState()
   },
 
-  /** 送審（home.submit）。 */
-  async submit(userId: number): Promise<HomeSectionsState> {
-    return deepClone(
-      homeStore.mutate((d) => {
-        if (d.status === 2) throw new ApiError('CONFLICT_STATE', '已經在送審中。')
-        d.status = 2
-        d.submittedByUserId = userId
-        d.submittedAt = nowIso()
-        d.decisionNote = null
-        return d
-      }),
-    )
-  },
-
-  /** 撤回送審，改回草稿（home.edit，讓自己送出的單能收回修改）。 */
-  async withdraw(_userId: number): Promise<HomeSectionsState> {
-    return deepClone(
-      homeStore.mutate((d) => {
-        if (d.status !== 2) throw new ApiError('CONFLICT_STATE', '目前不是送審中，無法撤回。')
-        d.status = 1
-        return d
-      }),
-    )
-  },
-
-  /** 核准發布（home.publish）：草稿成為上線版。 */
-  async approve(userId: number): Promise<HomeSectionsState> {
-    return deepClone(
-      homeStore.mutate((d) => {
-        if (d.status !== 2) throw new ApiError('CONFLICT_STATE', '只有送審中的版位可以核准。')
-        d.published = deepClone(d.sections)
-        d.status = 3
-        d.publishedByUserId = userId
-        d.publishedAt = nowIso()
-        d.decisionNote = null
-        return d
-      }),
-    )
-  },
-
-  /** 退回（home.publish）：附原因，狀態改回草稿。 */
+  /** 退回原因必填（docs/08 §B-3 的 CHECK 約束，不只是前端規則）。 */
   async reject(note: string, _userId: number): Promise<HomeSectionsState> {
     if (!note.trim()) throw new ApiError('VALIDATION_REQUIRED', '退回原因為必填。')
-    return deepClone(
-      homeStore.mutate((d) => {
-        if (d.status !== 2) throw new ApiError('CONFLICT_STATE', '只有送審中的版位可以退回。')
-        d.status = 1
-        d.decisionNote = note
-        return d
-      }),
-    )
+    const state = await loadHomeState()
+    const reviewId = await findHomeReviewId(state.homePageId)
+    await request<null>(`/admin/review/${reviewId}/reject`, { method: 'POST', body: { decisionNote: note } })
+    return loadHomeState()
   },
 }
 
@@ -425,280 +478,267 @@ export type MenuItemPatch = Partial<
   Pick<MenuItem, 'label' | 'linkKind' | 'contentUnit' | 'contentItemId' | 'url' | 'relAttr' | 'openInNewTab'>
 >
 
-interface MenuDb {
-  nextId: number
-  items: MenuItem[]
-}
-
 /** `booking.20skin.tw` 與 `20skinshop.com` 在這裡，而且只在這裡（docs/08 §G-3；
  * CLAUDE.md 決策 4）。兩者都是 LinkKind=3 ＋ IsExternal=1，任何人想在別的地方
  * 放這兩個網域，就是在把已排除的範圍偷渡回來。 */
-const EXTERNAL_BOOKING_URL = 'https://booking.20skin.tw/MainMs/Login'
-const EXTERNAL_SHOP_URL = 'https://www.20skinshop.com/'
 
-function seedMenuDb(): MenuDb {
-  let nextId = 1
-  const items: MenuItem[] = []
-
-  function addTop(menuKey: MenuKey, label: string, url: string): MenuItem {
-    const item: MenuItem = {
-      id: nextId++,
-      menuKey,
-      parentId: null,
-      depth: 1,
-      label,
-      linkKind: 2,
-      contentUnit: null,
-      contentItemId: null,
-      url,
-      isExternal: false,
-      relAttr: null,
-      openInNewTab: false,
-      sortOrder: items.filter((i) => i.menuKey === menuKey && i.depth === 1).length,
-    }
-    items.push(item)
-    return item
-  }
-
-  function addChild(parent: MenuItem, label: string, url: string): MenuItem {
-    const item: MenuItem = {
-      id: nextId++,
-      menuKey: parent.menuKey,
-      parentId: parent.id,
-      depth: 2,
-      label,
-      linkKind: 2,
-      contentUnit: null,
-      contentItemId: null,
-      url,
-      isExternal: false,
-      relAttr: null,
-      openInNewTab: false,
-      sortOrder: items.filter((i) => i.parentId === parent.id).length,
-    }
-    items.push(item)
-    return item
-  }
-
-  function addExternal(menuKey: MenuKey, label: string, url: string, parent?: MenuItem): MenuItem {
-    const item: MenuItem = {
-      id: nextId++,
-      menuKey,
-      parentId: parent?.id ?? null,
-      depth: parent ? 2 : 1,
-      label,
-      linkKind: 3,
-      contentUnit: null,
-      contentItemId: null,
-      url,
-      isExternal: true,
-      relAttr: 'noopener external',
-      openInNewTab: true,
-      sortOrder: items.filter((i) => i.menuKey === menuKey && i.parentId === (parent?.id ?? null)).length,
-    }
-    items.push(item)
-    return item
-  }
-
-  // ── 主選單：結構示意照抄 apps/web/app/data/navigation.ts 的 MAIN_NAV（唯讀參考，
-  // 這裡是可編輯的後台資料，兩邊接上 API 後會是同一份）。示範性質，未逐一複製
-  // 全部葉節點——重點是樹狀、兩層、可指向內容或外部網址三種型態都有示範。
-  const about = addTop('main', '品牌理念', '/about/')
-  addChild(about, '新中式美學', '/about/new-chinese-aesthetics/')
-  addChild(about, '彩妝式輕醫美', '/about/makeup-style/')
-
-  const concerns = addTop('main', '肌膚困擾', '/concerns/')
-  // 這兩個子項目在 mock 內容庫裡有對應的 Concern 記錄，示範 LinkKind=1（站內內容）；
-  // 其餘六個困擾在 mock 尚無內容記錄，維持 LinkKind=2（固定路徑）比較誠實。
-  const concernAcne = addChild(concerns, '痘痘・粉刺', '/concerns/acne/')
-  concernAcne.linkKind = 1
-  concernAcne.contentUnit = 'concern'
-  const concernSensitive = addChild(concerns, '敏感肌', '/concerns/sensitive-skin/')
-  concernSensitive.linkKind = 1
-  concernSensitive.contentUnit = 'concern'
-  addChild(concerns, '斑點・色素沉澱', '/concerns/pigmentation/')
-  addChild(concerns, '抗老・緊緻', '/concerns/anti-aging/')
-
-  const treatments = addTop('main', '專業服務', '/treatments/')
-  addChild(treatments, '光療美顏', '/treatments/laser/')
-  addChild(treatments, '微針美容', '/treatments/microneedle/')
-  addChild(treatments, '光電美容', '/treatments/photoelectric/')
-  addChild(treatments, '醫美保養', '/treatments/skincare/')
-
-  addTop('main', '醫師團隊', '/team/')
-  addTop('main', '案例分享', '/cases/')
-  addTop('main', '常見問題', '/faq/')
-
-  const clinics = addTop('main', '診所據點', '/clinics/')
-  const clinicSiji = addChild(clinics, '四季診所', '/clinics/siji/')
-  clinicSiji.linkKind = 1
-  clinicSiji.contentUnit = 'clinic'
-  const clinicErlin = addChild(clinics, '二林四季皮膚科', '/clinics/erlin/')
-  clinicErlin.linkKind = 1
-  clinicErlin.contentUnit = 'clinic'
-
-  // 兩個外部導流連結——CLAUDE.md 決策 4：只以外部連結存在，強制標記。
-  addExternal('main', '線上預約掛號', EXTERNAL_BOOKING_URL)
-  addExternal('main', '線上購物', EXTERNAL_SHOP_URL)
-
-  // ── 頁尾選單：結構示意照抄 FOOTER_COLUMNS（同樣只示範代表性節點）。
-  const footerConcerns = addTop('footer', '肌膚困擾', '/concerns/')
-  addChild(footerConcerns, '痘痘・粉刺', '/concerns/acne/')
-  addChild(footerConcerns, '敏感肌', '/concerns/sensitive-skin/')
-
-  const footerTreatments = addTop('footer', '專業服務', '/treatments/')
-  addChild(footerTreatments, '光療美顏', '/treatments/laser/')
-  addChild(footerTreatments, '微針美容', '/treatments/microneedle/')
-
-  const footerAbout = addTop('footer', '關於 20SKIN', '/about/')
-  addChild(footerAbout, '醫師團隊', '/team/')
-  addChild(footerAbout, '常見問題', '/faq/')
-  addChild(footerAbout, '聯絡我們', '/contact/')
-  addExternal('footer', '線上購物', EXTERNAL_SHOP_URL, footerAbout)
-
-  return { nextId, items }
+interface ServerMenuNode {
+  id: number | null
+  label: string
+  linkKind: number
+  contentItemId: number | null
+  url: string | null
+  relAttr: string | null
+  openInNewTab: boolean
+  children: ServerMenuNode[]
+  /** 唯讀，由 API join 出來（MenuItems 沒有這兩欄）。 */
+  contentType: number | null
+  contentTitle: string | null
 }
 
-const menuStore = createStore<MenuDb>('menu', seedMenuDb)
-
-function findMenuItem(db: MenuDb, id: number): MenuItem {
-  const item = db.items.find((i) => i.id === id)
-  if (!item) throw new ApiError('NOT_FOUND', '找不到這個選單項目。')
-  return item
+interface ServerMenuTree {
+  main: ServerMenuNode[] | null
+  footer: ServerMenuNode[] | null
 }
 
-function siblingCount(db: MenuDb, menuKey: MenuKey, parentId: number | null): number {
-  return db.items.filter((i) => i.menuKey === menuKey && i.parentId === parentId).length
+/** docs/08 §B-1 的 ContentType 值 → 單元代號。畫面要知道「這個節點指的是哪個單元」。 */
+const CONTENT_TYPE_TO_UNIT: Record<number, UnitKey> = {
+  1: 'treatment',
+  2: 'doctor',
+  3: 'concern',
+  4: 'article',
+  5: 'case',
+  6: 'faq',
+  7: 'clinic',
+  8: 'page',
+  9: 'term',
 }
 
-function assertLinkShape(input: { linkKind: LinkKind; contentUnit?: UnitKey | null; contentItemId?: number | null; url?: string | null }) {
-  if (input.linkKind === 1 && (!input.contentUnit || !input.contentItemId)) {
-    throw new ApiError('VALIDATION_REQUIRED', '指向站內內容時，必須選擇單元與項目。')
+/**
+ * 巢狀樹 → 後台用的扁平清單。
+ *
+ * ⚠️ **API 的選單是樹，後台畫面是扁平清單 ＋ parentId。** 兩種形狀都有各自的理由：
+ * 樹是因為新節點還沒有資料庫 Id，靠巢狀 JSON 才表達得出父子關係；扁平是因為
+ * 上下移動、升降一層這幾個操作在扁平結構上簡單得多。轉換集中在這裡兩支函式。
+ */
+function flattenMenu(nodes: ServerMenuNode[], menuKey: MenuKey): MenuItem[] {
+  const out: MenuItem[] = []
+  // API 回的節點一定有 Id（讀取時），這裡用一個遞減的負數當「還沒存過」的暫時 Id。
+  let tempId = -1
+
+  function walk(list: ServerMenuNode[], parentId: number | null, depth: 1 | 2) {
+    list.forEach((node, index) => {
+      const id = node.id ?? tempId--
+      const isExternal = node.linkKind === 3
+      out.push({
+        id,
+        menuKey,
+        parentId,
+        depth,
+        label: node.label,
+        linkKind: node.linkKind as LinkKind,
+        contentUnit: node.contentType !== null ? CONTENT_TYPE_TO_UNIT[node.contentType] ?? null : null,
+        contentItemId: node.contentItemId,
+        url: node.url,
+        isExternal,
+        relAttr: node.relAttr,
+        openInNewTab: node.openInNewTab,
+        sortOrder: index,
+      })
+      // 最多兩層（docs/08 §G-3），第三層以下就算 API 回了也不往下走。
+      if (depth === 1) walk(node.children ?? [], id, 2)
+    })
   }
-  if ((input.linkKind === 2 || input.linkKind === 3) && !input.url) {
-    throw new ApiError('VALIDATION_REQUIRED', '網址為必填。')
+
+  walk(nodes, null, 1)
+  return out
+}
+
+function nestMenu(items: MenuItem[], menuKey: MenuKey): unknown[] {
+  const scoped = items.filter((i) => i.menuKey === menuKey)
+  const build = (parentId: number | null): unknown[] =>
+    scoped
+      .filter((i) => i.parentId === parentId)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((i) => ({
+        // 負數是本地暫時 Id（見 flattenMenu），送出去要變回 null＝新增。
+        id: i.id > 0 ? i.id : null,
+        label: i.label,
+        linkKind: i.linkKind,
+        contentItemId: i.linkKind === 1 ? i.contentItemId : null,
+        url: i.linkKind === 1 ? null : i.url,
+        relAttr: i.relAttr,
+        openInNewTab: i.openInNewTab,
+        children: parentId === null ? build(i.id) : [],
+      }))
+  return build(null)
+}
+
+async function loadMenu(menuKey: MenuKey): Promise<MenuItem[]> {
+  const tree = await request<ServerMenuTree>('/admin/menu')
+  return flattenMenu((menuKey === 'main' ? tree.main : tree.footer) ?? [], menuKey)
+}
+
+/**
+ * ⚠️ `PUT /admin/menu` 是**整棵樹整批替換**：送出去的那一份就是新的全部。
+ * 所以每一個編輯動作都是「讀回來 → 在記憶體改 → 整份送回去」。
+ * 只送一個節點等於把該選單其餘節點全部刪掉。
+ */
+async function saveMenu(menuKey: MenuKey, items: MenuItem[]): Promise<void> {
+  const payload = menuKey === 'main'
+    ? { main: nestMenu(items, 'main') }
+    : { footer: nestMenu(items, 'footer') }
+  await request<ServerMenuTree>('/admin/menu', { method: 'PUT', body: payload })
+}
+
+function assertLinkShape(item: Pick<MenuItem, 'linkKind' | 'contentItemId' | 'url'>) {
+  if (item.linkKind === 1 && !item.contentItemId) {
+    throw new ApiError('VALIDATION_REQUIRED', '連結到站內內容時必須選一筆內容。')
   }
-  if (input.linkKind === 3 && input.url && !/^https?:\/\//.test(input.url)) {
-    throw new ApiError('VALIDATION_FORMAT', '外部網址必須是完整的 http(s) 網址。')
+  if (item.linkKind !== 1 && !item.url) {
+    throw new ApiError('VALIDATION_REQUIRED', '這個連結類型需要填寫網址或路徑。')
   }
+}
+
+function findItem(items: MenuItem[], id: number): MenuItem {
+  const found = items.find((i) => i.id === id)
+  if (!found) throw new ApiError('NOT_FOUND', `找不到選單項目 #${id}。`)
+  return found
 }
 
 const menu = {
   async list(menuKey: MenuKey): Promise<MenuItem[]> {
-    return deepClone(
-      menuStore
-        .read()
-        .items.filter((i) => i.menuKey === menuKey)
-        .sort((a, b) => a.depth - b.depth || a.sortOrder - b.sortOrder),
-    )
+    return loadMenu(menuKey)
   },
 
   async create(input: NewMenuItemInput, _userId: number): Promise<MenuItem> {
-    assertLinkShape(input)
-    return deepClone(
-      menuStore.mutate((d) => {
-        let depth: 1 | 2 = 1
-        if (input.parentId != null) {
-          const parent = findMenuItem(d, input.parentId)
-          if (parent.menuKey !== input.menuKey) throw new ApiError('VALIDATION_FORMAT', '子項目必須跟父項目在同一個選單。')
-          if (parent.depth !== 1) throw new ApiError('VALIDATION_RANGE', '最多兩層，不能再往下加一層。')
-          depth = 2
-        }
-        const isExternal = input.linkKind === 3
-        const item: MenuItem = {
-          id: d.nextId++,
-          menuKey: input.menuKey,
-          parentId: input.parentId ?? null,
-          depth,
-          label: input.label,
-          linkKind: input.linkKind,
-          contentUnit: input.linkKind === 1 ? input.contentUnit ?? null : null,
-          contentItemId: input.linkKind === 1 ? input.contentItemId ?? null : null,
-          url: input.linkKind === 1 ? null : input.url ?? null,
-          isExternal,
-          relAttr: isExternal ? input.relAttr ?? 'noopener external' : null,
-          openInNewTab: isExternal ? true : Boolean(input.openInNewTab),
-          sortOrder: siblingCount(d, input.menuKey, input.parentId ?? null),
-        }
-        d.items.push(item)
-        return item
-      }),
-    )
+    assertLinkShape({ linkKind: input.linkKind, contentItemId: input.contentItemId ?? null, url: input.url ?? null })
+    const items = await loadMenu(input.menuKey)
+
+    let depth: 1 | 2 = 1
+    if (input.parentId != null) {
+      const parent = findItem(items, input.parentId)
+      if (parent.depth !== 1) throw new ApiError('VALIDATION_RANGE', '最多兩層，不能再往下加一層。')
+      depth = 2
+    }
+
+    const isExternal = input.linkKind === 3
+    const item: MenuItem = {
+      // 本地暫時 Id，送出時會變成 null＝新增（見 nestMenu）。
+      id: Math.min(0, ...items.map((i) => i.id)) - 1,
+      menuKey: input.menuKey,
+      parentId: input.parentId ?? null,
+      depth,
+      label: input.label,
+      linkKind: input.linkKind,
+      contentUnit: input.linkKind === 1 ? input.contentUnit ?? null : null,
+      contentItemId: input.linkKind === 1 ? input.contentItemId ?? null : null,
+      url: input.linkKind === 1 ? null : input.url ?? null,
+      isExternal,
+      relAttr: isExternal ? input.relAttr ?? 'noopener external' : null,
+      openInNewTab: isExternal ? true : Boolean(input.openInNewTab),
+      sortOrder: items.filter((i) => i.parentId === (input.parentId ?? null)).length,
+    }
+
+    items.push(item)
+    await saveMenu(input.menuKey, items)
+
+    // 存回去之後 Id 才由資料庫決定，所以重讀一次再把那一筆找出來。
+    const saved = await loadMenu(input.menuKey)
+    const match = saved.find((i) => i.label === item.label && i.parentId === item.parentId)
+    return match ?? item
   },
 
   async update(id: number, patch: MenuItemPatch, _userId: number): Promise<MenuItem> {
-    return deepClone(
-      menuStore.mutate((d) => {
-        const item = findMenuItem(d, id)
-        const next = { ...item, ...patch }
-        assertLinkShape(next)
-        if (next.linkKind === 1) {
-          next.url = null
-          next.isExternal = false
-          next.relAttr = null
-        } else {
-          next.contentUnit = null
-          next.contentItemId = null
-          if (next.linkKind === 3) {
-            next.isExternal = true
-            next.relAttr = next.relAttr ?? 'noopener external'
-            next.openInNewTab = true
-          } else {
-            next.isExternal = false
-          }
+    for (const menuKey of ['main', 'footer'] as MenuKey[]) {
+      const items = await loadMenu(menuKey)
+      const item = items.find((i) => i.id === id)
+      if (!item) continue
+
+      Object.assign(item, patch)
+      if (item.linkKind === 1) {
+        item.url = null
+        item.isExternal = false
+        item.relAttr = null
+      } else {
+        item.contentUnit = null
+        item.contentItemId = null
+        item.isExternal = item.linkKind === 3
+        if (item.isExternal) {
+          item.relAttr = item.relAttr ?? 'noopener external'
+          item.openInNewTab = true
         }
-        Object.assign(item, next)
-        return item
-      }),
-    )
+      }
+      assertLinkShape(item)
+
+      await saveMenu(menuKey, items)
+      const saved = await loadMenu(menuKey)
+      return saved.find((i) => i.id === id) ?? item
+    }
+    throw new ApiError('NOT_FOUND', `找不到選單項目 #${id}。`)
   },
 
   /** 刪除連同其子項目一併移除（子項目的 parentId 指向它，留著會變孤兒節點）。 */
   async remove(id: number): Promise<void> {
-    menuStore.mutate((d) => {
-      const item = findMenuItem(d, id)
-      const toRemove = new Set([item.id, ...d.items.filter((i) => i.parentId === item.id).map((i) => i.id)])
-      d.items = d.items.filter((i) => !toRemove.has(i.id))
-    })
+    for (const menuKey of ['main', 'footer'] as MenuKey[]) {
+      const items = await loadMenu(menuKey)
+      if (!items.some((i) => i.id === id)) continue
+      const remaining = items.filter((i) => i.id !== id && i.parentId !== id)
+      await saveMenu(menuKey, remaining)
+      return
+    }
+    throw new ApiError('NOT_FOUND', `找不到選單項目 #${id}。`)
   },
 
-  /** 同層排序（上／下移動，docs 現況：拖曳排序此輪先以上下移動按鈕實作，與其餘畫面一致）。 */
+  /** 同層排序（上／下移動）。 */
   async move(id: number, direction: -1 | 1, _userId: number): Promise<void> {
-    menuStore.mutate((d) => {
-      const item = findMenuItem(d, id)
-      const siblings = d.items
-        .filter((i) => i.menuKey === item.menuKey && i.parentId === item.parentId)
-        .sort((a, b) => a.sortOrder - b.sortOrder)
+    for (const menuKey of ['main', 'footer'] as MenuKey[]) {
+      const items = await loadMenu(menuKey)
+      const item = items.find((i) => i.id === id)
+      if (!item) continue
+
+      const siblings = items.filter((i) => i.parentId === item.parentId).sort((a, b) => a.sortOrder - b.sortOrder)
       const index = siblings.findIndex((i) => i.id === id)
       const targetIndex = index + direction
       if (targetIndex < 0 || targetIndex >= siblings.length) return
-      const a = siblings[index]
-      const b = siblings[targetIndex]
-      const tmp = a.sortOrder
-      a.sortOrder = b.sortOrder
-      b.sortOrder = tmp
-    })
+
+      const tmp = siblings[index].sortOrder
+      siblings[index].sortOrder = siblings[targetIndex].sortOrder
+      siblings[targetIndex].sortOrder = tmp
+
+      await saveMenu(menuKey, items)
+      return
+    }
+    throw new ApiError('NOT_FOUND', `找不到選單項目 #${id}。`)
   },
 
   /** 升／降一層（promote：newParentId=null；demote：newParentId=某個同選單的頂層項目）。 */
   async changeParent(id: number, newParentId: number | null, _userId: number): Promise<void> {
-    menuStore.mutate((d) => {
-      const item = findMenuItem(d, id)
-      if (newParentId === item.id) throw new ApiError('VALIDATION_FORMAT', '不能把項目移到自己底下。')
-      if (newParentId == null) {
+    for (const menuKey of ['main', 'footer'] as MenuKey[]) {
+      const items = await loadMenu(menuKey)
+      const item = items.find((i) => i.id === id)
+      if (!item) continue
+
+      if (newParentId === id) throw new ApiError('VALIDATION_FORMAT', '不能把項目移到自己底下。')
+
+      if (newParentId === null) {
         item.parentId = null
         item.depth = 1
       } else {
-        const hasChildren = d.items.some((i) => i.parentId === item.id)
-        if (hasChildren) throw new ApiError('VALIDATION_RANGE', '這個項目底下還有子項目，最多兩層，無法再往下移一層。')
-        const parent = findMenuItem(d, newParentId)
-        if (parent.menuKey !== item.menuKey) throw new ApiError('VALIDATION_FORMAT', '只能移到同一個選單底下。')
+        if (items.some((i) => i.parentId === id)) {
+          throw new ApiError('VALIDATION_RANGE', '這個項目底下還有子項目，最多兩層，無法再往下移一層。')
+        }
+        const parent = findItem(items, newParentId)
         if (parent.depth !== 1) throw new ApiError('VALIDATION_RANGE', '最多兩層，目標項目本身已經是子層。')
         item.parentId = parent.id
         item.depth = 2
       }
-      item.sortOrder = siblingCount(d, item.menuKey, item.parentId)
-    })
+      item.sortOrder = items.filter((i) => i.parentId === item.parentId && i.id !== id).length
+
+      await saveMenu(menuKey, items)
+      return
+    }
+    throw new ApiError('NOT_FOUND', `找不到選單項目 #${id}。`)
   },
 }
 

@@ -338,7 +338,9 @@ public const string PublicFilter = """
 `ContentVersions.Snapshot` 存 **JSON 完整快照**：主幹欄位 ＋ 該型別專屬欄位 ＋ `SeoMeta` ＋ 所有關聯 ＋ 首頁版位設定（[08](08-database.md) §B-2）。
 
 - **序列化格式要有一份獨立於 EF 的規格。** 遷移期的匯入腳本走 Dapper 直寫，它產生的快照必須與 API 產生的讀得通（[08](08-database.md) §J-1）
+- 🔴 **送審一定要重新快照當下的工作副本，不可以沿用最後一筆既有版本。** `ContentReviews.VersionId` 指到的那一版核准時會成為 `PublishedVersionId`，也就是建置期匯出真正讀的那一份（§7、[09](09-frontend.md) §3）。沿用舊版的話，任何「不產生版本的編輯路徑」送審核准之後上線的都是**改動前**的內容 —— 而且畫面上還會顯示「已發布」。首頁版位就是這樣一條路徑（它由 `HomeSectionHandler` 直接寫兩張表），2026-09-12 實測抓到。代價是每次送審多一筆版本列，那由 `VersionPrune` 收（§11）；「核准了卻沒上線」沒有東西收得掉
 - 還原是**整筆還原成草稿**，不直接上線（[10](10-api.md) §3.3）
+- ⚠️ **首頁那筆 Page 的還原要連版位一起還原。** 版位是首頁上唯一會變的東西，只還原內文等於這個按鈕對首頁沒有作用
 - 差異比對在應用層 diff 兩份 JSON，不做欄位級歷史表
 - **每筆保留最近 30 版**，超出由 Timer 清掉（§11）
 
@@ -399,12 +401,13 @@ SAS 以 **Managed Identity 取 user delegation key** 簽發，系統內不存放
   → POST /repos/{repo}/dispatches  { event_type: "content-published" }
 ```
 
-四條規則：
+五條規則：
 
 1. **要聚合。** 連續發布 10 篇不該觸發 10 次 build（[07](07-deployment.md) §5）。窗口狀態存 DB 或 Blob，**不要用 `MemoryCache`**（多執行個體）
 2. **不要因為重建失敗而 throw。** 內容狀態已經改好了，重建失敗應獨立告警，不要讓整個流程重跑一次狀態轉換
 3. **沒有異動就不要觸發。** Timer 每 15 分鐘跑一次，沒有到期內容時直接 return，否則等於每 15 分鐘跑一次全站 build
-4. **後台要看得到「發布中／已上線」**（[09](09-frontend.md) §10）
+4. **後台要看得到「發布中／已上線」**（[09](09-frontend.md) §10），端點是 `GET /admin/rebuild`（[10](10-api.md) §3.4）。⚠️ 它回的是「請求送出去了沒有」，**不是建置進度** —— `repository_dispatch` 是射後不理，API 不知道 GitHub Actions 跑到哪裡。後台那個狀態字是樂觀顯示，不是部署成功的證據
+5. **改工作副本不要觸發。** 首頁版位的 `PUT /admin/home-section` 改的是工作副本（§8），前台沒有任何變化 —— 觸發重建只是白跑一次建置，而且會讓人以為「存檔＝上線」。真正觸發的是核准那一步
 
 `GITHUB_DISPATCH_TOKEN` 是這個 App 唯一需要保管的外部憑證（SQL 與 Blob 都走 Managed Identity）。權限收斂到單一 repo 的 dispatch。
 

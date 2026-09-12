@@ -15,8 +15,17 @@ namespace Skin20.Api.Services.Dapper;
 /// </summary>
 public interface IRedirectReadService
 {
+    /// <param name="sortBy"><c>fromPath</c> 或 <c>createdAt</c>（其餘值一律退回 <c>createdAt</c>）。</param>
+    /// <param name="sortDescending">後台預設新的在前。</param>
     Task<(IReadOnlyList<RedirectDto> Items, int TotalCount)> ListAsync(
-        string? keyword, int page, int pageSize, CancellationToken ct = default);
+        string? keyword, bool? isActive, byte? source, string? sortBy, bool sortDescending,
+        int page, int pageSize, CancellationToken ct = default);
+
+    /// <summary>
+    /// 後台清單上方的統計卡。
+    /// <para>⚠️ 一定要在 SQL 層算 —— 前端拿分頁結果加總只會算到當頁那 20 筆（docs/10 §2）。</para>
+    /// </summary>
+    Task<RedirectStatsDto> StatsAsync(CancellationToken ct = default);
 
     /// <summary>
     /// 匯出用：不分頁的完整清單。
@@ -46,14 +55,30 @@ public sealed class RedirectReadService(ISqlConnectionFactory factory) : IRedire
         """;
 
     public async Task<(IReadOnlyList<RedirectDto> Items, int TotalCount)> ListAsync(
-        string? keyword, int page, int pageSize, CancellationToken ct = default)
+        string? keyword, bool? isActive, byte? source, string? sortBy, bool sortDescending,
+        int page, int pageSize, CancellationToken ct = default)
     {
         using var connection = factory.Create();
 
-        var hasKeyword = !string.IsNullOrWhiteSpace(keyword);
-        var where = hasKeyword ? "WHERE r.FromPath LIKE @Keyword OR r.ToPath LIKE @Keyword" : "";
+        var conditions = new List<string>();
         var parameters = new DynamicParameters();
-        if (hasKeyword) parameters.Add("Keyword", $"%{keyword}%");
+        if (!string.IsNullOrWhiteSpace(keyword))
+        {
+            conditions.Add("(r.FromPath LIKE @Keyword OR r.ToPath LIKE @Keyword)");
+            parameters.Add("Keyword", $"%{keyword}%");
+        }
+        if (isActive is not null) { conditions.Add("r.IsActive = @IsActive"); parameters.Add("IsActive", isActive); }
+        if (source is not null) { conditions.Add("r.Source = @Source"); parameters.Add("Source", source); }
+        var where = conditions.Count > 0 ? $"WHERE {string.Join(" AND ", conditions)}" : "";
+
+        // 🔴 排序欄位是**白名單映射**，不是把參數接進 SQL。這裡的字串會直接進查詢，
+        //    接受任意輸入就是 SQL injection。
+        var orderColumn = sortBy?.ToLowerInvariant() switch
+        {
+            "frompath" => "r.FromPath",
+            _ => "r.Id",
+        };
+        var orderDirection = sortDescending ? "DESC" : "ASC";
 
         var countSql = $"SELECT COUNT(*) FROM Redirects r {where}";
         var totalCount = await connection.ExecuteScalarAsync<int>(
@@ -65,7 +90,7 @@ public sealed class RedirectReadService(ISqlConnectionFactory factory) : IRedire
         var pageSql = $"""
             {SelectColumns}
             {where}
-            ORDER BY r.Id DESC
+            ORDER BY {orderColumn} {orderDirection}
             OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY
             """;
 
@@ -73,6 +98,21 @@ public sealed class RedirectReadService(ISqlConnectionFactory factory) : IRedire
             new CommandDefinition(pageSql, parameters, cancellationToken: ct));
 
         return (items.AsList(), totalCount);
+    }
+
+    public async Task<RedirectStatsDto> StatsAsync(CancellationToken ct = default)
+    {
+        using var connection = factory.Create();
+        const string sql = """
+            SELECT COUNT(*)                                        AS TotalCount,
+                   SUM(CASE WHEN IsActive = 1   THEN 1 ELSE 0 END) AS ActiveCount,
+                   SUM(CASE WHEN IsVerified = 1 THEN 1 ELSE 0 END) AS VerifiedCount,
+                   SUM(CASE WHEN Source = 1     THEN 1 ELSE 0 END) AS MigrationCount,
+                   SUM(CASE WHEN Source = 2     THEN 1 ELSE 0 END) AS ManualCount,
+                   SUM(CASE WHEN Source = 3     THEN 1 ELSE 0 END) AS SystemCount
+            FROM Redirects
+            """;
+        return await connection.QuerySingleAsync<RedirectStatsDto>(new CommandDefinition(sql, cancellationToken: ct));
     }
 
     public async Task<IReadOnlyList<RedirectDto>> ListAllAsync(CancellationToken ct = default)

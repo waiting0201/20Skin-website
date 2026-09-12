@@ -18,16 +18,16 @@ const UnitEdit = () => import('@/pages/UnitEdit.vue')
 // 系統類畫面（docs/06-page-inventory.md §5）。九個內容模型走上面的通用
 // /:unit 路由，這些各有各的形狀，所以一個畫面一支元件。
 const SYSTEM_SCREENS: { path: string; name: string; permission: string; component: () => Promise<unknown> }[] = [
-  { path: '/review',        name: 'review',        permission: 'review.view',   component: () => import('@/pages/Review.vue') },
-  { path: '/questions',     name: 'questions',     permission: 'question.view', component: () => import('@/pages/Questions.vue') },
-  { path: '/sitemap',       name: 'sitemap',       permission: 'setting.view',  component: () => import('@/pages/SitemapSettings.vue') },
-  { path: '/redirects',     name: 'redirects',     permission: 'redirect.view', component: () => import('@/pages/Redirects.vue') },
-  { path: '/export',        name: 'export',        permission: 'setting.view',  component: () => import('@/pages/Export.vue') },
-  { path: '/home-sections', name: 'home-sections', permission: 'home.view',     component: () => import('@/pages/HomeSections.vue') },
-  { path: '/menu',          name: 'menu',          permission: 'menu.view',     component: () => import('@/pages/Menu.vue') },
-  { path: '/settings',      name: 'settings',      permission: 'setting.view',  component: () => import('@/pages/Settings.vue') },
-  { path: '/users',         name: 'users',         permission: 'user.view',     component: () => import('@/pages/Users.vue') },
-  { path: '/roles',         name: 'roles',         permission: 'role.view',     component: () => import('@/pages/Roles.vue') },
+  { path: '/review',        name: 'review',        permission: 'review.approve',   component: () => import('@/pages/Review.vue') },
+  { path: '/questions',     name: 'questions',     permission: 'content.faq.edit', component: () => import('@/pages/Questions.vue') },
+  { path: '/sitemap',       name: 'sitemap',       permission: 'settings.edit',  component: () => import('@/pages/SitemapSettings.vue') },
+  { path: '/redirects',     name: 'redirects',     permission: 'redirect.manage', component: () => import('@/pages/Redirects.vue') },
+  { path: '/export',        name: 'export',        permission: 'settings.edit',  component: () => import('@/pages/Export.vue') },
+  { path: '/home-sections', name: 'home-sections', permission: 'home.arrange',     component: () => import('@/pages/HomeSections.vue') },
+  { path: '/menu',          name: 'menu',          permission: 'menu.edit',     component: () => import('@/pages/Menu.vue') },
+  { path: '/settings',      name: 'settings',      permission: 'settings.edit',  component: () => import('@/pages/Settings.vue') },
+  { path: '/users',         name: 'users',         permission: 'account.manage',     component: () => import('@/pages/Users.vue') },
+  { path: '/roles',         name: 'roles',         permission: 'account.manage',     component: () => import('@/pages/Roles.vue') },
 ]
 
 declare module 'vue-router' {

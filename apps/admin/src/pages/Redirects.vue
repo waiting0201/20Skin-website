@@ -16,9 +16,9 @@ import type { RedirectImportPreview, RedirectImportRow, RedirectRecord, Redirect
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
-const canView = computed(() => hasPermission(permCtx, 'redirect.view'))
-const canEdit = computed(() => hasPermission(permCtx, 'redirect.edit'))
-const canExport = computed(() => hasPermission(permCtx, 'redirect.export'))
+const canView = computed(() => hasPermission(permCtx, 'redirect.manage'))
+const canEdit = computed(() => hasPermission(permCtx, 'redirect.manage'))
+const canExport = computed(() => hasPermission(permCtx, 'redirect.manage'))
 
 // ── 清單 ──────────────────────────────────────────────────────────────
 

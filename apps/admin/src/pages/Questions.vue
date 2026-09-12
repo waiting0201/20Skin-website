@@ -18,7 +18,7 @@ import { QUESTION_STATUS_LABEL, SOURCE_LABEL } from '@/api/question'
 const router = useRouter()
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
-const canEdit = computed(() => hasPermission(permCtx, 'question.edit'))
+const canEdit = computed(() => hasPermission(permCtx, 'content.faq.edit'))
 
 const items = ref<QuestionInboxRecord[]>([])
 const loading = ref(true)

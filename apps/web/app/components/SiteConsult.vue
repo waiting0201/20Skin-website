@@ -5,6 +5,15 @@
 //    開合、Esc 關閉、焦點交還由 mockup 的 app.js 處理；送出後只回一則佔位訊息。
 //    是否輸出這段 DOM 由全站設定的啟用開關決定（見 layouts/default.vue）。
 import { EXTERNAL } from '~/data/navigation'
+
+// 文案與轉真人出口由全站設定決定（docs/04-ai-faq.md §4），
+// 由 layouts/default.vue 從 `GET /site-settings/public` 取得後傳進來。
+const props = withDefaults(
+  defineProps<{ panelTitle?: string; welcomeText?: string; bookingUrl?: string }>(),
+  { panelTitle: 'AI 線上諮詢', welcomeText: '', bookingUrl: '' },
+)
+
+const bookingHref = computed(() => props.bookingUrl || EXTERNAL.booking)
 </script>
 
 <template>
@@ -22,7 +31,7 @@ import { EXTERNAL } from '~/data/navigation'
   <aside class="c-chat" id="consultPanel" role="dialog" aria-labelledby="consultTitle" hidden>
     <div class="c-chat__head">
       <div>
-        <p class="c-chat__title" id="consultTitle">AI 線上諮詢</p>
+        <p class="c-chat__title" id="consultTitle">{{ panelTitle }}</p>
         <p class="c-chat__meta">依站內內容即時回覆</p>
       </div>
       <button class="c-chat__close" type="button" data-consult-close aria-label="關閉線上諮詢">
@@ -31,7 +40,7 @@ import { EXTERNAL } from '~/data/navigation'
     </div>
 
     <div class="c-chat__log" data-consult-log role="log" aria-live="polite">
-      <p class="c-chat__msg c-chat__msg--bot">你好，我是 20SKIN 的線上諮詢助理。可以用自己的話問我療程、術後照護或看診流程的問題。</p>
+      <p class="c-chat__msg c-chat__msg--bot">{{ welcomeText || '你好，我是 20SKIN 的線上諮詢助理。可以用自己的話問我療程、術後照護或看診流程的問題。' }}</p>
       <div class="c-chat__chips">
         <button class="c-chat__chip" type="button" data-consult-ask>做雷射會痛嗎？</button>
         <button class="c-chat__chip" type="button" data-consult-ask>療程後多久可以化妝？</button>
@@ -54,6 +63,6 @@ import { EXTERNAL } from '~/data/navigation'
       </button>
     </form>
 
-    <p class="c-chat__foot">AI 回覆僅供衛教參考，無法取代醫師診斷。需要個人化建議請<a class="ext" :href="EXTERNAL.booking" target="_blank" rel="noopener external">預約門診</a>。</p>
+    <p class="c-chat__foot">AI 回覆僅供衛教參考，無法取代醫師診斷。需要個人化建議請<a class="ext" :href="bookingHref" target="_blank" rel="noopener external">預約門診</a>。</p>
   </aside>
 </template>

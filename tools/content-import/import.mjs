@@ -823,8 +823,23 @@ async function ensureTerm(type, slug, title) {
   ]
 
   await api.put('/admin/home-section', { sections })
+
+  // 🔴 **寫完版位一定要重新發布首頁。**
+  //
+  //    版位編排的送審與版本歷程掛在 SystemKey='home' 的那筆 Page 上（docs/08 §G-2、
+  //    docs/11 §8），而建置期匯出讀的是**已核准的版本快照**（docs/09 §3、CLAUDE.md 決策 14）。
+  //    `PUT /admin/home-section` 改的是工作副本，它本身不產生快照 ——
+  //    不重新發布的話，首頁那一版快照裡的版位永遠停在寫入之前的樣子，
+  //    前台首頁會是「七個版位都在、但每個都沒有內容」。
+  //
+  //    ⚠️ 這個錯**沒有任何錯誤訊息**：匯入印出「7 個版位」、後台看得到內容、
+  //    只有前台是空的。2026-09-12 匯出改讀快照之後才抓到。
+  const homePage = (await api.list('page')).find((p) => p.fields?.systemKey === 'home')
+  if (!homePage) throw new Error('找不到首頁那筆系統頁（systemKey=home），無法發布版位。')
+  await api.publish('page', homePage.id)
+
   const withItems = sections.filter((s) => s.items.length).length
-  console.log(`  home       7 個版位（${withItems} 個有引用內容，2 個走版位設定）`)
+  console.log(`  home       7 個版位（${withItems} 個有引用內容，2 個走版位設定）＋ 重新發布首頁`)
 }
 
 // ── 14. 導覽選單與頁尾 ───────────────────────────────────────────────

@@ -20,7 +20,13 @@ public sealed record ContentListRow(
     int? OwnerUserId,
     DateTime UpdatedAt,
     int? CategoryTermId,
-    string? CategoryTitle);
+    string? CategoryTitle,
+    /// <summary>只有 <c>term</c> 有值（其餘單元為 <c>null</c>）。算法與 <c>CountReferencesAsync</c> 一致。</summary>
+    int? UsageCount,
+    /// <summary>
+    /// 逐單元的清單顯示欄位，JSON 物件字串（見 <c>ListExtras</c>）。沒有額外欄位的單元為 <c>null</c>。
+    /// </summary>
+    string? Extras);
 
 /// <summary>版本清單一列。</summary>
 public sealed record VersionListRow(int Id, int VersionNo, string Title, string? Note, int? CreatedByUserId, DateTime CreatedAt);
@@ -85,13 +91,43 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
             ? $"(@CategoryTermId IS NULL OR u.[{meta.CategoryColumn}] = @CategoryTermId)"
             : "(1 = 1)";
 
+        // 分類與標籤的「使用筆數」：後台清單要顯示它，刪除也靠它擋（docs/10 §3.3 —— 仍有引用回 409）。
+        // ⚠️ 只有 term 才算。這是四個相關子查詢，對其餘八個單元（文章有約 800 筆）
+        //    是白費的成本，而它們的畫面上根本沒有這一欄。
+        // ⚠️ 算法必須與 CountReferencesAsync 一致 —— 清單顯示「0 筆」但刪除被擋下，
+        //    使用者只會覺得後台壞了。改一邊就要改另一邊。
+        // 後台清單每個單元各自要顯示的子表欄位（職稱、地址、看診日期…）。
+        //
+        // ⚠️ 這裡刻意<b>不是</b>「把整筆詳情撈出來」：清單一頁 20 列，撈詳情等於 20 份
+        //    內文與圖片欄位。只取畫面上那幾欄，用 FOR JSON 收成一個 nvarchar，
+        //    Handler 那頭再展開成 fields 字典。
+        // ⚠️ 鍵名必須與 apps/admin/src/units/*.ts 的 listColumns 逐字相同 ——
+        //    對不上不會有錯誤訊息，只會在清單上留下一片空白欄。
+        // ⚠️ INCLUDE_NULL_VALUES 不可省：預設 FOR JSON 會把 null 的屬性整個拿掉，
+        //    前端就分不出「沒有這一欄」與「這一欄是空的」。
+        var (extraColumns, extraJoin) = ListExtras(unit);
+        var extrasSelect = extraColumns is null
+            ? "CAST(NULL AS nvarchar(max))"
+            : $"(SELECT {extraColumns} FOR JSON PATH, WITHOUT_ARRAY_WRAPPER, INCLUDE_NULL_VALUES)";
+
+        var usageCountSelect = unit == UnitCodes.Term
+            ? """
+              ((SELECT COUNT(*) FROM Treatments WHERE CategoryTermId = ci.Id) +
+               (SELECT COUNT(*) FROM Articles   WHERE CategoryTermId = ci.Id) +
+               (SELECT COUNT(*) FROM Faqs       WHERE CategoryTermId = ci.Id) +
+               (SELECT COUNT(*) FROM ContentRelations WHERE ToContentItemId = ci.Id OR FromContentItemId = ci.Id))
+              """
+            : "CAST(NULL AS int)";
+
         var sql = $"""
             SELECT ci.Id, ci.Title, ci.Slug, ci.UrlPath, ci.Status, ci.PublishAt, ci.UnpublishAt,
                    ci.SortOrder, ci.IncludeInSitemap, ci.IsSystemLocked, ci.OwnerUserId, ci.UpdatedAt,
-                   {categorySelect} AS CategoryTermId, {categoryTitleSelect} AS CategoryTitle
+                   {categorySelect} AS CategoryTermId, {categoryTitleSelect} AS CategoryTitle,
+                   {usageCountSelect} AS UsageCount, {extrasSelect} AS Extras
             FROM ContentItems ci
             INNER JOIN {meta.Table} u ON u.Id = ci.Id
             {categoryJoin}
+            {extraJoin}
             WHERE ci.ContentType = @ContentType
               AND (@Status IS NULL OR ci.Status = @Status)
               AND {categoryFilter}
@@ -185,6 +221,32 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
         var command = new CommandDefinition(sql, new { Id = contentItemId }, cancellationToken: ct);
         return await conn.QuerySingleAsync<int>(command);
     }
+
+    /// <summary>
+    /// 逐單元的清單顯示欄位。回傳 <c>(SELECT 片段, 額外 JOIN)</c>；<c>null</c> 代表這個單元
+    /// 除了共同欄位以外沒有要多顯示的東西。
+    ///
+    /// <para>
+    /// 🔴 <b>這些字串直接進 SQL，所以它們必須全部是這裡寫死的常數</b> —— 不可以接受任何
+    /// 來自請求的值。<c>unit</c> 本身在進到這裡之前已經被 <c>UnitTables</c> 的白名單擋過一次。
+    /// </para>
+    /// <para>
+    /// ⚠️ 分類名稱不在這裡 —— 它是<b>共同</b>欄位（<c>CategoryTitle</c>），三個有分類的單元共用。
+    /// </para>
+    /// </summary>
+    private static (string? Columns, string Join) ListExtras(string unit) => unit switch
+    {
+        UnitCodes.Doctor => ("u.JobTitle AS jobTitle, u.IsPhysician AS isPhysician", ""),
+        UnitCodes.Article => ("u.DisplayDate AS displayDate", ""),
+        // 案例清單顯示的是療程「名稱」，不是 TreatmentId。名稱在 ContentItems（TPT 父表），
+        // 所以 join 的是 ContentItems 而不是 Treatments。
+        UnitCodes.Case => ("tci.Title AS treatmentTitle", "LEFT JOIN ContentItems tci ON tci.Id = u.TreatmentId"),
+        UnitCodes.Faq => ("u.LastReviewedOn AS lastReviewedOn", ""),
+        UnitCodes.Clinic => ("u.Address AS address, u.Phone AS phone", ""),
+        UnitCodes.Page => ("u.PageKind AS pageKind, u.SystemKey AS systemKey", ""),
+        UnitCodes.Term => ("u.TermType AS termType", ""),
+        _ => (null, ""),
+    };
 
     /// <summary>LIKE 萬用字元逸出（<c>%</c>／<c>_</c>／<c>[</c>），關鍵字才不會被使用者輸入的萬用字元誤導。</summary>
     private static string EscapeLike(string value)

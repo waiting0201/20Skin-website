@@ -18,7 +18,7 @@ import type { AdminRecord } from '@/types'
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
-const canEdit = computed(() => hasPermission(permCtx, 'setting.edit'))
+const canEdit = computed(() => hasPermission(permCtx, 'settings.edit'))
 
 const loading = ref(true)
 const saving = ref(false)

@@ -31,6 +31,19 @@ export default defineNuxtConfig({
   // 本專案的 public/admin/，隨 nuxt generate 一起打包（docs/09-frontend.md §1）。
   // ⚠️ 建置有順序相依：先 admin 後 web。
 
+  // 前台是建置期預渲染的靜態站，**執行期只打四支 API**（docs/09 §4、docs/10 §3.1）：
+  // /health、POST /contact、POST /questions/miss、GET /site-settings/public。
+  // 療程、文章、醫師這些資料不經由 API —— 建置期就烤進 HTML 了。
+  //
+  // ⚠️ 這是 `public`，會被寫進產物，**不要放任何密鑰**。它只是一個公開網址。
+  // ⚠️ 後台與 API 不同網域（20skin.tw ↔ api.20skin.tw），所以一定是絕對網址；
+  //    寫成相對路徑會打到 SWA 自己的 /api，那裡只有 fallback 一支（CLAUDE.md 決策 7）。
+  runtimeConfig: {
+    public: {
+      apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || 'https://api.20skin.tw/api/v1',
+    },
+  },
+
   nitro: {
     prerender: {
       crawlLinks: true,

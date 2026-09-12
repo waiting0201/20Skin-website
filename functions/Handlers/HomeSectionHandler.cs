@@ -17,13 +17,20 @@ namespace Skin20.Api.Handlers;
 /// schema 本身就沒有文案欄位（docs/08 §G-2），這裡不要繞過它。
 ///
 /// <para>
-/// ⚠️ <b>已知缺口（已於交付報告中回報，未自行另寫一套）</b>：docs/08 §G-2 與 docs/11 §8
-/// 要求版位編排的送審與版本歷程掛在 <c>SystemKey='home'</c> 的 <c>ContentItem</c> 上，
-/// 快照時把 <c>HomeSections</c>／<c>HomeSectionItems</c> 序列化進 <c>ContentVersions.Snapshot</c>。
-/// 這套版本快照機制屬於 <c>ContentHandler</c> 那組負責、本次交付時尚未存在可呼叫的服務，
-/// 因此本檔案目前是<b>直接寫入</b>，未經草稿／送審／核准流程。等該服務就緒後，
-/// <see cref="UpdateAsync"/> 寫入 <c>HomeSections</c>／<c>HomeSectionItems</c> 的段落
-/// 需要改為「寫草稿版本 → 走 submit/approve → 核准後才落地」，並在核准時呼叫版本快照服務。
+/// 🔴 <b><c>HomeSections</c>／<c>HomeSectionItems</c> 兩張表是「工作副本」，不是上線版。</b>
+/// docs/08 §G-2、docs/11 §8：版位編排的送審與版本歷程掛在 <c>SystemKey='home'</c> 的
+/// <c>ContentItem</c> 上，快照時把版位序列化進 <c>ContentVersions.Snapshot</c>
+/// （見 <c>ContentHandler</c> 的快照建構）。所以工作流是這樣走的：
+/// </para>
+/// <list type="number">
+/// <item>這支 <c>PUT</c> 改的是工作副本 —— 首頁那筆 Page 若已發布，<b>會被打回草稿</b>（docs/11 §7 規則 2）</item>
+/// <item><c>POST /admin/page/{homeId}/submit</c> 送審，版位隨快照一起帶走</item>
+/// <item><c>POST /admin/review/{id}/approve</c> 核准，那份快照成為上線版</item>
+/// <item>建置期的匯出讀<b>快照</b>裡的版位，不讀這兩張表</item>
+/// </list>
+/// <para>
+/// ⚠️ 所以這支<b>不觸發重建</b> —— 改工作副本不會改變前台，觸發重建只是白跑一次建置，
+/// 而且會讓人以為「存檔＝上線」。真正觸發重建的是核准那一步。
 /// </para>
 ///
 /// <para>
@@ -32,7 +39,7 @@ namespace Skin20.Api.Handlers;
 /// 唯一例外是資料列擁有者判定（§5.4）。
 /// </para>
 /// </summary>
-public sealed class HomeSectionHandler(Skin20DbContext db, ISqlConnectionFactory sqlFactory, IRebuildService rebuild)
+public sealed class HomeSectionHandler(Skin20DbContext db, ISqlConnectionFactory sqlFactory)
 {
     private readonly HomeSectionReadService reads = new(sqlFactory);
 
@@ -110,14 +117,22 @@ public sealed class HomeSectionHandler(Skin20DbContext db, ISqlConnectionFactory
                 }
             }
 
+            // 🔴 docs/11 §7 規則 2：已發布的內容被編輯，工作副本回到草稿。
+            //    版位編排是首頁那筆 Page 的一部分，所以改版位＝改首頁，同一條規則。
+            //    ⚠️ 不動 PublishedVersionId —— 前台在重新核准之前仍然顯示舊版（docs/09 §3）。
+            var homePage = await db.Pages.FirstOrDefaultAsync(p => p.SystemKey == PageKeys.Home, ct);
+            if (homePage is not null && homePage.Status == ContentStatus.Published)
+            {
+                homePage.Status = ContentStatus.Draft;
+                homePage.UpdatedAt = Clock.UtcNow;
+            }
+
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
         });
 
-        // 首頁組成變了，觸發重建（docs/11 §10）。RebuildService 內部已做聚合，失敗也不會拋出。
-        await rebuild.RequestAsync(ct);
-
+        // ⚠️ 這裡**不觸發重建**（理由見類別註解）：改的是工作副本，前台沒有任何變化。
         var updated = await reads.GetAllAsync(ct);
-        return new OkObjectResult(ApiResponse.Ok(updated, "已更新首頁版位。"));
+        return new OkObjectResult(ApiResponse.Ok(updated, "已儲存首頁版位草稿。送審核准後才會出現在正式網站上。"));
     }
 }

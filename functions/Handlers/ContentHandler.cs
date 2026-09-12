@@ -93,9 +93,27 @@ public sealed class ContentHandler(
             r.Id, unit, r.Title, r.Slug, r.UrlPath, r.Status, StatusName((ContentStatus)r.Status),
             EffectiveStatus((ContentStatus)r.Status, r.PublishAt, r.UnpublishAt),
             r.PublishAt, r.UnpublishAt, r.SortOrder, r.IncludeInSitemap, r.IsSystemLocked, r.OwnerUserId,
-            r.CategoryTermId, r.CategoryTitle, r.UpdatedAt)).ToList();
+            r.CategoryTermId, r.CategoryTitle, r.UpdatedAt, r.UsageCount, ParseListExtras(r.Extras))).ToList();
 
         return new OkObjectResult(ApiResponse.Ok(Paging.Build(items, total, page, pageSize)));
+    }
+
+    /// <summary>
+    /// 把 <c>ContentReadService.ListExtras</c> 用 <c>FOR JSON</c> 產生的字串展開成字典。
+    /// <para>⚠️ 解析失敗回 <c>null</c> 而不是拋例外 —— 這只是清單上幾個顯示欄位，
+    /// 不值得讓整頁清單掛掉。</para>
+    /// </summary>
+    private static Dictionary<string, object?>? ParseListExtras(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<Dictionary<string, object?>>(json, JsonOpts);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     public async Task<IActionResult> GetAsync(string unit, string id)
@@ -111,12 +129,24 @@ public sealed class ContentHandler(
     private async Task<ContentDetailDto> BuildDetailDtoAsync(string unit, ContentItem entity, CancellationToken ct)
     {
         var fields = BuildFieldsDict(unit, entity);
+
+        // 分類／標籤的引用筆數：清單有這一欄，編輯畫面也顯示它（唯讀）。
+        // ⚠️ 只有 term 算 —— 理由同清單（見 ContentReadService.ListAsync 的註解）。
+        //    它是唯讀的衍生值，ApplyTermFields 不會回寫它。
+        if (unit == UnitCodes.Term)
+        {
+            fields["usageCount"] = await _read.CountReferencesAsync(entity.Id, ct);
+        }
+
         var seoDto = entity.Seo is null ? null : ToSeoDto(entity.Seo);
+        // 🔴 兩個方向都要撈。只撈正向的話，「反向唯讀」的欄位（醫師頁的關聯療程、
+        //    療程頁的駐診據點…）在畫面上永遠是空的 —— 而那不是沒有資料，是查錯方向
+        //    （docs/08 §D「雙向關聯一律單向存」）。這種錯不會有任何錯誤訊息。
         var relations = await db.ContentRelations.AsNoTracking()
-            .Where(r => r.FromContentItemId == entity.Id)
+            .Where(r => r.FromContentItemId == entity.Id || r.ToContentItemId == entity.Id)
             .OrderBy(r => r.RelationType).ThenBy(r => r.SortOrder)
             .ToListAsync(ct);
-        var relationDtos = await ToRelationDtosAsync(relations, ct);
+        var relationDtos = await ToRelationDtosAsync(relations, entity.Id, ct);
 
         return new ContentDetailDto(
             entity.Id, unit, (byte)entity.ContentType, entity.Slug, entity.UrlPath, entity.Title, entity.Summary,
@@ -144,6 +174,7 @@ public sealed class ContentHandler(
             throw AppException.BadRequest(ErrorCodes.ValidationRange, "title 長度不可超過 200 字。");
 
         var summary = ReadSummary(body);
+        var fieldsEl = TypeFieldsOf(body);
 
         var slug = NormalizeAndValidateSlug(JStr(body, "slug"), required: true);
 
@@ -156,13 +187,14 @@ public sealed class ContentHandler(
         TermType? termTypeForCreate = null;
         if (unit == UnitCodes.Term)
         {
-            var raw = JInt(body, "termType") ?? throw AppException.BadRequest(ErrorCodes.ValidationRequired, "termType 為必填欄位。");
+            var raw = JInt(fieldsEl, "termType") ?? JInt(body, "termType")
+                ?? throw AppException.BadRequest(ErrorCodes.ValidationRequired, "termType 為必填欄位。");
             termTypeForCreate = (TermType)raw;
             RequireTermManagePermission(req, termTypeForCreate.Value);
         }
         if (unit == UnitCodes.Page)
         {
-            var pageKind = (PageKind)(JInt(body, "pageKind") ?? (int)PageKind.Free);
+            var pageKind = (PageKind)(JInt(fieldsEl, "pageKind") ?? JInt(body, "pageKind") ?? (int)PageKind.Free);
             if (pageKind == PageKind.System)
                 throw AppException.BadRequest(ErrorCodes.ValidationFormat, "系統頁不可透過此端點新增，系統頁由建置種子資料建立。");
         }
@@ -200,7 +232,7 @@ public sealed class ContentHandler(
         entity.CreatedAt = now;
         entity.UpdatedAt = now;
 
-        ApplyFields(entity, unit, body, isCreate: true);
+        ApplyFields(entity, unit, fieldsEl, isCreate: true);
 
         entity.UrlPath = await ComputeUrlPathAsync(unit, entity, ct);
 
@@ -278,7 +310,7 @@ public sealed class ContentHandler(
         if (!isDoctorNonAdmin && body.TryGetProperty("ownerUserId", out var ownerEl))
             entity.OwnerUserId = ownerEl.ValueKind == JsonValueKind.Null ? null : ownerEl.GetInt32();
 
-        ApplyFields(entity, unit, body, isCreate: false);
+        ApplyFields(entity, unit, TypeFieldsOf(body), isCreate: false);
 
         if (!entity.IsSystemLocked)
             entity.UrlPath = await ComputeUrlPathAsync(unit, entity, ct);
@@ -287,17 +319,46 @@ public sealed class ContentHandler(
         {
             // ⚠️ 系統自動轉址（Source=SystemAuto）：換分類／改 slug 造成網址變動時，
             //    自動補一筆 301，避免舊網址變成孤兒（docs/08 §C-1、Redirects 型別註解）。
-            db.Redirects.Add(new Redirect
+            var newUrlPath = entity.UrlPath ?? oldUrlPath;
+
+            // 🔴 **先把「指向新網址」的舊規則清掉。** 網址改回曾經用過的值時
+            //    （A → B → A），資料庫裡會留著一筆 A → B ——
+            //    那會讓 /api/fallback 把**現在活著的頁面**轉走，頁面等於消失。
+            //    ⚠️ 只清系統自動產生的：人工建立的規則是有人刻意設的，不該被內容編輯的
+            //    一次改名靜靜刪掉；那種衝突要由 301 管理畫面處理。
+            var shadowing = await db.Redirects
+                .Where(r => r.FromPath == newUrlPath && r.Source == RedirectSource.SystemAuto)
+                .ToListAsync(ct);
+            if (shadowing.Count > 0) db.Redirects.RemoveRange(shadowing);
+
+            // 🔴 **同一個 FromPath 只能有一筆**（docs/08 §H 的唯一索引）。無條件 Add 的話，
+            //    slug 改回舊值就會撞上唯一索引 —— 編輯者拿到的是 409「這個值已經有人用了」，
+            //    訊息指向 slug，但真正衝突的是轉址表，而且**內容整筆存不進去**。
+            var existing = await db.Redirects.FirstOrDefaultAsync(r => r.FromPath == oldUrlPath, ct);
+            if (existing is null)
             {
-                FromPath = oldUrlPath,
-                ToPath = entity.UrlPath ?? oldUrlPath,
-                ToContentItemId = entity.Id,
-                StatusCode = 301,
-                Source = RedirectSource.SystemAuto,
-                IsActive = true,
-                IsVerified = false,
-                CreatedAt = Clock.UtcNow,
-            });
+                db.Redirects.Add(new Redirect
+                {
+                    FromPath = oldUrlPath,
+                    ToPath = newUrlPath,
+                    ToContentItemId = entity.Id,
+                    StatusCode = 301,
+                    Source = RedirectSource.SystemAuto,
+                    IsActive = true,
+                    IsVerified = false,
+                    CreatedAt = Clock.UtcNow,
+                });
+            }
+            else if (existing.Source == RedirectSource.SystemAuto)
+            {
+                // 同一個舊網址再次搬家：把目標更新成最新位置，不要串成 A→B→C 的轉址鏈。
+                existing.ToPath = newUrlPath;
+                existing.ToContentItemId = entity.Id;
+                existing.IsActive = true;
+            }
+            // ⚠️ 既有規則是**人工或遷移工具**建立的就不動它 —— 那是有人核對過的對照，
+            //    比一次內容改名更有權威。代價是舊網址會繼續指向原本的目標，
+            //    這在 301 管理畫面上看得到，而讓內容存不進去看不到。
         }
 
         // 🔴 docs/11 §7 規則 2：已發布的內容被編輯，工作副本回到草稿，
@@ -501,15 +562,23 @@ public sealed class ContentHandler(
         {
             await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-            var version = await db.ContentVersions
-                .Where(v => v.ContentItemId == contentId)
-                .OrderByDescending(v => v.VersionNo)
-                .FirstOrDefaultAsync(ct);
-            if (version is null)
-            {
-                version = await SaveVersionAsync(unit, entity, userId, "送審", ct);
-                await db.SaveChangesAsync(ct);
-            }
+            // 🔴 **送審一定要重新快照當下的工作副本，不可以沿用最後一筆既有版本。**
+            //
+            //    ContentReviews.VersionId 指到的那一版，核准時會成為 PublishedVersionId
+            //    （docs/11 §7、§8），也就是建置期匯出真正讀的那一份。沿用舊版的話，
+            //    任何「不產生版本的編輯路徑」送審核准之後，上線的都是**改動前**的內容 ——
+            //    而且沒有任何錯誤訊息，畫面上還會顯示「已發布」。
+            //
+            //    ⚠️ 首頁版位就是這樣一條路徑：它由 HomeSectionHandler 直接寫
+            //    HomeSections／HomeSectionItems，不經過本檔案的 SaveVersionAsync
+            //    （2026-09-12 後台接上真 API 時實測抓到：拖完版位、送審、核准，
+            //    快照裡仍是拖動前的排列）。
+            //
+            //    ⚠️ 這會讓每次送審多一筆版本列，即使內容與上一版相同。這是刻意的取捨：
+            //    版本列有 VersionPrune 這支 Timer 在收（docs/11 §11），
+            //    但「核准了卻沒上線」沒有任何東西收得掉。
+            var version = await SaveVersionAsync(unit, entity, userId, "送審", ct);
+            await db.SaveChangesAsync(ct);
 
             var fields = BuildFieldsDict(unit, entity);
             var riskFlags = await ScanRiskTermsAsync(entity.Title, fields, ct);
@@ -795,6 +864,15 @@ public sealed class ContentHandler(
                 }
             }
 
+            // 首頁那筆 Page 的快照裡還有版位編排（docs/08 §G-2、docs/11 §8）。
+            // ⚠️ 不還原它的話，「還原首頁的某個版本」只會還原內文，版位仍是現在這一份 ——
+            //    而版位正是首頁上唯一會變的東西，等於這個按鈕對首頁沒有作用。
+            if (unit == UnitCodes.Page && entity is Page { SystemKey: PageKeys.Home }
+                && root.TryGetProperty("homeSections", out var homeEl) && homeEl.ValueKind == JsonValueKind.Array)
+            {
+                await RestoreHomeSectionsAsync(homeEl, ct);
+            }
+
             await db.SaveChangesAsync(ct);
             await SaveVersionAsync(unit, entity, userId, $"還原自版本 {no}", ct);
             await db.SaveChangesAsync(ct);
@@ -807,6 +885,55 @@ public sealed class ContentHandler(
         await DeleteUnreferencedBlobsAsync(blobsBefore, CollectBlobPaths(entity), ct);
 
         return await GetAsync(unit, id);
+    }
+
+    /// <summary>
+    /// 把快照裡的版位編排寫回工作副本（<c>HomeSections</c>／<c>HomeSectionItems</c>）。
+    ///
+    /// <para>
+    /// ⚠️ 七個版位是種子資料，<b>不可新增刪除</b>（docs/08 §G-2）—— 所以這裡只更新既有的列，
+    /// 快照裡出現不認識的 <c>sectionKey</c> 一律略過（那是舊版留下的、現在已經不存在的版位）。
+    /// </para>
+    /// <para>
+    /// ⚠️ 快照裡引用的內容可能已經被刪除。這裡**過濾掉已不存在的引用**而不是整批失敗 ——
+    /// 還原一個舊版本本來就可能碰到這件事，讓整個還原掛掉沒有幫助。
+    /// </para>
+    /// </summary>
+    private async Task RestoreHomeSectionsAsync(JsonElement homeSections, CancellationToken ct)
+    {
+        var sections = await db.HomeSections.Include(s => s.Items).ToListAsync(ct);
+        var byKey = sections.ToDictionary(s => s.SectionKey);
+
+        foreach (var snapshot in homeSections.EnumerateArray())
+        {
+            var key = JStr(snapshot, "sectionKey");
+            if (key is null || !byKey.TryGetValue(key, out var section)) continue;
+
+            section.IsEnabled = JBool(snapshot, "isEnabled") ?? section.IsEnabled;
+            section.SortOrder = JInt(snapshot, "sortOrder") ?? section.SortOrder;
+            section.Settings = JStr(snapshot, "settings");
+
+            db.HomeSectionItems.RemoveRange(section.Items);
+            section.Items.Clear();
+
+            if (!snapshot.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array) continue;
+
+            var wanted = items.EnumerateArray()
+                .Select(i => (Id: JInt(i, "contentItemId"), SortOrder: JInt(i, "sortOrder") ?? 0))
+                .Where(i => i.Id is not null)
+                .Select(i => (Id: i.Id!.Value, i.SortOrder))
+                .ToList();
+
+            var existingIds = await db.ContentItems.AsNoTracking()
+                .Where(ci => wanted.Select(w => w.Id).Contains(ci.Id))
+                .Select(ci => ci.Id)
+                .ToListAsync(ct);
+
+            foreach (var item in wanted.Where(w => existingIds.Contains(w.Id)).OrderBy(w => w.SortOrder))
+            {
+                section.Items.Add(new HomeSectionItem { ContentItemId = item.Id, SortOrder = item.SortOrder });
+            }
+        }
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -826,11 +953,13 @@ public sealed class ContentHandler(
 
         var fields = BuildFieldsDict(unit, entity);
         var seoDto = entity.Seo is null ? null : ToSeoDto(entity.Seo);
+        // ⚠️ 版本快照<b>只存正向</b>關聯（與詳情不同）。反向那幾筆是「別人指著我」，
+        //    它們屬於對方那筆內容，還原時不該連對方的關聯一起改掉（docs/08 §D）。
         var relations = await db.ContentRelations
             .Where(r => r.FromContentItemId == entity.Id)
             .OrderBy(r => r.RelationType).ThenBy(r => r.SortOrder)
             .ToListAsync(ct);
-        var relationDtos = await ToRelationDtosAsync(relations, ct);
+        var relationDtos = await ToRelationDtosAsync(relations, entity.Id, ct);
 
         object? homeSections = null;
         if (unit == UnitCodes.Page && entity is Page { SystemKey: PageKeys.Home })
@@ -903,6 +1032,26 @@ public sealed class ContentHandler(
         IReadOnlyList<RiskTerm> result = terms;
         cache.Set(RiskTermCacheKey, result, TimeSpan.FromMinutes(30));
         return result;
+    }
+
+    /// <summary>
+    /// <c>GET /admin/risk-term</c>：啟用中的高風險字詞清單。
+    ///
+    /// <para>
+    /// 🔴 <b>這是編輯器的即時提示來源，不是閘門</b>（docs/02 §5）。送審時伺服器仍會自己重掃一次
+    /// （<see cref="ScanRiskTermsAsync"/>），前端掃到什麼<b>不影響</b>能不能送審 ——
+    /// 兩邊掃出來的結果不一致也不是錯誤，前端那份只是讓編輯在打字當下就看到提醒。
+    /// </para>
+    /// <para>
+    /// ⚠️ 權限是「登入即可」：能進到編輯畫面的人都需要這份提示，而它本身只是一份用語清單，
+    /// 沒有任何內容資料。
+    /// </para>
+    /// </summary>
+    public async Task<IActionResult> ListRiskTermsAsync()
+    {
+        var terms = await GetRiskTermsAsync(CancellationToken.None);
+        var result = terms.Select(t => t.Term).ToArray();
+        return new OkObjectResult(ApiResponse.Ok(result));
     }
 
     /// <summary>⚠️ 警示不阻擋送審，它是提示不是閘門（docs/02 §5）——本方法只回報命中結果，呼叫端不得因此擋下送審。</summary>
@@ -1138,21 +1287,34 @@ public sealed class ContentHandler(
         }
     }
 
-    private async Task<List<RelationItemDto>> ToRelationDtosAsync(List<ContentRelation> relations, CancellationToken ct)
+    /// <param name="selfId">
+    /// 這筆詳情自己的 Id。用來判斷每一列是正向（<c>From = 自己</c>）還是反向
+    /// （<c>To = 自己</c>），反向的那幾列要把 From 端當成「對方」回給前端。
+    /// </param>
+    private async Task<List<RelationItemDto>> ToRelationDtosAsync(List<ContentRelation> relations, int selfId, CancellationToken ct)
     {
         if (relations.Count == 0) return [];
-        var toIds = relations.Select(r => r.ToContentItemId).Distinct().ToList();
+
+        // 「對方」是誰要看方向：正向看 To，反向看 From。
+        var otherIds = relations
+            .Select(r => r.FromContentItemId == selfId ? r.ToContentItemId : r.FromContentItemId)
+            .Distinct().ToList();
         var targets = await db.ContentItems.AsNoTracking()
-            .Where(ci => toIds.Contains(ci.Id))
-            .Select(ci => new { ci.Id, ci.Title, ci.UrlPath })
+            .Where(ci => otherIds.Contains(ci.Id))
+            .Select(ci => new { ci.Id, ci.Title, ci.UrlPath, ci.ContentType })
             .ToDictionaryAsync(x => x.Id, ct);
 
         return relations.Select(r =>
         {
-            targets.TryGetValue(r.ToContentItemId, out var target);
+            var isReverse = r.FromContentItemId != selfId;
+            var otherId = isReverse ? r.FromContentItemId : r.ToContentItemId;
+            targets.TryGetValue(otherId, out var target);
+            // ⚠️ 反向時型別也要取對方的 —— ContentRelations.ToContentType 存的是 To 端的型別，
+            //    反向那幾列的對方在 From 端，型別不一樣。
+            var otherType = isReverse ? (byte)(target?.ContentType ?? 0) : (byte)r.ToContentType;
             return new RelationItemDto(
-                r.ToContentItemId, (byte)r.ToContentType, (byte)r.RelationType, r.SortOrder, r.Note,
-                target?.Title, target?.UrlPath);
+                otherId, otherType, (byte)r.RelationType, r.SortOrder, r.Note,
+                target?.Title, target?.UrlPath, isReverse);
         }).ToList();
     }
 
@@ -1309,6 +1471,29 @@ public sealed class ContentHandler(
         UnitCodes.Term => BuildTermFields((Term)entity),
         _ => [],
     };
+
+    /// <summary>
+    /// 型別專屬欄位在請求體的哪裡：巢狀的 <c>fields</c> 物件，或直接攤在頂層。
+    ///
+    /// <para>
+    /// 🔴 <b>兩種都收，巢狀優先。</b> 讀取端（<see cref="ContentDetailDto.Fields"/>）一律把型別欄位
+    /// 包在 <c>fields</c> 底下，所以寫入端也必須收得下同樣的形狀 —— 否則「把讀到的東西改一改再送回去」
+    /// 這個最自然的用法會靜靜地什麼都沒寫進去（欄位沒帶＝不動該欄位，<b>不會報錯</b>）。
+    /// 2026-09-12 後台接上真 API 時踩到。
+    /// </para>
+    /// <para>
+    /// ⚠️ 攤平那條路<b>不可以移除</b>：遷移期的匯入腳本（<c>tools/content-import/import.mjs</c>）
+    /// 送的就是攤平的形狀，而它是可重複執行、已經對正式內容跑過的工具。
+    /// </para>
+    /// <para>
+    /// ⚠️ 兩種形狀不可混用 —— 帶了 <c>fields</c> 就<b>只</b>讀 <c>fields</c>，
+    /// 頂層同名欄位一律忽略。混著讀會讓「哪一邊贏」變成一條沒有人記得的規則。
+    /// </para>
+    /// </summary>
+    private static JsonElement TypeFieldsOf(JsonElement body)
+        => body.TryGetProperty("fields", out var fields) && fields.ValueKind == JsonValueKind.Object
+            ? fields
+            : body;
 
     private static void ApplyFields(ContentItem entity, string unit, JsonElement fields, bool isCreate)
     {

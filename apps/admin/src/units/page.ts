@@ -23,6 +23,7 @@ export const pageUnit: UnitDefinition = {
       label: '型別',
       type: 'select',
       readOnly: true, // 建立後不可改型別；新增時才選
+      settableOnCreate: true,
       group: '基本資料',
       options: [
         { value: '1', label: '自由頁' },

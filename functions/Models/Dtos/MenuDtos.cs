@@ -18,7 +18,17 @@ public sealed record MenuNodeDto(
     string? Url,
     string? RelAttr,
     bool OpenInNewTab,
-    List<MenuNodeDto> Children);
+    List<MenuNodeDto> Children,
+    /// <summary>
+    /// <c>LinkKind=1</c> 時，被指到的那筆內容的型別與標題。
+    /// <para>
+    /// ⚠️ <b>唯讀，寫入時忽略</b> —— <c>MenuItems</c> 沒有這兩欄，它們是 join 出來的。
+    /// 存在的理由是後台選單編輯器要顯示「站內內容：○○療程」，以及知道該去哪個單元
+    /// 重新挑一筆；少了它就得為每個節點各打一次 API。
+    /// </para>
+    /// </summary>
+    byte? ContentType = null,
+    string? ContentTitle = null);
 
 /// <summary>
 /// <c>GET|PUT /admin/menu</c> 的形狀。<see cref="Main"/>／<see cref="Footer"/> 各自獨立，
