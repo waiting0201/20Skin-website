@@ -233,7 +233,77 @@
 
 | 項目 | 說明 |
 |---|---|
-| **機器人驗證供應商** | `POST /contact`、`POST /questions/miss`、`POST /auth/login` 需要。reCAPTCHA v3（分數制，需比對 `action` 並訂門檻）與 Cloudflare Turnstile 皆可。**介面命名不要帶供應商名稱**（`IBotCheckService`），換供應商時呼叫端不該改動。**開工前定案** |
+| ~~**機器人驗證供應商**~~ | ✅ **已定案（2026-09-12）：reCAPTCHA v3。** 規格見下方 §5.1 |
 | **`RefreshTokens` vs 短效 JWT ＋ `SecurityStamp`** | [08](08-database.md) §L 已列為二選一。建議 `RefreshTokens` ＋ rotation（撤銷重用即撤銷該使用者全部 token），因為後台要能「停用帳號後立刻踢下線」 |
 | **AI FAQ 的問答端點** | **本期不做。** AI 的實作方式與時程都未定（[04-ai-faq.md](04-ai-faq.md) §4），**不要先在契約裡留 `/ai/chat`**，也不要為它加 schema 欄位（[08](08-database.md) §0 決策二） |
 | **`GET /site-settings/public` 是否必要** | 見 [09](09-frontend.md) §13 —— 與「開關烤進 build」取捨 |
+
+---
+
+## 5.1 機器人驗證：reCAPTCHA v3（2026-09-12 定案）
+
+套用於三支對公網開放的寫入端點：`POST /contact`、`POST /questions/miss`、`POST /auth/login`。
+請求欄位一律是 **`botCheckToken`**，前端動作名稱一律是 **`contact`／`questions-miss`／`login`**。
+
+⚠️ **介面與欄位命名不帶供應商名稱**（`IBotCheckService`、`botCheckToken`）——
+換成 Turnstile 時只有 `functions/Services/BotCheckService.cs` 與前端那兩支
+取 token 的模組要改，呼叫端一行都不動。**不要讓 `recaptcha` 這個字漏進 Handler 或 DTO。**
+
+### v3 不會擋下任何人，門檻是我們自己訂的
+
+它回一個 0.0–1.0 的分數，所以有三件事缺一不可：
+
+1. **比對 `action`。** 少了這一步，攻擊者可以拿在首頁取得的 token 來打 `/auth/login` ——
+   同一把 site key 發出的 token 在任何動作上都驗得過
+2. **套分數門檻**（`BotCheck__MinimumScore`，預設 `0.5`，Google 建議的起點）
+3. **看 `success`。** token 過期（2 分鐘）、重複使用、site key 不符都在這裡現形
+
+⚠️ **不要為了「乾淨」把門檻往上調。** v3 對少數真人也會給低分（隱私瀏覽、VPN、
+輔助技術、極少互動就送出表單的人）。調到 0.7 擋掉的絕大多數是真的病人，
+而且他們**不會知道自己被擋了** —— v3 沒有挑戰題可以解，只會看到送出失敗。
+要調請先看 Application Insights 裡實際的分數分佈。
+
+### 什麼情況放行，什麼情況擋下
+
+| 情況 | 行為 | 理由 |
+|---|---|---|
+| 未設定 `BotCheck__SecretKey` | **放行** ＋ Warning | 本機開發與尚未申請金鑰的期間要能用。🔴 **正式環境上線前必須設定** |
+| 連不上 Google／逾時（5 秒）／回應無法解析 | **放行** ＋ Warning | 見下方 |
+| 請求**沒有帶 token** | **擋下** | 不擋的話，不送 token 就能繞過，整套驗證等於不存在 |
+| `success=false` | **擋下** | token 過期、重複使用、金鑰不符 |
+| `action` 不符 | **擋下** | 見上方第 1 點 |
+| 分數低於門檻 | **擋下** | |
+
+🔴 **「連不上就放行」不是把防護關掉，是兩害相權：**
+
+- `/contact` 擋下＝Google 有狀況的期間，**院方收不到任何病人詢問**。少收一封詢問比多收一封垃圾信嚴重得多
+- `/auth/login` 擋下＝**後台整個登不進去**。而登入真正的防線是次數限制（帳號 ＋ 來源 IP 雙維度，[02](02-backend-cms.md) §4），那一道不受 Google 影響
+
+⚠️ 所以「放行」**只發生在傳輸層失敗**。Google 明確回答「這不是人」時一律擋下，兩者不可混為一談。
+⚠️ 每一次放行都記 `Warning` —— 沉默的放行等於沒有防護。
+
+⚠️ **對外的錯誤訊息一律是同一句**，不透露是分數太低、token 過期還是 action 不符 ——
+那些差別對真人沒有用，對想繞過的人很有用。細節只進 log。
+
+### 前端
+
+- **site key 是公開值**（`NUXT_PUBLIC_RECAPTCHA_SITE_KEY`／`VITE_RECAPTCHA_SITE_KEY`），
+  本來就會出現在 HTML 裡。要保密的是 secret key，那個只在 Function App 的 app settings
+- 🔴 **token 在「送出的那一刻」才取。** 效期只有 2 分鐘 —— 頁面載入時就取的話，
+  使用者慢慢填完再送出時早就過期，而錯誤訊息會指向「自動化驗證未通過」，查不到真正的原因
+- 🔴 **Google 的 script 只在需要的頁面載入。** 前台約 950 頁，只有 `/contact/` 與 `/search/`
+  需要 —— 全站載入等於在每一頁塞一支第三方追蹤 script
+- 🔴 **取不到 token 時不要硬送。** 後端會擋下，而使用者只會看到一個看不懂的錯誤。
+  前端要分辨「載不到驗證」（擴充套件／防火牆擋下）與「驗證不通過」，並給出替代做法
+- 🔴 **徽章隱藏了，所以必須顯示 Google 指定的聲明文字**（含隱私權政策與服務條款兩個連結）。
+  這是使用條款的要求，不是可選的 —— **拿掉聲明就不可以隱藏徽章，兩者是一組的**。
+  隱藏的理由是版面：徽章固定在右下角，與浮動諮詢鈕（`.c-consult`）會疊在一起
+- ⚠️ **徽章用 JS 隱藏，不是 CSS。** 這條規則沒有地方可以放：`mockup/` 不進版控
+  （STATUS.md §八 技術債），而 `verify:css` 禁止 `app/` 底下有自己的樣式表或 `<style>` 區塊 ——
+  寫進 `base.css` 的話，別人 clone 下來根本沒有那一行
+
+### 🚨 緊急逃生口
+
+若 reCAPTCHA 讓所有人都登不進後台（Google 有狀況、金鑰設錯、script 被擋），
+把 Function App 的 **`BotCheck__SecretKey` 清空**即可立刻放行，**不需要重新部署**。
+次數限制那一道不受影響。

@@ -11,6 +11,7 @@ import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { adminApi, ApiError } from '@/api/client'
 import { _setSession, isAuthenticated } from '@/auth'
+import { botCheckEnabled } from '@/api/bot-check'
 
 // layout: false 改由 src/router.ts 路由表 meta 處理（App.vue 依 meta.layout 決定要不要套 AdminLayout）。
 
@@ -123,6 +124,14 @@ async function submitNewPassword() {
             {{ submitting ? '處理中…' : '設定新密碼並登入' }}
           </button>
         </form>
+
+        <p v-if="botCheckEnabled" class="adm-login__hint">
+          <!-- 🔴 Google 的條款：使用 reCAPTCHA 就必須顯示這段聲明，兩個連結都要留著。
+               ⚠️ 不要改寫成自己的說法 —— 它是使用條款要求的文字。 -->
+          本頁受 reCAPTCHA 保護，適用 Google 的
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener external">隱私權政策</a>與
+          <a href="https://policies.google.com/terms" target="_blank" rel="noopener external">服務條款</a>。
+        </p>
       </div>
     </div>
   </div>

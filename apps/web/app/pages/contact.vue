@@ -29,6 +29,9 @@ interface ContactPayload {
   consent: boolean
 }
 
+// 聲明文字只在真的啟用驗證時顯示 —— 沒設定 site key 的環境顯示它是不實陳述。
+const botCheckEnabled = useBotCheck().enabled
+
 const form = reactive<ContactPayload>({
   name: '',
   phone: '',
@@ -58,6 +61,20 @@ const errorMessage = ref('')
 async function submitContactForm(payload: ContactPayload): Promise<void> {
   const { public: { apiBaseUrl } } = useRuntimeConfig()
 
+  // 機器人驗證（docs/10 §5，reCAPTCHA v3）。
+  //
+  // 🔴 **在這裡取 token，不是在頁面載入時。** v3 的 token 只有 2 分鐘效期 ——
+  //    載入時就取的話，使用者慢慢填完再送出時早就過期了，而錯誤訊息會指向
+  //    「自動化驗證未通過」，完全查不到真正的原因。
+  //
+  // 🔴 **取不到就不要送出。** 後端對「沒有 token」是擋下（不然不送就能繞過），
+  //    所以硬送只會拿到一個看不懂的錯誤。這裡直接給出真正的原因與替代做法。
+  const botCheck = useBotCheck()
+  const botCheckToken = await botCheck.getToken('contact')
+  if (botCheck.enabled && !botCheckToken) {
+    throw new Error('無法載入自動化驗證（可能被瀏覽器擴充套件或網路環境擋下）。請關閉阻擋類擴充套件後重試，或直接致電院所。')
+  }
+
   const response = await $fetch<{ success: boolean; code: string | null; message: string | null }>(
     `${apiBaseUrl}/contact`,
     {
@@ -70,6 +87,7 @@ async function submitContactForm(payload: ContactPayload): Promise<void> {
         topic: payload.topic,
         message: payload.message,
         privacyConsent: payload.consent,
+        botCheckToken,
       },
       // 非 2xx 不要讓 $fetch 直接丟掉回應內容 —— 錯誤碼在 body 裡。
       ignoreResponseError: true,
@@ -87,7 +105,7 @@ function errorTextFor(code: string | null, message: string | null): string {
     case 'RATE_LIMITED':
       return '送出太過頻繁，請稍候幾分鐘再試一次。若是急事請直接致電院所。'
     case 'BOT_CHECK_FAILED':
-      return '自動化驗證未通過，請重新整理頁面後再送出一次。'
+      return '自動化驗證未通過，請重新整理頁面後再送出一次。若仍不成功，請直接致電院所。'
     case 'VALIDATION_REQUIRED':
     case 'VALIDATION_FORMAT':
       return message ?? '有欄位未填或格式不正確，請檢查後再送出。'
@@ -199,6 +217,15 @@ async function handleSubmit() {
           <input id="cfConsent" v-model="form.consent" name="consent" type="checkbox">
           <span>我已閱讀並同意<a href="/privacy/">隱私權政策</a>，同意 20SKIN 美醫集團為回覆本次詢問之目的蒐集與處理上述個人資料。</span>
         </label>
+
+        <!-- 🔴 Google 的條款：隱藏浮動徽章就**必須**顯示這段聲明，而且要留著這兩個連結。
+             徽章之所以隱藏，是因為它與右下角的浮動諮詢鈕（c-consult）會疊在一起。
+             ⚠️ 不要把這段刪掉或改寫成自己的說法 —— 它是使用條款要求的文字。 -->
+        <p v-if="botCheckEnabled" class="contact-field__hint">
+          本表單受 reCAPTCHA 保護，適用 Google 的
+          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener external">隱私權政策</a>與
+          <a href="https://policies.google.com/terms" target="_blank" rel="noopener external">服務條款</a>。
+        </p>
 
         <p v-if="status === 'sent'" class="c-note">
           <span class="c-note__icon" aria-hidden="true">&#10003;</span>

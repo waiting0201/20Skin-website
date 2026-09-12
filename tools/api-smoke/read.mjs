@@ -176,6 +176,24 @@ if (SKIP_CONTACT) {
   r = await call('POST', '/contact', { name: '煙霧測試', message: '缺同意', privacyConsent: false, phone: '0900000000' })
   check('POST /contact 未勾同意被擋', r.json?.success === false && r.json?.code === 'VALIDATION_REQUIRED', r.json?.code)
 }
+
+// ── 機器人驗證（docs/10 §5，reCAPTCHA v3）─────────────────────────────
+//
+// ⚠️ 這裡只驗「有沒有啟用」，**驗不出分數門檻與 action 比對** —— 那需要真的站台金鑰
+//    （Google 的公開測試金鑰是 v2 的，回應沒有 score 也沒有 action）。
+//    完整的九項行為驗證見 STATUS.md §五：用假的 siteverify 端點跑過。
+console.log('\n【機器人驗證】')
+token = null
+r = await call('POST', '/contact', { name: '煙霧測試', phone: '0900-000-000', message: '檢查機器人驗證是否啟用', privacyConsent: true })
+if (r.json?.code === 'BOT_CHECK_FAILED') {
+  check('已啟用：沒帶 token 會被擋下', true)
+} else if (r.json?.success) {
+  // 🔴 這在正式環境是一個**缺陷**，不是通過。留空 secret key 等於沒有防護。
+  console.log('  ⚠ 未啟用（BotCheck__SecretKey 留空）—— 本機開發正常，**正式環境上線前必須設定**')
+  pass++
+} else {
+  check('機器人驗證狀態可判讀', false, `${r.status} ${r.json?.code}`)
+}
 token = savedToken
 
 console.log(`\n─────────────\n通過 ${pass}　失敗 ${fail}`)

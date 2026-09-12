@@ -5,6 +5,21 @@ public sealed class LoginRequest
 {
     public string? UserName { get; set; }
     public string? Password { get; set; }
+
+    /// <summary>
+    /// 機器人驗證權杖（docs/10 §5）。
+    /// <para>
+    /// ⚠️ <b>命名刻意不帶供應商名稱</b> —— 目前是 reCAPTCHA v3（2026-09-12 定案），
+    /// 換成 Turnstile 時只有 <c>BotCheckService</c> 要改，這個欄位不動。
+    /// </para>
+    /// <para>
+    /// 🔴 登入是<b>唯一</b>需要它的後台端點 —— 沒有雙因素、沒有 IP 白名單
+    /// （CLAUDE.md 決策 10），次數限制是主防線、這一道是補強。
+    /// ⚠️ 未設定金鑰或連不上 Google 時<b>放行</b>（見 <c>BotCheckService</c>）——
+    /// 否則 Google 一有狀況，後台就整個登不進去。
+    /// </para>
+    /// </summary>
+    public string? BotCheckToken { get; set; }
 }
 
 /// <summary>登入／換發成功的回應。</summary>

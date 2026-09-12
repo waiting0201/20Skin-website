@@ -112,6 +112,7 @@ Nuxt 3 純靜態，21 個模板 → **220 條預渲染路由、106 頁 HTML**。
 
 | 缺口 | 說明 |
 |---|---|
+| 🔴 **`aifaq.enabled` 曾被匯入腳本蓋成 `true`** | 種子刻意是 `false`（docs/04 §4：AI 未串接前不對外顯示，「一顆點下去沒反應的常駐按鈕比沒有按鈕更糟」），但搬遷前的 `app/data/site-settings.ts` 寫死 `true`（樣稿要展示那個面板），匯入腳本把它一起搬了過去。2026-09-12 發現並修掉 —— **功能開關不是內容，不由匯入決定**。本機 `Skin20_Dev` 已改回 `false`；🔴 **正式庫上線前要確認這個值** |
 | **圖片尚未上傳到 Blob** | 61 個 blob，跑 `node tools/content-import/upload-images.mjs`（要你跑，需正式儲存體寫入權限）。在那之前前台的內容圖是破圖 |
 | **26 個療程頁沒有內容** | 顯示「內容建置中」，已加 `noIndex` 且不輸出 `MedicalProcedure`。正式站這些是草稿，根本不會產生該頁 |
 | **文章只有 11 篇、全屬「醫美新知」** | 其餘三個分類顯示空狀態。三個空分類的 Hero 文案是改寫的通用句，**待院方補真文案** |
@@ -356,6 +357,50 @@ schema 的真實來源是 `functions/Data/Migrations/`（docs/07 §5）。
 - `PUT /admin/home-section` 現在會把首頁那筆 Page **打回草稿**（docs/11 §7 規則 2），而且**不再觸發重建** —— 改的是工作副本，前台沒有變化
 - 版本還原會**連版位一起還原**（版位是首頁上唯一會變的東西）
 - 送審每次都會多一筆版本列。由 `VersionPrune` 收；「核准了卻沒上線」沒有東西收得掉
+
+### ✅ 機器人驗證：reCAPTCHA v3（2026-09-12 定案並實作）
+
+三支對公網開放的寫入端點都套上了：`POST /contact`、`POST /questions/miss`、
+**`POST /auth/login`**（原本沒有，但 docs/10 §5 一直要求）。規格見 [10](docs/10-api.md) §5.1。
+
+用假的 siteverify 端點跑過九項行為，全部符合設計：
+
+| 情況 | 預期 | 結果 |
+|---|---|---|
+| 沒帶 token | 擋下 | ✅ 不擋的話，不送 token 就能繞過 |
+| `success=false`（過期／重複使用） | 擋下 | ✅ |
+| 分數 0.1 < 門檻 0.5 | 擋下 | ✅ |
+| `action` 不符（拿 login 的 token 打 contact） | 擋下 | ✅ |
+| 對外訊息不透露原因 | — | ✅ 一律同一句，細節只進 log |
+| `success=true` ＋ 分數與 action 都對 | 放行 | ✅ |
+| 連不上驗證服務 | **放行** | ✅ |
+| 逾時 | **放行**，5 秒內收手 | ✅ 實測 5.0s |
+| 未設定 SecretKey | **放行** ＋ Warning | ✅ |
+
+🔴 **「連不上就放行」是刻意的，不是把防護關掉。** 另一邊更糟：`/contact` 擋下＝
+Google 有狀況的期間院方收不到任何病人詢問；`/auth/login` 擋下＝後台整個登不進去。
+放行**只發生在傳輸層失敗**，Google 明確說「不是人」時一律擋下。
+
+🚨 **逃生口**：reCAPTCHA 若讓所有人都登不進後台，清空 Function App 的
+`BotCheck__SecretKey` 即可立即放行，不需重新部署。
+
+🔴 **上線前要做的兩件事**（STATUS §七）：
+① 申請正式站台的金鑰對，設 `BotCheck__SecretKey`（Function App）與
+`NUXT_PUBLIC_RECAPTCHA_SITE_KEY`／`VITE_RECAPTCHA_SITE_KEY`（兩個前端）；
+② **兩邊要一起設** —— 前端留空但後端設了 secret key，所有送出都會因為
+「沒有帶 token」被擋下，而錯誤訊息指不到這個原因。
+
+⚠️ 分數門檻預設 0.5（Google 建議的起點）。**不要為了「乾淨」往上調** ——
+v3 對少數真人也會給低分，而他們不會知道自己被擋了（沒有挑戰題可解）。
+
+前端那一半也用 Playwright 對**建置產物**驗過九項：聲明文字與兩個連結都在、
+送出時真的帶了 token、`action` 是 `contact`（不是別頁的 token）、徽章確實被隱藏、
+以及**驗證載不起來時不會硬送出去**，而是顯示真正的原因與替代做法（致電）——
+最後這一項是重點：硬送只會讓病人以為詢問已經送到。
+
+⚠️ **徽章用 JS 隱藏，不是 CSS。** 這條規則沒有地方可以放：`mockup/` 不進版控（見本節
+技術債），而 `verify:css` 禁止 `app/` 底下有自己的樣式表 —— 寫進 `base.css` 的話，
+別人 clone 下來根本沒有那一行。
 
 ### ⚠️ 整合時修掉的六個問題
 
@@ -632,6 +677,15 @@ STATUS 先前寫的「301 種子約 772 筆」指的是**後台畫面的 mock �
 - [ ] 遷移在正式資料庫的實際行為（先在可丟棄的庫演練一次完整遷移與回滾）
 - [ ] 全站 404 掃描、301 迴圈檢查、結構化資料驗證、CWV
 - [ ] **種子密碼 `Admin@123` 更換**（🔴 沒有雙因素，帳密是唯一憑證）
+- [ ] **`aifaq.enabled` 在正式庫必須是 `false`**（docs/04 §4）—— 匯入腳本曾把它蓋成 `true`（已修，見 §二）
+- [ ] **reCAPTCHA v3 的金鑰對**（[10](docs/10-api.md) §5.1）—— 🔴 **三個地方要一起設**：
+      `BotCheck__SecretKey`（Function App）、`NUXT_PUBLIC_RECAPTCHA_SITE_KEY`（前台建置）、
+      `VITE_RECAPTCHA_SITE_KEY`（後台建置）。
+      ⚠️ 只設後端不設前端＝**所有送出與登入都被擋**，而錯誤訊息指不到這個原因
+- [ ] **reCAPTCHA 的分數分佈**（App Insights）—— 上線頭幾天看一次真實分數，
+      再決定 `BotCheck__MinimumScore` 要不要動。**預設 0.5 不要先調高**
+- [ ] **確認 reCAPTCHA 的聲明文字有顯示**（`/contact/` 與 `/admin/` 登入頁）——
+      徽章是隱藏的，Google 的條款要求顯示那段文字與兩個連結，拿掉聲明就不可以隱藏徽章
 - [ ] AI 爬蟲以實際 UA 逐一驗證回應 200
 
 ---
@@ -646,17 +700,23 @@ STATUS 先前寫的「301 種子約 772 筆」指的是**後台畫面的 mock �
 | **FAQ 五大分類，兩份文件對不上** | [08](docs/08-database.md) §C-9 種子（品牌與診所／療程相關／肌膚困擾／醫師與看診／費用與流程）vs `mockup/16-faq.html`（療程相關／術後照護／看診與預約／費用與付款／院所資訊）。**建議以 mockup 為準** —— 前者沒有 slug，且「肌膚困擾」與 `/concerns/` 整段重複。動到網址結構，所以先不改 |
 | 圖片衍生尺寸誰產 | 瀏覽器端上傳前轉檔 vs Function 端 sharp（[07](docs/07-deployment.md) §3） |
 | 301 對照表是否改建置期烤 `redirects.json` | 可省掉 SWA 上唯一的明文密鑰（[07](docs/07-deployment.md) §2） |
-| 機器人驗證供應商 | reCAPTCHA v3 或 Turnstile，**介面不要帶供應商名稱** |
+| ~~機器人驗證供應商~~ | ✅ **已定案並實作（2026-09-12）：reCAPTCHA v3**。見 §五 |
 | **301 的「命中次數」放不進架構** | 後台原本想用命中次數排出「哪幾條值得寫進 `staticwebapp.config.json` 快速路徑」，但 [`Redirects`](docs/08-database.md) §H **沒有這個欄位，而且放不了**：`/api/fallback` 對這張表只做單筆 seek 不做寫入，它那組唯讀 SQL 使用者**只能 SELECT 這一張表**。<br>已改為顯示「目前已寫進設定檔的 7 條」（人工挑定，與 `apps/web/public/staticwebapp.config.json` 一致）。<br>若真的要命中次數，唯一不牴觸架構的作法是 **Application Insights 的請求記錄離線彙總**，需另案評估。 |
 | **醫師的「醫學審閱」無法實作** | [02](docs/02-backend-cms.md) §4 寫醫師「可對**指派**內容執行醫學審閱」，但 ①「醫師」角色只有 `review.decide`、沒有 `review.view`，進不了審核佇列；② [`ContentReviews`](docs/08-database.md) §B-3 **沒有「指派給誰」的欄位**，做不出「只看指派給我的」。<br>唯一現成的線索是 `Articles.ReviewerDoctorId`（審閱醫師），**但只有文章有**，療程與案例都沒有。<br>三個選項：**(a)** 醫學審閱只涵蓋文章，用 `ReviewerDoctorId` 篩選；**(b)** 為 `ContentReviews` 加 `AssignedReviewerId`（**新增欄位，與 [08](docs/08-database.md) §0 決策二「不預留未定案的欄位」相衝，需明確定案**）；**(c)** 拿掉醫師的審閱職責，只留「編輯自己的內容」。<br>⚠️ **在定案之前不要自行加欄位。** |
 | ~~`RefreshTokens` vs 短效 JWT ＋ `SecurityStamp`~~ | ✅ **已定案（2026-09-11）：採 `RefreshTokens` ＋ rotation**。後台只剩一道防線，「停用帳號要能**即時**失效」比省一張表重要，短效 JWT 仍有空窗 |
 | **`llms.txt` 的內容範圍** | [03](docs/03-seo-geo.md) §4 ④ 說它是全站核心資訊 ＋ 頁面索引，[04](docs/04-ai-faq.md) §3 只定義了 FAQ 專屬的 `faq.json`／`llms-full.txt` —— **兩份文件對 `llms.txt` 沒有交集的權威定義**。目前實作比照 sitemap 的資料來源、依型別分組各取前 20 筆，**是假設不是規格** |
 | **後台密碼強度與輪替規則** | [02](docs/02-backend-cms.md) §4 註明待訂。目前用 ≥8 碼的保守底線。🔴 沒有雙因素，帳密是唯一憑證 —— 這條不該一直待訂 |
 
-### 🔴 安全防線只剩一道
+### 🟡 安全防線：一主一補
 
 原規劃三道：雙因素（2026-09-11 不做）、IP 白名單（2026-08-13 不做）、登入次數限制。
-**現在只剩最後一道**，而後台路徑 `/admin/` 是客戶指定、與舊站相同、公開可猜。
+2026-09-12 補上 **reCAPTCHA v3** 作為第二道，擋的是次數限制抓不到的**分散式撞庫**
+（每個 IP 只試幾次、換一批 IP 再來）。
+
+⚠️ **它不能取代次數限制** —— v3 是分數制、連不上 Google 時放行（否則後台會整個登不進去）。
+⚠️ **它也帶來一個新的失效模式**：金鑰設錯或 script 被擋時沒有人登得進後台。
+逃生口是清空 Function App 的 `BotCheck__SecretKey`（立即生效，不需重新部署）。
+⚠️ 後台路徑 `/admin/` 仍是客戶指定、與舊站相同、公開可猜。
 
 連帶要求（已寫進 [02](docs/02-backend-cms.md) §4、[07](docs/07-deployment.md) §2、[10](docs/10-api.md) §3.2）：
 次數限制必須**帳號 ＋ 來源 IP 雙維度計數**、鎖定即時告警、**種子密碼上線前必須更換**、

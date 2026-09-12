@@ -41,6 +41,12 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBaseUrl: process.env.NUXT_PUBLIC_API_BASE_URL || 'https://api.20skin.tw/api/v1',
+
+      // reCAPTCHA v3 的 site key（docs/10 §5）。
+      // ⚠️ site key 是**公開值**，本來就會出現在 HTML 裡 —— 要保密的是 secret key，
+      //    那個只在 Function App 的 app settings（BotCheck__SecretKey）。
+      // ⚠️ 留空＝這個環境不啟用驗證。後端沒設 secret key 時也會放行，兩邊要一起設。
+      recaptchaSiteKey: process.env.NUXT_PUBLIC_RECAPTCHA_SITE_KEY || '',
     },
   },
 

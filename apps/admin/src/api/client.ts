@@ -31,6 +31,7 @@ import type { UnitField } from '../unit-schema'
 import { ApiError } from './errors'
 import { clampPageSize, fetchAllPages, normalizePaged, request, setTokens, type ServerPaged } from './http'
 import { fieldsFromServer, fieldsToServer } from './content-fields'
+import { botCheckEnabled, getBotCheckToken } from './bot-check'
 import { uploadApi, type UploadedImage } from './upload'
 import { redirectApi } from './redirect'
 import { seoApi } from './seo'
@@ -269,9 +270,21 @@ const auth = {
    * 每一支端點都會回 403，呼叫端要據此導向改密碼畫面。
    */
   async login(userName: string, password: string): Promise<CurrentUser> {
+    // 機器人驗證（docs/10 §5，reCAPTCHA v3）。
+    //
+    // 🔴 **取不到就不要送出。** 後端對「沒有 token」是擋下（不然不送就能繞過），
+    //    硬送只會拿到一個看不懂的「自動化驗證未通過」。這裡直接給出真正的原因。
+    const botCheckToken = await getBotCheckToken('login')
+    if (botCheckEnabled && !botCheckToken) {
+      throw new ApiError(
+        'BOT_CHECK_FAILED',
+        '無法載入自動化驗證（可能被瀏覽器擴充套件或網路環境擋下）。請關閉阻擋類擴充套件後重試。',
+      )
+    }
+
     const res = await request<TokenResponse>('/auth/login', {
       method: 'POST',
-      body: { userName, password },
+      body: { userName, password, botCheckToken },
       auth: false,
     })
     setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken })

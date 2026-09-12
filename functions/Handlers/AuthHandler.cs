@@ -16,7 +16,13 @@ namespace Skin20.Api.Handlers;
 
 /// <summary>
 /// docs/10 §3.2：後台認證。🔴 **單段驗證，沒有雙因素**（2026-09-11 院方決定）——
-/// 登入次數限制是唯一防線，帳號與來源 IP 雙維度計數，不可打折。
+/// 登入次數限制是主防線，帳號與來源 IP 雙維度計數，不可打折。
+///
+/// <para>
+/// 2026-09-12 補上機器人驗證（reCAPTCHA v3）作為第二道。⚠️ 它<b>不能取代</b>次數限制：
+/// v3 是分數制、連不上 Google 時會放行（否則後台會整個登不進去），
+/// 真正擋得住撞庫的仍然是次數限制。
+/// </para>
 ///
 /// <para>
 /// ⚠️ 分層鐵律（docs/11 §2）：Handler 內<b>禁止直接寫 SQL</b> —— 讀走 Dapper ReadService、
@@ -29,6 +35,7 @@ public sealed class AuthHandler(
     Skin20DbContext db,
     IJwtService jwt,
     IRateLimitService rateLimit,
+    IBotCheckService botCheck,
     IConfiguration configuration,
     ILogger<AuthHandler> logger)
 {
@@ -58,6 +65,15 @@ public sealed class AuthHandler(
 
         // 🔴 後台唯一防線：帳號與來源 IP 雙維度計數（docs/10 §3.2）。
         await rateLimit.EnsureNotLockedAsync(userName, ip);
+
+        // 機器人驗證（docs/10 §5，2026-09-12 定案採 reCAPTCHA v3）。
+        //
+        // ⚠️ **排在次數限制之後**：次數限制是一次本機 DB 查詢，機器人驗證是一次外部
+        //    HTTP 呼叫。已經被鎖的帳號不該再讓 Google 跑一趟。
+        // ⚠️ **排在驗密碼之前**：驗過密碼才擋，等於讓機器人拿到「這組帳密對不對」的資訊。
+        // ⚠️ 它是**補強**不是主防線 —— 連不上 Google 時 BotCheckService 會放行，
+        //    那時擋在前面的仍然是次數限制。
+        await botCheck.EnsureHumanAsync(body.BotCheckToken, "login");
 
         var user = await authRead.FindByUserNameAsync(userName);
 

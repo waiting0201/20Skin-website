@@ -732,10 +732,16 @@ async function ensureTerm(type, slug, title) {
   // ⚠️ 端點收的是 { items: [{ settingKey, settingValue }] }，而且**只能更新既有的鍵**
   //    —— key-value 表的彈性是給 schema 演進用的，不是讓呼叫端任意塞新鍵（docs/08 §G-1）。
   const existingKeys = new Set((await api.get('/admin/setting')).map((r) => r.settingKey))
+  // 🔴 **功能開關不是內容，不要搬。**
+  //    `aifaq.enabled` 的種子值是 **false**，而且那是刻意的（docs/04 §4、docs/08 §J-4 步驟 7）：
+  //    Phase 1 只交付介面，AI 未串接前不對外顯示 —— 一顆點下去沒反應的常駐按鈕比沒有按鈕更糟。
+  //    搬遷前的 `app/data/site-settings.ts` 寫死 true（樣稿要展示那個面板），
+  //    一起搬過來就會把種子那個決定**靜靜地推翻**，而且前台會出現一個沒有作用的浮動鈕。
+  //    2026-09-12 發現：本機 Skin20_Dev 已經被推翻成 true。
+  //    ⚠️ 這一類「院方自己開關」的設定一律不由匯入腳本決定，要開請在後台開。
   const wanted = [
     ['site.name', s.siteName],
     ['site.description', s.description],
-    ['aifaq.enabled', String(Boolean(s.aiFaqEnabled))],
   ]
   const items = wanted
     .filter(([k, v]) => v != null && existingKeys.has(k))

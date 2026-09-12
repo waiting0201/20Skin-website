@@ -48,12 +48,15 @@ public interface IEmailService
 }
 
 /// <summary>
-/// 機器人驗證（docs/10 §5 待確認供應商）。
+/// 機器人驗證。供應商為 <b>reCAPTCHA v3</b>（2026-09-12 定案，docs/10 §5）。
 /// <para>
-/// ⚠️ <b>介面刻意不帶供應商名稱</b> —— reCAPTCHA v3 與 Turnstile 都可能，
-/// 換供應商時呼叫端不該因此改動。
+/// ⚠️ <b>介面刻意不帶供應商名稱</b> —— 換成 Turnstile 時只有 <c>BotCheckService</c>
+/// 要改，呼叫端一行都不用動。請不要讓 <c>recaptcha</c> 這個字漏到 Handler 或 DTO 裡。
 /// </para>
-/// <para>⚠️ 若採用 reCAPTCHA v3：它是<b>分數制</b>，另需比對 <c>action</c> 並套門檻。</para>
+/// <para>
+/// 🔴 v3 是<b>分數制</b>：它不會擋下任何人，只回 0.0–1.0。門檻、<c>action</c> 比對、
+/// 以及「連不上時怎麼辦」全部是實作的責任 —— 三者的理由見 <c>BotCheckService</c> 的註解。
+/// </para>
 /// </summary>
 public interface IBotCheckService
 {
