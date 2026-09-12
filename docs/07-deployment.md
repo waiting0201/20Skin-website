@@ -239,6 +239,30 @@
 - **800 篇文章匯入仍用本機腳本。** HTTP 觸發的 230 秒上限擋在那裡，這是平台層的負載平衡器閒置逾時，不是可調參數。硬要走 API 就得改成 Durable 的非同步模式，為一次性作業做這個不划算。
 - **`sitemap.xml`／`llms.txt` 仍在建置期產生**，產物直接進 `.output/public`。走 API 產生反而更差。
 
+### 建置期產物（2026-09-12 實作）
+
+`tools/content-export` 除了 `content/*.json`，另外把這幾個檔寫進 `apps/web/public/`
+（`nuxt generate` 原樣帶進 `.output/public`）：
+
+| 產物 | 來源 |
+|---|---|
+| `robots.txt` | `SiteSettings.seo.robotsTxt`（後台可編輯）。⚠️ 原本是手寫靜態檔 —— 改成產生的，「後台改了卻沒作用」才不會發生 |
+| `sitemap.xml` ＋ 5 個分檔 | 收錄範圍＝`ContentType ＋ IncludeInSitemap ＋ 可見性 ＋ UrlPath IS NOT NULL`；分檔的旋鈕在 `SiteSettings.seo.sitemapFiles` |
+| `faq.json`／`llms.txt`／`llms-full.txt` | 已發布 FAQ 與站台索引 |
+| `search-index.json` | 由 `apps/web/scripts/build-search-index.mjs` 從 `content/*.json` 產生（[09](09-frontend.md) §4） |
+
+🔴 **語料檔的格式只有一份產生器**：`functions/Common/ExportFormats.cs`，
+由 `ContentExport.csproj` 以 `<Compile Include>` 連結。後台的 `GET /admin/export/{kind}`
+是**同一支函式**的截短預覽 —— 各寫一份的話，「預覽跟正式產物不一樣」不會有任何徵兆，
+而那正是那個畫面唯一的用途。
+
+⚠️ **產物必須是決定性的**：時間戳一律用「內容的最後更新時間」，不是 `UtcNow`。
+這些檔案進版控（與 `content/*.json` 同一個理由：它們是資料庫的投影），
+用 `UtcNow` 會讓每次匯出都產生一份沒有意義的 diff，真正的變動就淹沒在裡面。
+
+⚠️ **`<lastmod>` 用內容的 `UpdatedAt`，不是建置時間。** 每次建置都把全站 lastmod
+推到今天，等於告訴搜尋引擎「這 950 頁每天都在改」，幾輪之後它就不再相信這個欄位。
+
 **方案選 Flex Consumption。** Microsoft 已將原 Consumption plan 標為 legacy 並建議新專案改用 Flex Consumption。
 ⚠️ 附帶一提 **Flex Consumption 沒有 deployment slots**（Consumption 有 2 個、Premium 有 3 個）。本專案不設 staging（§5），所以用不到；但這也代表**日後若想加藍綠部署，得先換方案**。
 

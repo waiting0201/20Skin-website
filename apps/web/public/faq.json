@@ -1,0 +1,258 @@
+{
+  "generatedAt": "2026-09-12T09:33:47",
+  "count": 36,
+  "items": [
+    {
+      "question": "第一次做醫美，該從哪一項開始？",
+      "answer": "沒有固定起手式，門診會先由醫師了解膚況與需求，再共同討論適合項目與優先順序；若調整保養即可改善，也會直接建議，不一定需要療程。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "做雷射會痛嗎？",
+      "answer": "多數雷射過程有溫熱或輕微刺感，程度依機型、能量與個人耐受度而異；施作前可評估表面麻醉，過程中可隨時反映由醫師調整。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "一次療程要做幾次才夠？",
+      "answer": "次數依困擾類型、嚴重程度與膚況而不同，沒有一體適用的答案；多數能量式療程採分次進行，並依每次反應調整後續規劃。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "同一天可以做多項療程嗎？",
+      "answer": "視項目組合而定，部分項目原理上互相影響或會拉長恢復期，不建議同日進行；能否合併需由醫師依當次膚況評估決定。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "懷孕或哺乳期間可以做療程嗎？",
+      "answer": "多數醫學美容療程建議懷孕與哺乳期間暫緩，請面診時主動告知目前狀況，由醫師評估替代方向或建議延後進行。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "正在服用藥物，需要先告知嗎？",
+      "answer": "需要，口服A酸、抗凝血劑、部分抗生素與慢性病用藥可能影響療程適用性與恢復狀況，請面診時完整告知用藥情形，勿自行停藥。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "皮秒雷射會痛嗎？",
+      "answer": "治療前會外用表面麻醉，多數人僅感覺輕微刺痛或熱脹感，實際感受因個人痛覺閾值與施打部位而異。治療前會外用表面麻醉，多數人僅感覺輕微刺痛或熱脹感，實際感受因個人痛覺閾值與施打部位而異。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-09-11"
+    },
+    {
+      "question": "術後多久可以化妝？",
+      "answer": "若無傷口或明顯脫屑，通常隔日即可淡妝，實際時間需依當次治療反應與醫師建議調整。若無傷口或明顯脫屑，通常隔日即可淡妝，實際時間需依當次治療反應與醫師建議調整。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-09-11"
+    },
+    {
+      "question": "需要請假嗎？",
+      "answer": "多數人治療後可正常上班上課，僅需注意當天避免碰水加溫與劇烈運動，不一定需要請假，仍依個人恢復狀況而定。多數人治療後可正常上班上課，僅需注意當天避免碰水加溫與劇烈運動，不一定需要請假，仍依個人恢復狀況而定。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-09-11"
+    },
+    {
+      "question": "和淨膚雷射差在哪？",
+      "answer": "兩者波長與作用原理不同，皮秒雷射脈衝時間更短、以光機械效應為主；淨膚雷射則多屬奈秒等級光熱效應。實際適合的雷射類型需由醫師依膚況判斷。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-09-11"
+    },
+    {
+      "question": "一次就會有效果嗎？",
+      "answer": "色素、痘疤與毛孔問題多需要多次治療累積效果，建議療程為 3–5 次、間隔 4–6 週，實際次數依個人膚況而異。色素、痘疤與毛孔問題多需要多次治療累積效果，建議療程為 3–5 次、間隔 4–6 週，實際次數依個人膚況而異。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-09-11"
+    },
+    {
+      "question": "懷孕可以做嗎？",
+      "answer": "懷孕或哺乳期間不建議進行本療程，詳見上方「禁忌症與注意事項」，實際仍需經醫師面診評估。懷孕或哺乳期間不建議進行本療程，詳見上方「禁忌症與注意事項」，實際仍需經醫師面診評估。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-09-11"
+    },
+    {
+      "question": "痘痘可以自己擠嗎？",
+      "answer": "不建議自行擠壓，容易造成傷口感染、發炎範圍擴大，也可能留下明顯痘疤或色素沉澱。若痘痘反覆發炎或已形成膿皰、囊腫，建議由醫師評估後處理，日常則以溫和清潔與保濕為主。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-09-11"
+    },
+    {
+      "question": "痘疤療程要做幾次？",
+      "answer": "建議次數依疤痕型態、深淺與個人膚況而定，並非固定套用在每個人身上，需由醫師實際檢視後規劃療程組合與間隔。詳細可參考 Picosure® Pro 鉑金版蜂巢皮秒雷射，並於面診時進一步討論。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-09-11"
+    },
+    {
+      "question": "口服A酸期間可以做雷射嗎？",
+      "answer": "服藥期間皮膚屏障較脆弱、對光敏感度也較高，是否適合同時進行雷射需由醫師評估，不建議自行安排。回診時請主動告知目前用藥情況，由醫師判斷合適的時機與間隔。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-09-11"
+    },
+    {
+      "question": "痘痘肌可以化妝嗎？",
+      "answer": "可以，但建議選擇質地清爽、不易致粉刺的產品，並確實卸妝與清潔，避免殘留堵塞毛孔。若正處於發炎化膿或傷口未癒合階段，建議先減少局部上妝。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-09-11"
+    },
+    {
+      "question": "生理期前爆痘正常嗎？",
+      "answer": "生理期前荷爾蒙波動會使皮脂分泌增加，是常見現象，多能隨月經來潮後緩解。但若範圍持續擴大或發炎加劇，建議進一步就診評估。生理期前荷爾蒙波動會使皮脂分泌增加，是常見現象，多能隨月經來潮後緩解。但若範圍持續擴大或發炎加劇，建議進一步就診評估。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-09-11"
+    },
+    {
+      "question": "痘痘和飲食有關係嗎？",
+      "answer": "飲食是可能的影響因素之一，部分研究指出高升糖飲食與乳製品攝取有一定關聯，但影響程度因人而異。建議搭配規律作息與正確清潔，並依個人膚況諮詢醫師。",
+      "category": "療程相關",
+      "categorySlug": "treatment",
+      "lastReviewedOn": "2026-09-11"
+    },
+    {
+      "question": "療程後多久可以化妝？",
+      "answer": "依項目與皮膚反應而不同，從當天到需等待數日都有可能，實際時間以醫師當次衛教說明為準；治療部位仍有傷口或紅腫應暫停上妝。",
+      "category": "術後照護",
+      "categorySlug": "aftercare",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "術後可以曬太陽嗎？",
+      "answer": "術後皮膚對紫外線較敏感，建議依醫師指示加強防曬並避免長時間曝曬，防曬不足是色素沉澱最常見的原因之一。",
+      "category": "術後照護",
+      "categorySlug": "aftercare",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "術後出現紅腫，是正常的嗎？",
+      "answer": "部分項目術後輕微泛紅、腫脹屬常見反應，通常會隨時間緩解；若持續加劇、疼痛或有分泌物，應儘速回診由醫師評估，勿自行處理。",
+      "category": "術後照護",
+      "categorySlug": "aftercare",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "術後可以運動、泡溫泉嗎？",
+      "answer": "高溫、大量流汗與公共水域可能增加不適或感染風險，建議依醫師指示時間內暫緩，恢復時間依項目而異，請以當次衛教說明為準。",
+      "category": "術後照護",
+      "categorySlug": "aftercare",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "需要搭配特定保養品嗎？",
+      "answer": "多數情況以溫和清潔、保濕與防曬三件事為主，是否需搭配特定產品由醫師依項目與膚況說明，不需為療程更換整套保養品。",
+      "category": "術後照護",
+      "categorySlug": "aftercare",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "初診需要準備什麼？",
+      "answer": "請攜帶健保卡與身分證件，並告知慢性病用藥、過敏史或近期療程紀錄；初診問診時間較長，建議預留較充裕時間。",
+      "category": "看診與預約",
+      "categorySlug": "visit",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "可以指定醫師嗎？",
+      "answer": "可以指定醫師，各醫師看診院區與時段不同；若指定時段已滿，門診可協助安排其他合適的醫師。",
+      "category": "看診與預約",
+      "categorySlug": "visit",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "需要提前多久預約？",
+      "answer": "視時段與醫師而定，週末與夜診較熱門建議提前預約；臨時有空檔也可致電詢問當日候補。",
+      "category": "看診與預約",
+      "categorySlug": "visit",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "沒有預約可以直接到現場嗎？",
+      "answer": "可現場掛號，但需視當日名額與候診狀況，已預約者優先看診，建議先預約以縮短等候時間。",
+      "category": "看診與預約",
+      "categorySlug": "visit",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "需要取消或改期怎麼辦？",
+      "answer": "請於預約時段前透過線上系統或電話告知，以便將名額釋出給其他候診者。",
+      "category": "看診與預約",
+      "categorySlug": "visit",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "療程費用怎麼計算？",
+      "answer": "費用依項目、施作範圍與次數而不同，由醫師面診並確認規劃內容後，服務人員會完整說明費用，確認後再決定是否進行。",
+      "category": "費用與付款",
+      "categorySlug": "fee",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "門診諮詢需要收費嗎？",
+      "answer": "掛號與診察費用依院所公告收費標準辦理，實際金額請於預約或現場洽詢櫃檯。",
+      "category": "費用與付款",
+      "categorySlug": "fee",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "可以使用哪些付款方式？",
+      "answer": "付款方式依院所公告為準，實際可用方式請於門診時洽詢櫃檯。",
+      "category": "費用與付款",
+      "categorySlug": "fee",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "療程有健保給付嗎？",
+      "answer": "一般皮膚疾病診療依健保規定辦理，醫學美容類療程屬自費項目，個別給付與否請於面診時由醫師與服務人員說明。",
+      "category": "費用與付款",
+      "categorySlug": "fee",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "兩個院區有什麼不同？",
+      "answer": "四季診所以醫學美容與光電療程為主，二林四季皮膚科以一般皮膚疾病門診為主並提供基礎光電與保養類療程，兩院區門診時段與駐診醫師不同。",
+      "category": "院所資訊",
+      "categorySlug": "clinic",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "有停車位嗎？",
+      "answer": "停車資訊請見各院區的據點頁面，周邊停車方式與特約停車可於預約時洽詢櫃檯。",
+      "category": "院所資訊",
+      "categorySlug": "clinic",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "可以陪同看診嗎？",
+      "answer": "可以陪同看診，若為未成年人就診建議由家長或監護人陪同，以利說明療程內容與後續照護。",
+      "category": "院所資訊",
+      "categorySlug": "clinic",
+      "lastReviewedOn": "2026-08-01"
+    },
+    {
+      "question": "線上購物與線上預約是同一個系統嗎？",
+      "answer": "不是，線上預約與線上購物為兩個獨立的外部系統，可分別由網站上方的按鈕進入。",
+      "category": "院所資訊",
+      "categorySlug": "clinic",
+      "lastReviewedOn": "2026-08-01"
+    }
+  ]
+}

@@ -1,7 +1,10 @@
-# 20SKIN 美醫集團（docs/03-seo-geo.md §1）
-# ⚠️ 不封鎖 AI 爬蟲 —— GEO 策略的先決條件就是它們讀得到內容。
-# ⚠️ 不寫 Disallow: /admin/ —— 後台位於 /admin/，寫進公開檔案等於標示位置；
-#    擋索引由該 route 的 X-Robots-Tag: noindex, nofollow 負責（staticwebapp.config.json）。
+# ⚠️ 這個檔案由 tools/content-export 產生，內容來自 SiteSettings 的 seo.robotsTxt。
+# 直接改這個檔不會生效 —— 請在後台的「sitemap 設定」畫面改。
+
+# ⚠️ 不封鎖 AI 爬蟲（GPTBot／ClaudeBot／PerplexityBot…）——
+#    讀得到內容是 GEO 策略的先決條件（docs/03-seo-geo.md §1）。
+# ⚠️ 不要寫 Disallow: /admin/ —— 後台就在 /admin/，寫進公開檔案等於標示位置。
+#    擋索引由該路由的 X-Robots-Tag 負責，不是靠這裡。
 
 User-agent: *
 Allow: /

@@ -1,34 +1,142 @@
 <script setup lang="ts">
 // 模板 19 —— 搜尋結果（mockup/19-search.html）
 //
-// docs/09-frontend.md §4：站內搜尋是建置期產生的索引檔，在 client 端比對，
-// 「現在還沒有索引檔」。這一頁只切版面、讀 `?q=` 顯示查詢字串，**不接 API、
-// 也不假造搜尋結果**——mockup 示範的「8 筆結果」是設計稿用來說明排版的假資料，
-// 照抄貼上會讓使用者以為搜尋真的動了，等同「假裝送出成功」的同一種問題，
-// 所以這裡略過那個區塊與旁邊的假分類計數 tab，只留下：
-//   1. 搜尋框（讀得到網址上的關鍵字）
-//   2. 「找不到結果」狀態（mockup 原本就設計成一種展示狀態，現在是唯一誠實的狀態）
-//   3. 分類瀏覽入口（純靜態，不依賴搜尋結果）
+// 站內搜尋是**建置期產生的索引 ＋ client 端比對**（docs/09-frontend.md §4）。
+// 索引由 `scripts/build-search-index.mjs` 從 `content/*.json` 產生 ——
+// 與頁面渲染同一份資料，所以不會出現「搜尋得到、點進去 404」。
 //
-// TODO(docs/09-frontend.md §4)：串接 content/*.json 建置期索引後，
-// 在這裡加入 client 端比對、渲染真正的結果列表與型別篩選 tab，
-// 查無結果時改打 POST /questions/miss（docs/10-api.md §3.1）回寫未命中查詢。
+// ⚠️ **索引是獨立的 `/search-index.json`，不內聯進 bundle。** 文章有約 800 篇，
+//    內聯等於讓每一個訪客都下載整份索引，而絕大多數人不會用搜尋。
+//
+// ⚠️ **中文不斷詞，用子字串比對。** 站內這個量級（約 950 筆）夠用，
+//    而斷詞器對醫療專有名詞切得很差（「皮秒雷射」→「皮」「秒」「雷射」）。
+//
+// ⚠️ 這一頁 `noIndex` —— 結果依網址參數而變，不該進索引（robots 也擋了 /search/）。
 import { SEARCH_SUGGESTIONS } from '~/data/pages'
 
+interface IndexEntry {
+  /** 型別標籤（療程／文章／常見問題…） */
+  t: string
+  /** 網址 */
+  u: string
+  /** 標題 */
+  ti: string
+  /** 摘要 */
+  ex: string
+  /** 比對用的小寫全文 */
+  k: string
+}
+
 const route = useRoute()
-const query = computed(() => (typeof route.query.q === 'string' ? route.query.q : ''))
+const query = computed(() => (typeof route.query.q === 'string' ? route.query.q.trim() : ''))
 
 usePageHead({
   title: '搜尋結果',
   description: '站內搜尋，涵蓋療程、文章、醫師、肌膚困擾與常見問題。',
   pageCss: '/assets/pages/19-search.css',
   path: '/search/',
-  // 查詢結果頁內容依網址參數而變、目前又還沒有真正的結果可排名，先不索引。
   noIndex: true,
   jsonLd: breadcrumbJsonLd([
     { label: '首頁', href: '/' },
     { label: '搜尋結果', href: '/search/' },
   ]),
+})
+
+const index = ref<IndexEntry[]>([])
+const loading = ref(false)
+const loadFailed = ref(false)
+const activeType = ref('')
+
+// ⚠️ 索引只抓一次，而且只在**真的有關鍵字**時才抓 —— 空著進來的人不需要付這 48 KB。
+async function loadIndex() {
+  if (index.value.length > 0 || loading.value) return
+  loading.value = true
+  try {
+    const data = await $fetch<{ entries: IndexEntry[] }>('/search-index.json')
+    index.value = data?.entries ?? []
+  } catch {
+    loadFailed.value = true
+  } finally {
+    loading.value = false
+  }
+}
+
+const matches = computed<IndexEntry[]>(() => {
+  const q = query.value.toLowerCase()
+  if (!q || index.value.length === 0) return []
+  return index.value
+    .filter((e) => e.k.includes(q))
+    // 標題命中的排前面 —— 搜「皮秒雷射」時那個療程頁應該在第一個，
+    // 而不是某篇剛好提到它的文章。
+    .sort((a, b) => Number(b.ti.toLowerCase().includes(q)) - Number(a.ti.toLowerCase().includes(q)))
+})
+
+/** 型別 → 筆數，給篩選 tab 用。維持索引裡的出現順序，不另外排。 */
+const typeCounts = computed(() => {
+  const counts = new Map<string, number>()
+  for (const m of matches.value) counts.set(m.t, (counts.get(m.t) ?? 0) + 1)
+  return [...counts.entries()]
+})
+
+const visible = computed(() =>
+  activeType.value ? matches.value.filter((m) => m.t === activeType.value) : matches.value)
+
+/**
+ * 把命中的關鍵字包成 <mark>（mockup 的結果摘要就是這樣呈現的）。
+ * ⚠️ 先逸出 HTML 再插入標記 —— 摘要來自資料庫，直接 v-html 等於開了一個 XSS 入口。
+ */
+function highlight(text: string): string {
+  const escaped = text.replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
+  const q = query.value
+  if (!q) return escaped
+  const needle = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return escaped.replace(new RegExp(needle, 'gi'), (hit) => `<mark>${hit}</mark>`)
+}
+
+/** 顯示用的路徑（mockup 的 search-result__path 長這樣）。 */
+function displayPath(url: string): string {
+  return `20skin.tw${url}`
+}
+
+/**
+ * 查無結果時把這句查詢回寫題庫（`POST /questions/miss`，docs/10 §3.1、docs/08 §F）。
+ *
+ * 🔴 **只寫問題文字本身**，不帶任何可回連到送出者的欄位 —— 這是題庫成長的工作清單，
+ *    不是搜尋日誌。去重與正規化都在伺服器端做。
+ *
+ * ⚠️ **失敗一律靜默。** 這是背景的內容分析，不是使用者要求的動作 ——
+ *    它對公網開放，所以有頻率限制（同一個 IP 每小時 10 次），搜得勤一點就會撞到 429。
+ *    在畫面上顯示那個錯誤只會讓訪客困惑。
+ */
+const reported = new Set<string>()
+async function reportMiss(q: string) {
+  if (!q || reported.has(q)) return
+  reported.add(q)
+  const { public: { apiBaseUrl } } = useRuntimeConfig()
+  try {
+    await $fetch(`${apiBaseUrl}/questions/miss`, {
+      method: 'POST',
+      body: { questionText: q, source: 'search' },
+      ignoreResponseError: true,
+    })
+  } catch {
+    // 靜默（理由見上）。
+  }
+}
+
+onMounted(() => {
+  if (query.value) void loadIndex()
+})
+
+watch(query, (q) => {
+  activeType.value = ''
+  if (q) void loadIndex()
+})
+
+// 索引載入完、且確定沒有結果時才回報 —— 載入中就回報會把每一次搜尋都算成未命中。
+watch([matches, loading, query], ([list, isLoading, q]) => {
+  if (!isLoading && q && index.value.length > 0 && list.length === 0) void reportMiss(q)
 })
 </script>
 
@@ -57,14 +165,50 @@ usePageHead({
       </form>
 
       <div v-if="query" class="search-hero__stat">
-        <span class="search-hero__stat-num">0</span>
-        <p class="search-hero__stat-label">筆結果，關鍵字「<strong>{{ query }}</strong>」。站內搜尋索引尚未上線，暫時無法回傳結果</p>
+        <span class="search-hero__stat-num">{{ loading ? '⋯' : matches.length }}</span>
+        <p class="search-hero__stat-label">
+          <template v-if="loading">載入索引中，關鍵字「<strong>{{ query }}</strong>」</template>
+          <template v-else-if="loadFailed">載入搜尋索引失敗，請重新整理再試一次</template>
+          <template v-else>筆結果，關鍵字「<strong>{{ query }}</strong>」，涵蓋療程、文章、醫師與常見問題</template>
+        </p>
       </div>
     </div>
   </section>
 
-  <!-- 2. 找不到結果時（目前站內搜尋索引尚未上線，一律顯示這個狀態） -->
-  <section class="section section--alt section--tight" id="no-result">
+  <!-- 2. 型別篩選 -->
+  <section v-if="matches.length" class="search-filters">
+    <div class="container--narrow">
+      <nav class="c-tabs" aria-label="依內容型別篩選">
+        <div class="c-tabs__list">
+          <button class="c-tabs__btn" type="button" :aria-selected="activeType === ''" @click="activeType = ''">
+            全部 {{ matches.length }}
+          </button>
+          <button v-for="[type, count] in typeCounts" :key="type" class="c-tabs__btn" type="button"
+                  :aria-selected="activeType === type" @click="activeType = type">
+            {{ type }} {{ count }}
+          </button>
+        </div>
+      </nav>
+    </div>
+  </section>
+
+  <!-- 3. 結果清單 -->
+  <section v-if="visible.length" class="section section--tight" id="results">
+    <div class="container container--narrow">
+      <div class="search-list">
+        <article v-for="hit in visible" :key="hit.u + hit.ti" class="search-result">
+          <span class="search-result__type">{{ hit.t }}</span>
+          <h2 class="search-result__title"><a :href="hit.u">{{ hit.ti }}</a></h2>
+          <!-- eslint-disable-next-line vue/no-v-html -- 內容已在 highlight() 裡逸出，只插入 <mark> -->
+          <p class="search-result__excerpt" v-html="highlight(hit.ex)"></p>
+          <span class="search-result__path">{{ displayPath(hit.u) }}</span>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. 找不到結果時 -->
+  <section v-if="!loading && !matches.length" class="section section--alt section--tight" id="no-result">
     <div class="container container--narrow">
       <div class="search-empty">
         <h2 v-if="query">沒有找到「{{ query }}」的結果</h2>
@@ -84,7 +228,7 @@ usePageHead({
     </div>
   </section>
 
-  <!-- 3. 其他入口 -->
+  <!-- 5. 其他入口 -->
   <section class="section" id="browse">
     <div class="container">
       <div class="c-sechead">

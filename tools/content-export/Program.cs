@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Dapper;
 using Microsoft.Data.SqlClient;
+using Skin20.Api.Common;
 
 // ── 建置期資料匯出（docs/09-frontend.md §3）────────────────────────────
 //
@@ -24,30 +25,44 @@ var connectionString = (args.Length > 1 ? args[1] : null)
     ?? Environment.GetEnvironmentVariable("SKIN20_EXPORT_SQL")
     ?? throw new InvalidOperationException("缺少連線字串：請給第二個參數或設定 SKIN20_EXPORT_SQL。");
 
+// SEO 產物（sitemap／robots／語料）直接進 public/，由 nuxt generate 原樣帶進 .output/public。
+// ⚠️ 它們是**產生物**，不進版控（apps/web/.gitignore）。
+var publicDir = Environment.GetEnvironmentVariable("SKIN20_EXPORT_PUBLIC")
+    ?? Path.Combine(Path.GetDirectoryName(outDir.TrimEnd('/', '\\')) ?? ".", "public");
+
+// 網址一律絕對（sitemap 協定要求）。
+var origin = (Environment.GetEnvironmentVariable("SKIN20_SITE_ORIGIN") ?? "https://20skin.tw").TrimEnd('/');
+
 Directory.CreateDirectory(outDir);
 
 await using var db = new SqlConnection(connectionString);
 
-// 可見性判定與 API 共用同一條規則（docs/11 §6.4）：有已核准的版本才算在線上。
-// PublishAt／UnpublishAt 的時間窗一併考慮 —— 排程下架的內容不該還出現在產物裡。
-const string sql = """
+// 🔴 可見性判定**與 API 共用同一份原始碼**（docs/11 §6.4）——
+//    `Visibility.PublicFilter` 由 ContentExport.csproj 以 <Compile Include> 連結進來。
+//    ⚠️ 2026-09-12 之前這裡手寫了一份 `ci.Status = 3`，與那份不同：
+//    工作副本回到草稿（編輯已上線的頁面時一定會發生）就會讓那一頁**從網站上消失**。
+var sql = $"""
     SELECT ci.Id, ci.ContentType, ci.Slug, ci.UrlPath, ci.SortOrder, ci.IncludeInSitemap,
            ci.UpdatedAt, cv.Snapshot
     FROM ContentItems ci
     INNER JOIN ContentVersions cv ON cv.Id = ci.PublishedVersionId
-    WHERE ci.Status = 3
-      AND (ci.PublishAt   IS NULL OR ci.PublishAt   <= SYSUTCDATETIME())
-      AND (ci.UnpublishAt IS NULL OR ci.UnpublishAt >  SYSUTCDATETIME())
+    WHERE {Visibility.PublicFilter}
     ORDER BY ci.ContentType, ci.SortOrder, ci.Id;
     """;
 
-var rows = (await db.QueryAsync<ContentRow>(sql)).ToList();
+var now = DateTime.UtcNow;
+var rows = (await db.QueryAsync<ContentRow>(sql, new { Now = now })).ToList();
+
+// 「這一筆前台看得到嗎」的 SELECT 運算式，同樣來自共用的 Visibility.PublicFilter。
+// ⚠️ 用在關聯目標與首頁版位引用上 —— 那兩處原本寫 `Status = 3`，同一個分岔。
+var visibleExpr = $"CAST(CASE WHEN {Visibility.PublicFilter} THEN 1 ELSE 0 END AS bit)";
 
 // 關聯目標的基本資料。⚠️ 連未發布的也要撈 —— 這樣才分得出「指向草稿」與「指向不存在的內容」，
 // 前者在遷移期間是正常的（26 項療程還是草稿），後者是資料錯誤。
-var targets = (await db.QueryAsync<TargetRow>("""
-    SELECT Id, ContentType, Slug, UrlPath, Title, Status FROM ContentItems;
-    """)).ToDictionary(t => t.Id);
+var targets = (await db.QueryAsync<TargetRow>($"""
+    SELECT ci.Id, ci.ContentType, ci.Slug, ci.UrlPath, ci.Title, {visibleExpr} AS IsVisible
+    FROM ContentItems ci;
+    """, new { Now = now })).ToDictionary(t => t.Id);
 
 var unitNames = new Dictionary<byte, string>
 {
@@ -87,7 +102,9 @@ foreach (var group in grouped)
                 relation["toTitle"] = target.Title;
                 // 指向草稿的關聯照樣輸出，由前端決定要不要渲染成連結 ——
                 // 遷移期間有 26 項療程還是草稿，靜默丟掉會讓困擾頁的建議療程整段消失。
-                relation["toIsPublished"] = target.Status == 3;
+                // ⚠️ 「已發布」在這裡的意思是**前台看得到**，不是 Status=3。
+                //    工作副本回到草稿的頁面仍然在線上（看的是已核准的那一版，docs/11 §6.4）。
+                relation["toIsPublished"] = target.IsVisible;
             }
         }
 
@@ -127,11 +144,11 @@ var referencedIds = homeSections.SelectMany(s => s.ItemIds).Distinct().ToArray()
 var referencedById = referencedIds.Length == 0
     ? new Dictionary<int, HomeItemRow>()
     : (await db.QueryAsync<HomeItemRow>(
-        """
-        SELECT ci.Id, ci.ContentType, ci.Slug, ci.UrlPath, ci.Title, ci.Status
+        $"""
+        SELECT ci.Id, ci.ContentType, ci.Slug, ci.UrlPath, ci.Title, {visibleExpr} AS IsVisible
         FROM ContentItems ci
         WHERE ci.Id IN @Ids;
-        """, new { Ids = referencedIds })).ToDictionary(i => i.Id);
+        """, new { Ids = referencedIds, Now = now })).ToDictionary(i => i.Id);
 
 var homeArray = new JsonArray();
 foreach (var section in homeSections)
@@ -141,7 +158,7 @@ foreach (var section in homeSections)
     // ⚠️ 只輸出已發布的引用 —— 版位勾了一筆草稿時，前台不該渲染出一個連到 404 的卡片。
     foreach (var id in section.ItemIds)
     {
-        if (!referencedById.TryGetValue(id, out var item) || item.Status != 3) continue;
+        if (!referencedById.TryGetValue(id, out var item) || !item.IsVisible) continue;
         items.Add(new JsonObject
         {
             ["contentItemId"] = item.Id,
@@ -206,7 +223,166 @@ await File.WriteAllTextAsync(Path.Combine(outDir, "site.json"),
     settingsObject.ToJsonString(jsonOptions) + "\n", new UTF8Encoding(false));
 Console.WriteLine($"  {"site",-12} {settingsObject.Count,4} 項 → {Path.Combine(outDir, "site.json")}");
 
-Console.WriteLine($"\n匯出完成：{total} 筆內容（只含已發布且在上下架時間窗內的）。");
+// ═══════════════════════════════════════════════════════════════════════
+// SEO 產物：sitemap 分檔 ＋ 索引、robots.txt、三個語料檔
+// ═══════════════════════════════════════════════════════════════════════
+//
+// docs/07 §4：「sitemap.xml／llms.txt 仍在建置期產生，產物直接進 .output/public。
+// 走 API 產生反而更差」——所以它們在這裡產，不在 Function 裡產。
+// 後台的 `GET /admin/export/{kind}` 是**同一支格式函式**的截短預覽（Common/ExportFormats.cs）。
+//
+// ⚠️ 寫進 `apps/web/public/`，由 nuxt generate 原樣帶進 `.output/public`。
+//    它們是產生物，不進版控（apps/web/.gitignore）。
+
+Directory.CreateDirectory(publicDir);
+
+// ── robots.txt ─────────────────────────────────────────────────────────
+//
+// 🔴 內容來自 `SiteSettings.seo.robotsTxt`（docs/08 §H 末段），不是寫死的檔案。
+//    後台「sitemap 設定」畫面可以編輯它 —— 寫死的話那個畫面等於沒有作用。
+// ⚠️ 不要在這裡自動補 `Disallow: /admin/`：後台實際位於 /admin/，
+//    寫進公開檔案等於標示位置（docs/03 §1）。擋索引由該 route 的 X-Robots-Tag 負責。
+// 🔴 **產物必須是決定性的**：同一份資料重跑兩次，位元組要一模一樣。
+//    時間戳一律用「內容的最後更新時間」，**不是 DateTime.UtcNow** ——
+//    用 now 的話每次匯出都產生一份沒有意義的 diff，而這些檔案是進版控的
+//    （與 content/*.json 同一個理由：它們是資料庫的投影，要看得出什麼時候真的變了）。
+var contentLastModified = rows.Count > 0 ? rows.Max(r => r.UpdatedAt) : now;
+
+var robotsTxt = settingsObject["seo.robotsTxt"]?.GetValue<string>();
+if (string.IsNullOrWhiteSpace(robotsTxt))
+{
+    // 設定被清空時**不要**寫一個空的 robots.txt —— 空檔案與「沒有這個檔案」對爬蟲
+    // 是兩件事，而且會把 Sitemap 指令一起弄不見。保留上一份，並明確告警。
+    Console.WriteLine("  ⚠ SiteSettings 的 seo.robotsTxt 是空的，略過 robots.txt（保留既有檔案）");
+}
+else
+{
+    // 產生物要自己說自己是產生的 —— 否則下一個人會直接改這個檔，
+    // 然後在下一次匯出時發現改動不見了，而且找不到原因。
+    var robotsHeader = "# ⚠️ 這個檔案由 tools/content-export 產生，內容來自 SiteSettings 的 seo.robotsTxt。\n"
+                     + "# 直接改這個檔不會生效 —— 請在後台的「sitemap 設定」畫面改。\n\n";
+    await File.WriteAllTextAsync(Path.Combine(publicDir, "robots.txt"),
+        robotsHeader + robotsTxt.TrimEnd() + "\n", new UTF8Encoding(false));
+    Console.WriteLine($"  {"robots.txt",-12} → {Path.Combine(publicDir, "robots.txt")}");
+}
+
+// ── sitemap ────────────────────────────────────────────────────────────
+//
+// docs/08 §H：5 個分檔**不需要資料表** —— 收錄範圍由
+// `ContentType ＋ IncludeInSitemap ＋ 可見性 ＋ UrlPath IS NOT NULL` 算出來。
+// 分檔的那幾個旋鈕（是否納入、changefreq、priority）存在 `SiteSettings.seo.sitemapFiles`。
+var sitemapEntries = rows
+    .Where(r => r.IncludeInSitemap && !string.IsNullOrWhiteSpace(r.UrlPath))
+    .Select(r => new ExportIndexEntry(r.ContentType, TitleOf(r), r.UrlPath!, r.UpdatedAt))
+    .ToList();
+
+// 哪個型別進哪一個分檔。⚠️ 與 apps/admin 的 `sourceUnits` 一致（那裡是給人看的說明，
+//    這裡是真的在分檔）—— 對不上會變成「後台說收在 A 檔、實際在 B 檔」。
+var sitemapBuckets = new (string Key, string FileName, byte[] Types)[]
+{
+    ("pages",      "sitemap-pages.xml",      [8, 7, 5, 6]),
+    ("treatments", "sitemap-treatments.xml", [1]),
+    ("concerns",   "sitemap-concerns.xml",   [3]),
+    ("doctors",    "sitemap-doctors.xml",    [2]),
+    ("blog",       "sitemap-blog.xml",       [4, 9]),
+};
+
+var sitemapConfig = ParseSitemapConfig(settingsObject["seo.sitemapFiles"]?.GetValue<string>());
+var writtenFiles = new List<(string FileName, DateTime LastMod)>();
+
+foreach (var (key, fileName, types) in sitemapBuckets)
+{
+    var cfg = sitemapConfig.TryGetValue(key, out var c) ? c : (Enabled: true, ChangeFreq: "monthly", Priority: 0.5m);
+    if (!cfg.Enabled) continue;
+
+    var bucket = sitemapEntries.Where(e => types.Contains(e.ContentType)).ToList();
+    // ⚠️ 空分檔就不要輸出 —— 一個沒有 <url> 的 sitemap 是合法但無意義的，
+    //    而且會讓 Search Console 報「沒有可編入索引的網址」。
+    if (bucket.Count == 0) continue;
+
+    await File.WriteAllTextAsync(Path.Combine(publicDir, fileName),
+        ExportFormats.BuildSitemapFile(bucket, origin, cfg.ChangeFreq, cfg.Priority), new UTF8Encoding(false));
+    writtenFiles.Add((fileName, bucket.Max(e => e.UpdatedAt)));
+}
+
+await File.WriteAllTextAsync(Path.Combine(publicDir, "sitemap.xml"),
+    ExportFormats.BuildSitemapIndex(writtenFiles, origin), new UTF8Encoding(false));
+Console.WriteLine($"  {"sitemap",-12} {sitemapEntries.Count,4} 個網址 → {writtenFiles.Count} 個分檔 ＋ sitemap.xml");
+
+// ── 語料檔 ─────────────────────────────────────────────────────────────
+//
+// 🔴 語料來源是 `Faqs.AiAnswer`（60–100 字、語意自足），**不是 WebAnswer**（docs/04 §2）。
+var faqRows = (await db.QueryAsync<ExportFaqRow>($"""
+    SELECT ci.Title AS Question, f.AiAnswer, f.LastReviewedOn,
+           catCi.Title AS CategoryTitle, catCi.Slug AS CategorySlug
+    FROM ContentItems ci
+    INNER JOIN Faqs f ON f.Id = ci.Id
+    INNER JOIN ContentItems catCi ON catCi.Id = f.CategoryTermId
+    WHERE {Visibility.PublicFilter}
+    ORDER BY catCi.SortOrder, ci.SortOrder;
+    """, new { Now = now })).ToList();
+
+await File.WriteAllTextAsync(Path.Combine(publicDir, "faq.json"),
+    ExportFormats.BuildFaqJson(faqRows, contentLastModified) + "\n", new UTF8Encoding(false));
+await File.WriteAllTextAsync(Path.Combine(publicDir, "llms-full.txt"),
+    ExportFormats.BuildLlmsFullTxt(faqRows, contentLastModified), new UTF8Encoding(false));
+await File.WriteAllTextAsync(Path.Combine(publicDir, "llms.txt"),
+    ExportFormats.BuildLlmsTxt(sitemapEntries), new UTF8Encoding(false));
+Console.WriteLine($"  {"語料",-12} faq.json／llms-full.txt（{faqRows.Count} 則）＋ llms.txt");
+
+Console.WriteLine($"\n匯出完成：{total} 筆內容（只含前台可見的）。");
+
+/// <summary>
+/// 從快照裡取標題。sitemap 與 llms.txt 都要標題，而 ContentRow 只有 Snapshot。
+/// ⚠️ 用快照裡的標題而不是 ContentItems.Title —— 前台顯示的就是已核准那一版的標題，
+/// 兩者在「編輯了標題但還沒核准」時會不一樣。
+/// </summary>
+static string TitleOf(ContentRow row)
+{
+    try
+    {
+        using var doc = JsonDocument.Parse(row.Snapshot);
+        return doc.RootElement.TryGetProperty("title", out var t) && t.ValueKind == JsonValueKind.String
+            ? t.GetString() ?? string.Empty
+            : string.Empty;
+    }
+    catch (JsonException)
+    {
+        return string.Empty;
+    }
+}
+
+/// <summary>
+/// 解析 `SiteSettings.seo.sitemapFiles`（後台「sitemap 設定」畫面存的那個 JSON 陣列）。
+/// ⚠️ 解析失敗或缺鍵時退回預設值，不要讓整個匯出掛掉 —— 那是一個可以在後台手改的欄位。
+/// </summary>
+static Dictionary<string, (bool Enabled, string ChangeFreq, decimal Priority)> ParseSitemapConfig(string? json)
+{
+    var result = new Dictionary<string, (bool, string, decimal)>(StringComparer.Ordinal);
+    if (string.IsNullOrWhiteSpace(json)) return result;
+
+    try
+    {
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Array) return result;
+
+        foreach (var item in doc.RootElement.EnumerateArray())
+        {
+            if (!item.TryGetProperty("key", out var keyEl) || keyEl.GetString() is not { } key) continue;
+            result[key] = (
+                !item.TryGetProperty("enabled", out var en) || en.ValueKind != JsonValueKind.False,
+                item.TryGetProperty("defaultChangeFreq", out var cf) && cf.ValueKind == JsonValueKind.String
+                    ? cf.GetString()! : "monthly",
+                item.TryGetProperty("defaultPriority", out var pr) && pr.TryGetDecimal(out var p) ? p : 0.5m);
+        }
+    }
+    catch (JsonException)
+    {
+        // 退回預設值。
+    }
+
+    return result;
+}
 
 /// <summary>
 /// 從首頁那筆 Page 的已核准快照裡取出版位編排。
@@ -262,12 +438,12 @@ static IReadOnlyList<HomeSectionRow> ReadHomeSectionsFromSnapshot(string? snapsh
 internal sealed record ContentRow(int Id, byte ContentType, string? Slug, string? UrlPath,
     int SortOrder, bool IncludeInSitemap, DateTime UpdatedAt, string Snapshot);
 
-internal sealed record TargetRow(int Id, byte ContentType, string? Slug, string? UrlPath, string Title, byte Status);
+internal sealed record TargetRow(int Id, byte ContentType, string? Slug, string? UrlPath, string Title, bool IsVisible);
 
 internal sealed record HomeSectionRow(
     string SectionKey, string Title, string? Subtitle, bool IsEnabled, int SortOrder, string? Settings,
     IReadOnlyList<int> ItemIds);
 
-internal sealed record HomeItemRow(int Id, byte ContentType, string? Slug, string? UrlPath, string Title, byte Status);
+internal sealed record HomeItemRow(int Id, byte ContentType, string? Slug, string? UrlPath, string Title, bool IsVisible);
 
 internal sealed record MenuRow(int Id, string MenuKey, int? ParentId, string Label, byte LinkKind, int? ContentItemId, string? Url, string? RelAttr, bool OpenInNewTab, int SortOrder);

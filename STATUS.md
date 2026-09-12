@@ -36,7 +36,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 
 **剩下兩個缺口**：`Redirects` 表 0 列（真實 301 清單未匯入）、
 CI workflow 未進 repo（目前靠本機腳本部署）。
-🔴 **正式 Function App 仍是舊組建**，且**有六支遷移尚未套用到正式庫** —— 見 §六。
+🔴 **正式 Function App 仍是舊組建**，且**有七支遷移尚未套用到正式庫** —— 見 §六。
 
 ---
 
@@ -61,7 +61,7 @@ CI workflow 未進 repo（目前靠本機腳本部署）。
 | 技術架構與規格 | ✅ | [07](docs/07-deployment.md) 部署、[08](docs/08-database.md) 資料庫、[09](docs/09-frontend.md) 前端、[10](docs/10-api.md) API 契約、[11](docs/11-backend-design.md) 後端施工標準 |
 | **前台開發** | 🟡 | 21 個模板切版完成、SEO 與 JSON-LD 落地；內容全部來自資料庫；`/contact/` 與 AI FAQ 開關已接執行期端點（§二） |
 | **後台開發** | 🟡 | **30／30 畫面完成**，**已接上真 API**（2026-09-12，§三） |
-| **資料模型與 migrations** | ✅ | 35 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四）。⚠️ 共 8 支遷移，正式庫只套到第 2 支，**還有 6 支未套**（§六） |
+| **資料模型與 migrations** | ✅ | 35 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四）。⚠️ 共 9 支遷移，正式庫只套到第 2 支，**還有 7 支未套**（§六） |
 | **API** | ✅ | 端點、服務、三支 Timer 完成，**已對真 SQL Server 端到端驗證**（§五） |
 | 部署與 CI/CD | 🟡 | **已部署並實測**（前台 ＋ 後台 ＋ 兩個 API）；workflow 未進 repo，目前靠 `tools/deploy-swa.sh` 本機部署（§六） |
 | 內容遷移（約 800 篇） | ⬜ | 需先有資料庫 |
@@ -118,9 +118,9 @@ Nuxt 3 純靜態，21 個模板 → **220 條預渲染路由、106 頁 HTML**。
 | 🔴 **案例列表從 9 則變成 1 則** | 另外 8 則缺四個法規揭露必填欄位（個案差異聲明、拍攝條件、書面同意、同意書索引，[08](docs/08-database.md) §C-5 全部 NOT NULL）。**捏造是法規紅線**，所以沒有進資料庫。要恢復列表必須由院方補齊那四個欄位 —— 這是內容問題不是程式問題 |
 | **7 個困擾頁只有一句話簡述** | AI 摘要 30–38 字（規範 40–60），沒有為了湊字數編醫療內容 |
 | **服務條款、醫療免責聲明無條文** | 「待院方法務提供」骨架 ＋ `noIndex` |
-| 站內搜尋 | 只有版面與空狀態，建置期索引未做。連帶 `POST /questions/miss`（搜尋無結果回寫題庫）也還沒有呼叫點 —— 端點是好的，只是前台沒有地方觸發它 |
+| ~~站內搜尋~~ | ✅ **2026-09-12 完成**。建置期由 `content/*.json` 產生 `search-index.json`（127 筆／48 KB），client 端子字串比對 ＋ 型別篩選 ＋ 關鍵字標記；查無結果時回寫 `POST /questions/miss`。已用 Playwright 對建置產物實測（結果數、篩選、標記、空狀態、只回報一次、摘要有逸出） |
 | ~~`/contact/` 表單~~ | ✅ **2026-09-12 已接上 `POST /contact`**。只寄通知信、不落庫；失敗照實顯示錯誤碼（429／機器人驗證／欄位），不吞錯 |
-| `sitemap.xml`／`llms.txt`／`faq.json` | 建置期腳本未實作 |
+| ~~`sitemap.xml`／`llms.txt`／`faq.json`~~ | ✅ **2026-09-12 完成**，連同 `robots.txt` 一起由 `tools/content-export` 產生（詳見 [07](docs/07-deployment.md) §4）。sitemap 91 個網址 ÷ 5 個分檔；robots.txt 改成從 `SiteSettings.seo.robotsTxt` 產生，後台改得動了 |
 | 208 個 `href="#"` | mockup 遺留的佔位連結，`verify:links` 會列出數量，不會無聲增加 |
 
 ### ✅ 執行期端點已接上（2026-09-12）
@@ -132,7 +132,7 @@ Nuxt 3 純靜態，21 個模板 → **220 條預渲染路由、106 頁 HTML**。
 | `GET /health` | ✅ 部署後 smoke test 用 |
 | `POST /contact` | ✅ 已接。`site`（院區）與 `topic`（主題）一併進通知信 —— 少了它們，院方收到的信沒有分流資訊 |
 | `GET /site-settings/public` | ✅ 已接。**AI FAQ 開關改成執行期讀**，院方在後台按一下就生效，不必等下一次建置（docs/08 §J-4 步驟 7 的要求）。讀失敗時退回建置期烤進去的值，不是關掉面板 |
-| `POST /questions/miss` | 🟡 端點正常，但前台還沒有呼叫點（站內搜尋未實作） |
+| `POST /questions/miss` | ✅ 已接。站內搜尋查無結果時回寫，**只帶問題文字**、失敗靜默（它有頻率限制，同 IP 每小時 10 次） |
 
 API 位址走 `runtimeConfig.public.apiBaseUrl`（`NUXT_PUBLIC_API_BASE_URL`），預設正式站網址。
 
@@ -270,6 +270,8 @@ schema 的真實來源是 `functions/Data/Migrations/`（docs/07 §5）。
 | `CS0111` 重複定義 | `PropertyBuilder<string?>` 與 `PropertyBuilder<string>` 在 CLR 層同型別，nullable 註記不影響簽章 |
 | `SetValueGenerated` 不存在 | `IMutableProperty` 只有可寫屬性 |
 | NuGet 降版 | `Microsoft.Data.SqlClient 6.1.1` 要求 `Azure.Identity >= 1.14.2` |
+| 🔴 **遷移裡的 SQL 字串常值少了 `N` 前綴**（2026-09-12） | 少了它，SQL Server 會先把常值當成 varchar（走資料庫定序的編碼頁）再轉 nvarchar。中文多半活得下來，但 `⚠️` 這類 BMP 外的字元變成 `??` —— **而且不會有錯誤**，遷移照跑成功，只是字沒了。寫 `migrationBuilder.Sql` 時每一個字串常值都要 `N'…'` |
+| ⚠️ **EF 產出的 `UpdateData` 是無條件覆蓋** | 用來補種子預設值時會把使用者改過的資料一起蓋掉。要改成帶 `WHERE SettingValue = <舊種子值>` 的 `migrationBuilder.Sql` —— 遷移可以補預設值，不可以覆寫使用者的資料 |
 
 ### ⚠️ docs/08 寫不出來的三處（未自行發明欄位補洞）
 
@@ -339,13 +341,14 @@ schema 的真實來源是 `functions/Data/Migrations/`（docs/07 §5）。
 | 未命中題目清單支援 `source` 篩選 | 同上，必須在 SQL 層 |
 | 設定新增鍵 `seo.sitemapFiles` | sitemap 分檔設定原本是後台自己的 localStorage。遷移 `20260912091129_AddSitemapFilesSetting` |
 
-**修掉的四個 bug**（都是既有的，不是這次改出來的）：
+**修掉的五個 bug**（都是既有的，不是這次改出來的）：
 
 | 問題 | 後果 |
 |---|---|
 | 🔴 **送審沿用最後一筆既有版本，不重新快照** | `ContentReviews.VersionId` 核准後成為 `PublishedVersionId`，也就是匯出真正讀的那一份。任何不產生版本的編輯路徑（**首頁版位就是**）送審核准之後，上線的是**改動前**的內容，而畫面顯示「已發布」。實測抓到：拖完版位、送審、核准，快照裡仍是拖動前的排列 |
 | 🔴 **匯出讀 `HomeSections` 即時表，不是已核准快照** | 等於「編輯者拖一拖版位、還沒送審，下一次建置就上線了」—— 核准那道關卡完全被繞過。連帶：匯入腳本寫完版位沒有重新發布首頁，正式資料的首頁快照裡版位是空的（已一併修正） |
 | **`PublishedFaqRow` 宣告成 `DateOnly`** | Dapper 對 record 建構式不做 `DateOnly` 轉換，`GET /admin/export/faq.json` 與 `llms-full.txt` 執行期 500。編譯看不出來，而且只有匯出預覽會呼叫 |
+| 🔴 **匯出腳本的可見性條件與 API 分岔** | `Visibility.cs` 第一行就寫著「這段條件只能有一份」，但 `tools/content-export` 手寫了一份 `ci.Status = 3`，API 用的是 `PublishedVersionId IS NOT NULL AND Status <> 4`。意思是**編輯一個已上線的頁面（工作副本回到草稿）之後重新建置，那一頁會從網站上消失** —— 正是那段註解預言的症狀。而本次「存首頁版位會把首頁打回草稿」的改動會讓它每次都踩到。現已改為 `<Compile Include>` 連結同一份原始碼，**從機制上**不可能再分岔 |
 | **改網址時的自動 301 是無條件 `Add`** | slug 或分類改回曾經用過的值（A→B→A）就撞上 `Redirects` 的唯一索引 —— 編輯者拿到一個指向 slug 的 409「這個值已經有人用了」，而且**整筆內容存不進去**。改為 upsert，並把「指向現用網址」的殭屍規則清掉（那會讓 `/api/fallback` 把活著的頁面轉走）。⚠️ 只動 `Source=SystemAuto` 的；人工與遷移工具建立的規則不碰 |
 
 **連帶的行為改變**（不是漏做，是修正）：
@@ -443,7 +446,7 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 | schema | **35 張表 ＋ 165 列種子已套用**，用 `efbundle`（docs/11 §13）。⚠️ **只套到第 2 支**，見下方 |
 | 驗證 | `InitialSchema` 當時：表數 37、匿名約束 0、AI FAQ 開關 `false`、外部網域 2 筆 |
 
-### 🟡 第 3–8 支遷移（**全部尚未套用到正式庫**）
+### 🟡 第 3–9 支遷移（**全部尚未套用到正式庫**）
 
 | # | 遷移 | 內容 |
 |---|---|---|
@@ -453,6 +456,7 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 | 6 | `AddDoctorToConcernRelation` | 新的 `RelationType` |
 | 7 | `AddConcernToConcernRelation` | 新的 `RelationType` |
 | 8 | `AddSitemapFilesSetting`（2026-09-12） | 種子加一列 `seo.sitemapFiles`（sitemap 分檔設定）。**只 INSERT 一列，向後相容** |
+| 9 | `SeedRobotsTxtGuardrails`（2026-09-12） | robots.txt 的種子值加上兩行警語（不封鎖 AI 爬蟲、不要寫 `Disallow: /admin/`）。⚠️ **只在值仍是原始種子時才更新** —— EF 產出的 `UpdateData` 是無條件覆蓋，會把院方改過的 robots.txt 靜靜蓋掉 |
 
 第 3 支的四個欄位（已對本機 `Skin20_Dev` 實跑）：
 

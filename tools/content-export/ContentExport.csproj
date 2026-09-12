@@ -23,4 +23,23 @@
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
   </ItemGroup>
 
+  <!--
+    🔴 與 API **共用同一份原始碼**，不是抄一份過來。
+
+    · Visibility.cs   前台可見性判定（docs/11 §6.4）。它自己的第一行註解就是
+                      「這段條件只能有一份」—— 而 2026-09-12 之前這裡確實手寫了一份
+                      `ci.Status = 3`，與 API 的 `PublishedVersionId IS NOT NULL AND Status <> 4`
+                      分岔，症狀是「編輯一個已上線的頁面之後重新建置，那一頁從網站上消失」。
+    · ExportFormats.cs  faq.json／llms.txt／llms-full.txt 的格式。API 那支
+                      `GET /admin/export/{kind}` 是**同一支函式**的截短預覽 ——
+                      各寫一份的話，「預覽跟正式產物不一樣」不會有任何徵兆。
+
+    ⚠️ 被連結的檔案**不可以有相依**（不 using EF、不 using Models.Entities），
+       否則這個小專案會編不過。改那兩個檔時請一併在這裡 build 一次。
+  -->
+  <ItemGroup>
+    <Compile Include="../../functions/Common/Visibility.cs" Link="Shared/Visibility.cs" />
+    <Compile Include="../../functions/Common/ExportFormats.cs" Link="Shared/ExportFormats.cs" />
+  </ItemGroup>
+
 </Project>

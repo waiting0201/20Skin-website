@@ -456,8 +456,14 @@ public static class SeedData
             @"[{""key"":""pages"",""label"":""固定頁面"",""fileName"":""sitemap-pages.xml"",""sourceUnits"":[""page"",""clinic"",""case"",""faq""],""enabled"":true,""defaultChangeFreq"":""monthly"",""defaultPriority"":0.5},{""key"":""treatments"",""label"":""療程"",""fileName"":""sitemap-treatments.xml"",""sourceUnits"":[""treatment"",""term""],""enabled"":true,""defaultChangeFreq"":""weekly"",""defaultPriority"":0.8},{""key"":""concerns"",""label"":""困擾"",""fileName"":""sitemap-concerns.xml"",""sourceUnits"":[""concern""],""enabled"":true,""defaultChangeFreq"":""weekly"",""defaultPriority"":0.7},{""key"":""doctors"",""label"":""醫師"",""fileName"":""sitemap-doctors.xml"",""sourceUnits"":[""doctor""],""enabled"":true,""defaultChangeFreq"":""monthly"",""defaultPriority"":0.6},{""key"":""blog"",""label"":""文章"",""fileName"":""sitemap-blog.xml"",""sourceUnits"":[""article"",""term""],""enabled"":true,""defaultChangeFreq"":""weekly"",""defaultPriority"":0.6}]",
             SettingValueType.Json);
 
+        // ⚠️ 那兩行警語是**值的一部分**，不是程式碼註解 —— 它們要出現在後台的編輯框裡，
+        //    給實際會改這個欄位的人看。放在這裡的 C# 註解等於沒寫。
         Add("seo.robotsTxt",
-            "User-agent: *\nAllow: /\nDisallow: /search/\n\nSitemap: https://20skin.tw/sitemap.xml",
+            "# ⚠️ 不封鎖 AI 爬蟲（GPTBot／ClaudeBot／PerplexityBot…）——\n"
+            + "#    讀得到內容是 GEO 策略的先決條件（docs/03-seo-geo.md §1）。\n"
+            + "# ⚠️ 不要寫 Disallow: /admin/ —— 後台就在 /admin/，寫進公開檔案等於標示位置。\n"
+            + "#    擋索引由該路由的 X-Robots-Tag 負責，不是靠這裡。\n"
+            + "\nUser-agent: *\nAllow: /\nDisallow: /search/\n\nSitemap: https://20skin.tw/sitemap.xml",
             SettingValueType.Text);
 
         // 🔴 AI FAQ 的啟用開關**預設關閉**（docs/04 §4）：Phase 1 只交付介面，

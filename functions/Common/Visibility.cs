@@ -8,6 +8,13 @@ namespace Skin20.Api.Common;
 /// 寫兩份遲早會分岔，而分岔的症狀是<b>「列表看得到、點進去 404」</b>，
 /// 而且只在上線後才發現。
 /// </para>
+/// <para>
+/// ⚠️ <b>它真的分岔過。</b> 2026-09-12 之前 <c>tools/content-export</c> 用的是自己手寫的
+/// <c>ci.Status = 3</c>，與這裡的 <c>PublishedVersionId IS NOT NULL AND Status &lt;&gt; 4</c> 不同 ——
+/// 意思是「編輯一個已上線的頁面（工作副本回到草稿）之後重新建置，那一頁會從網站上消失」，
+/// 正是本段警告的那個症狀。現已改為 <c>&lt;Compile Include&gt;</c> 連結同一份原始碼，
+/// <b>從機制上</b>不可能再分岔。
+/// </para>
 ///
 /// <para>
 /// ⚠️ <b>可見性不綁在編輯狀態上。</b> 判定的是「<b>有沒有一版已核准的內容</b>」
@@ -40,20 +47,12 @@ public static class Visibility
         AND (ci.UnpublishAt IS NULL OR ci.UnpublishAt >  @Now)
         """;
 
-    /// <summary>
-    /// 同一段條件的 C# 版本，給 EF Core 的寫入路徑與 Timer 用。
-    /// ⚠️ 改動時<b>兩處要一起改</b>。
-    /// </summary>
-    public static bool IsPubliclyVisible(
-        int? publishedVersionId,
-        Models.Entities.ContentStatus status,
-        DateTime? publishAt,
-        DateTime? unpublishAt)
-    {
-        var now = Clock.UtcNow;
-        return publishedVersionId is not null
-            && status != Models.Entities.ContentStatus.Unpublished
-            && (publishAt is null || publishAt <= now)
-            && (unpublishAt is null || unpublishAt > now);
-    }
+    // ⚠️ 這裡原本還有一個 `IsPubliclyVisible(...)` 的 C# 版本，註解寫著「改動時兩處要一起改」。
+    //    2026-09-12 移除 —— 它**沒有任何呼叫端**，卻是同一條規則的第二份抄寫，
+    //    正好違反這個類別自己的第一條規定（「這段條件只能有一份」）。
+    //    真的需要 C# 版時請由這個常數推導，不要再手抄一份。
+    //
+    // ⚠️ 這個檔案**刻意沒有任何相依**（不 using Models.Entities）——
+    //    `tools/content-export` 用 `<Compile Include>` 連結同一份原始碼，
+    //    加相依會讓那邊編不過（見 ContentExport.csproj 的說明）。
 }

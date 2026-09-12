@@ -28,7 +28,9 @@ tools/deploy-swa.sh    部署 SWA：前台 ＋ 後台 SPA ＋ /api/fallback（�
 tools/deploy-api.sh    部署獨立 Function App（functions/ → func-20skin-web-api-prod）
                        ⚠️ 尚未對 Azure 實跑驗證，見檔頭
 tools/content-import/  mockup 內容 → 資料庫（dump／import／upload-images／golden-diff）
-tools/content-export/  資料庫 → apps/web/content/*.json（Dapper 唯讀，建置期跑）
+tools/content-export/  資料庫 → apps/web/content/*.json ＋ SEO 產物（robots／sitemap／語料）
+                       Dapper 唯讀，建置期跑。⚠️ 與 API 共用 Visibility.cs 與 ExportFormats.cs
+                       （<Compile Include>，不是抄一份）
 tools/sync-public.sh   master → public 分支（去除 reference/ output/），推 GitHub 前執行
 .githooks/pre-push     安全網：擋下含非公開路徑或過大檔案的 ref 推向 Remote_GitHub
 docs/                  工程端文件（真實來源）
@@ -111,6 +113,8 @@ scripts/
 node tools/content-import/dump.mjs /tmp/frontend-data.json   # TS 資料模組 → JSON
 node tools/content-import/import.mjs /tmp/frontend-data.json # → 資料庫（走真正的 API，需先啟動 func）
 pnpm --filter web export:content                             # 資料庫 → apps/web/content/*.json
+                                                             #   順帶產出 robots.txt／sitemap*.xml／
+                                                             #   faq.json／llms*.txt（見 docs/07 §4）
 node tools/content-import/upload-images.mjs /tmp/frontend-data.json  # 圖片 → Blob（含對帳）
 
 # 前後台建置（⚠️ 順序不可顛倒：先 admin 後 web）
