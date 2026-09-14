@@ -33,6 +33,20 @@ import { ACCOUNT, CONTAINER, blobFor } from './images.mjs'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const SOURCE_DIR = join(ROOT, 'mockup/assets/img')
 
+// 2026-09-14 起 image-sources.json 多了一批 `/legacy/treatments/…` —— 舊站的療程產品圖，
+// 來源在 tools/legacy-import/.cache/treatments/img/（fetch-treatments.mjs 抓的，扁平化檔名）。
+//
+// ⚠️ **為什麼要收進同一份對照表**：下面那段對帳會檢查「資料庫引用的每個 blobPath 都在清單裡」。
+//    療程封面另外開一支上傳腳本的話，這支就會判定那 28 個 blob 是孤兒引用而中止 ——
+//    等於為了少改五行，把整條鏈路唯一擋得住「資料庫有 URL、Blob 上沒檔案」的檢查弄壞。
+// ⚠️ 對照表裡存的是**乾淨檔名**（`/legacy/treatments/product-p22.png`），
+//    因為 blobFor() 的雜湊輸入是 basename —— 存扁平化後的快取檔名會算出不一樣的路徑。
+const LEGACY_PREFIX = '/legacy/treatments/'
+const LEGACY_DIR = join(ROOT, 'tools/legacy-import/.cache/treatments/img')
+const sourceFile = (src) => src.startsWith(LEGACY_PREFIX)
+  ? join(LEGACY_DIR, `images__product__${src.slice(LEGACY_PREFIX.length)}`)
+  : join(SOURCE_DIR, src.replace(/^\/assets\/img\//, ''))
+
 const rest = process.argv.slice(2)
 const dryRun = rest.includes('--dry-run')
 
@@ -50,14 +64,15 @@ let uploaded = 0
 const plan = []
 
 for (const { usage, src } of usages) {
-  const file = join(SOURCE_DIR, src.replace(/^\/assets\/img\//, ''))
+  const file = sourceFile(src)
   if (!existsSync(file)) { missing.push(`${src}（${usage}）`); continue }
   plan.push({ file, ...blobFor(usage, src) })
 }
 
 console.log(`來源 ${new Set(usages.map((u) => u.src)).size} 個檔案 → ${plan.length} 個 blob`)
 if (missing.length) {
-  console.error(`\n🔴 找不到 ${missing.length} 個來源檔（mockup/ 沒進版控，確認本機有這個目錄）：`)
+  console.error(`\n🔴 找不到 ${missing.length} 個來源檔（mockup/ 與 .cache/ 都沒進版控，確認本機有這兩個目錄；`)
+  console.error('   後者用 node tools/legacy-import/fetch-treatments.mjs 重抓）：')
   for (const m of missing.slice(0, 10)) console.error(`   ${m}`)
   process.exit(1)
 }
@@ -82,16 +97,40 @@ if (existsSync(contentDir)) {
       try { walk(JSON.parse(v)) } catch { /* 不是合法 JSON 就當它沒有圖 */ }
     }
   }
-  for (const f of readdirSync(contentDir)) walk(JSON.parse(readFileSync(join(contentDir, f), 'utf8')))
+  // ⚠️ content/ 底下不是只有 *.json —— 1100 篇文章匯入之後多了 article-bodies/ 這個目錄，
+  //    直接 readFileSync 會以 EISDIR 中止（2026-09-14 踩到）。內文裡的插圖要走進去看。
+  const walkDir = (dir) => {
+    for (const f of readdirSync(dir, { withFileTypes: true })) {
+      if (f.isDirectory()) walkDir(join(dir, f.name))
+      else if (f.name.endsWith('.json')) walk(JSON.parse(readFileSync(join(dir, f.name), 'utf8')))
+    }
+  }
+  walkDir(contentDir)
 
   const planned = new Set(plan.map((p) => p.blobPath))
-  const orphanRefs = [...referenced].filter((b) => !planned.has(b))
+
+  // 🔴 **對帳要對的是「Blob 上有沒有」，不是「這支會不會傳」。**
+  //    圖片來自兩條管線：這支（mockup ＋ 療程封面）與 tools/legacy-import/upload-images.mjs
+  //    （1100 篇舊文章的四千張圖）。只比對自己的清單，那四千張會被判成孤兒引用而中止 ——
+  //    2026-09-14 文章匯入之後這個檢查就一直是紅的，等於沒有在保護任何東西。
+  //    所以把儲存體上已經有的也算進來：條件仍然是「資料庫引用的每個 blob 都找得到檔案」。
+  let already = new Set()
+  try {
+    already = new Set(JSON.parse(execFileSync('az', [
+      'storage', 'blob', 'list', '--account-name', ACCOUNT, '--container-name', CONTAINER,
+      '--prefix', '2026/09/', '--auth-mode', 'login', '--query', '[].name', '-o', 'json', '--only-show-errors',
+    ], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })))
+  } catch {
+    console.log('   ⚠️ 查不到儲存體上的現有 blob（az 沒登入？）—— 對帳只比對本次清單，可能誤報。')
+  }
+
+  const orphanRefs = [...referenced].filter((b) => !planned.has(b) && !already.has(b))
   const unused = [...planned].filter((b) => !referenced.has(b))
 
-  console.log(`對帳：資料庫引用 ${referenced.size} 個、清單 ${planned.size} 個`)
+  console.log(`對帳：資料庫引用 ${referenced.size} 個、本次清單 ${planned.size} 個、儲存體已有 ${already.size} 個`)
   if (orphanRefs.length) {
-    console.error(`\n🔴 有 ${orphanRefs.length} 個 blob 被資料庫引用卻不在上傳清單裡 —— 前台會破圖。`)
-    console.error('   多半是 import.mjs 新增了 imageField() 的位置，這支沒跟著加。')
+    console.error(`\n🔴 有 ${orphanRefs.length} 個 blob 被資料庫引用，本次不會上傳、儲存體上也沒有 —— 前台會破圖。`)
+    console.error('   多半是 import.mjs 新增了 imageField() 的位置，這支與 image-sources.json 沒跟著加。')
     for (const b of orphanRefs.slice(0, 5)) console.error(`   ${b}`)
     process.exit(1)
   }

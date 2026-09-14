@@ -1,0 +1,642 @@
+{
+  "_source": "https://www.20skin.tw/product01.php … product04.php ＋ 14 個 product0N-dNN.php",
+  "_capturedAt": "2026-09-14",
+  "_producedBy": "node tools/legacy-import/parse-treatments.mjs（不連網；原始頁面由 fetch-treatments.mjs 抓）",
+  "items": [
+    {
+      "slug": "picosure-pro",
+      "categoryPage": "product01.php",
+      "category": "光療美顏",
+      "nameEn": "Picosure® Pro",
+      "nameZh": "鉑金版蜂巢皮秒雷射",
+      "indications": [
+        "黑色素",
+        "痘疤",
+        "皺紋",
+        "刺青",
+        "太田母斑",
+        "肝斑",
+        "顴骨斑"
+      ],
+      "deviceLicense": "衛署醫器輸字第028802號",
+      "image": "images/product/product-p01.png",
+      "detailPage": "product01-d01.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "色素斑",
+          "body": "常見的曬斑、雀斑、肝斑等，都統稱為色素斑。當肌膚受到陽光、賀爾蒙等刺激，細胞會自然增生黑色素以保護肌膚。有時因為斑點太過「突顯」，造成許多心理困擾。新科技的「Picosure® Pro 鉑金版蜂巢皮秒雷射」瞄準黑色素擊發、不傷表皮層、術後復原期短。台灣衛生福利部核准治療適應症：黑色素、太田母斑、肝斑、顴骨斑幫助還原天生「淨白肌」，為生活增添自信風采。"
+        },
+        {
+          "title": "刺青",
+          "body": "刺青是時下最夯自我風格展現，為青春留下永恆紀念的一種方式。不過隨著時空環境改變，肌膚因老化鬆弛影響圖騰美觀。「Picosure® Pro 鉑金版蜂巢皮秒雷射」能清除彩色刺青，降低產生疤痕機率，協助重回素淨肌膚。"
+        },
+        {
+          "title": "皺紋",
+          "body": "皺紋又分為動態及靜態紋二種，皺紋是隨著歲月流逝，不可抗拒的老化過程。同時、讓人顯得老態。「Picosure® Pro 鉑金版蜂巢皮秒雷射」能改善皺紋深度、幫助撫平細紋，重現美肌樣貌。"
+        },
+        {
+          "title": "痘疤",
+          "body": "青春期隨著肌膚油脂分泌旺盛，是青春痘最易生長時刻。有些人因肌膚組織長期發炎而過度破壞，留下如同月球表面疤疤坑坑的痕跡。這些凹疤肌膚從此伴隨著一生，時時遭受他人異樣眼光，因此造成很大心理創傷。這些凹疤因為肌膚組織纖維化，需要較長期耐心地治療，慢慢改善回平整肌膚狀態。"
+        }
+      ]
+    },
+    {
+      "slug": "capri-blue",
+      "categoryPage": "product01.php",
+      "category": "光療美顏",
+      "nameEn": "Capri",
+      "nameZh": "藍雷射",
+      "indications": [
+        "痤瘡",
+        "降低皮脂分泌",
+        "局部青春痘",
+        "滅菌"
+      ],
+      "deviceLicense": "衛署醫器輸字第035941號",
+      "image": "images/product/product-p18.png",
+      "detailPage": null,
+      "blogUrl": "https://20skinblog.com/capriblue_laser/",
+      "sections": []
+    },
+    {
+      "slug": "helios-iii",
+      "categoryPage": "product01.php",
+      "category": "光療美顏",
+      "nameEn": "D.O.E HELIOS III",
+      "nameZh": "光繞雷射",
+      "indications": [
+        "淡化斑點",
+        "膚質毛孔",
+        "痘疤"
+      ],
+      "deviceLicense": "衛署醫器輸字第028717號",
+      "image": "images/product/product-p12.png",
+      "detailPage": null,
+      "blogUrl": "https://20skinblog.com/customized-acne-scar-treatment/",
+      "sections": []
+    },
+    {
+      "slug": "er-yag",
+      "categoryPage": "product01.php",
+      "category": "光療美顏",
+      "nameEn": "Er：YAG Laser",
+      "nameZh": "鉺雅鉻雷射/汽化雷射",
+      "indications": [
+        "皮膚良性腫瘤",
+        "除痣",
+        "痘疤",
+        "疤痕"
+      ],
+      "deviceLicense": "衛署醫器輸字第021691號",
+      "image": "images/product/product-p02.png",
+      "detailPage": "product01-d02.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "皮膚良性腫瘤",
+          "body": "老人斑是常見的良性皮膚腫瘤，好發於皮膚白皙、喜愛戶外活動者。肌膚受到紫外線刺激，表皮角質細胞與黑色素細胞增生，造成肌膚老化，容易讓人誤認年紀較大，影響外觀產生心理困擾。「Er：YAGLaser鉺雅鉻雷射」雷射光將皮膚細胞水份子吸收，皮膚細胞因此瞬間被蒸發破壞，可以有效去除皮膚腫瘤。"
+        },
+        {
+          "title": "除痣",
+          "body": "痣的學名為黑色素細胞痣，生成原因分先天性與後天性，後天生成的痣多半與陽光曝曬有關。如因生長位置、大小、美觀等問題造成心理上的影響。「Er：YAGLaser鉺雅鉻雷射」汽化雷射，可有效清除黑色素，潔顏修整素肌原態。"
+        },
+        {
+          "title": "痘疤",
+          "body": "常見的紅色痘疤是因青春痘發炎，導致血管過度擴張留下紅色印記。雖不痛不癢，但造成外觀不佳困擾。因此可藉由「Er：YAG Laser鉺雅鉻雷射」專業細緻磨皮去除，重現細嫩肌膚質感。"
+        },
+        {
+          "title": "疤痕",
+          "body": "疤痕是因發炎過程波及黑色素細胞，使表皮層與真皮層的黑色素增加，導致肌膚暗沉。身上大片的暗沉傷疤，嚴重會造成觀感心理困擾，可採取「Er：YAGLaser鉺雅鉻雷射」來代謝黑色素，刺激膠原蛋白再生讓皮膚重組，使凸起或凹陷的暗沉疤痕平整。"
+        }
+      ]
+    },
+    {
+      "slug": "emface",
+      "categoryPage": "product01.php",
+      "category": "光療美顏",
+      "nameEn": "EMFACE",
+      "nameZh": "菲斯波",
+      "indications": [
+        "改善皮膚紋理和光滑度"
+      ],
+      "deviceLicense": "衛署醫器輸字第028717號",
+      "image": "images/product/product-p30.png",
+      "detailPage": null,
+      "blogUrl": "https://20skinblog.com/emface/",
+      "sections": []
+    },
+    {
+      "slug": "dermav",
+      "categoryPage": "product01.php",
+      "category": "光療美顏",
+      "nameEn": "DermaV",
+      "nameZh": "青萃光",
+      "indications": [
+        "改善肌膚微血管擴張",
+        "血管型黑眼圈及酒糟泛紅"
+      ],
+      "deviceLicense": "衛署醫器輸字第021691號",
+      "image": "images/product/product-p28.png",
+      "detailPage": "product02-d21.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "精準處理不同型態血管",
+          "body": "青萃光不僅是難得一見的雙波長血管雷射，搭載可處理淺層血管問題、對紅色素作用效果佳的532nm波長，以及能治療深層血管問題與可吸收青黑色素的1064nm波長，給各種深度不一、嚴重不一的發紅問題、血管病灶提出解方。"
+        },
+        {
+          "title": "不浪費每一發雷射能量",
+          "body": "青萃光配備智能追蹤速度與光點密度系統，更能精準運用每一發雷射能量輸出治療，精準的治療，便可避免雷射能量重疊產生肌膚不適反應，並大大降低過去傳統染料雷射治療易造成瘀青的副作用風險。"
+        },
+        {
+          "title": "熱傷害小、反黑率低",
+          "body": "青萃光的ICD高效冷卻系統，在雷射能量輸出的前後會噴灑冷媒降低溫度，治療肌膚同時可以保護皮膚表面，減少皮膚不必要的熱傷害，熱傷害小自然反黑率就能降低、縮短恢復期。"
+        }
+      ]
+    },
+    {
+      "slug": "btl-embody",
+      "categoryPage": "product01.php",
+      "category": "光療美顏",
+      "nameEn": "BTL Embody",
+      "nameZh": "倍達樂磁波刺激器",
+      "indications": [
+        "增強肌肉",
+        "打造不易多脂肪體質"
+      ],
+      "deviceLicense": "衛署醫器輸字第028717號",
+      "image": "images/product/product-p29.png",
+      "detailPage": "product02-d22.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "專利HIFEM高強度聚焦磁能技術",
+          "body": "1.8T特斯拉單位，聚焦夠強才有感!"
+        },
+        {
+          "title": "非侵入式治療",
+          "body": "無創、無痛、無恢復期；安全可信賴！"
+        },
+        {
+          "title": "市場最大探頭",
+          "body": "完整鍛鍊腹部6-8塊核心肌群/3塊臀部肌群，可大範圍刺激肌肉!"
+        }
+      ]
+    },
+    {
+      "slug": "targetcool",
+      "categoryPage": "product01.php",
+      "category": "光療美顏",
+      "nameEn": "TargetCool",
+      "nameZh": "冷凍槍(疼就酷)",
+      "indications": [
+        "舒緩疼痛",
+        "冰晶導入",
+        "冷凍治療"
+      ],
+      "deviceLicense": "衛署醫器輸字第021691號",
+      "image": "images/product/product-p26.png",
+      "detailPage": null,
+      "blogUrl": "https://20skinblog.com/targetcool/",
+      "sections": []
+    },
+    {
+      "slug": "hbot",
+      "categoryPage": "product01.php",
+      "category": "光療美顏",
+      "nameEn": "hyperbaric oxygen therapy",
+      "nameZh": "HBOT高壓氧艙",
+      "indications": [
+        "術後修復",
+        "日常保養",
+        "安全舒適"
+      ],
+      "deviceLicense": "衛署醫器輸字第028717號",
+      "image": "images/product/product-p27.png",
+      "detailPage": null,
+      "blogUrl": null,
+      "sections": []
+    },
+    {
+      "slug": "onda",
+      "categoryPage": "product01.php",
+      "category": "光療美顏",
+      "nameEn": "ONDA",
+      "nameZh": "昂達ONDA 超微波",
+      "indications": [
+        "治療頸部鬆弛",
+        "肌膚老化"
+      ],
+      "deviceLicense": "衛署醫器輸字第021691號",
+      "image": "images/product/product-p32.png",
+      "detailPage": null,
+      "blogUrl": "https://20skinblog.com/ondacoolwave_flx_ulthera/",
+      "sections": []
+    },
+    {
+      "slug": "emsella",
+      "categoryPage": "product01.php",
+      "category": "光療美顏",
+      "nameEn": "EMSELLA G動椅",
+      "nameZh": "倍達樂非侵入式治療裝置",
+      "indications": [
+        "強化盆底肌，幫助改善頻尿",
+        "漏尿"
+      ],
+      "deviceLicense": "衛署醫器輸字第028717號",
+      "image": "images/product/product-p31.png",
+      "detailPage": null,
+      "blogUrl": "https://20skinblog.com/emsella-g-stop-leaks-urinary/",
+      "sections": []
+    },
+    {
+      "slug": "sculptra",
+      "categoryPage": "product02.php",
+      "category": "微針美容",
+      "nameEn": "Sculptra",
+      "nameZh": "舒顏萃/4D聚左旋乳酸",
+      "indications": [
+        "豐盈雙頰",
+        "緊緻臉部線條",
+        "改善皺紋"
+      ],
+      "deviceLicense": "衛署醫器輸字第021227號",
+      "image": "images/product/product-p03.png",
+      "detailPage": "product02-d01.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "豐盈雙頰",
+          "body": "人體膠原蛋白會隨著老化逐漸流失，雙頰塌陷總是令人憔悴、蒼老。Sculptra 舒顏萃中的聚左旋乳酸是一種微粒注射型粉末，與水份混和後，注入真皮深層及皮下組織層，產生填充效用，讓肌膚產生自然肌嫩效果。改善因歲月造成的面容塌陷問題，幫助重建蘋果肌打造神采洋溢。"
+        },
+        {
+          "title": "緊致臉部線條",
+          "body": "許多同齡中年夫妻外出，常被誤認為「母子」或「父女」檔，讓夫妻某一方心理上產生不平衡。眼尾下垂、雙下巴鬆垮等老化現象，是因肌膚膠原蛋白流失，加上臉部肌肉鬆弛，造成肌膚下滑凹陷，「Sculptra舒顏萃」以促進膠原蛋白增生，增加肌肉支撐度，強化線條立體感並消除倦容，展現活力朝氣樣貌。"
+        },
+        {
+          "title": "改善皺紋",
+          "body": "保有個人氣質韻味，停留在最適切美麗時刻樣貌，是許多人改善皺紋所嚮往追求的夢想。竭盡力保年輕容貌在肌膚上留下睿智風采，是現代人表現成熟美麗大器態度。保留當下的容顏極致，是自我的呵護與尊重。親和、陽光朝氣個人形象，是每個人都可建立的樣貌選擇。"
+        }
+      ]
+    },
+    {
+      "slug": "radiesse",
+      "categoryPage": "product02.php",
+      "category": "微針美容",
+      "nameEn": "RADIESSE",
+      "nameZh": "再生針",
+      "indications": [
+        "輪廓拉提",
+        "膠原新生",
+        "彈力支撐"
+      ],
+      "deviceLicense": "衛署醫器輸字第022991號",
+      "image": "images/product/product-p24.png",
+      "detailPage": "product02-d19.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "輪廓拉提",
+          "body": "高黏度與高彈性的特性,協助輪廓拉提及重塑,不易位移"
+        },
+        {
+          "title": "膠原新生",
+          "body": "形成再生美學支架並啟動真皮層再生,膠原新生、調理膚質"
+        },
+        {
+          "title": "彈力支撐",
+          "body": "CMC凝膠快速填補,提供穩定又富有彈性的支撐力"
+        }
+      ]
+    },
+    {
+      "slug": "belotero-revive",
+      "categoryPage": "product02.php",
+      "category": "微針美容",
+      "nameEn": "BELOTERO REVIVE",
+      "nameZh": "素妍針",
+      "indications": [
+        "肌膚水潤光澤",
+        "撫平表淺細紋",
+        "恢復彈性緊緻"
+      ],
+      "deviceLicense": "衛署醫器輸字第021227號",
+      "image": "images/product/product-p25.png",
+      "detailPage": "product02-d18-.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "肌膚水潤光澤、撫平表淺細紋、恢復彈性緊緻",
+          "body": "REVIVE 為什麼這麼補水又保水透過針劑注射方式達到真皮深層,將真皮深層的水分帶向表面角質層以達到持續、穩定、有效的補水保水作用,由內而外的補水可持續保濕高達36週。另一個神級保濕成分-甘油(glycerol),能增加角質層穩定代謝,強化肌膚屏障來達到強效鎖水。比日常保養更一步到位的內建保濕系統,真正做到由內而外為肌膚保濕!"
+        }
+      ]
+    },
+    {
+      "slug": "restylane",
+      "categoryPage": "product02.php",
+      "category": "微針美容",
+      "nameEn": "Restylane",
+      "nameZh": "瑞絲朗 / 彈麗玻",
+      "indications": [
+        "改善輪廓",
+        "撫平紋理"
+      ],
+      "deviceLicense": "衛署醫器輸字第022991號",
+      "image": "images/product/product-p04.png",
+      "detailPage": "product02-d02.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "改善輪廓",
+          "body": "拍照時總感覺不太上相,在朋友眼中顯得黯淡無光,渴望更加魅力有型,成為群體中最閃耀巨星。「Restylane彈麗玻」玻尿酸具高度支撐力,能挺立鼻形、豐盈蘋果肌,形塑個人氣質,展現獨一無二的極致韻味,表現個人麗質自信。"
+        },
+        {
+          "title": "撫平紋理",
+          "body": "「Restylane彈麗玻」玻尿酸與「天然玻尿酸」擁有99%的相似性,穩定性佳、安全度高,可避免人體過敏反應。注入肌膚能填充彈性、撫平紋理,展現最適宜的青春樣貌,散發生氣蓬勃的萬般風情。"
+        }
+      ]
+    },
+    {
+      "slug": "xeomin",
+      "categoryPage": "product02.php",
+      "category": "微針美容",
+      "nameEn": "Xeomin",
+      "nameZh": "新一代天使肉毒",
+      "indications": [
+        "撫平動態紋路"
+      ],
+      "deviceLicense": "衛署醫器輸字第021227號",
+      "image": "images/product/product-p05.png",
+      "detailPage": "product02-d03.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "撫平動態紋路",
+          "body": "動態紋又稱為表情紋，臉部表情一經變化，魚尾紋、皺眉紋、抬頭紋等線條就不自覺傾巢而出。「新一代天使肉毒」抑制神經訊息傳遞功能，協助放鬆過度活躍肌肉，使臉部惱人線條不見蹤影，洋溢自然風采。高科技提煉的純淨XEOMIN移除「複合式蛋白質」，長期施打，人體免疫系統也不會因而產生抗體，影響效果。"
+        }
+      ]
+    },
+    {
+      "slug": null,
+      "categoryPage": "product02.php",
+      "category": "微針美容",
+      "nameEn": "Ellanse",
+      "nameZh": "洢蓮絲 / 新型膠原蛋白增生劑 / 微聚酯晶球",
+      "indications": [
+        "緊緻臉部線條",
+        "填補臉部凹陷"
+      ],
+      "deviceLicense": "衛署醫器輸字第022991號",
+      "image": "images/product/product-p06.png",
+      "detailPage": "product02-d04.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "緊緻臉部線條",
+          "body": "隨著年齡增長，肌膚內膠原蛋白逐漸流失，臉部肌肉鬆弛，造成嘴邊肉、雙下巴等憔悴、鬆垮臉部線條，凸顯老態。「Ellanse新型膠原蛋白增生劑」能夠重建肌膚彈性，拉提臉部線條，並刺激自體膠原蛋白新生，讓臉部輪廓豐潤自然、立體緊緻，重建青春活力的朝氣樣貌。"
+        },
+        {
+          "title": "填補臉部凹陷",
+          "body": "眼下的淚溝、凹陷的雙頰，總令人感覺蒼老、年輕不再。「Ellanse新型膠原蛋白增生劑」中的微聚酯晶球由CMC凝膠載體與PLC微粒子組成，注射進入肌膚皮下組織時，CMC凝膠載體能立即填充凹陷部位，產生膨潤效果。而PLC微粒子則是持續刺激自體膠原蛋白生長，新生的膠原蛋白讓肌膚重現緊緻細嫩，保有豐潤彈性肌膚。"
+        }
+      ],
+      "conflict": "radiesse：資料庫的 `radiesse` 標題寫「Radiesse 洢蓮絲」，但洢蓮絲是 Ellanse、再生針才是 RADIESSE，兩者不同廠牌。需要人決定要不要補這第 28 筆。"
+    },
+    {
+      "slug": "potenza",
+      "categoryPage": "product02.php",
+      "category": "微針電波",
+      "nameEn": "POTENZA",
+      "nameZh": "無限電波",
+      "indications": [
+        "細紋",
+        "皺紋"
+      ],
+      "deviceLicense": "衛署醫器輸字第035937號",
+      "image": "images/product/product-p22.png",
+      "detailPage": null,
+      "blogUrl": "https://20skinblog.com/potenza/",
+      "sections": []
+    },
+    {
+      "slug": "lightsheer-duet",
+      "categoryPage": "product03.php",
+      "category": "光電美容",
+      "nameEn": "LightSheer DUET",
+      "nameZh": "真空快速無痛除毛",
+      "indications": [
+        "無痛除毛",
+        "緊緻拉提"
+      ],
+      "deviceLicense": "衛署醫器輸字第021260號",
+      "image": "images/product/product-p07.png",
+      "detailPage": "product03-d01.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "無痛除毛",
+          "body": "炎熱夏季，許多女性喜愛以清涼無袖上衣和短褲展現身材，通常會除毛，避免露出毛髮的尷尬。但拔除毛髮疼痛非人人可忍，有些因不耐疼痛，只好將就保守穿衣風格。「LightSheerDUET真空快速無痛除毛」採真空原理將肌膚表皮吸起毛髮，直接破壞毛囊，輕易達成快速無痛除毛，展示婀娜多姿體態。"
+        },
+        {
+          "title": "緊致拉提",
+          "body": "除毛分為自行除毛及專業除毛二種方式。一般剛開始大家因為方便性，通常選擇在家自行處理。腋下肌膚可能因為長期拉扯，產生鬆垮、毛囊角化、色素沈澱等問題。高效能的「LightSheerDUET真空快速無痛除毛」採用二極體脈衝雷射，改善老廢角質並淡化毛囊色素殘留，還原光滑白皙狀態。"
+        }
+      ]
+    },
+    {
+      "slug": "miradry",
+      "categoryPage": "product03.php",
+      "category": "光電美容",
+      "nameEn": "MiraDry",
+      "nameZh": "清新微波/微波熱能除汗",
+      "indications": [
+        "清新微波"
+      ],
+      "deviceLicense": "衛署醫器輸字第025955號",
+      "image": "images/product/product-p08.png",
+      "detailPage": "product03-d02.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "清新微波",
+          "body": "氣候變遷、全球暖化，夏季氣溫屢創新高，「熱浪」已是不容小覷的氣候現象。流汗為身體自然散熱功能，在會議、公眾場合舉手投足時，腋下明顯的汗漬區塊總讓人尷尬，對許多業務人員造成工作困擾。多汗症的出汗量有時高達正常人五倍，只要一緊張或運動量大時就大量出汗，「MiraDry腋淨爽」微波熱能除汗藉加熱汗腺令其萎縮，讓腋下回歸舒適乾爽狀態。"
+        }
+      ]
+    },
+    {
+      "slug": "thermage-flx",
+      "categoryPage": "product03.php",
+      "category": "光電美容",
+      "nameEn": "Thermage FLX",
+      "nameZh": "鳳凰電波",
+      "indications": [
+        "非侵入式",
+        "改善皺紋細紋"
+      ],
+      "deviceLicense": "衛署醫器輸字第031638號",
+      "image": "images/product/product-p13.png",
+      "detailPage": null,
+      "blogUrl": "https://20skinblog.com/radiofrequency-skin-tightening-all-guide/",
+      "sections": []
+    },
+    {
+      "slug": "sylfirm",
+      "categoryPage": "product03.php",
+      "category": "光電美容",
+      "nameEn": "Sylfirm",
+      "nameZh": "矽谷電波X & 矽谷電波",
+      "indications": [
+        "肝斑",
+        "改善泛紅",
+        "改善毛孔"
+      ],
+      "deviceLicense": "衛署醫器輸字第031661號",
+      "image": "images/product/product-p14.png",
+      "detailPage": null,
+      "blogUrl": "https://20skinblog.com/?s=%E7%9F%BD%E8%B0%B7%E9%9B%BB%E6%B3%A2",
+      "sections": []
+    },
+    {
+      "slug": "ulthera",
+      "categoryPage": "product03.php",
+      "category": "光電美容",
+      "nameEn": "Ulthera",
+      "nameZh": "美國音波",
+      "indications": [
+        "非侵入式",
+        "拉提",
+        "細紋",
+        "皺紋"
+      ],
+      "deviceLicense": "衛署醫器輸字第025344號",
+      "image": "images/product/product-p20.png",
+      "detailPage": null,
+      "blogUrl": "https://20skinblog.com/neckwrinkles_treatments/",
+      "sections": []
+    },
+    {
+      "slug": "regenera-activa",
+      "categoryPage": "product03.php",
+      "category": "光電美容",
+      "nameEn": "Regenera Activa",
+      "nameZh": "瑞捷",
+      "indications": [
+        "毛髮",
+        "毛囊",
+        "髮根"
+      ],
+      "deviceLicense": "衛署醫器輸字第019538號",
+      "image": "images/product/product-p21.png",
+      "detailPage": null,
+      "blogUrl": "https://20skinblog.com/hair-transplant-new-way-male-baldness/",
+      "sections": []
+    },
+    {
+      "slug": "hydrafacial",
+      "categoryPage": "product04.php",
+      "category": "醫學美容護膚",
+      "nameEn": "HydraFacial",
+      "nameZh": "海菲秀",
+      "indications": [
+        "膚質易出油",
+        "粉刺",
+        "青春症",
+        "膚色暗沉"
+      ],
+      "deviceLicense": "衛署醫器輸字第019502號",
+      "image": "images/product/product-p16.png",
+      "detailPage": null,
+      "blogUrl": "https://20skinblog.com/category/other-treatment/hydrafacial/",
+      "sections": []
+    },
+    {
+      "slug": "neostrata-peel",
+      "categoryPage": "product04.php",
+      "category": "醫學美容護膚",
+      "nameEn": "Neostrata",
+      "nameZh": "果酸換膚",
+      "indications": [
+        "嚴重青春痘",
+        "囊腫",
+        "痘疤",
+        "粉刺",
+        "皮膚粗糙角化"
+      ],
+      "deviceLicense": "衛署醫器輸字第025955號",
+      "image": "images/product/product-p10.png",
+      "detailPage": "product04-d02.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "嚴重青春痘",
+          "body": "嚴重膿包型青春痘與紅色痘疤佈滿臉部。因顯眼外觀時時遭受他人異樣眼光，會造成嚴重自信心不足問題。美國果酸之父史考特醫師(Dr. EugeneJ. Van Scott)與華裔余瑞錦博士研發的AHA甘醇酸，能快速深入肌膚底層發揮作用，幫助皮膚新陳代謝，讓老廢角質自然脫落。"
+        },
+        {
+          "title": "囊腫",
+          "body": "表皮囊腫俗稱粉瘤，因為皮下組織阻塞，在真皮層內形成一個附有表皮細胞的囊袋，囊袋的內容物是堆積的皮垢。有些囊腫成半球狀突出皮膚表面，影響外觀。AHA甘醇酸可有效代謝老廢角質，幫助肌膚恢復健康狀態。"
+        },
+        {
+          "title": "痘疤",
+          "body": "因青春痘發炎留下的痘疤，在臉上留下許多紅色印記伴隨一生，長期造成許多心理困擾。果酸可促進皮膚細胞再生、加速新陳代謝，回歸乾淨白嫩肌膚。"
+        },
+        {
+          "title": "粉刺",
+          "body": "當毛孔被角質層堵住,皮脂無法順利排除，堆積在毛孔中就形成閉鎖性的白頭粉刺 ，而被堵住的毛孔有了開口,跟外界的空氣、灰塵接觸，就氧化變成黑頭粉刺。選擇合適濃度果酸進行換膚課程，可促進角質代謝，使皮膚變得光滑而細緻。"
+        },
+        {
+          "title": "皮膚粗糙角化",
+          "body": "毛孔角化症主要是皮膚角質異常增生，導致毛孔附近角質堆積，形成角栓阻塞毛囊，產生一粒粒粗糙突起的「雞皮膚」，影響外觀。果酸可幫助代謝角質，並促進真皮層內彈性纖維、膠原蛋白增生，幫助皮膚重回水嫩淨白狀態。"
+        }
+      ]
+    },
+    {
+      "slug": "retinol-peel",
+      "categoryPage": "product04.php",
+      "category": "醫學美容護膚",
+      "nameEn": "NEOSTRATA",
+      "nameZh": "A醇煥膚",
+      "indications": [
+        "痘痘",
+        "痘疤",
+        "細紋",
+        "淡化色斑"
+      ],
+      "deviceLicense": null,
+      "image": "images/product/product-p23.png",
+      "detailPage": null,
+      "blogUrl": "https://20skinblog.com/retinol-can-update-skin-condition/",
+      "sections": []
+    },
+    {
+      "slug": "neo-tec",
+      "categoryPage": "product04.php",
+      "category": "醫學美容護膚",
+      "nameEn": "NEO-TEC",
+      "nameZh": "超聲波導入儀器",
+      "indications": [
+        "美白",
+        "改善皺紋",
+        "保濕透亮皮膚"
+      ],
+      "deviceLicense": "衛署醫器製字第001524號",
+      "image": "images/product/product-p11.png",
+      "detailPage": "product04-d03.php",
+      "blogUrl": null,
+      "sections": [
+        {
+          "title": "美白",
+          "body": "自古以來，亞洲人普遍追求「膚若凝脂」狀態，因為細心呵護的白嫩肌膚是美麗品味展現。超聲波導入儀藉由高速震動，加大表皮細胞間孔道，提高GF煥白修護導入劑滲進皮膚的穿透力，幫助維持淨嫩肌膚。"
+        },
+        {
+          "title": "改善皺紋",
+          "body": "GF抗皺修護導入劑含胜肽配方，藉由超聲波導入儀器高效深層按摩，可促進肌膚吸收精華，改善歲月在肌膚上留下的痕跡，重現美肌樣貌。"
+        },
+        {
+          "title": "保濕透亮",
+          "body": "細密緊實的肌膚紋理讓皮膚表面細滑豐盈、彈性十足，超聲波導入儀器的震動能量，可加速血液循環，刺激新陳代謝，呈現年輕白皙肌膚的健康質感。"
+        }
+      ]
+    }
+  ]
+}
