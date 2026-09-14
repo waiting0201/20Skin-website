@@ -26,7 +26,7 @@
    三行、整個第一屏只剩標題。這裡只在文章頁作用域覆寫字級，不動
    --fs-display——其餘 20 個模板的 h1 不受影響（CLAUDE.md 硬性限制）。 */
 .article-head h1 {
-  font-size: clamp(1.75rem, 1.3rem + 2vw, 2.5rem); /* 28–40px，原 40–68px */
+  font-size: clamp(1.5rem, 1.2rem + 1.1vw, 2rem); /* 24–32px。40–68px → 28–40px → 這裡 */
   margin-bottom: var(--sp-4);
 }
 /* 頁首與封面**不**跟著 .article-layout 切兩欄，但寬度與左緣要跟閱讀欄一致：
@@ -193,6 +193,11 @@
 .article-content h3 {
   scroll-margin-top: calc(var(--header-h) + var(--sp-4));
 }
+/* 內文標題也要跟著 h1 降級 —— h1 縮到 24–32px 之後，吃全站 --fs-2xl（28–44px）
+   的 h2 會比文章標題還大，層級整個倒過來。同樣只在本頁作用域覆寫。
+   級距刻意拉開：h1 24–32 > h2 21–26 > h3 18 > 內文 16。 */
+.article-content h2 { font-size: clamp(1.3125rem, 1.15rem + .6vw, 1.625rem); }
+.article-content h3 { font-size: var(--fs-md); }
 .article-content h2 { margin-top: var(--sp-9); padding-bottom: var(--sp-2); position: relative; }
 .article-content h2:first-child { margin-top: 0; }
 .article-content h2::after {
