@@ -5,7 +5,7 @@
 > 分工：本檔記錄**狀態**；[`docs/`](docs/README.md) 的十二份文件記錄各領域的**規格與施工標準**；
 > [`CLAUDE.md`](CLAUDE.md) 記錄**專案規範、關鍵數字與已定案決策**。三份不要互相抄，各司其職。
 
-**最後更新**：2026-09-12
+**最後更新**：2026-09-14
 
 ---
 
@@ -34,7 +34,11 @@
 （`mock-store.ts`／`mock-seed.ts` 已刪），改走 `api.20skin.tw`；前台的 `/contact/` 表單與
 AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 
-**剩下一個缺口**：CI workflow 未進 repo（目前靠本機腳本部署）。
+~~**剩下一個缺口**：CI workflow 未進 repo（目前靠本機腳本部署）。~~
+🎉 **2026-09-14：CI/CD 全線打通。** 兩條 workflow 都已實跑成功（`api` 3m04s、`web` 3m11s），
+從此 `main` 合併即上線，本機腳本退為備援。OIDC 身分、四個 SQL 身分、secrets／vars 全部到位。
+過程踩了四個坑（immutable subject、SQL 使用者未建、密碼含 `;`、`FROM EXTERNAL PROVIDER`），
+**每一個的錯誤訊息都指不到真正的原因**，都記在 §六。
 ✅ **2026-09-14：`Redirects` 表已有 1002 列**（1000 條遷移工具產生 ＋ 2 條系統自動）—— 文章內頁 780、固定頁與療程頁 24、臻美分享列表 196。見 §六。
 ✅ **2026-09-14：10 支遷移全部套用到正式庫，Function App 也部署了新組建**（見 §六）。
 
@@ -73,7 +77,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 | **後台開發** | 🟡 | **30／30 畫面完成**，**已接上真 API**（2026-09-12，§三） |
 | **資料模型與 migrations** | ✅ | 35 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四）。共 10 支遷移，**2026-09-14 全部套用到正式庫**（§六） |
 | **API** | ✅ | 端點、服務、三支 Timer 完成，**已對真 SQL Server 端到端驗證**（§五） |
-| 部署與 CI/CD | 🟡 | **已部署並實測**（前台 ＋ 後台 ＋ 兩個 API）。兩條 workflow **2026-09-14 進 repo**（`.github/workflows/{web,api}.yml`，比照 NTI），**2026-09-14 首次實跑：兩條都正常觸發**，止於 `azure/login`（OIDC secrets 未設，見 §六）。在那之前仍靠 `tools/deploy-swa.sh` 本機部署 |
+| 部署與 CI/CD | ✅ | **CI/CD 2026-09-14 全線打通並實跑驗證**：`api` 3m04s、`web` 3m11s，兩條都綠。`api` 走完 build → `efbundle` 遷移 → 部署 → health smoke test；`web` 走完資料庫匯出 → admin SPA → `nuxt generate` → SWA 部署 → 四項 smoke test。從此 `main` 合併即上線，`tools/deploy-swa.sh` 退為本機備援。踩過的四個坑見 §六 |
 | 內容遷移（約 800 篇） | ⬜ | 需先有資料庫 |
 | 療程內容（**28 項**） | 🟡 | 適應症、許可證字號、產品圖、標題、療程↔文章關聯已全部按舊站補齊（§下）。**但 28 項的療程時間／術後照護／禁忌症舊站一項都沒有，仍需醫師投入 —— Phase 1 最大瓶頸沒有改變**，27 頁仍是 noindex 的「建置中」 |
 | 上線前驗收 | ⬜ | checklist 見 §七 |
@@ -614,7 +618,7 @@ reCAPTCHA v3 的 action 只接受 `A-Za-z/_`。原本用的是 **`questions-miss
 |---|---|---|
 | `func-20skin-web-api-prod`（受控識別） | `db_datareader` ＋ `db_datawriter`，**不給 DDL** | ✅ |
 | `fallback_readonly`（帳密） | **只有 `SELECT` `Redirects` 一張表** | ✅ 實測：讀得到 `Redirects`、讀不到 `Users` |
-| CI 遷移身分（DDL） | 待建服務主體 | ⬜ 等 repo 上 GitHub |
+| CI 遷移身分（DDL） | `db_ddladmin` ＋ `db_datareader` ＋ `db_datawriter` | ✅ `20skin-web-github-oidc`，2026-09-14 以 SID 建立（**不是** `FROM EXTERNAL PROVIDER`，見 §六）。實跑驗證：`efbundle` 已成功套用遷移 |
 
 `fallback_readonly` 的連線字串已寫進 SWA 的 `SKIN20_SQL_CONNECTION`，密碼未經對話、
 產生後直接寫入並刪除暫存。**這是全架構唯一的明文密鑰**，權限收斂到單一資料表。
@@ -653,13 +657,14 @@ OIDC 的三個 secret 還沒設，這是預期的。`Close SQL firewall` 因為�
 
 ⬜ **要讓它們真的跑完，缺的是 Azure 那邊的東西**（我這裡做不到）：
 
-| 缺什麼 | 給誰 |
+| 項目 | 狀態 |
 |---|---|
-| OIDC 服務主體 ＋ 聯合認證 | `AZURE_CLIENT_ID`／`AZURE_TENANT_ID`／`AZURE_SUBSCRIPTION_ID`（secrets） |
-| SWA 部署權杖（`az staticwebapp secrets list`） | `AZURE_STATIC_WEB_APPS_API_TOKEN`（secret） |
-| 建置期**唯讀**連線字串 | `SKIN20_EXPORT_SQL`（secret） |
-| 名稱與網址 | vars：`SITE_URL`／`API_BASE_URL`／`RECAPTCHA_SITE_KEY`／`FUNCTION_APP_NAME`／`AZURE_RESOURCE_GROUP`／`SQL_SERVER_NAME`／`SQL_DATABASE` |
-| **服務主體在 SQL 裡建成使用者並給 DDL** | 否則 `efbundle` 連得上也套不了遷移（docs/08 §J-3 的第三組身分） |
+| OIDC 服務主體 ＋ 聯合認證 | ✅ `20skin-web-github-oidc`（appId `ee20ef33-f3f4-4499-9af7-8f25ba8e1535`）。RBAC 是 **`Contributor`，範圍只給 `rg-20skin-web-prod`**，比照 NTI 只給 `NTIUS`。<br>🔴 **subject 必須用 immutable 格式，寫名字的那種對不上**（2026-09-14 實際踩到，`AADSTS700213`）：這個 repo 送出的 subject 是 `repo:waiting0201@5709750/20Skin-website@1365177944:...`，嵌的是 owner ID 與 repo ID，不是 `repo:waiting0201/20Skin-website:...`。**是 repo 層級、看建立時間**：`jabez`（2026-02 建）用名稱格式且 CI 正常，`nti`（09-02）與本 repo（09-11）都是 immutable —— 所以**照 jabez 抄會錯**。<br>⚠️ **兩條 workflow 的 subject 結尾不同**：`web.yml` 沒有 `environment:` → `:ref:refs/heads/main`；`api.yml` 有 → `:environment:production`。**兩條都要建**。<br>⚠️ NTI 那邊三條裡只有 `nti-env-production-immutable` 是有效的，另外兩條是無效殘留 —— 它的 `web.yml` 不用 OIDC（只用 SWA token），所以只補了一條就夠。**照 NTI 抄會只抄到殘留的那兩條**。<br>💡 要確認實際格式，看 run 日誌裡 `azure/login` 印的 `subject claim` 那行，不要用推的 |
+| SWA 部署權杖 ＋ OIDC 三件組 | ✅ 四個 secrets 已設（與 NTI 同樣的四個） |
+| 名稱與網址 | ✅ 七個 vars 已設。⚠️ **`SITE_URL` 是 `https://20skin.4webdemo.com` 不是正式網域** —— DNS 未切，寫正式網域會讓 smoke test 打到舊 PHP 站，`/index2.php` 回 200 而非 301，每次部署都紅在最後一步。NTI 也是這樣設的（用 SWA 預設網域）。**切 DNS 那天要一起改** |
+| 建置期**唯讀**連線字串 | ✅ `SKIN20_EXPORT_SQL`（secret）＋ SQL 使用者 `skin20_export`（`db_datareader`，2026-09-14 建）。⚠️ **NTI 沒有這個 secret，不能照抄**：NTI 是 Next.js 執行期打 API，CI 不碰資料庫；20Skin 是 Nuxt 純靜態、建置期要把內容內聯進 1845 頁（決策 14），非連不可 |
+| 🔴 **連線字串裡的密碼不要含 `;`** | 2026-09-14 實際踩到，代價比想像大。分號會讓連線字串在該處斷開，`SqlConnection` 丟 `Keyword not supported: '<密碼片段>;encrypt'` —— **而那個片段會原樣印進 Actions 日誌**。GitHub 只遮蔽完整的 secret 值，截斷後的片段遮不到，**這個 repo 又是 PUBLIC 的**，等於密碼外流。補救是換密碼（刪日誌只是治標）。`'` 與 `"` 同理 |
+| **服務主體在 SQL 裡建成使用者並給 DDL** | ⬜ 否則 `efbundle` 連得上也套不了遷移（docs/08 §J-3 的第三組身分）。🔴 **不能用 `CREATE USER ... FROM EXTERNAL PROVIDER`** —— 這台 SQL Server 沒有受控識別（`az sql server show` 回 `identity: null`），Azure SQL 無從透過 Graph 解析服務主體，會回 `Principal could not be resolved`。改用 `WITH SID = 0x33ef20eef4f399449af78f25ba8e1535, TYPE = E`（由 appId 依 GUID little-endian 轉出）。角色要 `db_ddladmin` ＋ `db_datareader` ＋ `db_datawriter` 三個：**只給 DDL 會在「表建好、正要寫 `__EFMigrationsHistory`」時失敗，留下半套狀態** |
 
 ⚠️ 另有一則不影響執行的警告：`actions/checkout@v4` 等幾個 action 仍標 Node.js 20，
 runner 已強制改用 Node 24。等官方出 v5 再換，不要現在為了消警告去釘版本。
@@ -764,8 +769,8 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
 
 | 項目 | 說明 |
 |---|---|
-| **workflow 第一次實跑** | ✅ 已進 repo（`.github/workflows/web.yml`／`api.yml`，2026-09-14）。⬜ 還沒在 GitHub 上跑過一次，且缺 secrets（`AZURE_STATIC_WEB_APPS_API_TOKEN`、OIDC 三件組）與 vars（`SITE_URL`／`API_BASE_URL`／`RECAPTCHA_SITE_KEY`／`FUNCTION_APP_NAME`／`AZURE_RESOURCE_GROUP`／`SQL_SERVER_NAME`／`SQL_DATABASE`）。**CI 遷移身分也還沒建**（見上方三組 SQL 身分） |
-| **`favicon.ico`／`sitemap.xml`／`llms.txt`** | 線上實測皆 404，三者都還沒產生 |
+| **workflow 第一次實跑** | ✅ **2026-09-14 兩條都跑成功**（`api` 34838913060、`web` 34839861953）。中間失敗五輪，四個坑都記在 §六：immutable subject、SQL 使用者未建、密碼含 `;`、`FROM EXTERNAL PROVIDER` 解析不出服務主體 |
+| **`favicon.ico`** | ⬜ 線上實測仍 404。⚠️ `sitemap.xml`／`robots.txt`／`llms.txt` **已解決** —— 2026-09-14 由 CI 的 `export:content` 產出，三者皆 200（sitemap 是索引檔，含 5 個子 sitemap） |
 | ~~部署程式碼~~ | ✅ **已部署**（見上方） |
 | ~~Azure SQL~~ | ✅ **已就緒**（見下方） |
 | 自訂網域 | `20skin.tw`／`www.20skin.tw`／`api.20skin.tw` 都還沒綁 |
