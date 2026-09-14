@@ -33,6 +33,14 @@
       }
     },
     {
+      "_comment": "字型不吃 immutable：它們被 base.css 以固定路徑參照，postbuild 的 ?v= 只改得到 HTML 裡的網址，改不到 CSS 內部的。重跑字型子集（改了 mockup 文案就要跑）之後若還是一年 immutable，回訪的讀者會缺字。一週 TTL 之後靠 304 重新驗證，成本極低。",
+      "route": "/assets/fonts/*",
+      "headers": {
+        "Cache-Control": "public, max-age=604800"
+      }
+    },
+    {
+      "_comment": "其餘 /assets 的網址由 postbuild 加上 ?v=<內容雜湊>，內容一變網址就變，immutable 才名副其實。",
       "route": "/assets/*",
       "headers": {
         "Cache-Control": "public, max-age=31536000, immutable"
