@@ -296,7 +296,7 @@ async function handleSubmit() {
         <div class="c-sechead__text">
           <span class="u-eyebrow">LOCATION</span>
           <h2>兩個院區的位置</h2>
-          <p>同在彰化二林，步行可達的距離內。</p>
+          <p>四季診所在台中市南屯區，二林四季皮膚科在彰化縣二林鎮。</p>
         </div>
         <a class="c-sechead__more" href="/clinics/">查看據點資訊 →</a>
       </div>

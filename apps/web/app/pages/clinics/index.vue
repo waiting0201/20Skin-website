@@ -137,7 +137,7 @@ const faqs = [
         <div class="c-sechead__text">
           <span class="u-eyebrow">LOCATION</span>
           <h2>兩個院區的位置</h2>
-          <p>相距步行可達，走錯的話不用重新搭車。</p>
+          <p>四季診所在台中市南屯區，二林四季皮膚科在彰化縣二林鎮，分屬兩個縣市，出發前請先確認要去哪一間。</p>
         </div>
       </div>
 
@@ -161,17 +161,17 @@ const faqs = [
         <article class="clist-step">
           <span class="clist-step__no">開車</span>
           <h3>國道與省道</h3>
-          <p>下交流道後沿主要道路直行即可抵達，兩院區相距步行可達的距離。</p>
+          <p>四季診所下國道一號 181 南屯交流道；二林四季皮膚科下國道一號北斗／埤頭交流道，逐段路線見各院區頁面。</p>
         </article>
         <article class="clist-step">
           <span class="clist-step__no">大眾運輸</span>
           <h3>客運與轉乘</h3>
-          <p>可搭乘客運至二林站後步行前往，班次請以客運業者公告為準。</p>
+          <p>大眾運輸的建議路線與轉乘方式，可於預約時一併洽詢櫃檯。</p>
         </article>
         <article class="clist-step">
           <span class="clist-step__no">停車</span>
           <h3>停車方式</h3>
-          <p>周邊停車位置與特約停車方式，可於預約時一併洽詢櫃檯。</p>
+          <p>二林四季皮膚科往前 50 公尺（右邊）設有免費專用停車場；四季診所的停車方式可於預約時洽詢櫃檯。</p>
         </article>
       </div>
     </div>

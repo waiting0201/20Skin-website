@@ -83,12 +83,16 @@ export interface Clinic {
   facebookUrl?: string
   /** Facebook 連結的顯示文字（各院區的官方粉專名稱不同）。 */
   facebookLabel?: string
-  /** 待補：mockup 全站沒有任何院區的 LINE 官方帳號連結可抄，不臆造。 */
+  /** 院區的 LINE 官方帳號（2026-09-14 自舊站 contact.php 補齊）。
+   *  ⚠️ **目前沒有任何模板渲染它** —— mockup 沒有 LINE 的版位，加上去會動到
+   *  `verify:css` 把關的標記。資料先備妥，要不要露出是設計的決定。
+   *  ⚠️ 每個院區其實有兩組（門診諮詢／自費美容諮詢），資料表只有一欄，
+   *  這裡是門診諮詢那組；另一組記在 tools/legacy-import/contact.json。 */
   lineUrl?: string
-  /** 待補：mockup 的「在 Google 地圖開啟」一律是 # 佔位連結，尚無實際網址。 */
+  /** 待補：舊站的地圖是一張手繪 png，沒有 Google 地圖網址可抄。 */
   mapUrl?: string
-  /** 待補：docs/08 §C-7 要求 decimal(9,6) 座標，地址本身也還是佔位地址
-   *  （彰化縣二林鎮○○路○○號），沒有真實地點就沒有真實座標，不臆造，
+  /** 待補：docs/08 §C-7 要求 decimal(9,6) 座標。地址已經是真的了
+   *  （2026-09-14 自舊站補齊），但舊站沒有座標，不臆造 ——
    *  JSON-LD 的 geo 屬性在座標補齊前不會輸出。 */
   latitude?: number
   longitude?: number
@@ -110,15 +114,6 @@ export interface Clinic {
   faqs: ClinicFaqItem[]
 }
 
-function nap(href: string) {
-  const entry = CLINIC_NAP.find((n) => n.href === href)
-  if (!entry) throw new Error(`clinics.ts：找不到 navigation.ts CLINIC_NAP 對應項目 ${href}`)
-  return entry
-}
-
-const sijiNap = nap('/clinics/siji/')
-const erlinNap = nap('/clinics/erlin/')
-
 // ── 資料來源：content/clinics.json（docs/09 §3）──────────────────────────
 //
 // ⚠️ 版面用的字串（英文小標、英文角色標籤、時段表格、JSON-LD 的固定描述）留在前台 ——
@@ -134,7 +129,6 @@ import { eyebrowFor } from './_presentation'
 /** 版面字串：與內容無關，改版面才會動。 */
 const PRESENTATION: Record<string, {
   eyebrow: string
-  phoneHref: string
   hoursFootnote: string
   jsonLdDescription: string
   roleLabel: string
@@ -144,24 +138,31 @@ const PRESENTATION: Record<string, {
 }> = {
   siji: {
     eyebrow: 'SIJI CLINIC',
-    phoneHref: 'tel:+886400000000',
-    hoursFootnote: '週日休診。六上午看診至 12:30。',
-    jsonLdDescription: '四季診所位於彰化縣二林鎮，提供醫學美容與光電雷射療程，週一二四五09:00–13:00／17:00–21:00，週六09:00–12:30，週三、日休診。',
+    hoursFootnote: '週三上午、週六晚間、週日休診。',
+    jsonLdDescription: '四季診所位於台中市南屯區公益路二段，提供醫學美容與光電雷射療程，並設有皮膚科健保門診。',
     roleLabel: 'MEDICAL AESTHETICS',
-    medicalSpecialty: ['Dermatology', 'CosmeticDentistry'],
+    // ⚠️ 牙科（允赫齒科）是二林的另一家診所，不是四季診所的科別 ——
+    //    這裡原本掛著 CosmeticDentistry，等於在 JSON-LD 裡對 Google 宣稱一件不存在的事。
+    medicalSpecialty: ['Dermatology'],
     facebookUrl: 'https://www.facebook.com/20skin4g88/',
     facebookLabel: '四季診所',
   },
   erlin: {
     eyebrow: 'ERLIN CLINIC',
-    phoneHref: 'tel:+886400000000',
-    hoursFootnote: '週日休診。',
-    jsonLdDescription: '二林四季皮膚科位於彰化縣二林鎮，提供皮膚科一般診療與醫學美容療程。',
+    hoursFootnote: '週三、週六晚間休診，週日全日休診。',
+    jsonLdDescription: '二林四季皮膚科位於彰化縣二林鎮儒林路二段，提供皮膚科一般診療與醫學美容療程。',
     roleLabel: 'DERMATOLOGY',
     medicalSpecialty: ['Dermatology'],
     facebookUrl: 'https://www.facebook.com/20skin.tw',
     facebookLabel: '20SKIN 美醫集團',
   },
+}
+
+/** `04-23103389` → `tel:+886423103389`。由電話推導，不另存一份 ——
+ *  兩者分岔時使用者會撥到一支不存在的號碼，而畫面上顯示的號碼看起來完全正確。 */
+function telHref(phone: string): string {
+  const digits = phone.replace(/[^0-9]/g, '')
+  return digits ? `tel:+886${digits.replace(/^0/, '')}` : ''
 }
 
 function hoursTableOf(hours: { dayOfWeek: number; startTime: string; endTime: string }[]): ClinicHoursTableRow[] {
@@ -186,7 +187,7 @@ function toClinic(record: ContentRecord): Clinic {
   const f = record.fields
   const slug = record.slug as ClinicSlug
   const look = PRESENTATION[slug] ?? {
-    eyebrow: '', phoneHref: '', hoursFootnote: '', jsonLdDescription: '', roleLabel: '', medicalSpecialty: [],
+    eyebrow: '', hoursFootnote: '', jsonLdDescription: '', roleLabel: '', medicalSpecialty: [],
   }
   const nap = CLINIC_NAP.find((n) => n.name === record.title)
   const hours = ((f.businessHours ?? []) as { dayOfWeek: number; startTime: string; endTime: string; sortOrder: number }[])
@@ -203,7 +204,7 @@ function toClinic(record: ContentRecord): Clinic {
     desc: record.summary ?? '',
     lede: intro?.lede ?? record.summary ?? '',
     phone: (f.phone as string) ?? '',
-    phoneHref: look.phoneHref,
+    phoneHref: telHref((f.phone as string) ?? ''),
     address: (f.address as string) ?? '',
     // ⚠️ 門診時段的一句話摘要與頁尾共用同一份 NAP 主資料（docs/03 §4 ③：
     //    任何不一致都會降低 AI 對這個實體的確信度）。
@@ -212,6 +213,8 @@ function toClinic(record: ContentRecord): Clinic {
     jsonLdDescription: look.jsonLdDescription,
     medicalSpecialty: look.medicalSpecialty,
     facebookUrl: look.facebookUrl,
+    lineUrl: (f.lineUrl as string) || undefined,
+    mapUrl: (f.mapUrl as string) || undefined,
     facebookLabel: look.facebookLabel,
     latitude: (f.latitude as number) || undefined,
     longitude: (f.longitude as number) || undefined,

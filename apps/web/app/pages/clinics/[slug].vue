@@ -240,7 +240,7 @@ onMounted(() => {
         <div class="c-sechead__text">
           <span class="u-eyebrow">GETTING HERE</span>
           <h2>位置與交通</h2>
-          <p>院區位於二林鎮區內，開車與大眾運輸皆可抵達。</p>
+          <p>院區位於{{ clinic.address }}，以下是開車前往的路線。</p>
         </div>
       </div>
 

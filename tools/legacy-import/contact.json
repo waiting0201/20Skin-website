@@ -1,0 +1,174 @@
+{
+  "_source": "https://www.20skin.tw/contact.php",
+  "_capturedAt": "2026-09-14",
+  "_producedBy": "node tools/legacy-import/fetch-contact.mjs 抓回原始頁面，這份 JSON 由人工對照 .cache/contact/contact.php.html 與門診時段圖填寫",
+  "_notes": [
+    "門診時段（businessHours）頁面上沒有文字，只有圖。以下是看圖判讀的結果，圖檔在 .cache/contact/img/。",
+    "dayOfWeek 沿用 docs/08 §C-7 的 schema.org 慣例：0=週日、1=週一 … 6=週六。三家的時段表都沒有週日欄位，等同週日休診。",
+    "舊站沒有經緯度、沒有 Google Maps 連結，地圖是一張手繪 png。新站要的 latitude/longitude/mapUrl 這頁抓不到。",
+    "allowance：允赫齒科（牙科）是否納入新站尚未定案，先一併抓下來。"
+  ],
+  "clinics": [
+    {
+      "key": "siji",
+      "name": "四季診所",
+      "anchor": "https://www.20skin.tw/contact.php",
+      "phone": "04-23103389",
+      "address": "台中市南屯區公益路二段120號",
+      "postalCode": null,
+      "services": [
+        { "title": "美容醫學項目(預約自費)", "items": ["光電美容", "微針美容", "光療美顏", "醫學美容護膚"] },
+        { "title": "皮膚主治項目(健保掛號)", "items": ["皮膚病專門", "青春痘專門", "敏感肌專門", "酒糟肌專門", "皮膚外科手術專門"] }
+      ],
+      "tests": ["保養品檢測"],
+      "facebook": "https://www.facebook.com/20skin4g88/",
+      "lines": [
+        { "label": "四季診所專人諮詢", "url": "https://lin.ee/mJ6rUaa" },
+        { "label": "自費美容專人諮詢", "url": "https://lin.ee/4CUkS2v" }
+      ],
+      "bookingUrl": "http://booking.20skin.tw/MainMs/Login",
+      "queueUrl": "https://www.mainpi.com/query?i=1035",
+      "scheduleArticleUrl": "https://www.20skin.tw/share_info.php?no=575",
+      "businessHoursImage": "admin/goods_pic/1150626043325.jpg",
+      "businessHours": [
+        { "dayOfWeek": 1, "startTime": "09:00", "endTime": "13:00" },
+        { "dayOfWeek": 1, "startTime": "17:00", "endTime": "21:00" },
+        { "dayOfWeek": 2, "startTime": "09:00", "endTime": "13:00" },
+        { "dayOfWeek": 2, "startTime": "17:00", "endTime": "21:00" },
+        { "dayOfWeek": 3, "startTime": "17:00", "endTime": "21:00" },
+        { "dayOfWeek": 4, "startTime": "09:00", "endTime": "13:00" },
+        { "dayOfWeek": 4, "startTime": "17:00", "endTime": "21:00" },
+        { "dayOfWeek": 5, "startTime": "09:00", "endTime": "13:00" },
+        { "dayOfWeek": 5, "startTime": "17:00", "endTime": "21:00" },
+        { "dayOfWeek": 6, "startTime": "09:00", "endTime": "13:00" }
+      ],
+      "transport": {
+        "title": "如何前往四季診所",
+        "mapImage": "images/contact/4g-map.png",
+        "byCar": [
+          "中山高速公路(一高)北下",
+          "下[181 南屯]交流道，右轉往[五權西路]方向",
+          "左轉往[環中路]方向",
+          "右轉往[公益路]方向"
+        ]
+      },
+      "photos": [
+        "images/contact/4g-space-p.jpg",
+        "images/contact/4g-space-p02.jpg",
+        "images/contact/4g-space-p03.jpg",
+        "images/contact/4g-space-p04.jpg"
+      ]
+    },
+    {
+      "key": "erlin",
+      "name": "二林四季皮膚科診所",
+      "anchor": "https://www.20skin.tw/contact.php#20",
+      "phone": "04-8958678",
+      "address": "彰化縣二林鎮儒林路二段310號",
+      "postalCode": "526",
+      "services": [
+        { "title": "美容醫學項目(預約自費)", "items": ["光電美容", "微針美容", "光療美顏", "醫學美容護膚"] },
+        { "title": "皮膚主治項目(健保掛號)", "items": ["一般皮膚疾病", "兒童皮膚過敏", "特殊皮膚疾病", "皮膚腫瘤處理"] }
+      ],
+      "tests": ["保養品檢測"],
+      "facebook": "https://www.facebook.com/20skin.tw",
+      "lines": [
+        { "label": "二林四季皮膚科專人諮詢", "url": "https://line.me/R/ti/p/%40xat.0000144991.qy6" },
+        { "label": "二林自費美容專人諮詢", "url": "https://lin.ee/1UfPh7R" }
+      ],
+      "bookingUrl": "http://booking.20skin.tw/MainMs/Login",
+      "queueUrl": "https://www.mainpi.com/query?i=823",
+      "scheduleArticleUrl": "https://www.20skin.tw/share_info.php?no=574",
+      "businessHoursImage": "admin/goods_pic/1120831030659.jpg",
+      "businessHours": [
+        { "dayOfWeek": 1, "startTime": "08:30", "endTime": "12:00" },
+        { "dayOfWeek": 1, "startTime": "15:00", "endTime": "18:00" },
+        { "dayOfWeek": 1, "startTime": "18:00", "endTime": "21:00" },
+        { "dayOfWeek": 2, "startTime": "08:30", "endTime": "12:00" },
+        { "dayOfWeek": 2, "startTime": "15:00", "endTime": "18:00" },
+        { "dayOfWeek": 2, "startTime": "18:00", "endTime": "21:00" },
+        { "dayOfWeek": 3, "startTime": "08:30", "endTime": "12:00" },
+        { "dayOfWeek": 3, "startTime": "15:00", "endTime": "18:00" },
+        { "dayOfWeek": 4, "startTime": "08:30", "endTime": "12:00" },
+        { "dayOfWeek": 4, "startTime": "15:00", "endTime": "18:00" },
+        { "dayOfWeek": 4, "startTime": "18:00", "endTime": "21:00" },
+        { "dayOfWeek": 5, "startTime": "08:30", "endTime": "12:00" },
+        { "dayOfWeek": 5, "startTime": "15:00", "endTime": "18:00" },
+        { "dayOfWeek": 5, "startTime": "18:00", "endTime": "21:00" },
+        { "dayOfWeek": 6, "startTime": "08:30", "endTime": "12:00" },
+        { "dayOfWeek": 6, "startTime": "15:00", "endTime": "18:00" }
+      ],
+      "transport": {
+        "title": "如何前往二林四季皮膚科診所",
+        "mapImage": "images/contact/20-map.png",
+        "byCar": [
+          "中山高速公路(一高)南下",
+          "下[北斗/埤頭]交流道，往[埤頭/二林]方向左轉",
+          "直行斗苑路，約15分鐘進二林市區(會看到麥當勞)",
+          "看到麥當勞後再往前1分鐘",
+          "右手邊有一間7-11 (請左轉大成路一段)",
+          "往前過健興街紅綠燈(右邊有全國電子)",
+          "下一個路口(壹咖啡)，請左轉儒林路二段",
+          "皮膚科在左邊，再往前50公尺(右邊)有皮膚科免費專用停車場"
+        ]
+      },
+      "photos": [
+        "images/contact/20-space-p.jpg",
+        "images/contact/20-space-p02.jpg",
+        "images/contact/20-space-p03.jpg",
+        "images/contact/20-space-p04.jpg"
+      ]
+    },
+    {
+      "key": "dental",
+      "name": "允赫齒科",
+      "anchor": "https://www.20skin.tw/contact.php#dental",
+      "phone": "04-8969966",
+      "address": "彰化縣二林鎮儒林路二段306號",
+      "postalCode": "526",
+      "services": [
+        { "title": "主治項目(健保掛號)", "items": ["一般牙科", "牙周治療", "假牙製作", "前牙美學", "雷射牙科", "傳統矯正", "隱形矯正", "兒童牙科", "微創植牙", "牙齦美容"] }
+      ],
+      "tests": [],
+      "facebook": "https://www.facebook.com/dental20skin/",
+      "lines": [
+        { "label": "專人諮詢", "url": "http://line.me/ti/p/%40onz0054u" }
+      ],
+      "bookingUrl": null,
+      "queueUrl": null,
+      "scheduleArticleUrl": null,
+      "notices": [
+        "開放現場掛號門診名額有限，請儘早等候！",
+        "實際門診時間請來電確認為主"
+      ],
+      "businessHoursImage": "images/contact/dental-time.png",
+      "businessHours": [
+        { "dayOfWeek": 1, "startTime": "18:00", "endTime": "20:30" },
+        { "dayOfWeek": 2, "startTime": "08:30", "endTime": "12:00" },
+        { "dayOfWeek": 3, "startTime": "14:30", "endTime": "16:30" },
+        { "dayOfWeek": 5, "startTime": "18:00", "endTime": "20:30" },
+        { "dayOfWeek": 6, "startTime": "08:30", "endTime": "12:00" }
+      ],
+      "transport": {
+        "title": "如何前往允赫齒科",
+        "mapImage": "images/contact/dental-map.png",
+        "byCar": [
+          "中山高速公路(一高)南下",
+          "下[北斗/埤頭]交流道，往[埤頭/二林]方向左轉",
+          "直行斗苑路，約15分鐘進二林市區(會看到麥當勞)",
+          "看到麥當勞後再往前1分鐘",
+          "右手邊有一間7-11 (請左轉大成路一段)",
+          "往前過健興街紅綠燈(右邊有全國電子)",
+          "下一個路口(壹咖啡)，請左轉儒林路二段",
+          "允赫齒科在左邊，再往前50公尺(右邊)有允赫齒科免費專用停車場"
+        ]
+      },
+      "photos": [
+        "images/contact/dental-space-p.jpg",
+        "images/contact/dental-space-p02.jpg",
+        "images/contact/dental-space-p03.jpg",
+        "images/contact/dental-space-p04.jpg"
+      ]
+    }
+  ]
+}
