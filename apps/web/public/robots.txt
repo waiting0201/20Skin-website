@@ -2,9 +2,7 @@
 # 直接改這個檔不會生效 —— 請在後台的「sitemap 設定」畫面改。
 
 # ⚠️ 不封鎖 AI 爬蟲（GPTBot／ClaudeBot／PerplexityBot…）——
-#    讀得到內容是 GEO 策略的先決條件（docs/03-seo-geo.md §1）。
-# ⚠️ 不要寫 Disallow: /admin/ —— 後台就在 /admin/，寫進公開檔案等於標示位置。
-#    擋索引由該路由的 X-Robots-Tag 負責，不是靠這裡。
+#    讀得到內容是 GEO 策略的先決條件。
 
 User-agent: *
 Allow: /

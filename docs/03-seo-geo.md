@@ -12,7 +12,7 @@ SEO 追求「在搜尋結果中被點擊」，GEO（Generative Engine Optimizati
 |---|---|
 | **WAF 爬蟲放行** 🔴 最高優先 | 現行 Mod_Security 對非瀏覽器 UA 回 406。須 allowlist：`Googlebot`、`Bingbot`、`GPTBot`、`OAI-SearchBot`、`ChatGPT-User`、`ClaudeBot`、`PerplexityBot`、`Google-Extended`、`Applebot`、`Applebot-Extended`。**放行後須以實際 UA 逐一驗證回應 200**，不能只改設定不驗收。 |
 | **sitemap.xml** | 分檔並以 sitemap index 串接：`sitemap-pages.xml`、`-treatments.xml`、`-concerns.xml`、`-doctors.xml`、`-blog.xml`。由後台自動生成、發布時即時更新，提交 Search Console 與 Bing Webmaster。 |
-| **robots.txt** | 加入 `Sitemap:` 指令；封鎖 `/search/` 等無價值參數頁；**不封鎖 AI 爬蟲**。**不再列 `Disallow: /admin/`** —— 後台實際位於 `/admin/`（[07](07-deployment.md) §1），寫進公開檔案等於標示位置；擋索引改由該 route 的 `X-Robots-Tag: noindex, nofollow` 負責（範本已含），且後台無對外連結，爬蟲本來就發現不到。 |
+| **robots.txt** | 加入 `Sitemap:` 指令；封鎖 `/search/` 等無價值參數頁；**不封鎖 AI 爬蟲**。**不再列 `Disallow: /admin/`** —— 後台實際位於 `/admin/`（[07](07-deployment.md) §1），寫進公開檔案等於標示位置；擋索引改由該 route 的 `X-Robots-Tag: noindex, nofollow` 負責（範本已含），且後台無對外連結，爬蟲本來就發現不到。<br>🔴 **連「為什麼不寫」這句說明也不能放進 robots.txt 的內容裡**（2026-09-14 修掉）—— 那個值原樣就是公開檔案，寫「後台就在 `/admin/`」等於親手做了它要防的事。給編輯看的警語放在後台 robots.txt 編輯框上方的說明與存檔前的防呆。 |
 | **Canonical** | 每頁唯一自我 canonical。分頁列表、年份／標籤篩選頁指向主版本 —— 約 800 篇文章的列表很容易產生大量重複頁。 |
 | **網址正規化** | 統一 https、統一 www 或非 www（擇一並全站 301）、統一結尾斜線、全小寫。四者不一致會憑空製造四倍重複內容。 |
 | **Core Web Vitals** | 目標 LCP < 2.5s、INP < 200ms、CLS < 0.1。醫美網站圖片量大，重點在圖片策略：WebP／AVIF、響應式 srcset、首屏外 lazy load、明確 width/height 防位移。 |

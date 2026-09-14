@@ -59,8 +59,7 @@ const DEFAULT_ROBOTS_TXT = `User-agent: *
 Disallow: /search/
 
 # AI 爬蟲：本站刻意放行——讀得到內容是 GEO 策略的先決條件。
-# 不要在這裡加 Disallow 擋 GPTBot／ClaudeBot／PerplexityBot 等，
-# 也不要加 Disallow: /admin/——寫進這個公開檔案等於標示後台位置。
+# 不要在這裡加 Disallow 擋 GPTBot／ClaudeBot／PerplexityBot 等。
 
 Sitemap: https://www.20skin.tw/sitemap.xml
 `

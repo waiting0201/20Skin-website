@@ -446,6 +446,9 @@ public static class SeedData
         // robots.txt 內容放設定，不寫死在建置腳本裡（docs/08 §H 末段）
         // ⚠️ 不要列 Disallow: /admin/ —— 後台實際位於 /admin/，寫進公開檔案等於標示位置。
         //    擋索引由該 route 的 X-Robots-Tag 負責（docs/03 §1）。
+        // 🔴 這句警語**不可以寫進值裡**：值就是公開的 robots.txt，寫進去等於
+        //    在公開檔案裡講出後台位置 —— 正是它要防的事。給編輯看的警語放在
+        //    後台 SitemapSettings 畫面的說明與 checkRobotsTxt() 的擋存檔。
         // sitemap 五個分檔的「設定」（是否納入、預設 changefreq／priority）。
         // 🔴 不是新表 —— docs/08 §H 說得很清楚：分檔的收錄範圍在建置期由
         //    ContentType ＋ IncludeInSitemap ＋ Status ＋ UrlPath IS NOT NULL 算出來，
@@ -456,13 +459,12 @@ public static class SeedData
             @"[{""key"":""pages"",""label"":""固定頁面"",""fileName"":""sitemap-pages.xml"",""sourceUnits"":[""page"",""clinic"",""case"",""faq""],""enabled"":true,""defaultChangeFreq"":""monthly"",""defaultPriority"":0.5},{""key"":""treatments"",""label"":""療程"",""fileName"":""sitemap-treatments.xml"",""sourceUnits"":[""treatment"",""term""],""enabled"":true,""defaultChangeFreq"":""weekly"",""defaultPriority"":0.8},{""key"":""concerns"",""label"":""困擾"",""fileName"":""sitemap-concerns.xml"",""sourceUnits"":[""concern""],""enabled"":true,""defaultChangeFreq"":""weekly"",""defaultPriority"":0.7},{""key"":""doctors"",""label"":""醫師"",""fileName"":""sitemap-doctors.xml"",""sourceUnits"":[""doctor""],""enabled"":true,""defaultChangeFreq"":""monthly"",""defaultPriority"":0.6},{""key"":""blog"",""label"":""文章"",""fileName"":""sitemap-blog.xml"",""sourceUnits"":[""article"",""term""],""enabled"":true,""defaultChangeFreq"":""weekly"",""defaultPriority"":0.6}]",
             SettingValueType.Json);
 
-        // ⚠️ 那兩行警語是**值的一部分**，不是程式碼註解 —— 它們要出現在後台的編輯框裡，
-        //    給實際會改這個欄位的人看。放在這裡的 C# 註解等於沒寫。
+        // ⚠️ 這個值會**原樣變成公開的 robots.txt**，所以裡面只留對爬蟲有意義的東西。
+        //    唯一留下的註解是「不要封鎖 AI 爬蟲」—— 它講的是這個檔案自己的規則，
+        //    不洩漏任何位置；後台那條警語刻意不在這裡，理由見上面。
         Add("seo.robotsTxt",
             "# ⚠️ 不封鎖 AI 爬蟲（GPTBot／ClaudeBot／PerplexityBot…）——\n"
-            + "#    讀得到內容是 GEO 策略的先決條件（docs/03-seo-geo.md §1）。\n"
-            + "# ⚠️ 不要寫 Disallow: /admin/ —— 後台就在 /admin/，寫進公開檔案等於標示位置。\n"
-            + "#    擋索引由該路由的 X-Robots-Tag 負責，不是靠這裡。\n"
+            + "#    讀得到內容是 GEO 策略的先決條件。\n"
             + "\nUser-agent: *\nAllow: /\nDisallow: /search/\n\nSitemap: https://20skin.tw/sitemap.xml",
             SettingValueType.Text);
 
