@@ -1,6 +1,7 @@
 // 寫入路徑的端到端測試。
 //
-// 🔴 **它會真的建立、修改、發布、刪除內容 —— 絕對不要對正式環境或 Skin20_Dev 跑。**
+// 🔴 **它會真的建立、修改、發布、刪除內容 —— 絕對不要對正式環境或本機的 `20skin-website` 跑。**
+//    （本機開發庫 2026-09-14 由 `Skin20_Dev` 更名為 `20skin-website`，與正式庫同名。）
 //    請開一顆用完即丟的資料庫：
 //
 //      docker exec sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '…' -C \

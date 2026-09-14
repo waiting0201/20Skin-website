@@ -23,7 +23,7 @@
     "//sql": "正式環境用 SQL_SERVER ＋ SQL_DATABASE，走 Managed Identity（無密鑰）。 ⚠️ 本機開發才設 SQL_CONNECTION_STRING —— docker 的 SQL Server 沒有 Entra。    正式環境設了它就等於把無密鑰的設計繞掉。",
     "SQL_CONNECTION_STRING": "",
     "SQL_SERVER": "localhost",
-    "SQL_DATABASE": "Skin20_Dev",
+    "SQL_DATABASE": "20skin-website",
     "//storage": "本機可用 Azurite；沒開的話上傳端點會失敗，其餘端點不受影響。",
     "STORAGE_ACCOUNT": "st20skinweb",
     "BLOB_PUBLIC_CONTAINER": "media",

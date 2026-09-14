@@ -48,7 +48,7 @@ function check(name, ok, detail = '') {
 }
 
 // ── 登入 ───────────────────────────────────────────────────────────────
-// ⚠️ 本機這顆 Skin20_Dev 的種子密碼在內容匯入時就被換掉了
+// ⚠️ 本機這顆 `20skin-website`（原 `Skin20_Dev`）的種子密碼在內容匯入時就被換掉了
 //    （tools/content-import/import.mjs 的 IMPORT_PASSWORD）。登入識別是 sa@system.local，不是 sa。
 const USER = process.env.SKIN20_SMOKE_USER ?? 'sa@system.local'
 const PASS = process.env.SKIN20_SMOKE_PASSWORD ?? process.env.SKIN20_IMPORT_PASSWORD ?? 'Import@2026x'
