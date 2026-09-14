@@ -15,7 +15,24 @@
 //    這正是「一個引用一個 blob」的實作方式。
 
 import { createHash } from 'node:crypto'
-import { basename, extname } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { basename, dirname, extname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+/**
+ * 用途 → 原始來源檔名的對照表。
+ *
+ * 🔴 **雜湊的輸入必須是原始檔名，不能是呼叫端當下手上的 src。**
+ *    2026-09-11 內容搬進資料庫之後，`app/data/*.ts` 的圖片欄位變成 **Blob 網址** ——
+ *    再 dump 一次拿到的 src 是 `https://…/2026/09/<hash>.jpg`，拿它的 basename 去算
+ *    會得到一個**全新的路徑**，於是資料庫指向的檔案根本不存在：前台全部破圖，
+ *    而建置與匯入都不會有任何錯誤。2026-09-14 對正式庫匯入時踩到。
+ * ⚠️ 這份表因此是 `blobFor()` 的權威輸入，`src` 只在表裡查不到時當退路。
+ *    upload-images.mjs 與 import.mjs 吃的是同一份，兩邊才不可能算出不同答案。
+ */
+const SOURCES = JSON.parse(
+  readFileSync(join(resolve(dirname(fileURLToPath(import.meta.url))), 'image-sources.json'), 'utf8'),
+)
 
 /** 公開圖片容器。與 BLOB_PUBLIC_CONTAINER 一致。 */
 export const CONTAINER = 'media'
@@ -34,11 +51,13 @@ const MIGRATION_FOLDER = '2026/09'
  *
  * @param usage 引用位置，例如 `treatment/picosure-pro/cover`。**同一個檔案在不同位置
  *              會得到不同的 blob**，這是刻意的，見檔頭。
- * @param src   來源路徑，例如 `/assets/img/product-p01.png`
+ * @param src   來源路徑，例如 `/assets/img/product-p01.png`。
+ *              ⚠️ **只在 image-sources.json 查不到 usage 時才會用到** —— 見上方說明。
  */
 export function blobFor(usage, src) {
-  const ext = extname(src).toLowerCase()
-  const hex = createHash('md5').update(`${usage}|${basename(src)}`).digest('hex')
+  const canonical = SOURCES[usage] ?? src
+  const ext = extname(canonical).toLowerCase()
+  const hex = createHash('md5').update(`${usage}|${basename(canonical)}`).digest('hex')
   const blobPath = `${MIGRATION_FOLDER}/${hex}${ext}`
   return {
     blobPath,

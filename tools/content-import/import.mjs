@@ -566,6 +566,21 @@ async function ensureTerm(type, slug, title) {
     allFaqItems.map((f, i) => [f.question, f.slug ?? `faq-${String(i + 1).padStart(2, '0')}`]),
   )
 
+  /**
+   * 讀某筆內容目前的**正向**關聯，供「合併後整組覆寫」使用。
+   *
+   * 🔴 **一定要濾掉 `isReverse`。** 2026-09-12 起 `GET /admin/{unit}/{id}` 連
+   *    「別人指著我」的反向關聯一起回傳（docs/10 §3.3）—— 那幾筆的 From 端是對方，
+   *    原樣寫回去等於宣稱「我指著對方」，方向是錯的。
+   *    症狀是 `VALIDATION_FORMAT：relationType N 不適用於此內容單元`
+   *    （2026-09-14 對正式庫匯入時踩到：療程收到了 relationType 5＝困擾→療程）。
+   * ⚠️ 而且 `PUT .../relations` 是整組覆寫，所以少濾這一道不只是多寫幾筆，是整個請求被退回。
+   */
+  const forwardRelations = async (unit, id) =>
+    (await api.detail(unit, id)).relations
+      .filter((r) => !r.isReverse)
+      .map((r) => ({ relationType: r.relationType, toContentItemId: r.toContentItemId, sortOrder: r.sortOrder, note: r.note }))
+
   const save = async (unit, id, items) => {
     // ⚠️ 去重：(relationType, toContentItemId) 在資料庫上是唯一鍵（docs/08 §D）。
     //    來源資料會產生重複 —— 例如療程的兩個標籤同時對應到同一個困擾。
@@ -658,8 +673,7 @@ async function ensureTerm(type, slug, title) {
     for (const [slug, doctorSlugs] of byTreatment) {
       const id = ids.treatment.get(slug)
       if (!id) continue
-      const current = (await api.detail('treatment', id)).relations
-        .map((r) => ({ relationType: r.relationType, toContentItemId: r.toContentItemId, sortOrder: r.sortOrder, note: r.note }))
+      const current = await forwardRelations('treatment', id)
       const add = doctorSlugs.map((ds, i) => ({
         relationType: R.treatmentToDoctor, toContentItemId: ids.doctor.get(ds), sortOrder: i,
       }))
@@ -717,8 +731,7 @@ async function ensureTerm(type, slug, title) {
     if (items.length) {
       // ⚠️ 與上面那輪是同一筆內容的關聯，必須合併送出 —— relations 端點是整組覆寫，
       //    分兩次送第二次會把第一次的洗掉。
-      const current = (await api.detail('treatment', id)).relations
-        .map((r) => ({ relationType: r.relationType, toContentItemId: r.toContentItemId, sortOrder: r.sortOrder, note: r.note }))
+      const current = await forwardRelations('treatment', id)
       await save('treatment', id, [...current, ...items])
     }
   }
