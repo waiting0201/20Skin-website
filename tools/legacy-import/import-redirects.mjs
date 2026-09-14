@@ -23,9 +23,10 @@ await api.login(process.env.ADMIN_USER ?? 'admin', process.env.ADMIN_PASSWORD, p
 
 console.log(`匯入 ${rows} 條轉址（overwrite=${overwrite}）…`)
 const r = await api.post('/admin/redirect/import', { csv, overwriteExisting: overwrite })
-console.log(`  新增 ${r.insertedCount ?? r.inserted ?? 0}　更新 ${r.updatedCount ?? r.updated ?? 0}　錯誤 ${(r.errors ?? []).length}`)
-for (const e of (r.errors ?? []).slice(0, 10)) console.log(`   第 ${e.rowNumber} 列 ${e.fromPath}：${e.message}`)
+// 欄位名稱以 RedirectImportResult 為準（functions/Models/Dtos/RedirectDtos.cs:91）。
+console.log(`  共 ${r.totalRows} 列　新增 ${r.imported}　更新 ${r.updated}　略過 ${r.skipped}　錯誤 ${(r.errors ?? []).length}`)
+for (const e of (r.errors ?? []).slice(0, 10)) console.log(`   第 ${e.rowNumber} 列 ${e.fromPath}：${e.reason}`)
 if ((r.errors ?? []).length > 10) console.log(`   …另有 ${r.errors.length - 10} 筆`)
 
 const stats = await api.get('/admin/redirect/stats')
-console.log(`\n目前 Redirects：總數 ${stats.total}　啟用 ${stats.active}　已核對 ${stats.verified}`)
+console.log(`\n目前 Redirects：${JSON.stringify(stats)}`)

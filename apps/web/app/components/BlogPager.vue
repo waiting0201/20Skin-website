@@ -39,7 +39,10 @@ const numbers = computed<(number | null)[]>(() => {
       :aria-disabled="page <= 1 ? 'true' : undefined"
     >上一頁</a>
     <template v-for="(n, i) in numbers" :key="i">
-      <span v-if="n === null" class="c-pager__item c-pager__ellipsis" aria-hidden="true">…</span>
+      <!-- ⚠️ 省略號沿用 .c-pager__item，不要新增 class —— mockup 的分頁列只有這一個
+           class，`pnpm verify:css` 會擋下任何 mockup 標記裡沒有的 class。
+           base.css 的 .c-pager__item 沒有限定 <a>，<span> 也吃得到樣式。 -->
+      <span v-if="n === null" class="c-pager__item" aria-hidden="true">…</span>
       <a
         v-else
         class="c-pager__item"

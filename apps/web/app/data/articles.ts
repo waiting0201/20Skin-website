@@ -328,10 +328,19 @@ export function getArticleBySlug(slug: string): Article | undefined {
  *    所以 `tools/content-export` 把內文拆成 `content/article-bodies/{slug}.json`，
  *    這裡用 `import.meta.glob` 動態載入 —— Vite 會為每一篇產生獨立的 chunk。
  *
- * ⚠️ 預渲染時內文會被寫進該頁的 HTML 與 `_payload.json`，
- *    所以讀者實際上不會多發一個請求。
+ * 🔴 **只在伺服器端載入（`import.meta.server`）。**
+ *    少了這個判斷，Vite 會為 1083 篇各產生一個 chunk 並**全部列進 `<link rel=prefetch>`** ——
+ *    實測首頁一頁就有 1086 個 prefetch，瀏覽器會在閒置時把 8.4 MB 的內文默默下載完，
+ *    拆檔等於完全白做，而且沒有任何錯誤或警告（2026-09-14 實測）。
+ *    用戶端不需要這些 chunk：預渲染時 `useAsyncData` 會把內文寫進該頁的 HTML 與
+ *    `_payload.json`，hydration 讀 payload，站內換頁則讀目標路由的 `_payload.json`。
+ *
+ * ⚠️ 因此這支函式**必須包在 `useAsyncData` 裡呼叫**。直接在 setup 裡 await 的話，
+ *    內文不會進 payload，用戶端就真的拿不到了（回傳空陣列，內文靜靜消失）。
  */
-const BODY_MODULES = import.meta.glob<{ default: ArticleBodyBlock[] }>('~~/content/article-bodies/*.json')
+const BODY_MODULES = import.meta.server
+  ? import.meta.glob<{ default: ArticleBodyBlock[] }>('~~/content/article-bodies/*.json')
+  : {}
 
 export async function getArticleBody(slug: string): Promise<ArticleBodyBlock[]> {
   // glob 的鍵是完整路徑，比對結尾即可。⚠️ 用 `includes(slug)` 會讓
