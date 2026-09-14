@@ -32,6 +32,8 @@ const jsonLd: Record<string, unknown> = {
   medicalSpecialty: clinic.medicalSpecialty,
   openingHoursSpecification: clinicOpeningHours(clinic),
 }
+// hasMap：把頁面上的地圖指向的同一個位置，也告訴搜尋引擎（docs/03 §2 地區軸）。
+jsonLd.hasMap = clinic.mapLinkUrl
 if (clinic.latitude != null && clinic.longitude != null) {
   jsonLd.geo = { '@type': 'GeoCoordinates', latitude: clinic.latitude, longitude: clinic.longitude }
 }
@@ -244,19 +246,22 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- 正式站上線時，此處嵌入 Google 地圖 iframe（含院區實際座標，待補，
-           見 app/data/clinics.ts 的 latitude／longitude 註解）。 -->
-      <div class="clinic-map__canvas" role="img" :aria-label="`${clinic.name}位置地圖示意，正式站將嵌入 Google 地圖`">
-        <div class="clinic-map__road clinic-map__road--h" aria-hidden="true"></div>
-        <div class="clinic-map__road clinic-map__road--v" aria-hidden="true"></div>
-        <div class="clinic-map__pin-dot" aria-hidden="true"></div>
-        <svg class="clinic-map__pin" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3" fill="#fff"/>
-        </svg>
+      <!-- Google 地圖（mockup 在這裡是純 CSS 的示意版面 —— 比稿階段禁止外部嵌入）。
+           以地址查詢的免金鑰嵌入，網址由 clinics.ts 推導，見那裡的註解。
+           loading="lazy"：地圖在第一屏之外，不讓 Google 的資源拖慢 LCP。
+           iframe 自己有 title，外層不再掛 role="img"，否則螢幕報讀會把地圖蓋成一張圖。 -->
+      <div class="clinic-map__canvas">
+        <iframe
+          :src="clinic.mapEmbedUrl"
+          :title="`${clinic.name}位置地圖`"
+          loading="lazy"
+          referrerpolicy="no-referrer-when-downgrade"
+          allowfullscreen
+        ></iframe>
       </div>
       <div class="clinic-map__foot">
         <p class="clinic-map__label">{{ clinic.address }}</p>
-        <a class="btn btn--ghost btn--sm" href="#">在 Google 地圖開啟 →</a>
+        <a class="btn btn--ghost btn--sm ext" :href="clinic.mapLinkUrl" target="_blank" rel="noopener external">在 Google 地圖開啟 →</a>
       </div>
 
       <div class="grid grid--3 clinic-transport-grid">

@@ -947,11 +947,32 @@ blob 路徑是決定性的（`md5(用途|原始檔名)`），正式庫匯入後�
 
 院區的 NAP **已於 2026-09-14 補齊**（來源：舊站 `contact.php`，見
 [tools/legacy-import/README.md](tools/legacy-import/README.md) 末段）。
-仍要院方提供的只剩三項：**經緯度／Google Maps 連結**（舊站的地圖是手繪 png，
-沒有它 JSON-LD 的 `geo` 還是輸出不了）、**大眾運輸與停車資訊**（舊站只寫自行開車），
+仍要院方提供的只剩三項：**經緯度**（舊站的地圖是手繪 png，沒有它 JSON-LD 的
+`geo` 還是輸出不了；**地圖本身已經不等它了**，見下一段）、
+**大眾運輸與停車資訊**（舊站只寫自行開車），
 以及**門診時段的書面確認** —— 舊站的時段只存在圖片裡，二林那張是 2023-08 上傳的、
 允赫齒科那張被人用白色塗掉過幾格，頁面自己也寫「實際門診時間請來電確認為主」。
 這是會讓病人白跑一趟的資料，現在站上顯示的就是它，要院方看過。
+
+### ✅ 據點頁換成真的 Google 地圖（2026-09-14）
+
+`clinics/[slug]` 的地圖不再是 mockup 的 CSS 示意圖，改成**以地址查詢的免金鑰嵌入**
+（`https://www.google.com/maps?q=<地址>&output=embed`），「在 Google 地圖開啟」也從
+`href="#"` 換成官方文件化的 `maps/search/?api=1&query=<地址>`，JSON-LD 加上 `hasMap`。
+
+* **不需要 API 金鑰、不必開 GCP 專案** —— 官方的 Maps Embed API 要金鑰，而金鑰在純靜態站
+  等於公開（得綁 referrer ＋ 計費帳號），為了一張地圖不值得。
+* **不等經緯度** —— 兩支網址查的都是地址，座標只影響 JSON-LD 的 `geo`。
+* `Clinics.MapUrl` 仍是後台可填的欄位，但**只覆蓋「開啟」連結**，不當 iframe src ——
+  Google 的分享短網址（`maps.app.goo.gl`）加不了 `output=embed`，拿它當 src 是一片空白。
+* ⚠️ **地址錯了地圖就指到別的地方，而畫面上不會有任何異常**（上一段那次把台中寫成二林，
+  現在會連地圖一起錯）。
+* ⚠️ 只做了**據點明細頁**。`clinics/index.vue` 與 `contact.vue` 的地圖仍是示意版面、
+  「在 Google 地圖開啟」仍是 `href="#"`。
+
+樣式照抄規則照走：iframe 的那條 CSS 加在 `mockup/assets/pages/08-clinic-detail.css`
+再同步（mockup 頁面本身不載入外部資源，那條規則只對 `apps/web` 生效）。
+`verify:css`／`verify:links` 全綠，1845 頁建置通過。
 
 ### ✅ 院區 NAP 已補真實資料（2026-09-14）
 

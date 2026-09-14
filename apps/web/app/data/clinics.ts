@@ -89,8 +89,15 @@ export interface Clinic {
    *  ⚠️ 每個院區其實有兩組（門診諮詢／自費美容諮詢），資料表只有一欄，
    *  這裡是門診諮詢那組；另一組記在 tools/legacy-import/contact.json。 */
   lineUrl?: string
-  /** 待補：舊站的地圖是一張手繪 png，沒有 Google 地圖網址可抄。 */
+  /** 院方自訂的「在 Google 地圖開啟」目的地（分享短網址或地標網址）。
+   *  沒填就由地址推導，見 mapLinkUrl。舊站的地圖是一張手繪 png，沒有網址可抄。 */
   mapUrl?: string
+  /** 地圖嵌入用的 iframe src。**一律由地址推導**，不吃 mapUrl ——
+   *  Google 的分享短網址（maps.app.goo.gl）加不了 `output=embed`，
+   *  拿它當 iframe src 會得到一片空白或被拒絕嵌入。 */
+  mapEmbedUrl: string
+  /** 「在 Google 地圖開啟」的目的地：有 mapUrl 用 mapUrl，否則以地址查詢。 */
+  mapLinkUrl: string
   /** 待補：docs/08 §C-7 要求 decimal(9,6) 座標。地址已經是真的了
    *  （2026-09-14 自舊站補齊），但舊站沒有座標，不臆造 ——
    *  JSON-LD 的 geo 屬性在座標補齊前不會輸出。 */
@@ -165,6 +172,19 @@ function telHref(phone: string): string {
   return digits ? `tel:+886${digits.replace(/^0/, '')}` : ''
 }
 
+/** 地圖網址：兩支都以地址查詢，**不需要 API 金鑰**，院方不必開 GCP 專案。
+ *  `output=embed` 是 Google 地圖的免金鑰嵌入形式（官方的 Maps Embed API 要金鑰，
+ *  而金鑰在純靜態站等於公開，還得綁 referrer 與計費帳號）。
+ *  座標（latitude／longitude）補齊與否都不影響這兩支網址 —— 它們查的是地址。
+ *  ⚠️ 地址錯了，地圖就會指到別的地方，而畫面上不會有任何異常。地址的單一來源是
+ *  資料庫（經 CLINIC_NAP 對齊頁尾），不要在這裡另外寫死一份。 */
+const mapQuery = (address: string) => encodeURIComponent(address)
+const mapEmbedUrlOf = (address: string) =>
+  address ? `https://www.google.com/maps?q=${mapQuery(address)}&hl=zh-TW&z=16&output=embed` : ''
+/** 官方文件化的 Maps URLs 形式（api=1），比 output=embed 穩定，適合給人點。 */
+const mapLinkUrlOf = (address: string) =>
+  address ? `https://www.google.com/maps/search/?api=1&query=${mapQuery(address)}` : ''
+
 function hoursTableOf(hours: { dayOfWeek: number; startTime: string; endTime: string }[]): ClinicHoursTableRow[] {
   const rows = new Map<string, ClinicHoursTableRow>()
   for (const h of hours) {
@@ -215,6 +235,8 @@ function toClinic(record: ContentRecord): Clinic {
     facebookUrl: look.facebookUrl,
     lineUrl: (f.lineUrl as string) || undefined,
     mapUrl: (f.mapUrl as string) || undefined,
+    mapEmbedUrl: mapEmbedUrlOf((f.address as string) ?? ''),
+    mapLinkUrl: (f.mapUrl as string) || mapLinkUrlOf((f.address as string) ?? ''),
     facebookLabel: look.facebookLabel,
     latitude: (f.latitude as number) || undefined,
     longitude: (f.longitude as number) || undefined,
