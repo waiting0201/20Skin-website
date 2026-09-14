@@ -174,7 +174,9 @@ public sealed class AppException(string code, string message, int statusCode = 4
 - `MapInboundClaims = false` 保持 claim 原名；驗證參數全開，`ClockSkew = 30s`；驗證失敗回 `null`，由呼叫端轉 401
 - claims：`sub`、`roles`、`permissions`、`is_superadmin`
 - **沒有雙因素**（2026-09-11 院方決定）：`POST /auth/login` 帳密驗證通過就直接發 token，沒有第二段。⚠️ 連帶後果是**次數限制成為唯一防線**，下一條因此不可打折
-- **登入次數限制以帳號與來源 IP 雙維度計數**，狀態存 `LoginThrottles` 表。⚠️ **不要用 `MemoryCache`** —— Flex Consumption 是多執行個體，記憶體計數形同虛設。成功登入即清除計數，**不留歷史**（[08](08-database.md) §I）
+- **登入次數限制只以帳號計數**（2026-09-14 院方決定拿掉來源 IP 維度），狀態存 `LoginThrottles` 表的 `Dimension=1` 那一列。⚠️ **不要用 `MemoryCache`** —— Flex Consumption 是多執行個體，記憶體計數形同虛設。成功登入即清除計數，**不留歷史**（[08](08-database.md) §I）
+  ⚠️ 只寫一列，所以 `RecordFailureAsync` 不需要交易；`ipAddress` 參數留著只為了寫進告警信，**不參與計數**
+  ⚠️ `ThrottleDimension.IpAddress` 沒有廢棄 —— 公開端點的頻率限制（`/contact`、`/questions/miss`）沿用那個維度（[08](08-database.md) §A-3）
 
 ### 5.3 授權集中在 Router：預設拒絕
 

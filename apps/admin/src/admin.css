@@ -394,7 +394,6 @@
 .adm-login__brand { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-6); text-align: center; }
 .adm-login__brand img { width: 48px; height: 49px; }
 .adm-login__brand h1 { font-size: var(--fs-lg); }
-.adm-login__brand p { font-size: var(--fs-xs); color: var(--ink-50); }
 .adm-login__error { padding: var(--sp-3); background: #F5E9E6; color: var(--adm-danger); border-radius: var(--adm-radius); font-size: var(--fs-sm); }
 .adm-login__hint { margin-top: var(--sp-5); font-size: var(--fs-xs); color: var(--ink-50); line-height: 1.7; border-top: 1px solid var(--line); padding-top: var(--sp-4); }
 

@@ -173,7 +173,11 @@ public enum RedirectSource : byte
     SystemAuto = 3,
 }
 
-/// <summary>登入次數限制的計數維度（docs/08 §A-3）。</summary>
+/// <summary>
+/// <c>LoginThrottles</c> 的計數維度（docs/08 §A-3）。
+/// ⚠️ 登入<b>只用 <see cref="Account"/></b>（IP 維度 2026-09-14 拿掉）；
+/// <see cref="IpAddress"/> 只剩公開端點的頻率限制在用。
+/// </summary>
 public enum ThrottleDimension : byte
 {
     Account = 1,

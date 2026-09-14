@@ -123,15 +123,17 @@ account.manage           redirect.manage            media.manage
 | 欄位 | 說明 |
 |---|---|
 | `Id` int PK | |
-| `Dimension` tinyint | 1＝帳號、2＝來源 IP |
-| `ThrottleKey` nvarchar(128) | `UserName` 或 IP 字串 |
+| `Dimension` tinyint | 1＝帳號、2＝來源 IP。⚠️ **登入只寫 1**（見下） |
+| `ThrottleKey` nvarchar(128) | 登入是 `UserName`；公開端點的頻率限制是 `{bucket}:{ip}` |
 | `FailedCount` int | |
 | `FirstFailedAt` / `LastFailedAt` | datetime2 |
 | `LockedUntil` | datetime2 NULL |
 
 UNIQUE (`Dimension`, `ThrottleKey`)
 
-[02](02-backend-cms.md) §4 定案：IP 白名單不做，因此登入次數限制必須**帳號與來源 IP 雙維度計數**（只鎖帳號擋不住撞庫，只鎖 IP 擋不住分散式嘗試）。`Dimension` 就是這兩個維度。
+[02](02-backend-cms.md) §4：登入次數限制**只以帳號計數**（2026-09-14 院方決定拿掉來源 IP 維度）。代價是「同一個 IP 輪流試多個帳號」擋不到，那一種靠 reCAPTCHA v3（[10](10-api.md) §5.1）。
+
+⚠️ **`Dimension` 這個欄位不能跟著拿掉。** `2＝來源 IP` 現在由公開寫入端點（`/contact`、`/questions/miss`）的頻率限制在用 —— 它沿用這張表，把 bucket 名稱併進 `ThrottleKey`（`{bucket}:{ip}`）。登入不再寫這個維度的列。
 
 ⚠️ **這是計數器，不是日誌。** 登入成功即刪除該帳號那筆、鎖定到期即歸零，不保留任何歷史。符合本次「不做 log」的指定。
 

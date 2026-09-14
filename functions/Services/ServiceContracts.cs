@@ -6,9 +6,13 @@ namespace Skin20.Api.Services;
 /// 登入次數限制（docs/11-backend-design.md §5.2、docs/08 §A-3）。
 ///
 /// <para>
-/// 🔴 <b>這是後台唯一的防線。</b> IP 白名單不做（2026-08-13）、雙因素不做（2026-09-11），
-/// 而後台路徑 <c>/admin/</c> 是客戶指定、與舊站相同、公開可猜。所以這裡不能打折：
-/// <b>帳號與來源 IP 雙維度計數</b> —— 只鎖帳號擋不住撞庫，只鎖 IP 擋不住分散式嘗試。
+/// 🔴 <b>這是後台唯一的硬防線。</b> IP 白名單不做（2026-08-13）、雙因素不做（2026-09-11），
+/// 而後台路徑 <c>/admin/</c> 是客戶指定、與舊站相同、公開可猜。
+/// </para>
+/// <para>
+/// ⚠️ <b>只以帳號計數，沒有來源 IP 維度</b>（2026-09-14 院方決定拿掉）。連帶後果要知道：
+/// 同一個 IP 輪流試多個帳號（密碼噴灑）這一種，次數限制<b>抓不到</b> ——
+/// 擋它的只剩 reCAPTCHA v3，而 v3 是分數制、連不上 Google 時放行（docs/10 §5.1）。
 /// </para>
 /// <para>
 /// ⚠️ <b>狀態存 DB（<c>LoginThrottles</c>），不要用 <c>MemoryCache</c></b> ——
@@ -18,14 +22,20 @@ namespace Skin20.Api.Services;
 /// </summary>
 public interface IRateLimitService
 {
-    /// <summary>超限時丟 <c>AppException.RateLimited</c>。兩個維度任一超限都擋。</summary>
-    Task EnsureNotLockedAsync(string userName, string? ipAddress, CancellationToken ct = default);
+    /// <summary>該帳號超限時丟 <c>AppException.RateLimited</c>。</summary>
+    Task EnsureNotLockedAsync(string userName, CancellationToken ct = default);
 
-    /// <summary>記一次失敗。達門檻即鎖定並<b>即時寄出告警信</b>（不留存紀錄）。</summary>
+    /// <summary>
+    /// 記該帳號的一次失敗。達門檻即鎖定並<b>即時寄出告警信</b>（不留存紀錄）。
+    /// <para>
+    /// ⚠️ <paramref name="ipAddress"/> <b>不參與計數</b>（2026-09-14 起），
+    /// 只寫進告警信讓收信的人看得到來源。
+    /// </para>
+    /// </summary>
     Task RecordFailureAsync(string userName, string? ipAddress, CancellationToken ct = default);
 
-    /// <summary>登入成功：清掉該帳號與該 IP 的計數。</summary>
-    Task ClearAsync(string userName, string? ipAddress, CancellationToken ct = default);
+    /// <summary>登入成功：清掉該帳號的計數。</summary>
+    Task ClearAsync(string userName, CancellationToken ct = default);
 
     /// <summary>公開寫入端點的頻率限制（<c>/contact</c>、<c>/questions/miss</c>）。</summary>
     Task EnsurePublicQuotaAsync(string bucket, string? ipAddress, CancellationToken ct = default);
@@ -176,7 +186,8 @@ public static class RequestContext
 
     /// <summary>
     /// 來源 IP。⚠️ Function App 前面有負載平衡器，要看 <c>X-Forwarded-For</c> 的第一段；
-    /// 取不到時回 <c>null</c>，由呼叫端決定要不要因此放行（登入限制的 IP 維度會退化成只剩帳號維度）。
+    /// 取不到時回 <c>null</c>，由呼叫端決定要不要因此放行（公開端點的頻率限制會略過該次檢查；
+    /// 登入的次數限制不受影響 —— 它只看帳號，不看 IP）。
     /// </summary>
     public static string? IpAddress(HttpRequest req)
     {

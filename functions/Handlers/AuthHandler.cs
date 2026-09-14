@@ -16,7 +16,7 @@ namespace Skin20.Api.Handlers;
 
 /// <summary>
 /// docs/10 §3.2：後台認證。🔴 **單段驗證，沒有雙因素**（2026-09-11 院方決定）——
-/// 登入次數限制是主防線，帳號與來源 IP 雙維度計數，不可打折。
+/// 登入次數限制是主防線，<b>以帳號計數</b>（來源 IP 維度 2026-09-14 院方決定拿掉）。
 ///
 /// <para>
 /// 2026-09-12 補上機器人驗證（reCAPTCHA v3）作為第二道。⚠️ 它<b>不能取代</b>次數限制：
@@ -63,8 +63,9 @@ public sealed class AuthHandler(
         var userName = body.UserName.Trim();
         var ip = RequestContext.IpAddress(req);
 
-        // 🔴 後台唯一防線：帳號與來源 IP 雙維度計數（docs/10 §3.2）。
-        await rateLimit.EnsureNotLockedAsync(userName, ip);
+        // 🔴 後台唯一的硬防線：以帳號計數（docs/10 §3.2）。
+        // ⚠️ 不看來源 IP，所以「同一個 IP 輪流試多個帳號」擋不到 —— 那一種靠下面的機器人驗證。
+        await rateLimit.EnsureNotLockedAsync(userName);
 
         // 機器人驗證（docs/10 §5，2026-09-12 定案採 reCAPTCHA v3）。
         //
@@ -100,7 +101,7 @@ public sealed class AuthHandler(
         }
 
         // 登入成功：清掉計數器（docs/08 §A-3：這是計數器不是日誌，不留歷史）。
-        await rateLimit.ClearAsync(userName, ip);
+        await rateLimit.ClearAsync(userName);
 
         if (verify == PasswordVerificationResult.SuccessRehashNeeded)
         {

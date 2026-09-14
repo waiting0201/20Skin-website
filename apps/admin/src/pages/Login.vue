@@ -89,7 +89,6 @@ async function submitNewPassword() {
           <!-- 動態綁定，理由見 src/AdminLayout.vue 同一張圖的註解。 -->
           <img :src="'/assets/logo.jpg'" alt="" width="48" height="49">
           <h1>20SKIN 後台管理</h1>
-          <p>docs/02-backend-cms.md §4：登入次數限制為帳號與來源 IP 雙維度計數。</p>
         </div>
 
         <form v-if="!mustChangePassword" class="adm-form" @submit.prevent="submitCredentials">

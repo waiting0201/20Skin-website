@@ -11,8 +11,14 @@ namespace Skin20.Api.Services;
 /// 登入次數限制（docs/11-backend-design.md §5.2、docs/08-database.md §A-3）。
 ///
 /// <para>
-/// 🔴 <b>後台唯一的防線。</b> 帳號與來源 IP 雙維度計數，狀態存 <c>LoginThrottles</c>，
-/// 不使用 <c>MemoryCache</c>（Flex Consumption 多執行個體，記憶體計數形同虛設）。
+/// 🔴 <b>後台唯一的硬防線。</b> <b>只以帳號計數</b>（來源 IP 維度 2026-09-14 院方決定拿掉），
+/// 狀態存 <c>LoginThrottles</c>，不使用 <c>MemoryCache</c>
+/// （Flex Consumption 多執行個體，記憶體計數形同虛設）。
+/// </para>
+/// <para>
+/// ⚠️ <b>拿掉 IP 維度之後有一個缺口，不要以為防護沒變</b>：同一個 IP 輪流試多個帳號
+/// （密碼噴灑）永遠碰不到任何一個帳號的門檻，這一種只剩 reCAPTCHA v3 擋（docs/10 §5.1），
+/// 而 v3 是分數制、連不上 Google 時放行。
 /// </para>
 /// <para>
 /// ⚠️ <b>這是計數器不是日誌</b>：成功登入即刪除、鎖定到期即歸零，不留歷史。
@@ -24,6 +30,8 @@ namespace Skin20.Api.Services;
 /// <see cref="LoginThrottle"/> 表</b>：把 bucket 名稱併進 <c>ThrottleKey</c>
 /// （<c>"{bucket}:{ip}"</c>），一律用 <see cref="ThrottleDimension.IpAddress"/> 維度。
 /// 這是在既有約束下的權宜設計，<b>已在回報中明列，待確認是否需要一張獨立的表</b>。
+/// ⚠️ 登入不再用 IP 維度之後，<see cref="ThrottleDimension.IpAddress"/> <b>只剩這裡在用</b> ——
+/// 要動那個列舉值之前先看這一段。
 /// </para>
 /// </summary>
 public sealed class RateLimitService(
@@ -46,59 +54,37 @@ public sealed class RateLimitService(
 
     private readonly string? _lockoutAlertEmail = configuration["Alerts:LoginLockoutEmail"];
 
-    public async Task EnsureNotLockedAsync(string userName, string? ipAddress, CancellationToken ct = default)
+    public async Task EnsureNotLockedAsync(string userName, CancellationToken ct = default)
     {
-        var now = Clock.UtcNow;
         var accountKey = NormalizeAccountKey(userName);
 
         var account = await db.LoginThrottles.AsNoTracking().SingleOrDefaultAsync(
             x => x.Dimension == ThrottleDimension.Account && x.ThrottleKey == accountKey, ct);
-        ThrowIfLocked(account, now);
-
-        if (!string.IsNullOrWhiteSpace(ipAddress))
-        {
-            var ip = await db.LoginThrottles.AsNoTracking().SingleOrDefaultAsync(
-                x => x.Dimension == ThrottleDimension.IpAddress && x.ThrottleKey == ipAddress, ct);
-            ThrowIfLocked(ip, now);
-        }
+        ThrowIfLocked(account, Clock.UtcNow);
     }
 
     public async Task RecordFailureAsync(string userName, string? ipAddress, CancellationToken ct = default)
     {
-        var now = Clock.UtcNow;
         var accountKey = NormalizeAccountKey(userName);
 
-        bool justLockedAccount = false, justLockedIp = false;
+        // 只寫一列（IP 維度已拿掉），所以不需要交易 —— SaveChanges 本身就是原子的。
+        var justLocked = await BumpAsync(accountKey, Clock.UtcNow, ct);
+        await db.SaveChangesAsync(ct);
 
-        // 多表（此處是同一張表的多列）寫入包在交易裡（docs/11 §6.1）。
-        var strategy = db.Database.CreateExecutionStrategy();
-        await strategy.ExecuteAsync(async () =>
-        {
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
-
-            justLockedAccount = await BumpAsync(ThrottleDimension.Account, accountKey, now, ct);
-            if (!string.IsNullOrWhiteSpace(ipAddress))
-                justLockedIp = await BumpAsync(ThrottleDimension.IpAddress, ipAddress, now, ct);
-
-            await db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
-        });
-
-        if (justLockedAccount || justLockedIp)
-            await SendLockoutAlertAsync(userName, ipAddress, justLockedAccount, justLockedIp, ct);
+        // ⚠️ ipAddress 到這裡只是告警信的內容，不影響鎖不鎖。
+        if (justLocked)
+            await SendLockoutAlertAsync(userName, ipAddress, ct);
     }
 
-    public async Task ClearAsync(string userName, string? ipAddress, CancellationToken ct = default)
+    public async Task ClearAsync(string userName, CancellationToken ct = default)
     {
         var accountKey = NormalizeAccountKey(userName);
 
-        var rows = await db.LoginThrottles.Where(x =>
-                (x.Dimension == ThrottleDimension.Account && x.ThrottleKey == accountKey) ||
-                (ipAddress != null && x.Dimension == ThrottleDimension.IpAddress && x.ThrottleKey == ipAddress))
-            .ToListAsync(ct);
+        var row = await db.LoginThrottles.SingleOrDefaultAsync(
+            x => x.Dimension == ThrottleDimension.Account && x.ThrottleKey == accountKey, ct);
 
-        if (rows.Count == 0) return;
-        db.LoginThrottles.RemoveRange(rows);
+        if (row is null) return;
+        db.LoginThrottles.Remove(row);
         await db.SaveChangesAsync(ct);
     }
 
@@ -166,17 +152,18 @@ public sealed class RateLimitService(
             throw AppException.RateLimited("請求過於頻繁，請稍後再試。");
     }
 
-    private async Task<bool> BumpAsync(ThrottleDimension dimension, string key, DateTime now, CancellationToken ct)
+    /// <summary>把該帳號的失敗次數加一，回傳「這一次是否剛好觸發鎖定」。</summary>
+    private async Task<bool> BumpAsync(string accountKey, DateTime now, CancellationToken ct)
     {
         var row = await db.LoginThrottles.SingleOrDefaultAsync(
-            x => x.Dimension == dimension && x.ThrottleKey == key, ct);
+            x => x.Dimension == ThrottleDimension.Account && x.ThrottleKey == accountKey, ct);
 
         if (row is null)
         {
             row = new LoginThrottle
             {
-                Dimension = dimension,
-                ThrottleKey = key,
+                Dimension = ThrottleDimension.Account,
+                ThrottleKey = accountKey,
                 FailedCount = 0,
                 FirstFailedAt = now,
             };
@@ -204,8 +191,7 @@ public sealed class RateLimitService(
         return true;
     }
 
-    private async Task SendLockoutAlertAsync(
-        string userName, string? ipAddress, bool accountLocked, bool ipLocked, CancellationToken ct)
+    private async Task SendLockoutAlertAsync(string userName, string? ipAddress, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(_lockoutAlertEmail))
         {
@@ -216,17 +202,12 @@ public sealed class RateLimitService(
             return;
         }
 
-        var reason = (accountLocked, ipLocked) switch
-        {
-            (true, true) => "帳號與來源 IP 同時觸發鎖定",
-            (true, false) => "帳號觸發鎖定",
-            _ => "來源 IP 觸發鎖定",
-        };
-
         // ⚠️ 只記帳號與 IP，不記密碼、不記嘗試內容——這是安全告警不是操作日誌
         // （docs/08 §I：不做操作日誌／登入紀錄，LoginThrottles 只留當下計數）。
+        //
+        // ⚠️ 來源 IP 只是給收信的人看的線索，不代表那個 IP 被鎖 —— 計數只看帳號。
         var body = $"""
-            後台登入次數限制觸發：{reason}
+            後台登入次數限制觸發：帳號鎖定
             帳號：{userName}
             來源 IP：{ipAddress ?? "（無法識別）"}
             時間：{Clock.Now:yyyy-MM-dd HH:mm:ss}（台北時間）

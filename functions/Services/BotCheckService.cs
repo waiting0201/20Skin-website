@@ -32,8 +32,8 @@ namespace Skin20.Api.Services;
 /// <list type="bullet">
 ///   <item><c>/contact</c> 擋下＝Google 有狀況的期間，院方收不到任何病人詢問。
 ///     少收一封詢問比多收一封垃圾信嚴重得多。</item>
-///   <item><c>/auth/login</c> 擋下＝**後台整個登不進去**。而登入真正的防線是次數限制
-///     （帳號 ＋ 來源 IP 雙維度，docs/02 §4），那一道不受 Google 影響。</item>
+///   <item><c>/auth/login</c> 擋下＝**後台整個登不進去**。而登入真正的硬防線是次數限制
+///     （<b>只以帳號計數</b>，docs/02 §4），那一道不受 Google 影響。</item>
 /// </list>
 /// <para>
 /// ⚠️ 所以「放行」只發生在<b>傳輸層失敗</b>（連不上、逾時、回應不是預期格式）。

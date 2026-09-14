@@ -104,8 +104,10 @@ public sealed class RolePermission
 /// <summary>
 /// 登入次數限制的計數器（docs/08 §A-3）。
 /// <para>
-/// 🔴 IP 白名單不做（2026-08-13）、雙因素不做（2026-09-11），所以這是<b>唯一的防線</b>。
-/// 必須<b>帳號與來源 IP 雙維度</b>計數：只鎖帳號擋不住撞庫，只鎖 IP 擋不住分散式嘗試。
+/// 🔴 IP 白名單不做（2026-08-13）、雙因素不做（2026-09-11），所以這是<b>唯一的硬防線</b>。
+/// <b>登入只以帳號計數</b>（來源 IP 維度 2026-09-14 院方決定拿掉）——
+/// <c>ThrottleDimension.IpAddress</c> 現在只服務公開端點的頻率限制
+/// （<c>RateLimitService.EnsurePublicQuotaAsync</c>），登入不再寫那個維度的列。
 /// </para>
 /// <para>
 /// ⚠️ <b>這是計數器，不是日誌。</b> 登入成功即刪除該帳號那筆、鎖定到期即歸零，
@@ -117,7 +119,7 @@ public sealed class LoginThrottle
     public int Id { get; set; }
     public ThrottleDimension Dimension { get; set; }
 
-    /// <summary><c>UserName</c> 或 IP 字串。</summary>
+    /// <summary>登入是 <c>UserName</c>；公開端點的頻率限制是 <c>"{bucket}:{ip}"</c>。</summary>
     public string ThrottleKey { get; set; } = string.Empty;
 
     public int FailedCount { get; set; }
