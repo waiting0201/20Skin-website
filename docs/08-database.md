@@ -270,7 +270,7 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 
 ⚠️ **`UrlPath` 依賴 `CategoryTermId`** —— `/treatments/{分類}/{slug}/`。換分類就會改網址，因此**換分類時應用程式必須自動寫一筆 `Redirects`**（§H，`Source=3`）。[02](02-backend-cms.md) §1 說「分類是實體之後，療程換分類是後台操作」，schema 要讓這件事可以安全執行，不是只讓它可以按。
 
-⚠️ 27 項療程中 **12 項無站內內容需從零撰寫**（[06](06-page-inventory.md) §3）。這 12 筆會長時間停在 `Status=1 草稿`，列表畫面要能篩出來。
+⚠️ 28 項療程（2026-09-14 由 27 更正）**全部**缺療程時間／術後照護／禁忌症，需醫師撰寫（[06](06-page-inventory.md) §3）。適應症、許可證字號與產品圖已自舊站補齊，但前台的「有沒有完整內容」判斷看的是 `facts`，所以這 28 筆會長時間停在未完成狀態，列表畫面要能篩出來。
 
 ### C-2 `Doctors` ＋ `DoctorTags` ＋ `DoctorCredentials` ＋ `DoctorSchedules`
 

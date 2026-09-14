@@ -121,3 +121,148 @@ API 只收 `^[a-z0-9]+(-[a-z0-9]+)*$`，而 WP 有 68 篇用底線、
 所以日後若決定支援行內連結，資料已經在資料庫裡，
 **不必為了這件事再對舊站抓一次 1100 篇**。
 `bodyBlocks` 在 API 是原樣存 JSON、沒有結構驗證，多帶欄位是安全的。
+
+---
+
+## 另外抓的一頁：contact.php（院區資料）
+
+文章之外，**三個院區的地址、電話、LINE、交通與空間照只存在 `contact.php`**。
+
+```bash
+node tools/legacy-import/fetch-contact.mjs
+#   → .cache/contact/contact.php.html      原始頁面
+#   → .cache/contact/img/*                 18 張圖（門診時段表 ＋ 手繪地圖 ＋ 空間照）
+#   → tools/legacy-import/contact.json     人工對照後的結構化資料（進版控）
+
+node tools/legacy-import/import-contact.mjs --dry-run   # 先看一遍要改什麼
+node tools/legacy-import/import-contact.mjs             # contact.json → 資料庫（走 API，需先啟動 func）
+SKIN20_EXPORT_SQL=… pnpm --filter web export:content    # 資料庫 → content/*.json
+```
+
+⚠️ **`import-contact.mjs` 只寫 `contact.php` 抓得到的欄位**：地址、電話、LINE、門診時段、
+開車路線。經緯度、`mapUrl`、大眾運輸與停車資訊**刻意不碰** ——
+地圖指錯地方比沒有地圖糟。
+
+`contact.json` **不是腳本產的** —— 只有三筆，而且時段得看圖判讀，所以是人工填的，
+改了舊站要自己對一次。抓回來的當下（2026-09-14）：
+
+| | 電話 | 地址 |
+|---|---|---|
+| 四季診所 | 04-23103389 | **台中市南屯區**公益路二段120號 |
+| 二林四季皮膚科診所 | 04-8958678 | 526 彰化縣二林鎮儒林路二段310號 |
+| 允赫齒科 | 04-8969966 | 526 彰化縣二林鎮儒林路二段306號 |
+
+### 抓這一頁踩到的坑
+
+| 現象 | 原因 |
+|---|---|
+| `contact.php` 回 **409** ＋ 一段 JS | Mod_Security 的第二道關卡，跟 CLAUDE.md 記的「非瀏覽器 UA 回 406」是不同一件事。帶 `Cookie: humans_21909=1` 就 200 |
+| 抓不到門診時間 | **頁面上沒有任何一段文字寫時段**，三家都是一張圖。`contact.json` 的 `businessHours` 是看圖填的 |
+| 允赫齒科的時段表看起來只剩 5 格 | `dental-time.png` 是 **RGBA**，被關掉的格子是**用白色塗掉的**（不是刪掉）。在黑底上打開會看到底下原本的 ○ —— 也就是這張表被改過，現存內容只剩「一晚、二早、三午、五晚、六早」 |
+
+### 三件要先問院方，不要直接照抄上線
+
+1. **四季診所在台中，不在二林。**（已於 2026-09-14 改掉，記在這裡是因為它值得記得）
+   佔位資料把兩家都寫成彰化縣二林鎮，於是「兩院區相距步行可達」這種話寫進了三個模板。
+   **佔位資料不會只錯在自己那一格** —— 它會長出一批建立在它之上的文案。
+2. **門診時段的可信度存疑。** 時段圖的檔名是民國年的上傳時間 ——
+   四季是 `1150626`（2026-06-26），**二林是 `1120831`（2023-08-31，三年沒換過）**；
+   允赫齒科那張還被塗改過，頁面自己也寫「實際門診時間請來電確認為主」。
+   **上線前必須由院方書面確認**，這是會讓病人白跑一趟的資料。
+3. **允赫齒科（牙科）要不要納入新站尚未定案。** 資料先抓齊，`clinics.json` 目前只有兩家。
+
+### 這頁抓不到、新站卻需要的
+
+- **經緯度與 Google Maps 連結** —— 舊站的地圖是一張手繪 png，`latitude`／`longitude`／`mapUrl` 都得另外補。
+- **大眾運輸與停車資訊** —— 舊站只寫「自行開車」。
+- **空間照只有 750×450**，做首圖偏小；`reference/` 裡的院方原始照片解析度高得多，優先用那批。
+
+---
+
+## 又一頁：product01–04.php（療程資料）
+
+```bash
+node tools/legacy-import/fetch-treatments.mjs     # 4 個分類頁 ＋ 14 個細節頁 ＋ 28 張產品圖 → .cache/treatments/
+node tools/legacy-import/parse-treatments.mjs     # → tools/legacy-import/treatments.json（進版控）
+node tools/legacy-import/import-treatments.mjs --dry-run
+node tools/legacy-import/import-treatments.mjs    # → 資料庫（走 API，需先啟動 func）
+```
+
+**分類頁才是主要來源，不是細節頁。** 28 項在分類頁上就帶了分類、英文名、中文名、適應症、
+醫療器材許可證字號與產品圖；站內細節頁只有 14 頁，提供「小標題 ＋ 段落」——
+正好是 `Treatments.Indications` 的 `items[].title` 與 `.desc`。
+
+### 🔴 28 項，不是 27（已補上第 28 筆）
+
+舊站把 **RADIESSE（再生針）** 與 **Ellanse（洢蓮絲）** 列成兩項，
+而資料庫只有一筆 `radiesse`、標題卻寫「**Radiesse 洢蓮絲**」——
+洢蓮絲是 Ellansé（PCL）、再生針是 Radiesse（CaHA），**不同廠牌的不同產品被併成一筆**。
+
+2026-09-14 依「資料按照舊網站」處理：`radiesse` 的標題改回「Radiesse 再生針」，
+`ellanse`（`/treatments/microneedle/ellanse/`）補建為第 28 筆。
+
+### 🔴 許可證字號有 16 項在舊站上是重複的
+
+| 字號 | 被掛在幾項身上 |
+|---|---|
+| 衛署醫器輸字第028717號 | **5 項** —— 光繞雷射、EMFACE、BTL Embody、高壓氧艙、EMSELLA |
+| 衛署醫器輸字第021691號 | 4 項 —— 鉺雅鉻雷射、DermaV、TargetCool、ONDA |
+| 衛署醫器輸字第021227號 | 3 項 —— Sculptra、Belotero Revive、Xeomin |
+| 衛署醫器輸字第022991號 | 3 項 —— Radiesse、Restylane、Ellansé |
+| 衛署醫器輸字第025955號 | 2 項 —— MiraDry、果酸換膚 |
+
+許可證字號是主管機關核發給**單一品項**的識別碼，重複就代表至少有一項是錯的。
+**照搬仍是決定（2026-09-14「資料按照舊網站」）** —— 這些字號現在就公開在舊站上，
+搬過來不是產生新的宣稱。`import-treatments.mjs` 每次執行都會把重複清單印出來。
+⚠️ 28 項都該由院方核對；相關敘述請以主管機關函釋及院方法務意見為準。
+
+### 中文名改採舊站的說法（18 項）
+
+新站原本用的是市場通稱，2026-09-14 一律改回舊站：
+`POTENZA 黃金電波` → `無限電波`、`EMFACE 恰恰電波` → `菲斯波`、
+`EMSELLA 幸福椅` → `倍達樂非侵入式治療裝置`、`Ulthera 超音波拉提` → `美國音波`⋯
+
+⚠️ **只換中文那一段，英文前綴保留。** 標題格式在 28 筆之間本來就不一致
+（有 5 筆根本沒有英文前綴），統一格式是設計決定，不是資料搬遷該做的事。
+
+⚠️ **分類沒有跟著舊站改。** 舊站的四個分類（光療美顏／微針美容／光電美容／醫學美容護膚）
+與新站的 `laser`／`photoelectric`／`microneedle`／`skincare` **不是同一套切法**。
+分類是 [docs/01](../../docs/01-sitemap.md) §1 的定案值，而且決定 `urlPath` ——
+改它等於改 28 個網址，那是資訊架構的決定，不是資料搬遷。
+
+### 產品圖：28 張，走 content-import 的上傳管線
+
+去背 PNG（550–1444px）已上傳，28 項全部有封面。對照表在
+`tools/content-import/image-sources.json`，來源檔在 `.cache/treatments/img/`：
+
+```bash
+node tools/content-import/upload-images.mjs --dry-run
+node tools/content-import/upload-images.mjs      # 需要 az 身分對 st20skinweb 有寫入權限
+```
+
+⚠️ **刻意放進既有的對照表，不另開一支上傳腳本** —— 那支腳本的對帳會檢查
+「資料庫引用的每個 blobPath 都找得到檔案」，療程封面若不在它的視野裡就會被判成孤兒引用。
+順帶修好那段對帳：它原本只比對自己的清單，所以 1100 篇文章的四千張圖（另一條管線傳的）
+一直被誤判，2026-09-14 起改成把儲存體上已有的也算進來。
+
+⚠️ `er-yag` 的封面由 `product-p17.png` 改為舊站實際使用的 `product-p02.png`。
+
+### 12 個外連 blog 的療程：不必重抓，改成站內關聯
+
+舊站那 12 個「more」按鈕指向 `20skinblog.com`，而那 391 篇已經在資料庫裡了。
+`import-treatments.mjs` 把它們改寫成 `treatmentToArticle` 關聯（**11 筆**），
+權重不再送往外部網域（[docs/01](../../docs/01-sitemap.md) §決策二）。
+兩筆對不到文章，因為舊站連的根本不是文章：
+
+| 療程 | 舊站連到 |
+|---|---|
+| `sylfirm` | `?s=矽谷電波` —— **站內搜尋結果頁**（站內有 7 篇矽谷電波的文章，挑哪篇是編輯決定） |
+| `hydrafacial` | `/category/other-treatment/hydrafacial/` —— **分類頁**（站內有 2 篇） |
+
+### 搬完之後療程頁仍然是「內容建置中」，這是對的
+
+舊站**完全沒有** `facts`／`durationText`／`sessionsText`／`aftercare`／
+`contraindications`／`mechanism` —— 療程時間、恢復期、術後照護、禁忌症一項都沒有。
+前台的判斷式是 `summary && facts?.length`（`pages/treatments/[category]/[slug].vue`），
+所以 26 頁仍然顯示精簡版並且 `noindex`。**這是刻意的**：一個對外說「建置中」的療程頁
+比沒有那一頁更糟，它會進 sitemap、會被 Google 索引、會被 AI 當成院方對該療程的正式說明。

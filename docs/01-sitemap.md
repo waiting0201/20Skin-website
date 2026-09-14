@@ -99,7 +99,9 @@
 
 ### 決策三：`20skinblog.com` 全站整併進 `/blog/`
 
-27 項療程中有 12 項直接外連 blog 站。主站每次內部連結都在把權重送往外部網域，而 blog 站累積的外部連結也無法回饋主站。
+28 項療程中有 12 項直接外連 blog 站。主站每次內部連結都在把權重送往外部網域，而 blog 站累積的外部連結也無法回饋主站。
+
+> 2026-09-14：那 12 個外連已改寫成站內的「療程 → 文章」關聯（11 筆；另 2 筆舊站連的是搜尋結果頁與分類頁，不是文章）。見 [tools/legacy-import/README.md](../tools/legacy-import/README.md)。
 
 **本專案的範圍是「把文章與圖片抓回來」，保留原 slug**（`20skinblog.com/emface/` → `20skin.tw/blog/emface/`）。
 

@@ -75,7 +75,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 | **API** | ✅ | 端點、服務、三支 Timer 完成，**已對真 SQL Server 端到端驗證**（§五） |
 | 部署與 CI/CD | 🟡 | **已部署並實測**（前台 ＋ 後台 ＋ 兩個 API）；workflow 未進 repo，目前靠 `tools/deploy-swa.sh` 本機部署（§六） |
 | 內容遷移（約 800 篇） | ⬜ | 需先有資料庫 |
-| 療程內容（27 項，12 項從零寫） | 🔴 | **需醫師投入，Phase 1 最大瓶頸** |
+| 療程內容（**28 項**） | 🟡 | 適應症、許可證字號、產品圖、標題、療程↔文章關聯已全部按舊站補齊（§下）。**但 28 項的療程時間／術後照護／禁忌症舊站一項都沒有，仍需醫師投入 —— Phase 1 最大瓶頸沒有改變**，27 頁仍是 noindex 的「建置中」 |
 | 上線前驗收 | ⬜ | checklist 見 §七 |
 | — 線上購物／線上預約 | ⛔ | 僅外部導流連結（CLAUDE.md 決策 4） |
 | — 多語系 | ⛔ | 單一語系繁中（決策 12） |
@@ -801,12 +801,104 @@ docs/06 §6 的「約 770 條是下限，孤兒頁面尚未盤點」依然成立
 次數限制必須**帳號 ＋ 來源 IP 雙維度計數**、鎖定即時告警、**種子密碼上線前必須更換**、
 需訂定密碼強度與輪替規則。
 
+### 🟡 療程資料已按舊站補齊（2026-09-14）
+
+```bash
+node tools/legacy-import/fetch-treatments.mjs && node tools/legacy-import/parse-treatments.mjs
+node tools/legacy-import/import-treatments.mjs
+node tools/content-import/upload-images.mjs        # 28 張產品圖 → Blob
+```
+
+補進資料庫的：**適應症 27 項**（14 項帶完整說明段落，來自舊站的站內細節頁）、
+**醫療器材許可證字號 27 項**、**產品圖 28 張**（已上傳 `st20skinweb/media`）、
+**標題 18 項改回舊站的中文名**、**療程 → 文章關聯 11 筆**（原本是外連 20skinblog.com 的按鈕）。
+
+🔴 **療程數由 27 改為 28。** Radiesse（再生針）與 Ellansé（洢蓮絲）原本被併成一筆
+`radiesse`、標題寫「Radiesse 洢蓮絲」—— 兩個廠牌的兩種產品。已把標題改回「Radiesse 再生針」，
+`ellanse` 補建為獨立的一筆（`/treatments/microneedle/ellanse/`）。
+
+🔴 **16 項的許可證字號在舊站上是重複的，仍照舊站搬。**
+`衛署醫器輸字第028717號` 一個號碼掛在光繞雷射、EMFACE、BTL Embody、高壓氧艙、EMSELLA
+五項身上。許可證字號核發給單一品項，重複代表至少有一項是錯的 ——
+**搬過來不是產生新的宣稱**（這些字號現在就公開在舊站上），但**院方必須逐項核對**。
+清單每次執行 `import-treatments.mjs` 都會印出來，也記在
+[tools/legacy-import/README.md](tools/legacy-import/README.md)。
+⚠️ 相關敘述請以主管機關函釋及院方法務意見為準。
+
+⚠️ **分類沒有跟著舊站改。** 舊站的四個分類與新站的 `laser`／`photoelectric`／
+`microneedle`／`skincare` 不是同一套切法。分類是 [01](docs/01-sitemap.md) §1 的定案值、
+而且決定 `urlPath`，改它等於改 28 個網址 —— 那是資訊架構的決定，不是資料搬遷。
+
+⚠️ **仍然缺的是醫療內容本身**：`facts`／`durationText`／`sessionsText`／`aftercare`／
+`contraindications`／`mechanism`，舊站一項都沒有。前台的 `summary && facts?.length`
+判斷式因此讓 **27 頁維持「建置中」精簡版並 `noindex`** —— 這是刻意的，不要為了讓版面好看而放寬。
+
+⚠️ **兩項的外連對不到站內文章**：`sylfirm` 連的是 blog 的搜尋結果頁（站內有 7 篇可選）、
+`hydrafacial` 連的是分類頁（站內有 2 篇）。挑哪一篇是編輯決定，沒有自動猜。
+
+### 🔴 本機資料庫已經領先正式庫（2026-09-14）
+
+今天補的院區 NAP 與療程資料**只進了本機**。兩支匯入腳本的預設 API 是
+`http://localhost:7077/api/v1`，而本機 `func` 連的是 docker 的 `20skin-website`；
+正式的 Function App 連的是 `20skin-website.database.windows.net` / `20Skin-website`，
+是另一個資料庫。實測已部署的站台（`jolly-hill-015d56f1e.5.azurestaticapps.net`）：
+`/clinics/siji/` 仍是 `○○路○○號`，`/treatments/microneedle/ellanse/` 回 **404**。
+
+🔴 **唯一的例外是圖**：28 張產品圖已經傳進**正式** Blob（`st20skinweb/media`），
+但指向它們的資料列只在本機 —— 也就是說那 28 個 blob 現在是正式環境裡的孤兒檔。
+無害（路徑是決定性的），而且**之後往正式庫匯入時不用重傳圖**。
+
+往正式庫補的作法是同樣的腳本加 `--api`：
+
+```bash
+node tools/legacy-import/import-contact.mjs    --api https://func-20skin-web-api-prod.azurewebsites.net/api/v1
+node tools/legacy-import/import-treatments.mjs --api https://func-20skin-web-api-prod.azurewebsites.net/api/v1
+```
+
+⚠️ 那是對正式環境寫入，先確認再跑。`api.20skin.tw` 目前連不上（DNS 未切，符合規劃）。
+
+⚠️ **還有一件沒查清楚的**：已提交的 `apps/web/public/*` 產物與本機資料庫對不上 ——
+文章排序不同、療程的 `lastmod` 是 09-14 而本機是 09-11。那批產物比較像是從**正式庫**
+匯出的。所以「本機比較新」只在今天做的事情上成立；正式庫在別的地方是不是反而比本機新，
+沒有它的連線資訊，尚未查證。
+
 ### 🔴 待院方或主機商提供
 
 完整 `product*.php` 清單（找孤兒頁面）、Search Console 近 12 個月 URL 匯出、access log、
 現行 `/admin/` 功能清單、Mod_Security 規則、**兩組 SQL 使用者 ＋ 一組唯讀連線字串 ＋ 防火牆放行**、
-`api.20skin.tw` 的 CORS、`reference/banner1-L.jpg` 原始檔、兩個院區的**真實地址與電話**
-（目前是 `04-XXX-XXXX`／`○○路○○號` 佔位值，連 JSON-LD 的 `geo` 都輸出不了）。
+`api.20skin.tw` 的 CORS、`reference/banner1-L.jpg` 原始檔。
+
+院區的 NAP **已於 2026-09-14 補齊**（來源：舊站 `contact.php`，見
+[tools/legacy-import/README.md](tools/legacy-import/README.md) 末段）。
+仍要院方提供的只剩三項：**經緯度／Google Maps 連結**（舊站的地圖是手繪 png，
+沒有它 JSON-LD 的 `geo` 還是輸出不了）、**大眾運輸與停車資訊**（舊站只寫自行開車），
+以及**門診時段的書面確認** —— 舊站的時段只存在圖片裡，二林那張是 2023-08 上傳的、
+允赫齒科那張被人用白色塗掉過幾格，頁面自己也寫「實際門診時間請來電確認為主」。
+這是會讓病人白跑一趟的資料，現在站上顯示的就是它，要院方看過。
+
+### ✅ 院區 NAP 已補真實資料（2026-09-14）
+
+`node tools/legacy-import/import-contact.mjs` 把地址、電話、LINE、門診時段與開車路線
+寫進資料庫，兩筆都重新發布，`export:content` → `build` → `verify` 全綠。
+
+🔴 **原本的佔位資料把台中的四季診所寫成彰化縣二林鎮**（`彰化縣二林鎮○○路○○號`），
+連帶四個地方跟著錯：頁尾 NAP、聯絡我們、據點列表的「相距步行可達」與 JSON-LD 的
+`description`。真實情況是**四季診所在台中市南屯區公益路二段120號、
+二林四季皮膚科在彰化縣二林鎮儒林路二段310號，分屬兩個縣市**。
+所以這一輪不只換值，也把幾句已經變成假話的版面文案改掉了
+（`clinics/index.vue` 的交通三卡、`clinics/[slug].vue` 與 `contact.vue` 的位置小標）。
+
+連帶把兩個**寫死的事實**改成推導，不再有第二份：
+
+| 原本 | 現在 |
+|---|---|
+| `navigation.ts` 的 `CLINIC_NAP` 寫死地址／電話／時段摘要 | 由 `content/clinics.json` 推導（名稱、網址、地址、電話、時段一句話） |
+| `clinics.ts` 的 `phoneHref: 'tel:+886400000000'` | 由電話推導（`04-23103389` → `tel:+886423103389`） |
+
+⚠️ 順手修掉一個 JSON-LD 的假宣稱：四季診所的 `medicalSpecialty` 掛著
+`CosmeticDentistry`，但牙科是**二林的另一家診所**（允赫齒科），不是四季的科別。
+
+⚠️ **允赫齒科尚未決定納不納入新站** —— `contact.json` 有完整資料，資料庫裡沒有第三筆。
 
 ### ✅ 後台 SPA 的權限碼已對齊（2026-09-12 修正）
 
