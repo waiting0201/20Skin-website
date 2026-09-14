@@ -1,0 +1,233 @@
+/* =========================================================================
+   10-story.html 長版故事頁專屬版面樣式（.story- 前綴）
+   /about/new-chinese-aesthetics/ 與 /about/makeup-style/ 兩頁共用此模板。
+
+   版面策略（2026-09-01 改版）：原本全頁塞在 .container--narrow（720px）
+   置中欄裡，兩側大量留白，與同一份 mockup 其他頁面（09-about、
+   12-treatment-overview 等 1200px .container 分段式版面）視覺語彙不一致，
+   客戶回饋「這頁像是只集中在中間顯示」。
+   改為與其他頁面同一套節奏：1200px .container、.section／.section--alt
+   規律交替、圖文左右分欄。長文可讀行寬改用 max-width（62ch 上下）控制，
+   不再靠置中窄容器達成——文字區塊仍會左對齊在寬版容器裡，而不是浮在
+   整個視窗的正中央。
+   ========================================================================= */
+
+.story-hero__layout,
+.story-toc__inner,
+.story-origin__layout,
+.story-split,
+.story-sister__inner,
+.story-cta__box { min-width: 0; }
+
+/* -- 1. 頁首 Hero：左文右圖，比例比照 09-about 的 .about-hero -------------- */
+.story-hero { padding-block: var(--sp-8) var(--sp-7); }
+.story-hero__layout {
+  display: grid;
+  grid-template-columns: 1fr .8fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.story-hero__copy h1 { margin-block: var(--sp-3) var(--sp-4); }
+.story-hero__lede { font-size: var(--fs-md); color: var(--ink-70); max-width: 52ch; }
+.story-hero__meta {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-xs); color: var(--ink-50);
+}
+.story-hero__meta span::before { content: "\00b7"; margin-inline-end: var(--sp-1); color: var(--ink-50); }
+.story-hero__meta span:first-child::before { content: none; margin: 0; }
+
+.story-hero__media { position: relative; }
+/* 圖改用竹影白牆意象圖（1350×1800 直式），比例改為 4:5——與 09-about 的
+   .about-hero__frame 同一組比例，直式構圖也更貼近原圖的裁切,不需要大幅
+   裁掉畫面上下。 */
+.story-hero__frame {
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  background: var(--fill-media);
+}
+.story-hero__frame img { width: 100%; height: 100%; object-fit: cover; }
+.story-hero__caption {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-xs); color: var(--ink-50); text-align: right;
+}
+
+@media (max-width: 1024px) {
+  .story-hero__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+  .story-hero__media { order: -1; max-width: 640px; }
+}
+
+/* -- 2. 目錄：橫向條，貫穿整個 1200px 版寬 --------------------------------- */
+.story-toc { border-block: 1px solid var(--line); }
+.story-toc__inner {
+  padding-block: var(--sp-4);
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: var(--sp-2) var(--sp-6);
+}
+.story-toc__label {
+  flex: none;
+  font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: .1em;
+  color: var(--ink-50);
+}
+.story-toc__list { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); }
+.story-toc__list a { display: flex; align-items: baseline; gap: .5em; font-size: var(--fs-sm); color: var(--ink); }
+.story-toc__list a:hover { color: var(--brand-600); }
+.story-toc__list a::before {
+  content: ""; flex: none;
+  width: 4px; height: 4px;
+  border-radius: 50%; background: var(--ink-50);
+}
+
+@media (max-width: 768px) {
+  .story-toc__inner { flex-direction: column; align-items: flex-start; gap: var(--sp-3); }
+}
+
+/* -- 3. 創始人區：左人像、右短文 ------------------------------------------
+   版式取自 mockup3 的 Founder 區塊（客戶指定參考），但換成方向 A 的語彙：
+   人像是直角裱框的 3:4 直式，不是正圓——全站的圓形語彙保留給 .c-ring 三處
+   簽名圓框。人像維持全彩，不做去彩度（見 base.css 檔頭第 3 條）。 */
+.story-origin__layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: var(--sp-9);
+  align-items: center;
+}
+.story-origin__media {
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background: var(--fill-media);
+  border: 1px solid var(--line);
+}
+.story-origin__media img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.story-origin__role {
+  font-family: var(--font-base);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--brand-600);
+  margin-bottom: var(--sp-4);
+}
+.story-origin__lead {
+  font-size: var(--fs-md);
+  color: var(--ink-70);
+  line-height: 1.9;
+  max-width: 46ch;
+  margin-bottom: var(--sp-6);
+}
+.story-origin__cta { margin-top: var(--sp-6); }
+
+@media (max-width: 768px) {
+  .story-origin__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+  .story-origin__media { max-width: 260px; }
+}
+
+/* 引句：不用引號圖形，改用左細線 ＋ 宋體放大，與全站「留線去框」一致 */
+.story-pull {
+  padding-left: var(--sp-5);
+  border-left: 1px solid var(--accent);
+}
+.story-pull p {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.8;
+  color: var(--ink);
+}
+.story-pull cite {
+  display: block;
+  margin-top: var(--sp-3);
+  font-family: var(--font-base);
+  font-style: normal;
+  font-size: var(--fs-xs);
+  letter-spacing: .04em;
+  color: var(--ink-50);
+}
+
+/* -- 4／5／6. 圖文左右分欄段落（先看比例／留白／在門診裡怎麼執行）--------- */
+/* 三段共用同一組版式：markup 順序即視覺順序（圖在前就在左，文在前就在左），
+   欄寬各半，不特別加大文字欄——比照 tov-cat 的等分邏輯，避免每段都要
+   另外指定方向。段落標題同樣走 .c-sechead，讓行草簽名筆劃線在整頁的每一個
+   h2 底下都出現，不因為版式不同而缺一段。 */
+.story-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.story-split__copy .c-sechead { margin-bottom: var(--sp-4); }
+.story-split__copy p { margin-top: var(--sp-4); }
+.story-split__copy p:first-of-type { margin-top: var(--sp-4); }
+
+.story-list { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-4); }
+.story-list li {
+  position: relative; padding-left: 1.6em;
+  font-size: var(--fs-base); color: var(--ink-70); line-height: 1.75;
+}
+.story-list li::before {
+  content: ""; position: absolute; left: .15em; top: .75em;
+  width: 4px; height: 4px; border-radius: 50%; background: var(--ink-50);
+}
+
+.story-split .c-note { margin-top: var(--sp-6); }
+
+.story-split__media { position: relative; }
+/* ⚠️ 比例下在「框」上、圖片再 height:100%（同 base.css 的 .c-card__media）。
+   寫在 <img> 上會被圖片原生比例蓋過去。 */
+.story-figure__frame { overflow: hidden; aspect-ratio: 16 / 10; background: var(--fill-media); }
+.story-figure__frame img { width: 100%; height: 100%; object-fit: cover; }
+.story-figure figcaption { margin-top: var(--sp-2); font-size: var(--fs-xs); color: var(--ink-50); }
+
+@media (max-width: 1024px) {
+  .story-split { grid-template-columns: 1fr; gap: var(--sp-6); }
+  /* 手機一律圖在上、文在下，不管桌機版原本的左右順序 */
+  .story-split__media { order: -1; }
+}
+
+/* -- 7. 常見疑問：沿用 .c-faq／.c-sechead，narrow 容器只用於這一段 -------- */
+#faq .c-faq { margin-top: var(--sp-6); }
+#faq .c-note { margin-top: var(--sp-6); }
+
+/* -- 8. 姊妹篇：細線窄條，不佔整段 section 的 padding 節奏 ----------------- */
+.story-sister { border-block: 1px solid var(--line); }
+.story-sister__inner {
+  padding-block: var(--sp-5);
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--sp-4); flex-wrap: wrap;
+}
+.story-sister__label { font-size: var(--fs-xs); color: var(--ink-50); letter-spacing: .1em; }
+.story-sister__title { font-size: var(--fs-md); }
+.story-sister__title a:hover { color: var(--brand); }
+
+/* -- 10. 頁尾 CTA（與 09/12 頁同款深底方塊）-------------------------------- */
+.story-cta { padding-block: var(--sp-8); }
+.story-cta__box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-7);
+  flex-wrap: wrap;
+  padding: var(--sp-7);
+  background: var(--brand-700);
+  border-radius: var(--radius-md);
+}
+.story-cta__text { max-width: 46ch; }
+.story-cta__text .u-eyebrow { color: #fff; opacity: .8; }
+.story-cta__text h2 { color: #fff; margin-block: var(--sp-2) var(--sp-2); }
+.story-cta__text p { color: rgba(255,255,255,.75); font-size: var(--fs-sm); }
+.story-cta__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); flex: none; }
+.story-cta__actions .btn--line { background: transparent; color: #fff; border-color: rgba(255,255,255,.5); }
+.story-cta__actions .btn--line:hover { background: rgba(255,255,255,.1); border-color: #fff; }
+
+@media (max-width: 768px) {
+  .story-cta__box { padding: var(--sp-6); }
+  .story-cta__actions { width: 100%; }
+  .story-cta__actions .btn { flex: 1; }
+}

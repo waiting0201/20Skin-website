@@ -1,0 +1,144 @@
+/* =========================================================================
+   18-contact.html 聯絡我們專屬樣式（.contact- 前綴）
+
+   表單控制項是全站唯一一組（base.css 只有 .c-chat__input 與 .faq-search__input
+   兩個單獨的輸入框），因此欄位樣式定義在這裡。若日後後台表單也要用，
+   再上收到 base.css，現在不預先抽象。
+
+   ⚠️ 這是介面示意，表單沒有串接後端；送出不會有任何行為（button 為
+   type="button"），頁面上也明說了這件事。
+   ========================================================================= */
+
+.contact-hero__layout, .contact-layout, .contact-form, .contact-aside { min-width: 0; }
+
+/* -- 1. Hero：左文右圖，比照 08／09 同一組「裱框」語彙 -------------------- */
+.contact-hero { padding-block: var(--sp-8) var(--sp-7); }
+.contact-hero__layout {
+  display: grid;
+  grid-template-columns: 1.1fr .9fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.contact-hero__title { margin-block: var(--sp-3) var(--sp-4); }
+.contact-hero__lede { font-size: var(--fs-md); color: var(--ink-70); max-width: 52ch; }
+.contact-hero__media { position: relative; }
+/* 與 09-about__hero 同款裱紙白邊：比例下在框上、圖片再 height:100%，
+   避免 <img> 原生尺寸蓋過 aspect-ratio 撐開版面。 */
+.contact-hero__frame {
+  position: relative;
+  padding: var(--sp-2);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  aspect-ratio: 4 / 5;
+}
+.contact-hero__frame img { width: 100%; height: 100%; object-fit: cover; }
+
+@media (max-width: 1024px) {
+  .contact-hero__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+  .contact-hero__media { order: -1; max-width: 480px; }
+}
+
+/* -- 2. 版面：表單 ＋ 側欄 ------------------------------------------------- */
+.contact-layout {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: var(--sp-9);
+  align-items: start;
+}
+@media (max-width: 1024px) {
+  .contact-layout { grid-template-columns: 1fr; gap: var(--sp-8); }
+}
+
+/* -- 3. 表單 -------------------------------------------------------------- */
+.contact-form__grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5); }
+.contact-field--full { grid-column: 1 / -1; }
+@media (max-width: 480px) { .contact-form__grid { grid-template-columns: 1fr; } }
+
+.contact-field { display: flex; flex-direction: column; gap: var(--sp-2); }
+.contact-field__label {
+  font-family: var(--font-base);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink);
+}
+.contact-field__req { color: var(--brand-600); margin-inline-start: .2em; }
+.contact-field__hint { font-size: var(--fs-xs); color: var(--ink-50); }
+
+.contact-input,
+.contact-select,
+.contact-textarea {
+  width: 100%;
+  padding: .8em 1em;
+  font-family: var(--font-base);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--dur) var(--ease);
+}
+.contact-input::placeholder,
+.contact-textarea::placeholder { color: var(--ink-50); }
+.contact-input:hover,
+.contact-select:hover,
+.contact-textarea:hover { border-color: var(--ink-50); }
+.contact-input:focus,
+.contact-select:focus,
+.contact-textarea:focus { outline: none; border-color: var(--brand-600); }
+.contact-textarea { min-height: 160px; resize: vertical; }
+
+/* select 的原生箭頭在各平台差異大，統一改用背景的細三角 */
+.contact-select {
+  appearance: none;
+  padding-right: 2.4em;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><path fill='%236B747C' d='M6 7.6 0 1.2h12z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 1em center;
+  background-size: 10px 7px;
+}
+
+.contact-consent {
+  display: flex; gap: var(--sp-3);
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-sm);
+  color: var(--ink-70);
+}
+.contact-consent input { margin-top: .35em; flex: none; width: 16px; height: 16px; accent-color: var(--brand-600); }
+.contact-consent a { color: var(--brand-600); text-decoration: underline; text-underline-offset: 2px; }
+
+.contact-actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-6); }
+
+/* -- 4. 側欄 -------------------------------------------------------------- */
+.contact-aside { display: flex; flex-direction: column; gap: var(--sp-7); }
+.contact-block { padding-top: var(--sp-5); border-top: 1px solid var(--line); }
+.contact-block h2 { font-size: var(--fs-lg); margin-bottom: var(--sp-4); }
+.contact-block h3 { font-size: var(--fs-md); margin-bottom: var(--sp-2); }
+.contact-block p, .contact-block address { font-size: var(--fs-sm); color: var(--ink-70); line-height: 1.9; }
+.contact-block a:hover { color: var(--brand); }
+.contact-block + .contact-block { margin-top: 0; }
+.contact-nap { margin-bottom: var(--sp-5); }
+.contact-nap:last-child { margin-bottom: 0; }
+.contact-aside__actions { display: flex; flex-direction: column; gap: var(--sp-3); margin-top: var(--sp-4); }
+/* 急性症狀提示借用全站 .c-note--warn：上下細線＋較重墨色，比純段落更醒目，
+   語氣仍克制，不加色不加框。 */
+.contact-block .c-note--warn { margin-top: var(--sp-1); }
+
+/* -- 5. 地圖佔位 ----------------------------------------------------------
+   與 17 據點列表同一套視覺語彙（淡格線＋襯底），這頁不需要標兩根圖釘，
+   維持單純的位置示意即可。 */
+.contact-map {
+  aspect-ratio: 16 / 6;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background:
+    repeating-linear-gradient(0deg, var(--line-soft) 0 1px, transparent 1px 56px),
+    repeating-linear-gradient(90deg, var(--line-soft) 0 1px, transparent 1px 56px),
+    var(--fill-media);
+}
+
+/* -- 6. 導言中的行內連結（比照 base.css 的 .c-chat__foot a）--------------- */
+.contact-hero__lede a { color: var(--brand-600); }
+.contact-hero__lede a:hover { color: var(--brand-700); }

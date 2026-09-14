@@ -1,0 +1,93 @@
+/* =========================================================================
+   13-concern-overview.html 肌膚困擾總覽專屬樣式（.cov- 前綴）
+   元件本體樣式一律在 assets/base.css，這裡只處理本頁特有的排版比例。
+
+   這一頁是 /concerns/ 的入口，承接「還不知道自己需要什麼療程」的人，
+   因此八格困擾入口是主角：沿用首頁 .grid--icons 的留白分格，
+   不加圓框、不加編號（見 base.css 2026-08-15 視覺收斂第 4 點）。
+   ========================================================================= */
+
+.cov-hero__layout, .cov-entry, .cov-step, .cov-cta__box { min-width: 0; }
+
+/* -- 1. Hero：左文右圖，與 03／12 頁同一組比例（原本只有置中文字，無圖）--- */
+.cov-hero { padding-block: var(--sp-8) var(--sp-7); }
+.cov-hero__layout {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.cov-hero__title { margin-block: var(--sp-3) var(--sp-4); }
+.cov-hero__lede { font-size: var(--fs-md); color: var(--ink-70); max-width: 52ch; }
+.cov-hero__media { position: relative; }
+.cov-hero__frame { overflow: hidden; aspect-ratio: 3 / 2; background: var(--fill-media); }
+.cov-hero__frame img { width: 100%; height: 100%; object-fit: cover; }
+
+@media (max-width: 1024px) {
+  .cov-hero__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+  .cov-hero__media { order: -1; }
+}
+
+/* -- 2. 八大困擾入口 ------------------------------------------------------ */
+/* 首頁的 .home-specialty 是純圖示＋標題的密集格；這裡是入口頁，每一格
+   多帶一句症狀說明，所以改為左圖示右文字的橫式，一列兩格。 */
+.cov-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-6) var(--sp-8); }
+.cov-entry {
+  position: relative;
+  display: flex; gap: var(--sp-5);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--line);
+}
+.cov-entry__icon {
+  width: 64px; height: 64px; flex: none;
+  mix-blend-mode: multiply;
+  transition: transform var(--dur) var(--ease);
+}
+.cov-entry:hover .cov-entry__icon { transform: scale(1.06); }
+.cov-entry__title { font-size: var(--fs-md); transition: color var(--dur) var(--ease); }
+.cov-entry:hover .cov-entry__title { color: var(--brand); }
+/* 整格可點：與 .c-card__title a::after 同一個手法 */
+.cov-entry__title a::after { content: ""; position: absolute; inset: 0; }
+.cov-entry__desc { margin-top: var(--sp-2); font-size: var(--fs-sm); }
+.cov-entry__symptoms {
+  margin-top: var(--sp-3);
+  display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3);
+}
+
+@media (max-width: 768px) {
+  .cov-grid { grid-template-columns: 1fr; gap: var(--sp-5); }
+  .cov-entry__icon { width: 54px; height: 54px; }
+}
+
+/* -- 3. 動線三步 ---------------------------------------------------------- */
+.cov-step { padding-top: var(--sp-5); border-top: 1px solid var(--line); }
+.cov-step__no {
+  font-family: var(--font-base);
+  font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: .18em;
+  color: var(--brand-600);
+}
+.cov-step h3 { margin-block: var(--sp-2) var(--sp-2); font-size: var(--fs-md); }
+.cov-step p { font-size: var(--fs-sm); }
+
+/* -- 4. 頁尾 CTA（與 03 分類頁同款深底方塊）------------------------------- */
+.cov-cta { padding-block: var(--sp-8); }
+.cov-cta__box {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-7); flex-wrap: wrap;
+  padding: var(--sp-7);
+  background: var(--brand-700);
+  border-radius: var(--radius-md);
+}
+.cov-cta__text { max-width: 46ch; }
+.cov-cta__text .u-eyebrow { color: #fff; opacity: .8; }
+.cov-cta__text h2 { color: #fff; margin-block: var(--sp-2) var(--sp-2); }
+.cov-cta__text p { color: rgba(255,255,255,.75); font-size: var(--fs-sm); }
+.cov-cta__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); flex: none; }
+.cov-cta__actions .btn--line { background: transparent; color: #fff; border-color: rgba(255,255,255,.5); }
+.cov-cta__actions .btn--line:hover { background: rgba(255,255,255,.1); border-color: #fff; }
+
+@media (max-width: 768px) {
+  .cov-cta__box { padding: var(--sp-6); }
+  .cov-cta__actions { width: 100%; }
+  .cov-cta__actions .btn { flex: 1; }
+}

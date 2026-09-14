@@ -1,0 +1,68 @@
+/* =========================================================================
+   21-legal.html 通用法務頁專屬樣式（.legal- 前綴）
+   /privacy/、/terms/、/medical-disclaimer/ 三頁共用此模板，
+   差別只在頁籤選中項與條文內容。
+
+   版面：窄欄長文 ＋ 側邊條文目錄（桌機 sticky，平板以下收到內文上方）。
+   ========================================================================= */
+
+.legal-head, .legal-layout, .legal-content { min-width: 0; }
+
+/* -- 1. 頁首 ------------------------------------------------------------- */
+.legal-head { padding-block: var(--sp-9) var(--sp-6); }
+.legal-head h1 { margin-block: var(--sp-3) var(--sp-4); }
+.legal-head__meta {
+  display: inline-block;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-sm);
+  color: var(--ink-50);
+}
+
+/* -- 2. 三頁切換（.c-tabs 變體：跨頁連結，比照 03 分類頁）---------------- */
+.legal-tabs { border-bottom: 1px solid var(--line); }
+
+/* -- 3. 版面：目錄 ＋ 條文 ------------------------------------------------ */
+.legal-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--sp-8);
+  align-items: start;
+}
+.legal-toc {
+  position: sticky;
+  top: calc(var(--header-h) + var(--sp-5));
+}
+.legal-toc__title {
+  font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: .1em;
+  color: var(--ink-50); margin-bottom: var(--sp-3);
+}
+.legal-toc__list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.legal-toc__list a { font-size: var(--fs-sm); color: var(--ink-70); line-height: 1.5; }
+.legal-toc__list a:hover { color: var(--brand-600); }
+
+@media (max-width: 1024px) {
+  .legal-layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+  .legal-toc { position: static; padding-bottom: var(--sp-5); border-bottom: 1px solid var(--line); }
+  .legal-toc__list { flex-direction: row; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); }
+}
+
+/* -- 4. 條文排版（逐條上緣細線，強化長文的段落節奏）------------------------ */
+.legal-section { padding-block: var(--sp-7) 0; scroll-margin-top: calc(var(--header-h) + var(--sp-4)); }
+.legal-section:first-child { padding-top: 0; }
+.legal-section + .legal-section { border-top: 1px solid var(--line); }
+.legal-section h2 { font-size: var(--fs-lg); margin-bottom: var(--sp-4); }
+.legal-section p { margin-top: var(--sp-3); font-size: var(--fs-sm); line-height: 1.9; }
+.legal-list { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-4); }
+.legal-list li {
+  position: relative; padding-left: 1.6em;
+  font-size: var(--fs-sm); color: var(--ink-70); line-height: 1.9;
+}
+.legal-list li::before {
+  content: ""; position: absolute; left: .2em; top: .85em;
+  width: 4px; height: 4px; border-radius: 50%; background: var(--ink-50);
+}
+
+/* -- 5. 條文內的行內連結（比照 base.css 的 .c-chat__foot a）--------------- */
+.legal-section a { color: var(--brand-600); }
+.legal-section a:hover { color: var(--brand-700); }

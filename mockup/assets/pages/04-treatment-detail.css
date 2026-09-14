@@ -1,0 +1,302 @@
+/* =========================================================================
+   療程細節頁（04-treatment-detail.html）專屬版面樣式
+   .tdetail- 前綴。元件本體樣式一律在 assets/base.css，這裡只處理
+   「這一頁特有的排版比例／間距組合」，不建立新元件、不覆寫 base.css。
+
+   ★ 優雅降級說明（27 項療程中 12 項目前無站內內容）：
+   本頁「圖庫」（#gallery）與「相關案例」（#cases）兩節在資料不足時
+   應直接整節從 HTML 移除（含 TOC 對應項目），不要留空殼。以下樣式
+   皆以「該 <section> 存在才佔版面」為前提書寫：
+     - .tdetail-layout 是單純的 2 欄 grid，任一節缺席不影響前後節距。
+     - .tdetail-gallery / .tdetail-cases 皆為獨立 grid，非固定欄數鎖版，
+       少於設計張數（例如只剩 2 張）grid 仍會正常換行、不會留白破版。
+     - TOC（.tdetail-toc）純粹是一串 <a href="#id">，缺少對應 section
+       時只要同步移除該行 <li> 即可，不需要額外邏輯或 JS 判斷。
+   ========================================================================= */
+
+/* -- 1. Hero -------------------------------------------------------------- */
+.tdetail-hero { padding-block: var(--sp-7) var(--sp-8); }
+.tdetail-hero__layout {
+  display: grid;
+  grid-template-columns: 1fr .85fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.tdetail-hero__copy .u-eyebrow { display: block; margin-bottom: var(--sp-2); }
+.tdetail-hero__title { margin-bottom: var(--sp-4); }
+.tdetail-hero__subtitle { font-size: var(--fs-md); color: var(--ink-70); max-width: 52ch; margin-bottom: var(--sp-5); }
+.tdetail-hero__tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-bottom: var(--sp-6); }
+.tdetail-hero__cta { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+
+.tdetail-hero__frame {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--fill-media);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-8);
+}
+.tdetail-hero__frame img { width: 100%; height: 100%; object-fit: contain; }
+
+@media (max-width: 1024px) {
+  .tdetail-hero__layout { grid-template-columns: 1fr; gap: var(--sp-7); }
+  .tdetail-hero__frame { order: -1; max-width: 420px; margin-inline: auto; }
+}
+
+/* -- 2. 目錄／段落導覽 ------------------------------------------------------
+   桌機：左側 sticky 側欄。1024 以下：改為頂部水平捲動 pill 列（比照
+   首頁醫師團隊橫向捲動手勢），不做 sticky，避免與行動版 CTA bar 疊層。 */
+.tdetail-layout {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  gap: var(--sp-9);
+  align-items: start;
+}
+
+/* CJK 長句在 grid/flex 子項內的「自動最小寬度」預設等於整行未換行的
+   max-content 寬度（中文沒有空白字元可供瀏覽器估算安全的斷行點），
+   會把 grid 欄位撐寬進而造成整欄水平溢出。這裡統一給內容欄
+   min-width:0，讓一般換行在版面配置階段接手，而不是被拿去撐欄寬。 */
+.tdetail-toc,
+.tdetail-content { min-width: 0; }
+
+.tdetail-toc {
+  position: sticky;
+  top: calc(var(--header-h) + var(--sp-5));
+}
+.tdetail-toc__title {
+  font-size: var(--fs-eyebrow);
+  font-weight: 700;
+  letter-spacing: .1em;
+  color: var(--ink-50);
+  margin-bottom: var(--sp-3);
+}
+.tdetail-toc__list { display: flex; flex-direction: column; gap: var(--sp-1); border-left: 1px solid var(--line); }
+.tdetail-toc__list a {
+  display: block;
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--ink-70);
+  border-left: 2px solid transparent;
+  margin-left: -1px;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.tdetail-toc__list a:hover { color: var(--brand-600); border-left-color: var(--brand-100); }
+
+@media (max-width: 1024px) {
+  .tdetail-layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+  .tdetail-toc { position: static; }
+  .tdetail-toc__title { display: none; }
+  .tdetail-toc__list {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    border-left: 0;
+    gap: var(--sp-2);
+    margin-inline: calc(var(--sp-5) * -1);
+    padding-inline: var(--sp-5);
+    padding-bottom: var(--sp-2);
+  }
+  .tdetail-toc__list a {
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: var(--sp-2) var(--sp-4);
+    white-space: nowrap;
+  }
+  .tdetail-toc__list a:hover { border-color: var(--brand-600); }
+}
+
+/* -- 3. 內文段落節奏 -------------------------------------------------------- */
+.tdetail-block { scroll-margin-top: calc(var(--header-h) + var(--sp-4)); }
+.tdetail-block + .tdetail-block { margin-top: var(--sp-8); }
+/* 各節標題統一包在 .c-sechead 內取得 base.css 的 h2 底線裝飾與間距，
+   這裡不需要再自訂 h2 margin。 */
+
+@media (max-width: 1024px) {
+  .tdetail-block { scroll-margin-top: calc(var(--header-h-mobile) + var(--ctabar-h) + var(--sp-4)); }
+}
+
+/* -- 3b. 區塊底色（本頁專用的層次手段）--------------------------------------
+   其他頁面靠 .section--alt 做整段滿版灰底，但本頁是「sticky 目錄 ＋ 內容欄」
+   的兩欄版型，滿版色帶會把目錄一起蓋掉。因此改成只給內容欄裡的特定區塊
+   上底色——不加邊框、不加圓角、左右出血到內容欄邊緣，讀起來仍是「一段」
+   而不是「一張卡」。整頁挑三處，間隔大致平均。 */
+.tdetail-block--band {
+  padding: var(--sp-7) var(--sp-6);
+  margin-inline: calc(var(--sp-6) * -1);
+  background: var(--surface-alt);
+}
+@media (max-width: 768px) {
+  .tdetail-block--band {
+    padding: var(--sp-6) var(--sp-5);
+    margin-inline: calc(var(--sp-5) * -1);
+  }
+}
+
+/* -- 4. 適應症勾選清單 ------------------------------------------------------ */
+.tdetail-checklist {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-4) var(--sp-6);
+}
+.tdetail-checklist li { display: flex; gap: var(--sp-3); align-items: flex-start; }
+.tdetail-checklist li::before {
+  content: "";
+  flex: none;
+  width: 4px; height: 4px;
+  margin-top: .7em;
+  border-radius: 50%;
+  background: var(--ink-50);
+}
+.tdetail-checklist strong { display: block; color: var(--ink); font-weight: 600; margin-bottom: .15em; }
+.tdetail-checklist span { font-size: var(--fs-sm); color: var(--ink-70); }
+
+@media (max-width: 768px) {
+  .tdetail-checklist { grid-template-columns: 1fr; }
+}
+
+/* -- 5. 原理：圖文兩欄 ------------------------------------------------------ */
+.tdetail-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: var(--sp-7);
+  align-items: center;
+}
+.tdetail-split__frame {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+}
+.tdetail-split__frame img { width: 100%; height: 100%; object-fit: cover; }
+.tdetail-split__copy { min-width: 0; }
+.tdetail-split__copy p + p { margin-top: var(--sp-4); }
+
+@media (max-width: 768px) {
+  .tdetail-split { grid-template-columns: minmax(0, 1fr); }
+  .tdetail-split__frame { order: -1; }
+}
+
+/* -- 6. 療程流程：步驟卡 ---------------------------------------------------- */
+.tdetail-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-5);
+  counter-reset: tdetail-step;
+}
+/* 步驟卡：原為 1px 全框的盒子 ＋ 32px 實心藍圓號。六格排開就是六個框
+   加六顆藍圓點。改為只留頂緣一道細線，序號降為小字。 */
+.tdetail-step {
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line);
+}
+.tdetail-step__num {
+  display: block;
+  margin-bottom: var(--sp-3);
+  font-family: var(--font-base);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: .16em;
+  color: var(--ink-50);
+}
+.tdetail-step__title { font-size: var(--fs-base); font-weight: 600; margin-bottom: var(--sp-1); }
+.tdetail-step__desc { font-size: var(--fs-sm); color: var(--ink-70); }
+
+@media (max-width: 1024px) {
+  .tdetail-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .tdetail-steps { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* -- 7. 術後照護：時間軸 ---------------------------------------------------- */
+.tdetail-timeline { border-top: 1px solid var(--line); }
+.tdetail-timeline__item {
+  display: grid;
+  grid-template-columns: 8em minmax(0, 1fr);
+  gap: var(--sp-5);
+  padding-block: var(--sp-4);
+  border-bottom: 1px solid var(--line);
+}
+.tdetail-timeline__when {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--ink);
+}
+.tdetail-timeline__desc { font-size: var(--fs-sm); color: var(--ink-70); }
+
+@media (max-width: 480px) {
+  .tdetail-timeline__item { grid-template-columns: minmax(0, 1fr); gap: var(--sp-1); }
+}
+
+/* -- 8. 禁忌症清單（放在 .c-note--warn 內） ---------------------------------
+   .c-note--warn 本身是 base.css 的 flex 容器（凍結、不可改），其第二個子
+   元素（.tdetail-warn-body，本頁自訂）預設會有 min-width:auto，讓長句
+   CJK 文字把版面撐寬，因此這裡明確給 min-width:0 + overflow-wrap，讓
+   一般換行接手，而不是被拿去當作 flex 子項的最小寬度基準。 */
+.tdetail-warn-body { min-width: 0; }
+.tdetail-warn-body p,
+.tdetail-warn-body strong { overflow-wrap: break-word; }
+.tdetail-warn-list { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-3); }
+.tdetail-warn-list li { padding-left: var(--sp-4); position: relative; overflow-wrap: break-word; }
+.tdetail-warn-list li::before {
+  content: "";
+  position: absolute; left: 0; top: .7em;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--ink-50);
+}
+.tdetail-warn-note { margin-top: var(--sp-4); font-weight: 600; color: var(--ink); }
+
+/* -- 9. 儀器資訊：表格 + 補充說明間距 --------------------------------------- */
+.tdetail-device .c-facts { margin-bottom: var(--sp-4); }
+/* .c-facts 是 base.css 的 auto-layout 表格（凍結），欄寬由內容的
+   max-content 決定；本頁 td 內容都不長，這裡加 overflow-wrap 當保險，
+   避免未來抽換文案時撐破表格欄寬。 */
+.tdetail-device .c-facts th,
+.tdetail-device .c-facts td { overflow-wrap: break-word; }
+
+/* -- 10. 圖庫 ----------------------------------------------------------------
+   原為 4 張 320–480px 小圖擠成一列，改為 2 張真實院區大圖（1800px 原檔），
+   少而大——呼應客戶回饋「文字不一定要那麼多，放一些圖」。 */
+.tdetail-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-6);
+}
+.tdetail-gallery__frame {
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: var(--fill-media);
+  margin-bottom: var(--sp-3);
+}
+.tdetail-gallery__frame img {
+  width: 100%; height: 100%; object-fit: cover;
+  transition: transform var(--dur-slow) var(--ease);
+}
+.tdetail-gallery__item:hover .tdetail-gallery__frame img { transform: scale(1.03); }
+.tdetail-gallery__cap { font-size: var(--fs-sm); color: var(--ink-70); }
+
+@media (max-width: 768px) {
+  .tdetail-gallery { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* -- 11. 可改善標籤列 --------------------------------------------------------- */
+.tdetail-tags { display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-5); }
+
+/* -- 12. 相關案例：卡片內附加法規揭露區塊 ------------------------------------- */
+.tdetail-case__disclosure {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line-soft);
+  font-size: var(--fs-eyebrow);
+  line-height: 1.7;
+  color: var(--ink-50);
+}
+.tdetail-case__disclosure p + p { margin-top: var(--sp-1); }
+
+/* -- 13. 頁尾 CTA 區 ----------------------------------------------------------- */
+.tdetail-cta-band { text-align: center; }
+.tdetail-cta-band h2 { margin-bottom: var(--sp-3); }
+.tdetail-cta-band p { max-width: 56ch; margin-inline: auto; margin-bottom: var(--sp-6); }
+.tdetail-cta-band__actions { display: flex; justify-content: center; flex-wrap: wrap; gap: var(--sp-3); }

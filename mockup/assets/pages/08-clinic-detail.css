@@ -1,0 +1,221 @@
+/* =========================================================================
+   08-clinic-detail.html 專屬版面樣式（.clinic- 前綴）
+   元件本體樣式一律在 assets/base.css，這裡只處理本頁特有的排版比例／
+   間距組合，不建立新元件，優先重用 base.css 既有 class。
+
+   這頁是地區 SEO 主要落地頁：舊站 contact.php 回傳 409、地址電話完全看
+   不到。第一要務是讓 NAP 在第一屏就醒目可見，見 1. 與 3. 兩節。
+   ========================================================================= */
+
+/* -- 1. Hero（含第一屏 NAP 醒目資訊） ------------------------------------ */
+.clinic-hero { padding-block: var(--sp-7) var(--sp-8); }
+.clinic-hero__layout {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.clinic-hero__lede { font-size: var(--fs-md); color: var(--ink-70); max-width: 48ch; margin-block: var(--sp-4) var(--sp-5); }
+
+/* NAP 快覽：電話／地址。原為藍底藍框的色塊，兩顆並排時像兩顆大按鈕，
+   在 hero 裡跟真正的 CTA 打架。改為細線輪廓 ＋ 墨色文字。 */
+.clinic-hero__nap { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-6); }
+.clinic-hero__nap-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) 0;
+  padding-inline-end: var(--sp-6);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--ink);
+  transition: color var(--dur) var(--ease);
+}
+.clinic-hero__nap-item svg { color: var(--ink-50); }
+a.clinic-hero__nap-item:hover { color: var(--brand); }
+.clinic-hero__nap-icon { width: 20px; height: 20px; flex: none; }
+
+.clinic-hero__cta { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+
+.clinic-hero__media { position: relative; }
+.clinic-hero__frame {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+}
+.clinic-hero__frame img { width: 100%; height: 100%; object-fit: cover; }
+.clinic-hero__caption { margin-top: var(--sp-3); font-size: var(--fs-xs); color: var(--ink-50); text-align: right; }
+
+@media (max-width: 1024px) {
+  .clinic-hero__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+}
+@media (max-width: 480px) {
+  .clinic-hero__nap-item { font-size: var(--fs-sm); padding: var(--sp-2) var(--sp-3); }
+}
+
+
+/* -- 2. NAP 完整資訊表 ----------------------------------------------------- */
+.clinic-facts { max-width: 640px; }
+.clinic-facts .c-facts a.ext { color: var(--brand-600); font-weight: 600; }
+.clinic-facts .c-facts a.ext:hover { color: var(--brand-700); }
+
+
+/* -- 3. 結構化營業時間（含今日看診即時標示） ------------------------------- */
+.clinic-hours { max-width: 640px; }
+.clinic-hours__status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  margin-bottom: var(--sp-4);
+  padding-inline: 0;
+  border-block: 1px solid var(--line);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--ink);
+}
+.clinic-hours__status.is-closed { color: var(--ink-50); }
+.clinic-hours__status-icon { width: 18px; height: 18px; flex: none; }
+
+/* 「今日」高亮。時段表改成矩陣後，今天是一整「欄」而不是一列，
+   由 JS 依 data-day 標記整欄的格子（含表頭）。 */
+.clinic-hours .c-hours .is-today { background-color: var(--brand-050); }
+.clinic-hours .c-hours thead th.is-today { color: var(--brand-700); font-weight: 700; }
+
+.clinic-hours .c-note { margin-top: var(--sp-4); }
+
+
+/* -- 4. 地圖佔位區塊（禁止外部嵌入，純 CSS/SVG 示意） ------------------------ */
+.clinic-map__canvas {
+  position: relative;
+  height: 280px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(0deg, var(--line-soft) 0 1px, transparent 1px 48px),
+    repeating-linear-gradient(90deg, var(--line-soft) 0 1px, transparent 1px 48px),
+    var(--fill-media);
+}
+.clinic-map__road {
+  position: absolute;
+  background: var(--paper);
+  border: 1px solid var(--line-soft);
+}
+.clinic-map__road--h { left: 0; right: 0; top: 62%; height: 22px; }
+.clinic-map__road--v { top: 0; bottom: 0; left: 30%; width: 18px; }
+.clinic-map__pin {
+  position: absolute;
+  top: 62%; left: 30%;
+  transform: translate(-50%, -100%);
+  width: 40px; height: 40px;
+  color: var(--brand-600);
+  filter: drop-shadow(0 4px 6px rgba(18, 54, 92, .3));   /* = --brand-700 */
+}
+.clinic-map__pin-dot {
+  position: absolute;
+  top: 62%; left: 30%;
+  width: 10px; height: 4px;
+  transform: translate(-50%, 0);
+  border-radius: 50%;
+  background: rgba(18, 54, 92, .18);   /* = --brand-700 */
+}
+.clinic-map__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+.clinic-map__label { font-size: var(--fs-sm); color: var(--ink-70); }
+
+
+/* -- 5. 交通與停車 ---------------------------------------------------------- */
+.clinic-transport-grid { margin-top: var(--sp-8); }
+.clinic-transport { display: flex; flex-direction: column; gap: var(--sp-3); }
+.clinic-transport__icon {
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ink-50);
+}
+.clinic-transport__icon svg { width: 20px; height: 20px; }
+.clinic-transport h3 { margin-top: var(--sp-1); }
+.clinic-transport ul { display: flex; flex-direction: column; gap: var(--sp-2); }
+.clinic-transport li { font-size: var(--fs-sm); color: var(--ink-70); line-height: 1.7; }
+
+
+/* -- 6. 駐診醫師：時段附註 --------------------------------------------------- */
+.clinic-doctor__slot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding-top: var(--sp-2);
+  margin-top: var(--sp-2);
+  border-top: 1px dashed var(--line);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  font-weight: 600;
+}
+.clinic-doctor__slot .u-eyebrow { flex: none; }
+.clinic-doctors-note { margin-top: var(--sp-6); }
+
+
+/* -- 7. 本院區可提供的療程 --------------------------------------------------- */
+.clinic-cat__list { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-4); }
+
+.clinic-general { margin-top: var(--sp-7); padding-top: var(--sp-7); border-top: 1px solid var(--line); }
+.clinic-general__list { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-4); }
+
+
+/* -- 8. 院區環境照 ------------------------------------------------------------
+   原本是 4 張 320×220 網站小圖放大到 4 欄格——banner 小圖放大就糊，是這頁
+   最明顯的畫質落差。改用 7900px 原檔裁出的院方實景大圖（見
+   assets/img/IMAGE-SOURCES.md），只留 2 張、放大顯示，畫質換份量。
+   比例沿用 09-about 的裱框直式 4:5，與品牌理念頁的編輯語彙一致。 */
+.clinic-gallery { gap: var(--sp-7); }
+.clinic-gallery__frame {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background: var(--fill-media);
+}
+.clinic-gallery__frame img {
+  width: 100%; height: 100%; object-fit: cover;
+  transition: transform var(--dur-slow) var(--ease);
+}
+.clinic-gallery__item:hover .clinic-gallery__frame img { transform: scale(1.03); }
+.clinic-gallery__caption {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-sm);
+  color: var(--ink-70);
+}
+
+@media (max-width: 768px) {
+  .clinic-gallery { grid-template-columns: 1fr; }
+}
+
+
+/* -- 9. 另一個院區 ------------------------------------------------------------
+   原本是有外框、有底色的盒子——這是全站「去框、留線」收斂之前的殘留。
+   改成與頁面其餘段落一致的上緣細線，份量交給留白而不是盒子邊界。 */
+.clinic-other {
+  display: flex; flex-direction: column; gap: var(--sp-4);
+  max-width: 640px;
+}
+.clinic-other--plain {
+  padding-top: var(--sp-6);
+  border-top: 1px solid var(--line);
+}
+.clinic-other__nap { font-size: var(--fs-sm); color: var(--ink-70); line-height: 1.8; }
+.clinic-other__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+
+
+/* -- 10. 頁尾 CTA 區 ----------------------------------------------------------- */
+.clinic-cta { text-align: center; }   /* 灰底由 HTML 的 .section--alt 給 */
+.clinic-cta__inner { max-width: 560px; margin-inline: auto; }
+.clinic-cta h2 { margin-bottom: var(--sp-3); }
+.clinic-cta p { margin-bottom: var(--sp-6); font-size: var(--fs-sm); }
+.clinic-cta__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-3); }

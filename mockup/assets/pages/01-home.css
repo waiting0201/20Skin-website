@@ -1,0 +1,180 @@
+  /* =====================================================================
+     首頁專屬版面樣式（.home- 前綴）。元件本體樣式一律在 assets/base.css，
+     這裡只處理「這一頁特有的排版比例／間距組合」，不建立新元件。
+     ===================================================================== */
+
+  /* -- 1. Hero ---------------------------------------------------------- */
+  /* 上緣間距原為 --sp-10（128px），加上 88px 的 sticky header 後、
+     主標之前會空出近 150px，讀起來像頁面還沒開始。收到 --sp-7。 */
+  .home-hero { position: relative; overflow: hidden; padding-block: var(--sp-7) var(--sp-8); }
+  /* 媒體欄比文字欄寬：hero 圖是這一屏的主角。欄距同時從 96px 收到 64px，
+     兩項加起來讓圖片可用寬度從約 515px 增加到約 595px。
+     ⚠️ 沒有再往上加的空間——banner*.jpg 原始尺寸只有 320×220（線上網站
+     images/banner/banner1-s.jpg 也是同一份，沒有大圖版本），現在已經放大
+     約 1.85 倍，再大就會明顯糊掉。要真正更大需要院方提供高解析原圖。 */
+  .home-hero__layout {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: var(--sp-8);
+    align-items: center;
+  }
+  .home-hero__title {
+    margin-block: var(--sp-5) var(--sp-5);
+    letter-spacing: .01em;
+  }
+  .home-hero__title-dot { display: inline-block; margin-inline: .12em; color: var(--accent); }
+  .home-hero__lede { font-family: var(--font-serif); font-size: var(--fs-md); color: var(--ink); font-weight: 600; max-width: 46ch; margin-bottom: var(--sp-4); }
+  .home-hero__desc { font-size: var(--fs-sm); color: var(--ink-70); max-width: 50ch; margin-bottom: var(--sp-7); }
+  .home-hero__cta { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+  .home-hero__media { position: relative; }
+  /* 相框裱紙處理：外層留白 mat 邊，模擬藝廊裱框照片，而非直接滿版貼圖 */
+  .home-hero__frame {
+    position: relative;
+    padding: var(--sp-2);
+    background: var(--paper);
+    border: 1px solid var(--line);
+  }
+  .home-hero__glow {
+    position: absolute; inset: 0;
+    z-index: 1;                 /* 疊在輪播投影片之上 */
+    background: linear-gradient(200deg, rgba(18, 54, 92, .32) 0%, rgba(18, 54, 92, 0) 55%);
+    pointer-events: none;
+  }
+  .home-hero__caption {
+    font-size: var(--fs-xs);
+    color: var(--ink-50);
+    text-align: right;
+    letter-spacing: .02em;
+  }
+
+  @media (max-width: 1024px) {
+    .home-hero { padding-block: var(--sp-6) var(--sp-7); }
+    .home-hero__layout { grid-template-columns: 1fr; gap: var(--sp-7); }
+    /* 單欄後圖片會撐滿容器，在 1000px 寬時等於把 320px 的原圖放大近 3 倍，
+       糊到很明顯。上限壓在 640px（＝2 倍，與桌機的放大倍率一致）——
+       銳利的小圖比糊掉的大圖好看。原圖尺寸的限制見 .home-hero__layout 註解。 */
+    .home-hero__media { order: -1; max-width: 640px; }
+    .c-ring--hero { width: 180px; height: 180px; top: -30px; right: -40px; }
+  }
+
+  /* -- 2. 八大專科入口 ---------------------------------------------------
+     原本一格裡疊了三層裝飾：金色編號 01–08 ＋ 124px 藍色圓框 ＋ 四周花窗
+     格線。八格排開就是 8 個圓、8 組編號、一整片格線，成為首頁最吵的區塊。
+     現在只留 icon 與標題，靠 .grid--icons 的留白分格。 */
+  .home-specialty {
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    gap: var(--sp-4);
+    padding: var(--sp-5) var(--sp-3);
+  }
+  /* spec-08.png 是 RGB 沒有 alpha（其餘七張都有）。底色已是純白，multiply
+     等同無作用，但保留可避免日後把這一區改回淺色底時又露出白方塊。 */
+  .home-specialty__icon {
+    width: 76px; height: 76px;
+    mix-blend-mode: multiply;
+    transition: transform var(--dur) var(--ease);
+  }
+  .home-specialty:hover .home-specialty__icon,
+  .home-specialty:focus-visible .home-specialty__icon { transform: scale(1.06); }
+  .home-specialty__label {
+    font-size: var(--fs-md); font-weight: 600; color: var(--ink);
+    transition: color var(--dur) var(--ease);
+  }
+  .home-specialty:hover .home-specialty__label { color: var(--brand); }
+
+  @media (max-width: 768px) {
+    .home-specialty__icon { width: 64px; height: 64px; }
+  }
+  @media (max-width: 480px) {
+    .home-specialty { padding-block: var(--sp-4); }
+    .home-specialty__icon { width: 54px; height: 54px; }
+    .home-specialty__label { font-size: var(--fs-sm); }
+  }
+
+  /* -- 5. 醫師團隊：14 位全員多行展開 --------------------------------------
+     原本是橫向捲動列，改為格線 —— 團隊規模本身就是說服力，藏在捲軸後面
+     等於要求使用者主動去發現。桌機 5 欄（14 位排成 5+5+4）。 */
+  .home-doctors__grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--sp-6) var(--sp-5);
+  }
+  @media (max-width: 1024px) { .home-doctors__grid { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 768px)  { .home-doctors__grid { grid-template-columns: repeat(3, 1fr); gap: var(--sp-5) var(--sp-4); } }
+  @media (max-width: 480px)  { .home-doctors__grid { grid-template-columns: repeat(2, 1fr); } }
+
+  /* -- 6. 據點資訊 --------------------------------------------------------- */
+  /* 據點卡：原為 1px 全框的盒子。兩張並排時像兩個表單面板，
+     改為只留上緣一道細線，內容直接排在白底上。 */
+  .home-clinic {
+    padding-top: var(--sp-5);
+    border-top: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: var(--sp-5);
+  }
+  .home-clinic__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
+  .home-clinic__name { font-size: var(--fs-md); }
+  .home-clinic__nap { font-size: var(--fs-sm); color: var(--ink-70); line-height: 1.8; }
+  .home-clinic__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: auto; }
+
+  /* -- 7. 品牌理念摘要 ------------------------------------------------------ */
+  .home-philosophy__layout {
+    display: grid;
+    grid-template-columns: 1fr 1.1fr;
+    gap: var(--sp-9);
+    align-items: center;
+  }
+  .home-philosophy__media { position: relative; }
+  .home-philosophy__frame {
+    position: relative;
+    padding: var(--sp-2);
+    background: var(--paper);
+    border: 1px solid var(--line);
+  }
+  .home-philosophy__frame-inner {
+    position: relative;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+  }
+  .home-philosophy__frame-inner img { width: 100%; height: 100%; object-fit: cover; }
+  .c-ring--gold.home-philosophy__ring { top: -36px; left: -44px; }
+
+  .home-philosophy__kicker {
+    display: inline-block;
+    font-family: var(--font-base);
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    letter-spacing: .06em;
+    color: var(--accent);
+    padding-bottom: var(--sp-2);
+    border-bottom: 1px solid var(--accent);
+    margin-bottom: var(--sp-6);
+  }
+  .home-philosophy__quote {
+    position: relative;
+    font-size: var(--fs-lg);
+    font-weight: 600;
+    line-height: 1.75;
+    color: var(--ink);
+    margin-bottom: var(--sp-7);
+    max-width: 22ch;
+  }
+  /* 裝飾性放大引號，取材自引文自身已使用的中文夾注號，不另造新字元 */
+  .home-philosophy__quote::before {
+    content: "\300C";
+    position: absolute;
+    top: -.5em; left: -.6em;
+    font-family: var(--font-serif);
+    font-size: 3.5em;
+    line-height: 1;
+    color: var(--accent);
+    opacity: .18;
+    z-index: -1;
+    pointer-events: none;
+  }
+  .home-philosophy__points { display: flex; flex-direction: column; gap: var(--sp-5); margin-bottom: var(--sp-6); }
+  .home-philosophy__point h4 { margin-bottom: var(--sp-2); }
+  .home-philosophy__point p { font-size: var(--fs-sm); }
+
+  @media (max-width: 1024px) {
+    .home-philosophy__layout { grid-template-columns: 1fr; gap: var(--sp-7); }
+  }

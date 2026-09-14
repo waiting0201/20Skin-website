@@ -1,0 +1,201 @@
+# 前台 ＋ 後台 SPA ＋ /api/fallback → Azure Static Web Apps（swa-20skin-web-prod）。
+#
+# 這個 repo 的 GitHub main 分支由 tools/sync-public.sh 從 master 產生，所以一次部署是
+# 「commit → sync-public.sh → push Remote_GitHub」，不是 commit 完就上線。
+#
+# ⚠️ 應用程式 API 不在這裡（CLAUDE.md 決策 7：API 分兩處）。`api/` 只有 fallback
+#    那一支 Managed Function，它與前台是同一個部署單位、必須一起上傳；
+#    `functions/` 那個獨立 Function App 由 api.yml 部署，不隨內容重建。
+#
+# 🔴 這條 workflow 尚未在 GitHub 上實跑過（2026-09-14 寫）。本機等價物是
+#    tools/deploy-swa.sh —— 下面每一個「⚠️」都是那支腳本在正式環境實際踩出來的，
+#    不要因為看起來多餘就拿掉。第一次觸發請盯著輸出，跑通後更新 STATUS.md §六。
+#
+# 需要的 GitHub 設定：
+#   secrets: AZURE_STATIC_WEB_APPS_API_TOKEN（az staticwebapp secrets list 取得）
+#            SKIN20_EXPORT_SQL（建置期**唯讀**連線字串，docs/07 §6）
+#            AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID（OIDC，開 SQL 防火牆用）
+#   vars:    SITE_URL=https://20skin.tw（smoke test 與 sitemap 的絕對網址）
+#            AZURE_RESOURCE_GROUP=rg-20skin-web-prod、SQL_SERVER_NAME
+#            API_BASE_URL=https://api.20skin.tw/api/v1（烤進前台產物）
+#            RECAPTCHA_SITE_KEY（公開值；少了它前台送出表單會被後端擋下，docs/10 §5.1）
+name: web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'apps/admin/**'
+      - 'api/**'
+      - 'mockup/assets/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/web.yml'
+  # 後台按下「發布」與排程發布的 Timer trigger 會呼叫 GitHub API 觸發這條
+  repository_dispatch:
+    types: [content-published]
+  workflow_dispatch:
+
+# OIDC 需要這兩個權限（開 SQL 防火牆讓匯出連得上資料庫）。少了 id-token 會在
+# azure/login 拿不到 token，錯誤訊息是「Unable to get ACTIONS_ID_TOKEN_REQUEST_URL」。
+permissions:
+  id-token: write
+  contents: read
+
+# 同時只跑一個部署：只有一個正式環境（不設 staging、不設 PR 預覽，CLAUDE.md 決策 5），
+# 兩個 job 同時上傳會互相覆蓋。
+concurrency:
+  group: web-deploy
+  cancel-in-progress: true
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    name: Build and Deploy
+    timeout-minutes: 45 # 1845 頁預渲染
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      # 兩個版本都要：api/ 卡在 net9.0（SWA 的 apiRuntime 上限就是 dotnet-isolated:9.0，
+      # docs/07 §1，不要改成 10，會部署失敗），而 tools/content-export 是 net10.0。
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.x
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # ── 內容快照 ────────────────────────────────────────────────────
+      # 🔴 apps/web/content/*.json **不進版控**，由這一步從資料庫產生
+      #    （docs/09 §3：執行期不查詢、不讀檔，內容在建置期內聯進靜態產物）。
+      #    少了它 nuxt generate 會在 import ~~/content/*.json 當場失敗。
+      #    順帶產出 robots.txt／sitemap*.xml／faq.json／llms*.txt（docs/07 §4）。
+      # ⚠️ 讀的是**已核准的版本快照**，不是 ContentItems 的即時欄位 ——
+      #    那份判定與 API 共用同一份原始碼（Visibility.cs），不要在這裡另寫一套。
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # runner 的 IP 是浮動的，「允許 Azure 服務存取」也涵蓋不到它（runner 不是 Azure 資源）。
+      - name: Open SQL firewall for this runner
+        id: fw
+        run: |
+          IP=$(curl -s https://api.ipify.org)
+          RULE="gha-web-${{ github.run_id }}"
+          echo "rule=$RULE" >> "$GITHUB_OUTPUT"
+          az sql server firewall-rule create \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --server "${{ vars.SQL_SERVER_NAME }}" \
+            --name "$RULE" --start-ip-address "$IP" --end-ip-address "$IP"
+
+      - name: Export content from database
+        run: pnpm --filter web export:content
+        env:
+          # 建置期身分是**唯讀**的，與 API 的執行期身分、CI 的遷移身分都不同（docs/08 §J-3）。
+          SKIN20_EXPORT_SQL: ${{ secrets.SKIN20_EXPORT_SQL }}
+          SKIN20_SITE_ORIGIN: ${{ vars.SITE_URL }}
+
+      - name: Close SQL firewall
+        if: always() # 上一步失敗也要收掉，否則會留下一條長期開放的規則
+        run: |
+          az sql server firewall-rule delete \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --server "${{ vars.SQL_SERVER_NAME }}" \
+            --name "${{ steps.fw.outputs.rule }}" || true
+
+      # 🔴 順序：admin 一定要在 web 之前。apps/admin 的 vite 產物直接輸出到
+      #    apps/web/public/admin/，反過來跑的話 nuxt generate 會把上一版的後台打包進去。
+      - name: Build admin SPA
+        run: pnpm --filter admin build
+        env:
+          VITE_API_BASE_URL: ${{ vars.API_BASE_URL }}
+          # 後台登入也走 reCAPTCHA v3（docs/10 §5.1）。
+          # ⚠️ 少了這個變數，Function App 一設 BotCheck__SecretKey 就沒有人登得進後台 ——
+          #    前端拿不到 token，後端一律擋下，而錯誤訊息指不到原因。
+          VITE_RECAPTCHA_SITE_KEY: ${{ vars.RECAPTCHA_SITE_KEY }}
+
+      # 前台建置第一步是 sync:assets，從 mockup/assets 複製樣式與字型。
+      # ⚠️ mockup/assets 因此必須在版控裡（2026-09-14 放行，見 .gitignore）——
+      #    找不到它這一步會直接 exit 1。設計稿 HTML 沒進版控，所以 pnpm verify:css
+      #    在 CI 上跑不了，樣式照抄的驗收仍然只能在有設計稿的機器上做。
+      - name: Build web (nuxt generate)
+        run: pnpm --filter web build
+        env:
+          NUXT_PUBLIC_API_BASE_URL: ${{ vars.API_BASE_URL }}
+          NUXT_PUBLIC_RECAPTCHA_SITE_KEY: ${{ vars.RECAPTCHA_SITE_KEY }}
+
+      # SWA Standard 單一環境上限 500 MB。超過會部署失敗，而失敗訊息不見得指向大小 ——
+      # 沒有預覽環境可以先撞牆，這個檢查就是唯一的攔截點。
+      # staticwebapp.config.json 的 20 KB 是另一件事：301 規則寫太多會超過，
+      # 那正是 770 條轉址改走 /api/fallback 查 SQL 的原因（docs/07 §2）。
+      - name: Check size limits
+        run: |
+          OUT=apps/web/.output/public
+          SIZE_KB=$(du -sk "$OUT" | cut -f1)
+          echo "產物大小：$((SIZE_KB / 1024)) MB"
+          if [ "$SIZE_KB" -gt 450000 ]; then
+            echo "::error::產物超過 450 MB，逼近 SWA Standard 單一環境 500 MB 上限"
+            exit 1
+          fi
+          if [ "$SIZE_KB" -gt 300000 ]; then
+            echo "::warning::產物已達 $((SIZE_KB / 1024)) MB，請檢視圖片是否誤入建置產物、字型是否已子集化"
+          fi
+          CONFIG_BYTES=$(wc -c < "$OUT/staticwebapp.config.json")
+          echo "staticwebapp.config.json：${CONFIG_BYTES} bytes"
+          if [ "$CONFIG_BYTES" -gt 20480 ]; then
+            echo "::error::staticwebapp.config.json 超過 20 KB 上限（301 規則過多，只該留高流量那幾條）"
+            exit 1
+          fi
+
+      - name: Publish fallback function (net9.0)
+        run: dotnet publish api/Skin20.Fallback.csproj -c Release -o ${{ github.workspace }}/api-publish --nologo
+
+      # ⚠️ SWA 的 responseOverrides.404 對 function 回的 404 不生效（2026-09-11 實測），
+      #    而 navigationFallback 會把全站每一個找不到的請求都送進 /api/fallback，
+      #    所以 404 版面只能由那支 function 自己送 —— 它讀的是產物根目錄的 404.html。
+      - name: Copy 404 page into API output
+        run: cp apps/web/.output/public/404.html ${{ github.workspace }}/api-publish/404.html
+
+      - name: Deploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: apps/web/.output/public
+          api_location: api-publish
+          output_location: ''
+          # 已經自己 build 過了。讓 action 再 build 一次，在 pnpm workspace 下會產生
+          # 巢狀路徑，結果是 CSS 與字型 404 而部署顯示成功。
+          skip_app_build: true
+          skip_api_build: true
+
+      # 上線後這一步失敗＝正式站已經壞了，要有人看到。
+      # ⚠️ /admin/ 那條專門擋一個實際踩過的坑：staticwebapp.config.json 裡
+      #    /admin/static/* 必須排在 /admin/* 前面，否則後台的 JS 會被改寫成 index.html，
+      #    瀏覽器拿到 text/html 當 module 解析 —— 後台白畫面，而部署顯示成功。
+      - name: Smoke test
+        run: |
+          BASE="${{ vars.SITE_URL }}"
+          for P in "/" "/treatments/" "/admin/"; do
+            CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 --retry 3 --retry-delay 5 "$BASE$P")
+            echo "GET $BASE$P → $CODE"
+            [ "$CODE" = "200" ] || { echo "::error::$P 回應 $CODE"; exit 1; }
+          done
+          # 301 走 /api/fallback，是部署後最容易壞掉的一條路徑（它是 1000 條轉址的唯一出口）
+          CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$BASE/index2.php")
+          echo "GET $BASE/index2.php → $CODE"
+          [ "$CODE" = "301" ] || { echo "::error::301 fallback 回應 $CODE，應為 301"; exit 1; }

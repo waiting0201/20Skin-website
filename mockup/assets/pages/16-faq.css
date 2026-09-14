@@ -1,0 +1,129 @@
+/* =========================================================================
+   16-faq.html 常見問題頁專屬樣式（.faq- 前綴）
+   accordion 本體是 base.css 的 .c-faq（<details>/<summary>，免 JS 亦可用）；
+   分類切換是 base.css 的 .c-tabs ＋ app.js 的 handleTabs()，這裡只補版面。
+
+   ⚠️ 這一頁是「可瀏覽的題庫」，右下角浮動鈕的 AI 諮詢面板則是「直接問」。
+   兩者刻意分開：面板內不放題目清單（見 base.css 20c 的說明）。
+   ========================================================================= */
+
+.faq-hero__layout, .faq-search__form, .faq-help__item { min-width: 0; }
+
+/* -- 1. Hero：左文右圖，搜尋框收在文字欄裡 --------------------------------
+   搜尋框原本自成一個 section 掛在 Hero 底下，變成一條孤零零的橫帶：左邊
+   一個灰色輸入框、右邊整片空白，上下又各有一段 section 內距。改為併進 Hero
+   的文字欄——「標題→說明→搜尋」本來就是同一件事，併起來 Hero 才是完整的
+   一屏，也省掉中間那段空白。圖為非療效意象圖（木格柵長廊）。 */
+.faq-hero { padding-block: var(--sp-8) var(--sp-7); }
+.faq-hero__layout {
+  display: grid;
+  grid-template-columns: 1fr .85fr;
+  gap: var(--sp-8);
+  align-items: center;
+}
+.faq-hero__title { margin-block: var(--sp-3) var(--sp-4); }
+.faq-hero__lede { font-size: var(--fs-md); color: var(--ink-70); max-width: 44ch; }
+.faq-hero__media { overflow: hidden; aspect-ratio: 4 / 3; background: var(--fill-media); }
+.faq-hero__media img { width: 100%; height: 100%; object-fit: cover; }
+
+@media (max-width: 768px) {
+  .faq-hero__layout { grid-template-columns: 1fr; gap: var(--sp-5); }
+  .faq-hero__media { order: -1; }
+}
+
+.faq-search__form {
+  display: flex; gap: var(--sp-2);
+  max-width: 480px;
+  margin-top: var(--sp-6);
+}
+.faq-search__input {
+  flex: 1 1 auto; min-width: 0;
+  padding: .85em 1em;
+  font-family: var(--font-base);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  background: var(--surface-alt);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+.faq-search__input::placeholder { color: var(--ink-50); }
+.faq-search__input:focus { outline: none; border-color: var(--brand-600); background: var(--paper); }
+.faq-search__hint { margin-top: var(--sp-3); font-size: var(--fs-xs); color: var(--ink-50); max-width: 44ch; }
+
+/* -- 2. 分類 Tab ---------------------------------------------------------- */
+/* 題庫限寬 820px 並置中：問答的行長超過 40 個中文字就不好讀，兩側等寬留白
+   也讓這一區自成一塊。下方「沒有你要問的」用同一個寬度與置中方式，兩區
+   對齊成同一條中軸。 */
+.faq-tabs { max-width: 820px; margin-inline: auto; }
+
+/* 分類列在桌機一定放得下五個分類，不需要捲動；只有窄螢幕才需要橫向滑動，
+   而且捲軸要藏起來（系統設定「總是顯示捲軸」時，auto 會在分類列下方留一條
+   灰帶，看起來像版面壞掉）。捲動能力保留，只是不畫捲軸。 */
+.faq-tabs .c-tabs__list { flex-wrap: wrap; }
+.faq-tabs .c-tabs__btn { white-space: nowrap; }
+
+@media (max-width: 768px) {
+  .faq-tabs .c-tabs__list {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;          /* Firefox */
+  }
+  .faq-tabs .c-tabs__list::-webkit-scrollbar { display: none; }   /* Chrome / Safari */
+}
+.faq-tabs .c-tabs__panel { padding-top: var(--sp-7); }
+
+.faq-group__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: var(--sp-4); flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
+}
+.faq-group__count { font-size: var(--fs-xs); color: var(--ink-50); }
+
+/* -- 3. 找不到答案 --------------------------------------------------------
+   原本是三欄卡片並排：三段文字長度不一，按鈕就各自停在不同高度，底下的
+   免責聲明又緊接著上來，整區擠成一團。改成與題庫同寬（820px 置中）的
+   三列清單——「名稱｜說明｜動作」三欄對齊，靠上下細線分列，動作一律靠右
+   對齊在同一條垂直線上，這樣三個入口的比較關係一眼就看得出來。 */
+.faq-help__col { max-width: 820px; margin-inline: auto; }
+
+.faq-help { border-top: 1px solid var(--line); }
+.faq-help__item {
+  display: grid;
+  grid-template-columns: 7em minmax(0, 1fr) auto;
+  gap: var(--sp-5);
+  align-items: center;
+  padding-block: var(--sp-5);
+  border-bottom: 1px solid var(--line);
+}
+.faq-help__title { font-size: var(--fs-md); }
+.faq-help__desc { font-size: var(--fs-sm); }
+.faq-help__action { justify-self: end; white-space: nowrap; }
+
+/* 這一格不放按鈕：全站只有一顆 [data-consult-toggle]（右下角浮動鈕），
+   app.js 只綁第一個，頁面內再放第二顆會把浮動鈕的綁定搶走。 */
+.faq-help__pointer {
+  justify-self: end;
+  text-align: right;
+  font-size: var(--fs-xs);
+  color: var(--ink-50);
+  white-space: nowrap;
+}
+.faq-help__pointer strong { color: var(--brand-700); }
+
+.faq-help__note { margin-top: var(--sp-7); }
+
+@media (max-width: 768px) {
+  .faq-help__item {
+    grid-template-columns: 1fr;
+    gap: var(--sp-2);
+    align-items: start;
+    padding-block: var(--sp-4);
+  }
+  .faq-help__action, .faq-help__pointer { justify-self: start; text-align: left; margin-top: var(--sp-2); }
+}
+
+/* -- 4. 頁尾 CTA ---------------------------------------------------------- */
+.faq-cta__inner { text-align: center; }
+.faq-cta__inner p { margin-block: var(--sp-3) var(--sp-6); }
+.faq-cta__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); justify-content: center; }

@@ -1,0 +1,115 @@
+/* =========================================================================
+   12-treatment-overview.html 療程總覽（樞紐頁）專屬樣式（.tov- 前綴）
+   元件本體樣式一律在 assets/base.css，這裡只處理本頁特有的排版比例。
+
+   這一頁是 /treatments/ 的樞紐：往下分四個分類，往旁連八個困擾，
+   因此版面重點在「分類區塊」與「全項目索引」兩塊，而非卡片牆。
+   ========================================================================= */
+
+.tov-hero__layout, .tov-cat, .tov-index__group, .tov-cta__box { min-width: 0; }
+
+/* -- 1. Hero：左文右圖，與 03 分類頁同一組比例（原本只有置中文字，無圖）--- */
+.tov-hero { padding-block: var(--sp-8) var(--sp-7); }
+.tov-hero__layout {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.tov-hero__title { margin-block: var(--sp-3) var(--sp-4); }
+.tov-hero__lede { font-size: var(--fs-md); color: var(--ink-70); max-width: 52ch; }
+.tov-hero__media { position: relative; }
+.tov-hero__frame { overflow: hidden; aspect-ratio: 3 / 2; background: var(--fill-media); }
+.tov-hero__frame img { width: 100%; height: 100%; object-fit: cover; }
+
+@media (max-width: 1024px) {
+  .tov-hero__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+  .tov-hero__media { order: -1; }
+}
+
+/* -- 2. 四大分類：左圖右文，逐項交錯（偶數項圖片換到右側）---------------- */
+.tov-cat {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: var(--sp-7);
+  align-items: center;
+  padding-block: var(--sp-7);
+  border-top: 1px solid var(--line);
+}
+.tov-cat:last-child { border-bottom: 1px solid var(--line); }
+.tov-cat__media { overflow: hidden; aspect-ratio: 4 / 3; background: var(--fill-media); }
+.tov-cat__media img { width: 100%; height: 100%; object-fit: cover; }
+.tov-cat:nth-child(even) .tov-cat__media { order: 2; }
+.tov-cat__no {
+  font-family: var(--font-base);
+  font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: .18em;
+  color: var(--accent);
+}
+.tov-cat h3 { margin-block: var(--sp-2) var(--sp-3); font-size: var(--fs-xl); }
+.tov-cat p { font-size: var(--fs-sm); }
+.tov-cat__items {
+  display: flex; flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  margin-top: var(--sp-4);
+}
+.tov-cat__count { font-size: var(--fs-xs); color: var(--ink-50); margin-top: var(--sp-3); }
+.tov-cat__more { display: inline-block; margin-top: var(--sp-4); font-size: var(--fs-sm); font-weight: 600; color: var(--brand-600); }
+.tov-cat__more:hover { color: var(--brand-700); }
+
+@media (max-width: 768px) {
+  .tov-cat { grid-template-columns: 1fr; gap: var(--sp-5); }
+  .tov-cat:nth-child(even) .tov-cat__media { order: 0; }
+}
+
+/* -- 3. 全項目索引：四欄清單，純文字不做卡片 ------------------------------ */
+.tov-index { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-7) var(--sp-6); }
+.tov-index__group h3 {
+  font-size: var(--fs-md);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--sp-4);
+}
+.tov-index__list { display: flex; flex-direction: column; gap: var(--sp-3); }
+.tov-index__list a { font-size: var(--fs-sm); color: var(--ink-70); line-height: 1.6; }
+.tov-index__list a:hover { color: var(--brand); }
+.tov-index__list .tov-index__eng { display: block; font-size: var(--fs-xs); color: var(--ink-50); letter-spacing: .04em; }
+
+@media (max-width: 1024px) { .tov-index { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px)  { .tov-index { grid-template-columns: 1fr; } }
+
+/* -- 4. 依困擾找療程 ------------------------------------------------------ */
+.tov-concerns { display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-5); }
+.tov-concerns .c-tag { font-size: var(--fs-sm); }
+
+/* -- 5. 流程四步 ---------------------------------------------------------- */
+.tov-step { padding-top: var(--sp-5); border-top: 1px solid var(--line); }
+.tov-step__no {
+  font-family: var(--font-base);
+  font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: .18em;
+  color: var(--brand-600);
+}
+.tov-step h3 { margin-block: var(--sp-2) var(--sp-2); font-size: var(--fs-md); }
+.tov-step p { font-size: var(--fs-sm); }
+
+/* -- 6. 頁尾 CTA（與 03 分類頁同款深底方塊）------------------------------- */
+.tov-cta { padding-block: var(--sp-8); }
+.tov-cta__box {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-7); flex-wrap: wrap;
+  padding: var(--sp-7);
+  background: var(--brand-700);
+  border-radius: var(--radius-md);
+}
+.tov-cta__text { max-width: 46ch; }
+.tov-cta__text .u-eyebrow { color: #fff; opacity: .8; }
+.tov-cta__text h2 { color: #fff; margin-block: var(--sp-2) var(--sp-2); }
+.tov-cta__text p { color: rgba(255,255,255,.75); font-size: var(--fs-sm); }
+.tov-cta__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); flex: none; }
+.tov-cta__actions .btn--line { background: transparent; color: #fff; border-color: rgba(255,255,255,.5); }
+.tov-cta__actions .btn--line:hover { background: rgba(255,255,255,.1); border-color: #fff; }
+
+@media (max-width: 768px) {
+  .tov-cta__box { padding: var(--sp-6); }
+  .tov-cta__actions { width: 100%; }
+  .tov-cta__actions .btn { flex: 1; }
+}

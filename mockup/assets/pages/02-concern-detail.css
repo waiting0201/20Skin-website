@@ -1,0 +1,161 @@
+/* =========================================================================
+   02-concern-detail 頁專屬版面樣式（.concern- 前綴）。
+   元件本體樣式一律在 assets/base.css，這裡只處理「這一頁特有的排版比例／
+   間距組合」，不建立新元件、不覆寫 base.css 既有規則。
+   ========================================================================= */
+
+/* -- 0. 溢出防呆（沿用既有慣例）------------------------------------------ */
+.concern-head__layout,
+.concern-symptom__layout,
+.concern-doctors { min-width: 0; }
+
+/* -- 1. 頁首（麵包屑 + H1 + 情境圖） -------------------------------------- */
+.concern-head { padding-block: var(--sp-8) var(--sp-7); }
+.concern-head__layout {
+  display: grid;
+  grid-template-columns: 1.1fr .9fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.concern-head__icon-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-5);
+  margin-bottom: var(--sp-3);
+}
+.concern-head__icon { width: 40px; height: 40px; }
+.concern-head__lede { font-size: var(--fs-md); color: var(--ink-70); max-width: 46ch; margin-block: var(--sp-4) var(--sp-6); }
+.concern-head__related { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); }
+.concern-head__related-label { font-size: var(--fs-sm); color: var(--ink-50); margin-inline-end: var(--sp-1); }
+.concern-head__media { position: relative; }
+.concern-head__frame {
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+}
+.concern-head__frame img { width: 100%; height: 100%; object-fit: cover; }
+
+@media (max-width: 1024px) {
+  .concern-head__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+  .concern-head__media { order: -1; }
+}
+
+
+/* -- 1b. 症狀描述：圖文左右分欄，圖片負責份量、文字收短（與 09 品牌理念頁
+   「我們如何看待自然」段落同一組手法：.c-sechead 包住標題，段落緊接在後）--- */
+.concern-symptom__layout {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.concern-symptom__media { overflow: hidden; aspect-ratio: 4 / 3; background: var(--fill-media); }
+.concern-symptom__media img { width: 100%; height: 100%; object-fit: cover; }
+.concern-symptom__copy p { margin-top: var(--sp-4); }
+
+@media (max-width: 1024px) {
+  .concern-symptom__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+}
+
+
+/* -- 2. 自我判斷：困擾類型卡片（放入 base.css 既有 .grid.grid--2 內） ------ */
+.concern-type-card {
+  padding-left: var(--sp-5);
+  border-left: 1px solid var(--line);
+}
+.concern-type-card h4 { margin-bottom: var(--sp-3); }
+.concern-type-card__list { display: flex; flex-direction: column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.concern-type-card__list li {
+  font-size: var(--fs-sm);
+  color: var(--ink-70);
+  line-height: 1.6;
+  padding-left: var(--sp-4);
+  position: relative;
+}
+.concern-type-card__list li::before {
+  content: "";
+  position: absolute;
+  left: 0; top: .65em;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--ink-50);
+}
+.concern-type-card__direction {
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line-soft);
+}
+.concern-type-card__direction strong { color: var(--ink); }
+
+
+/* -- 3. 何時就醫：c-note--warn 內的條列 ------------------------------------ */
+/* 原本用 inline style 撐開間距（style="margin-top: var(--sp-8)"／
+   style="margin-bottom: var(--sp-2)"），改回 class——專案規範不得使用
+   inline style。 */
+.concern-warn-note { margin-top: var(--sp-8); }
+.concern-warn-note h3 { margin-bottom: var(--sp-2); }
+.concern-warn-list { display: flex; flex-direction: column; gap: var(--sp-2); margin-top: var(--sp-3); }
+.concern-warn-list li {
+  font-size: var(--fs-sm);
+  color: var(--ink-70);
+  padding-left: var(--sp-4);
+  position: relative;
+}
+.concern-warn-list li::before {
+  content: "";
+  position: absolute;
+  left: 0; top: .65em;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--ink-50);
+}
+
+
+/* -- 4. 建議療程：整頁視覺錨點 -------------------------------------------- */
+.concern-rx-intro { max-width: 68ch; margin-bottom: var(--sp-5); }
+.concern-rx-note { margin-bottom: var(--sp-7); }
+
+/* 建議順序。原為 30px 深藍實心圓標壓在圖片上——卡片去框之後那顆圓會直接
+   浮在照片上，更顯突兀。改為圖片上方的序號小字，跟 .c-tag 同一個層級。 */
+.concern-rx-badge {
+  display: block;
+  margin-bottom: var(--sp-2);
+  font-family: var(--font-base);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: .16em;
+  color: var(--ink-50);
+}
+/* 「首選」標記：不另給實心底色，與 .c-tag 一致，只用品牌藍區分 */
+.concern-tag--top { color: var(--brand); }
+.concern-rx-tagrow { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); }
+.concern-rx-more {
+  margin-top: auto;
+  padding-top: var(--sp-2);
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--brand);
+}
+
+
+/* -- 5. 相關醫師：精簡兩張，維持固定寬度而非撐滿整列 ------------------------ */
+.concern-doctors { display: flex; flex-wrap: wrap; gap: var(--sp-5); }
+.concern-doctors .c-card { flex: 0 1 220px; }
+
+
+/* -- 6. FAQ 時間戳 --------------------------------------------------------- */
+.concern-faq-updated { font-size: var(--fs-xs); color: var(--ink-50); margin-top: calc(var(--sp-3) * -1); margin-bottom: var(--sp-6); }
+
+
+/* -- 7. 頁尾 CTA 區 --------------------------------------------------------- */
+.concern-cta { text-align: center; }   /* 灰底由 HTML 的 .section--alt 給 */
+.concern-cta__inner { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); }
+.concern-cta__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-3); margin-top: var(--sp-2); }
+
+
+/* -- RWD ------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  .concern-head { padding-block: var(--sp-7) var(--sp-6); }
+}

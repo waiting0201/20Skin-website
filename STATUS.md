@@ -73,7 +73,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 | **後台開發** | 🟡 | **30／30 畫面完成**，**已接上真 API**（2026-09-12，§三） |
 | **資料模型與 migrations** | ✅ | 35 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四）。共 10 支遷移，**2026-09-14 全部套用到正式庫**（§六） |
 | **API** | ✅ | 端點、服務、三支 Timer 完成，**已對真 SQL Server 端到端驗證**（§五） |
-| 部署與 CI/CD | 🟡 | **已部署並實測**（前台 ＋ 後台 ＋ 兩個 API）；workflow 未進 repo，目前靠 `tools/deploy-swa.sh` 本機部署（§六） |
+| 部署與 CI/CD | 🟡 | **已部署並實測**（前台 ＋ 後台 ＋ 兩個 API）。兩條 workflow **2026-09-14 進 repo**（`.github/workflows/{web,api}.yml`，比照 NTI），但**尚未在 GitHub 上實跑過**，且 secrets／vars 與 CI 遷移身分都還沒設 —— 在那之前仍靠 `tools/deploy-swa.sh` 本機部署（§六） |
 | 內容遷移（約 800 篇） | ⬜ | 需先有資料庫 |
 | 療程內容（**28 項**） | 🟡 | 適應症、許可證字號、產品圖、標題、療程↔文章關聯已全部按舊站補齊（§下）。**但 28 項的療程時間／術後照護／禁忌症舊站一項都沒有，仍需醫師投入 —— Phase 1 最大瓶頸沒有改變**，27 頁仍是 noindex 的「建置中」 |
 | 上線前驗收 | ⬜ | checklist 見 §七 |
@@ -562,6 +562,7 @@ reCAPTCHA v3 的 action 只接受 `A-Za-z/_`。原本用的是 **`questions-miss
 | 8 | `AddSitemapFilesSetting`（2026-09-12） | 種子加一列 `seo.sitemapFiles`（sitemap 分檔設定）。**只 INSERT 一列，向後相容** |
 | 9 | `SeedRobotsTxtGuardrails`（2026-09-12） | robots.txt 的種子值加上兩行警語（不封鎖 AI 爬蟲、不要寫 `Disallow: /admin/`）。⚠️ **只在值仍是原始種子時才更新** —— EF 產出的 `UpdateData` 是無條件覆蓋，會把院方改過的 robots.txt 靜靜蓋掉 |
 | 10 | `RenameMakeupStylePageTitle`（2026-09-14） | 頁面 1114（`/about/makeup-style/`）的種子標題「彩妝式輕醫美」→「新中式美學」。只 `UpdateData` 一格，向後相容。⚠️ **這只改種子／工作副本的 `ContentItems.Title`** —— 前台匯出讀的是已核准的版本快照（`tools/content-export` 的 `TitleOf`），正式庫要改名還是得在後台改完後**重新發布**該頁 |
+| 11 | `ScrubAdminPathFromRobotsTxt`（2026-09-14） | 把「不要寫 `Disallow: /admin/` —— 後台就在 `/admin/`」那兩行從 robots.txt 的**值**裡拿掉。🔴 那句警語是對的，位置是錯的：這個值會原樣變成公開的 `robots.txt`，寫在裡面等於主動公告後台位置 —— 正是它要防的事。警語改放後台 SitemapSettings 畫面的說明與 `checkRobotsTxt()` 的擋存檔。⚠️ 同樣**只在值仍是上一版種子時才更新**，不覆寫院方改過的 robots.txt |
 
 第 3 支的四個欄位（已對本機 `Skin20_Dev` 實跑）：
 
@@ -625,9 +626,23 @@ reCAPTCHA v3 的 action 只接受 `A-Za-z/_`。原本用的是 **`questions-miss
 
 ### ✅ 已部署並實測（2026-09-11）
 
-部署方式是 **`tools/deploy-swa.sh`（本機執行）**，不是 CI —— workflow 還沒進 repo。
-那支腳本的檔頭記了四件不寫下來就會忘的事（建置順序、CLI 必給的兩個旗標、
-404 頁要複製進 API 產物、`api/` 是 net9.0）。
+部署方式是 **`tools/deploy-swa.sh`（本機執行）**。那支腳本的檔頭記了四件不寫下來就會忘的事
+（建置順序、CLI 必給的兩個旗標、404 頁要複製進 API 產物、`api/` 是 net9.0）——
+`.github/workflows/web.yml` 就是照它翻寫的，那四件事逐條寫在步驟的註解裡。
+
+#### 🟡 CI（2026-09-14 進 repo，尚未實跑）
+
+`.github/workflows/web.yml`（前台＋後台＋`/api/fallback`）與 `api.yml`（獨立 Function App），
+骨架比照 `/Users/tim/webapps/NTI`（同一套雙 remote 機制，那兩條是實際在跑的）。三件與範本不同的事：
+
+1. **觸發分支是 `main`，而 `main` 是推上去之後的名字。** 本機叫 `public`，
+   靠 `remote.Remote_GitHub.push = refs/heads/public:refs/heads/main` 這條 refspec 改名（比照 NTI）。
+   連帶結果：**跑完 `tools/sync-public.sh` 並推上 GitHub 才會部署**，不是 commit 完就上線。
+2. **`mockup/assets` 進版控了**（12 MB，2026-09-14）。前台建置第一步 `sync:assets`
+   找不到它會直接 exit 1 —— 沒有它 CI 建不起前台。⚠️ 設計稿 HTML 仍未進版控，
+   所以 **`pnpm verify:css` 在 CI 上跑不了**，樣式照抄的驗收只能在有設計稿的機器上做。
+3. **範本那步 `dotnet test functions/Skin20.Api.Tests` 拿掉了** —— 那個專案不存在，
+   照抄會讓每次部署都失敗在那裡。API 的驗收目前靠 `tools/api-smoke/read.mjs` 與 workflow 末段的 smoke test。
 
 | 項目 | 狀態 |
 |---|---|
@@ -729,7 +744,7 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
 
 | 項目 | 說明 |
 |---|---|
-| **兩條 workflow 進 repo** | 範本在 [`docs/templates/`](docs/templates/)，尚未複製到 `.github/workflows/`。目前部署靠 `tools/deploy-swa.sh` 本機執行 |
+| **workflow 第一次實跑** | ✅ 已進 repo（`.github/workflows/web.yml`／`api.yml`，2026-09-14）。⬜ 還沒在 GitHub 上跑過一次，且缺 secrets（`AZURE_STATIC_WEB_APPS_API_TOKEN`、OIDC 三件組）與 vars（`SITE_URL`／`API_BASE_URL`／`RECAPTCHA_SITE_KEY`／`FUNCTION_APP_NAME`／`AZURE_RESOURCE_GROUP`／`SQL_SERVER_NAME`／`SQL_DATABASE`）。**CI 遷移身分也還沒建**（見上方三組 SQL 身分） |
 | **`favicon.ico`／`sitemap.xml`／`llms.txt`** | 線上實測皆 404，三者都還沒產生 |
 | ~~部署程式碼~~ | ✅ **已部署**（見上方） |
 | ~~Azure SQL~~ | ✅ **已就緒**（見下方） |

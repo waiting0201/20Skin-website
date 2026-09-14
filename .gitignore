@@ -7,15 +7,20 @@ node_modules/
 .claude/settings.local.json
 
 # ── 設計稿 ────────────────────────────────────────────────────────────
-# 三份 mockup 都不進版控（2026-09-11 決定）。體積 13M／2.7M／4.1M，
-# 且內含院方提供的實景照片。
+# 設計稿本體不進版控（2026-09-11 決定），**但 mockup/assets 是例外**
+# （2026-09-14 改）：CI 要建得起前台就一定要有它。
 #
-# ⚠️ 連帶後果要知情：frontend/ 的建置與驗收**相依於 mockup/**——
-#    `pnpm sync:assets` 從 mockup/assets 複製樣式、`pnpm verify:css` 拿
-#    mockup 的 CSS 與 HTML 當比對基準。**在沒有 mockup/ 的機器上 clone 下來
-#    是 build 不起來的**，CI 也一樣。要在別台機器或 CI 上建置，得另外把
-#    mockup/ 取得到（從 NAS 複製，或日後改成獨立的素材來源）。
-mockup/
+# 🔴 例外只到 assets/ 為止。設計稿 HTML（640 KB）與 mockup2／mockup3 仍然擋著，
+#    reference/ 的院方原始照片更不用說。放行 assets/ 的理由很具體：
+#    那 12 MB 的每一個檔案本來就逐一公開掛在網站上，進公開 repo 不多洩漏任何東西，
+#    最大單檔 708 KB 也低於 pre-push 的 2 MB 閘。
+#
+# ⚠️ 連帶後果要知情：`pnpm --filter web build` 第一步 `sync:assets` 會從
+#    mockup/assets 複製樣式，**找不到就 exit 1**——所以它非進版控不可。
+#    但 `pnpm verify:css` 另外要拿 **mockup 的 HTML** 當 class 詞彙基準，
+#    那些沒進版控，所以**驗收閘只能在有設計稿的機器上跑，CI 跑不了**。
+mockup/*
+!mockup/assets/
 mockup2/
 mockup3/
 

@@ -1,0 +1,198 @@
+/* =========================================================================
+   09-about.html 品牌理念頁專屬版面樣式（.about- 前綴）
+   元件本體樣式一律在 assets/base.css，這裡只處理本頁特有的排版比例／
+   間距組合，不建立新元件。
+   ========================================================================= */
+
+/* -- 0. 溢出防呆（沿用既有慣例）------------------------------------------ */
+.about-hero__layout,
+.about-quote,
+.about-pillar,
+.about-view__layout,
+.about-cta__box { min-width: 0; }
+
+/* -- 1. Hero：左文右圖，與 03 分類頁同一組比例 ---------------------------- */
+.about-hero { padding-block: var(--sp-8) var(--sp-7); }
+.about-hero__layout {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.about-hero__title { margin-block: var(--sp-3) var(--sp-5); }
+/* Hero 導言：與 03／12／13／17 各頁 Hero 同一組規格（18px 黑體、--ink-70）。
+   一度改成 24px 宋體 600，但那個字級是 h3 的份量，壓在 h1 底下會讀成第二個
+   標題，而且 22ch 的斷行讓它變成四行短句，反而更吵。 */
+.about-hero__lede { font-size: var(--fs-md); color: var(--ink-70); line-height: 1.9; max-width: 46ch; }
+.about-hero__media { position: relative; }
+/* 暖金圓框是全站三處簽名之一（首頁理念區／此處／頁尾），不另外新增第四處 */
+.about-hero__ring { top: -34px; left: -46px; }
+/* 圖片是 7900px 原檔裁出的實景（1800×1200 橫式），顯示寬約 620px ＝ 縮小
+   顯示，邊緣才夠銳利。裱紙白邊留著：它是方向 A「藝廊裱框」語彙的一部分。 */
+.about-hero__frame {
+  position: relative;
+  padding: var(--sp-2);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  /* ⚠️ 比例要下在「框」上、圖片再 height:100% —— 這是 base.css 既有元件
+     （.c-card__media、.tcat-hero__frame）一致的作法。把 aspect-ratio 直接
+     寫在 <img> 上，在這裡會被圖片的原生尺寸蓋過去，變成整張原尺寸撐開。 */
+  aspect-ratio: 3 / 2;
+}
+.about-hero__frame img { width: 100%; height: 100%; object-fit: cover; }
+
+@media (max-width: 1024px) {
+  .about-hero__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+  .about-hero__media { order: -1; max-width: 640px; }
+}
+
+/* -- 2. 引言：左大圖、右引言 -----------------------------------------------
+   原本是置中的一段大字，兩側全空。改成圖與字並置——圖負責份量，
+   字負責語氣，兩者互相支撐，也讓這一段有「翻頁看到跨頁圖」的節奏。 */
+.about-quote__layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.about-quote__media { overflow: hidden; aspect-ratio: 4 / 5; background: var(--fill-media); }
+.about-quote__media img { width: 100%; height: 100%; object-fit: cover; }
+.about-quote__body { padding-right: var(--sp-6); }
+.about-quote__text {
+  font-family: var(--font-serif);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  line-height: 1.9;
+  color: var(--ink);
+}
+.about-quote__cite { display: block; margin-top: var(--sp-6); font-size: var(--fs-sm); color: var(--ink-50); font-style: normal; }
+
+@media (max-width: 768px) {
+  .about-quote__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+  .about-quote__media { aspect-ratio: 3 / 2; }
+  .about-quote__body { padding-right: 0; }
+}
+
+/* -- 3. 三個理念支柱（每欄一張圖）------------------------------------------ */
+/* 「去框、留線」：不做卡片盒子，圖片與文字直接堆疊，只在文字上緣留一道細線 */
+.about-pillar {
+  display: flex; flex-direction: column;
+  gap: var(--sp-3);
+}
+.about-pillar__media {
+  display: block;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  background: var(--fill-media);
+  margin-bottom: var(--sp-5);
+}
+.about-pillar__media img {
+  width: 100%; height: 100%; object-fit: cover;
+  transition: transform var(--dur-slow) var(--ease);
+}
+.about-pillar:hover .about-pillar__media img { transform: scale(1.04); }
+.about-pillar__no { padding-top: var(--sp-4); border-top: 1px solid var(--line); }
+.about-pillar__no {
+  font-family: var(--font-base);
+  font-size: var(--fs-eyebrow);
+  font-weight: 700;
+  letter-spacing: .18em;
+  color: var(--accent);
+}
+.about-pillar h3 { font-size: var(--fs-lg); }
+.about-pillar p { font-size: var(--fs-sm); }
+.about-pillar__more { margin-top: auto; padding-top: var(--sp-3); font-size: var(--fs-sm); font-weight: 600; color: var(--brand-600); }
+.about-pillar__more:hover { color: var(--brand-700); }
+
+/* -- 4. 我們如何看待「自然」：左圖右文 ------------------------------------ */
+.about-view__layout {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.about-view__media { overflow: hidden; aspect-ratio: 4 / 3; background: var(--fill-media); }
+.about-view__media img { width: 100%; height: 100%; object-fit: cover; }
+.about-view__copy p { margin-top: var(--sp-4); }
+.about-view__copy p:first-of-type { margin-top: 0; }
+
+@media (max-width: 1024px) {
+  .about-view__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+}
+
+/* -- 5. 沿革（年表）-------------------------------------------------------
+   原本是縮在 .container--narrow 裡的縱向點線時間軸：段落標題切齊 .container
+   左緣、年表卻是置中的窄欄，兩者左緣對不上，整區看起來偏向右側。
+   改為與段落標題共用同一個 .container，並拆成「年份｜事件」兩欄的年表列，
+   靠上下細線分列（沿用全站「去框、留線」的作法），左右不再失衡。 */
+.about-timeline { border-top: 1px solid var(--line); }
+.about-timeline__item {
+  display: grid;
+  grid-template-columns: 8em 1fr;
+  gap: var(--sp-5);
+  align-items: baseline;
+  padding-block: var(--sp-5);
+  border-bottom: 1px solid var(--line);
+}
+.about-timeline__year {
+  font-family: var(--font-base);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--brand-600);
+  font-variant-numeric: tabular-nums;
+}
+.about-timeline__title { font-size: var(--fs-md); margin-bottom: var(--sp-1); }
+.about-timeline__item p { font-size: var(--fs-sm); max-width: 62ch; }
+
+@media (max-width: 480px) {
+  .about-timeline__item { grid-template-columns: 1fr; gap: var(--sp-2); }
+}
+
+/* -- 6. 據點簡述（含院區實景照）------------------------------------------- */
+.about-clinic__media {
+  display: block;
+  overflow: hidden;
+  aspect-ratio: 3 / 2;
+  background: var(--fill-media);
+  margin-bottom: var(--sp-5);
+}
+.about-clinic__media img {
+  width: 100%; height: 100%; object-fit: cover;
+  transition: transform var(--dur-slow) var(--ease);
+}
+.about-clinic:hover .about-clinic__media img { transform: scale(1.03); }
+.about-clinic__name {
+  font-size: var(--fs-lg);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line);
+  margin-bottom: var(--sp-3);
+}
+.about-clinic p { font-size: var(--fs-sm); margin-bottom: var(--sp-3); }
+.about-clinic address { font-size: var(--fs-xs); color: var(--ink-50); line-height: 1.9; }
+
+/* -- 7. 頁尾 CTA（與 03 分類頁同款深底方塊）------------------------------- */
+.about-cta { padding-block: var(--sp-8); }
+.about-cta__box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-7);
+  flex-wrap: wrap;
+  padding: var(--sp-7);
+  background: var(--brand-700);
+  border-radius: var(--radius-md);
+}
+.about-cta__text { max-width: 46ch; }
+.about-cta__text .u-eyebrow { color: #fff; opacity: .8; }
+.about-cta__text h2 { color: #fff; margin-block: var(--sp-2) var(--sp-2); }
+.about-cta__text p { color: rgba(255,255,255,.75); font-size: var(--fs-sm); }
+.about-cta__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); flex: none; }
+.about-cta__actions .btn--line { background: transparent; color: #fff; border-color: rgba(255,255,255,.5); }
+.about-cta__actions .btn--line:hover { background: rgba(255,255,255,.1); border-color: #fff; }
+
+@media (max-width: 768px) {
+  .about-cta__box { padding: var(--sp-6); }
+  .about-cta__actions { width: 100%; }
+  .about-cta__actions .btn { flex: 1; }
+}

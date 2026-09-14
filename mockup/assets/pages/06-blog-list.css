@@ -1,0 +1,159 @@
+/* =========================================================================
+   06-blog-list.html 專屬版面樣式（.blog- 前綴）
+   元件本體樣式一律在 assets/base.css，這裡只處理「這一頁特有的排版比例／
+   間距組合」：分類 Hero、年份篩選列、精選文章橫幅卡、雙欄（主欄＋側欄）、
+   側欄迷你療程卡、分頁補充樣式、頁尾 CTA 區。
+   ========================================================================= */
+
+/* -- 0. 溢出防呆（沿用既有慣例）------------------------------------------ */
+.blog-layout, .blog-feature, .blog-cta__box { min-width: 0; }
+
+/* -- 1. 分類 Hero ------------------------------------------------------- */
+.blog-hero__title { margin-block: var(--sp-3) var(--sp-4); }
+.blog-hero__desc { font-size: var(--fs-md); color: var(--ink-70); max-width: 62ch; margin-bottom: var(--sp-4); }
+.blog-hero__count { font-size: var(--fs-sm); color: var(--ink-50); }
+.blog-hero__count strong { color: var(--brand-700); font-size: var(--fs-md); font-weight: 700; }
+
+/* -- 2. 分類 Tab ＋ 年份篩選 ---------------------------------------------- */
+.blog-filters { padding-block: var(--sp-5) var(--sp-6); border-bottom: 1px solid var(--line); }
+.blog-filters .c-tabs__list { border-bottom: 0; margin-bottom: var(--sp-5); }
+
+/* 12 個年份。原本是 12 顆帶框的 chip 橫排，讀起來像一整列按鈕；
+   chip 去框之後改用較寬的字間距排成一行文字列。 */
+.blog-years {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+}
+.blog-years__link { cursor: pointer; }
+
+@media (max-width: 480px) {
+  .blog-years {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-inline: calc(var(--sp-5) * -1);
+    padding-inline: var(--sp-5);
+    padding-bottom: var(--sp-1);
+    scroll-snap-type: x proximity;
+  }
+  .blog-years__link { flex: none; scroll-snap-align: start; }
+}
+
+/* -- 3. 雙欄版面（主欄 ＋ 側欄） ------------------------------------------- */
+.blog-layout {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: var(--sp-9);
+  align-items: start;
+}
+.blog-main { min-width: 0; }
+.blog-aside {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-7);
+  position: sticky;
+  top: calc(var(--header-h) + var(--sp-5));
+}
+
+@media (max-width: 1024px) {
+  .blog-layout { grid-template-columns: 1fr; gap: var(--sp-7); }
+  .blog-aside { position: static; }
+}
+
+/* -- 4. 精選文章橫幅卡（大版位：左圖右文）---------------------------------
+   原本圖佔 45%、封面是 800×500 的小圖放大。改為圖佔約一半版面、換上授權
+   素材大圖（1800px），比例收在 4:3——比一般卡片的 16:10 更方正，份量更重，
+   與其餘 9 篇文章的小卡片格拉出明確的層級差。 */
+.blog-feature { margin-bottom: var(--sp-8); }
+.blog-feature .c-card__media { flex: 0 0 52%; aspect-ratio: 4 / 3; }
+.blog-feature .c-card__body { flex: 1; padding: 0 0 0 var(--sp-7); gap: var(--sp-3); justify-content: center; }
+.blog-feature__badge { align-self: flex-start; }
+.blog-feature .c-card__title { font-size: var(--fs-xl); }
+.blog-feature .c-card__excerpt { font-size: var(--fs-base); max-width: 46ch; }
+
+@media (min-width: 769px) {
+  .blog-feature { flex-direction: row; }
+}
+@media (max-width: 768px) {
+  .blog-feature .c-card__media { flex: none; }
+  .blog-feature .c-card__body { padding: var(--sp-5) 0 0; }
+}
+
+/* -- 5. 文章卡片格：機台類封面圖用淺色底方框 + object-fit: contain -------- */
+.blog-grid { margin-bottom: var(--sp-3); }
+.blog-grid__media--pad {
+  background: var(--fill-media);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6);
+}
+.blog-grid__media--pad img { width: 100%; height: 100%; object-fit: contain; }
+
+/* -- 6. 分頁補充樣式 ------------------------------------------------------- */
+.blog-pager__ellipsis { border-color: transparent; pointer-events: none; }
+.blog-pager__status { margin-top: var(--sp-3); text-align: center; font-size: var(--fs-sm); color: var(--ink-50); }
+
+/* -- 7. 側欄：搜尋框 ------------------------------------------------------- */
+.blog-aside__block h3 { margin-bottom: var(--sp-4); }
+.blog-search { display: flex; gap: var(--sp-2); }
+.blog-search__input {
+  flex: 1;
+  min-width: 0;
+  padding: .7em var(--sp-3);
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+.blog-search__input:focus-visible { outline: 2px solid var(--brand-600); outline-offset: 1px; }
+
+/* -- 8. 側欄：熱門標籤 ------------------------------------------------------ */
+.blog-tags { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); }
+
+/* -- 9. 側欄：熱門療程迷你卡 ------------------------------------------------- */
+.blog-mini-list { display: flex; flex-direction: column; gap: var(--sp-4); }
+.blog-mini { display: flex; gap: var(--sp-3); align-items: flex-start; }
+.blog-mini__media {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  background: var(--fill-media);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-2);
+  overflow: hidden;
+}
+.blog-mini__media img { width: 100%; height: 100%; object-fit: contain; }
+.blog-mini__body { display: flex; flex-direction: column; gap: var(--sp-1); padding-top: var(--sp-1); }
+.blog-mini__title { font-size: var(--fs-sm); font-weight: 600; line-height: 1.5; }
+.blog-mini__title a:hover { color: var(--brand-600); }
+
+/* -- 10. 頁尾 CTA（深底方塊，與 09 品牌理念頁／10 故事頁同款收尾）----------
+   原本是白底置中的一段文字，收尾力道不夠。改成與其他頁面一致的深藍方塊，
+   也讓長頁面結束在一個明確的視覺句點上。 */
+.blog-cta__box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-7);
+  flex-wrap: wrap;
+  padding: var(--sp-7);
+  background: var(--brand-700);
+  border-radius: var(--radius-md);
+}
+.blog-cta__text { max-width: 46ch; }
+.blog-cta__text .u-eyebrow { color: #fff; opacity: .8; }
+.blog-cta__text h2 { color: #fff; margin-block: var(--sp-2) var(--sp-2); }
+.blog-cta__text p { color: rgba(255,255,255,.75); font-size: var(--fs-sm); }
+.blog-cta__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); flex: none; }
+
+@media (max-width: 768px) {
+  .blog-cta__box { padding: var(--sp-6); }
+  .blog-cta__actions { width: 100%; }
+  .blog-cta__actions .btn { flex: 1; }
+}

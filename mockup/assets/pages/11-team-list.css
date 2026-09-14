@@ -1,0 +1,78 @@
+/* =========================================================================
+   11-team-list.html 醫療團隊列表頁專屬版面樣式（.team- 前綴）
+   元件本體樣式一律在 assets/base.css；醫師卡直接沿用 .c-card--doctor，
+   這裡只補「專長標籤列」與篩選列的排版。
+   ========================================================================= */
+
+.team-hero__inner, .team-filters__row { min-width: 0; }
+
+/* -- 1. Hero -------------------------------------------------------------- */
+.team-hero { padding-block: var(--sp-8) var(--sp-7); }
+.team-hero__title { margin-block: var(--sp-3) var(--sp-4); }
+.team-hero__lede { font-size: var(--fs-md); color: var(--ink-70); max-width: 60ch; }
+.team-hero__count { margin-top: var(--sp-4); font-size: var(--fs-sm); color: var(--ink-50); }
+.team-hero__count strong { color: var(--brand-700); font-size: var(--fs-md); }
+
+/* -- 2. 篩選列（.c-tabs 變體：跨頁連結而非分頁切換，比照 03 分類頁）------ */
+.team-filters { border-bottom: 1px solid var(--line); padding-bottom: var(--sp-4); }
+.team-filters__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-4); }
+.team-filters .c-tabs__list { border-bottom: 0; flex: 1; }
+.team-sites { display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-4); flex: none; }
+.team-sites__label { font-size: var(--fs-xs); color: var(--ink-50); }
+
+/* -- 3. 醫師卡的專長標籤列 ------------------------------------------------ */
+/* .c-card__meta 之後再加一列標籤：字級同 .c-tag，靠 gap 分隔不加底色 */
+.team-card__tags {
+  display: flex; flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  margin-top: var(--sp-2);
+}
+.team-card__site {
+  font-family: var(--font-base);
+  font-size: var(--fs-xs);
+  color: var(--ink-50);
+}
+
+/* 藝術總監不是醫師 —— 用一道細線與字色把身分差異標出來，避免被讀成第 14 位醫師 */
+.c-card--doctor.team-card--art .c-card__title { color: var(--ink); }
+.team-card--art .team-card__site { color: var(--accent); }
+
+/* -- 4. 團隊組成說明 ------------------------------------------------------ */
+.team-note { margin-top: var(--sp-7); }
+
+/* -- 4b. 角色分工三欄（與 09 品牌理念頁的「三個支撐點」同款：每欄一張
+   意象圖 ＋ 上緣細線編號，不做卡片盒子。兩頁各自定義，避免跨頁 CSS 相依）
+   ⚠️ 比例要下在「框」上、圖片再 height:100%，不要寫在 <img> 上——
+   同一個地雷 09-about.css 已經寫過一次，這裡照抄它的作法。 --------------- */
+.team-role {
+  display: flex; flex-direction: column;
+  gap: var(--sp-3);
+}
+.team-role__media {
+  display: block;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  background: var(--fill-media);
+  margin-bottom: var(--sp-2);
+}
+.team-role__media img {
+  width: 100%; height: 100%; object-fit: cover;
+  transition: transform var(--dur-slow) var(--ease);
+}
+.team-role:hover .team-role__media img { transform: scale(1.04); }
+.team-role__no {
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line);
+  font-family: var(--font-base);
+  font-size: var(--fs-eyebrow);
+  font-weight: 700;
+  letter-spacing: .18em;
+  color: var(--accent);
+}
+.team-role h3 { font-size: var(--fs-lg); }
+.team-role p { font-size: var(--fs-sm); }
+
+/* -- 5. 頁尾 CTA ---------------------------------------------------------- */
+.team-cta__inner { text-align: center; }
+.team-cta__inner p { margin-block: var(--sp-3) var(--sp-6); }
+.team-cta__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); justify-content: center; }

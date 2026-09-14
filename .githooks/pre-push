@@ -6,6 +6,8 @@
 # 兩道檢查：
 #   1. 路徑：reference/ output/ mockup/ mockup2/ mockup3/ .wrangler/
 #      —— 必須涵蓋「歷史上出現過的路徑」，不只是現在的樹
+#      ⚠️ **mockup/assets/ 是例外**（2026-09-14）：CI 建前台需要它，且那些檔案
+#         本來就公開掛在網站上。擋的是設計稿 HTML 與其餘 mockup 內容。
 #   2. 體積：兩層，各防各的失效模式。路徑清單可能漏，體積不會。
 #      MAX_BLOB_MB  單一檔案 —— 素材目錄的特徵就是「少數幾個巨大的二進位檔」
 #      MAX_PACK_MB  封包總量 —— 對應 GitHub 的 2GB 單次推送上限
@@ -23,7 +25,9 @@ z40=0000000000000000000000000000000000000000
 while read -r local_ref local_sha remote_ref remote_sha; do
     [ "$local_sha" = "$z40" ] && continue
 
+    # 先濾掉放行的 mockup/assets（連同 mockup 這個目錄物件本身），再套黑名單。
     hit=$(git rev-list --objects "$local_sha" \
+          | grep -Ev ' mockup(/assets(/|$)|$)' \
           | grep -E ' (reference|output|mockup|mockup2|mockup3|\.wrangler)(/|$)' \
           | head -3 || true)
     if [ -n "$hit" ]; then

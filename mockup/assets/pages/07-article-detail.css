@@ -1,0 +1,302 @@
+/* =========================================================================
+   07-article-detail.html 專屬版面樣式（.article- 前綴）
+   元件本體樣式一律在 assets/base.css，這裡只處理本頁特有的排版比例／
+   間距組合，不建立新元件，優先重用 base.css 既有 class。
+
+   版面策略：全頁以 .container--narrow（720px）做為閱讀欄寬，維持左緣
+   對齊一致；只有卡片式區塊（關聯療程／相關文章）改用寬版 .container，
+   以區塊背景／間距做出視覺區隔，而非硬做側欄破壞窄欄對齊。
+   ========================================================================= */
+
+/* -- 1. 文章頁首（分類標籤／H1／摘要） ------------------------------------ */
+.article-head { padding-block: var(--sp-6) 0; }
+.article-head .c-tag { margin-bottom: var(--sp-4); }
+.article-head h1 { margin-bottom: var(--sp-4); }
+.article-excerpt { font-size: var(--fs-md); color: var(--ink-70); max-width: 62ch; }
+
+/* -- 2. 封面圖 ------------------------------------------------------------ */
+.article-cover { margin-block: var(--sp-6); }
+.article-cover__frame {
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+}
+.article-cover__frame img { width: 100%; height: 100%; object-fit: cover; }
+.article-cover figcaption {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--ink-50);
+  text-align: right;
+}
+
+/* -- 3. Byline 區（作者／審閱／日期／閱讀時間） --------------------------- */
+.article-byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  margin-block: var(--sp-6);
+  padding: var(--sp-5) 0;
+  border-block: 1px solid var(--line);
+}
+.article-byline__author {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex: none;
+}
+.article-byline__avatar {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  flex: none;
+  border: 1px solid var(--paper);
+}
+.article-byline__name { display: block; font-size: var(--fs-base); font-weight: 700; color: var(--brand-700); }
+.article-byline__author:hover .article-byline__name { color: var(--brand-600); }
+.article-byline__role { display: block; font-size: var(--fs-xs); color: var(--ink-50); }
+
+.article-byline__facts { flex: 1 1 260px; min-width: 0; }
+.article-byline__reviewed { font-size: var(--fs-sm); color: var(--ink); margin-bottom: var(--sp-2); }
+.article-byline__reviewed strong { color: var(--brand-700); }
+.article-byline__meta {
+  display: flex; flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-xs); color: var(--ink-50);
+}
+.article-byline__meta span::before { content: "\00b7"; margin-inline-end: var(--sp-1); color: var(--ink-50); }
+.article-byline__meta span:first-child::before { content: none; margin: 0; }
+
+@media (max-width: 480px) {
+  .article-byline { flex-direction: column; align-items: flex-start; }
+}
+
+/* -- 4. 目錄（TOC） -------------------------------------------------------- */
+.article-toc {
+  margin-block: 0 var(--sp-8);
+  padding: var(--sp-5) 0;
+  border-block: 1px solid var(--line);
+}
+.article-toc__title {
+  font-size: var(--fs-eyebrow);
+  font-weight: 700;
+  letter-spacing: .1em;
+  color: var(--ink-50);
+  margin-bottom: var(--sp-3);
+}
+.article-toc__list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sp-2) var(--sp-5);
+}
+@media (min-width: 600px) {
+  .article-toc__list { grid-template-columns: 1fr 1fr; }
+}
+.article-toc__list a {
+  display: flex;
+  gap: .5em;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  line-height: 1.5;
+}
+.article-toc__list a:hover { color: var(--brand-600); }
+.article-toc__list a::before {
+  content: "";
+  flex: none;
+  width: 4px; height: 4px;
+  margin-top: .7em;
+  border-radius: 50%;
+  background: var(--ink-50);
+}
+
+/* -- 5. 內文排版（H2/H3/段落/清單/表格/圖說/提醒框） ----------------------- */
+.article-content { padding-bottom: var(--sp-2); }
+.article-content h2,
+.article-content h3 {
+  scroll-margin-top: calc(var(--header-h) + var(--sp-4));
+}
+.article-content h2 { margin-top: var(--sp-9); padding-bottom: var(--sp-2); position: relative; }
+.article-content h2:first-child { margin-top: 0; }
+.article-content h2::after {
+  content: "";
+  position: absolute; left: 0; bottom: 0;
+  width: 40px; height: 2px;
+  background: var(--brand);
+}
+.article-content h3 { margin-top: var(--sp-7); }
+.article-content p { margin-top: var(--sp-4); }
+.article-content p:first-child,
+.article-content h2 + p,
+.article-content h3 + p { margin-top: var(--sp-4); }
+
+.article-lead {
+  font-size: var(--fs-md);
+  color: var(--ink);
+  font-weight: 500;
+  line-height: 1.8;
+}
+
+/* -- 清單（base.css 已將 ul/ol reset 為無樣式，這裡補上視覺記號） --------- */
+.article-content ul.article-list,
+.article-content ol.article-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+.article-content ul.article-list li,
+.article-content ol.article-list li {
+  position: relative;
+  padding-left: 1.6em;
+  font-size: var(--fs-base);
+  color: var(--ink-70);
+  line-height: 1.75;
+}
+.article-content ul.article-list li::before {
+  content: "";
+  position: absolute; left: .15em; top: .75em;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--ink-50);
+}
+.article-content ol.article-list { counter-reset: article-list; }
+.article-content ol.article-list li { counter-increment: article-list; }
+.article-content ol.article-list li::before {
+  content: counter(article-list) ".";
+  position: absolute; left: 0; top: 0;
+  font-weight: 700;
+  color: var(--ink-50);
+}
+
+/* -- 表格（CJK 內容需明確 min-width，overflow-x:auto 才不會被壓成單字欄） - */
+.article-table-wrap {
+  margin-top: var(--sp-5);
+  overflow-x: auto;
+  border-top: 1px solid var(--line);
+}
+.article-table { width: 100%; min-width: 560px; border-collapse: collapse; }
+.article-table th, .article-table td {
+  padding: var(--sp-3) var(--sp-4) var(--sp-3) 0;
+  font-size: var(--fs-sm);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--line);
+}
+.article-table thead th {
+  color: var(--ink);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.article-table td { color: var(--ink-70); }
+
+/* -- 插圖 + 圖說 ------------------------------------------------------------ */
+.article-figure { margin-top: var(--sp-7); margin-bottom: var(--sp-7); }
+/* ⚠️ 比例下在「框」上、圖片再 height:100% —— 直接把 aspect-ratio 寫在 <img>
+   上，在這個專案裡會被圖片原生比例蓋過去（1800×1197 的圖會整張撐開版面）。
+   base.css 的 .c-card__media 也是同一個寫法。 */
+.article-figure__frame {
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  background: var(--fill-media);
+}
+.article-figure__frame img { width: 100%; height: 100%; object-fit: cover; }
+.article-figure figcaption {
+  margin-top: var(--sp-3);
+  font-size: var(--fs-xs);
+  color: var(--ink-50);
+  text-align: center;
+}
+
+/* 插圖比閱讀欄再寬一些：閱讀欄本身只有 720px（含 padding），跨頁最主要的
+   插圖需要比文字更有份量。用 min() 算出「比欄寬多一些、但絕不超出視窗」
+   的寬度，再用負的 margin-inline 對齊置中——calc 全部相對於父層（.container
+   --narrow 的內容寬），不依賴假設某個固定斷點下容器剛好是幾px，所以在任何
+   螢幕寬度都不會產生水平溢出。窄螢幕算出來的寬度會自然收斂回欄寬，等於
+   沒有破格，不需要另外寫 media query 關掉它。 */
+.article-figure--wide {
+  --fig-w: min(960px, calc(100vw - var(--sp-5) * 3));
+}
+.article-figure--wide .article-figure__frame {
+  width: var(--fig-w);
+  margin-inline: calc((100% - var(--fig-w)) / 2);
+  aspect-ratio: 16 / 9;
+}
+
+.article-content .c-note,
+.article-content .c-note--warn { margin-top: var(--sp-5); }
+
+/* -- 6. 關聯療程（後台「關聯療程」欄位自動產生） --------------------------- */
+/* 關聯療程區改白底——本頁的唯一一段灰底留給末尾 CTA */
+
+/* -- 7. 相關困擾／標籤列 ---------------------------------------------------- */
+.article-related-block { margin-block: var(--sp-8) 0; }
+.article-related-block__label {
+  display: block;
+  font-size: var(--fs-eyebrow);
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--ink-50);
+  margin-bottom: var(--sp-3);
+}
+.article-tag-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+
+/* -- 8. 作者資訊卡（文末） -------------------------------------------------- */
+.article-authorcard {
+  display: flex;
+  gap: var(--sp-5);
+  margin-block: var(--sp-8) 0;
+  padding: var(--sp-6) 0 0;
+  border-top: 1px solid var(--line);
+}
+.article-authorcard__avatar {
+  width: 84px; height: 84px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top center;
+  flex: none;
+}
+.article-authorcard__name { font-size: var(--fs-md); font-weight: 700; color: var(--ink); margin-bottom: var(--sp-1); }
+.article-authorcard__role { font-size: var(--fs-sm); color: var(--brand-600); font-weight: 600; margin-bottom: var(--sp-3); }
+.article-authorcard__bio { font-size: var(--fs-sm); color: var(--ink-70); margin-bottom: var(--sp-3); max-width: 56ch; }
+.article-authorcard__link { font-size: var(--fs-sm); font-weight: 600; color: var(--brand-600); }
+.article-authorcard__link:hover { color: var(--brand-700); }
+
+@media (max-width: 480px) {
+  .article-authorcard { flex-direction: column; align-items: flex-start; gap: var(--sp-3); }
+}
+
+/* -- 9. 分享列（純外觀） ----------------------------------------------------- */
+.article-share {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-4);
+  margin-block: var(--sp-6) 0;
+}
+.article-share__label { font-size: var(--fs-sm); font-weight: 600; color: var(--ink-50); }
+.article-share__btns { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+
+/* -- 10. 頁尾 CTA 區（深底方塊，與 09／10 頁同款收尾）----------------------- */
+.article-cta__box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-7);
+  flex-wrap: wrap;
+  padding: var(--sp-7);
+  background: var(--brand-700);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+.article-cta__text { max-width: 46ch; }
+.article-cta__text .u-eyebrow { color: #fff; opacity: .8; }
+.article-cta__text h2 { color: #fff; margin-block: var(--sp-2) var(--sp-2); }
+.article-cta__text p { color: rgba(255,255,255,.75); font-size: var(--fs-sm); }
+.article-cta__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); flex: none; }
+
+@media (max-width: 768px) {
+  .article-cta__box { padding: var(--sp-6); }
+  .article-cta__actions { width: 100%; }
+  .article-cta__actions .btn { flex: 1; }
+}

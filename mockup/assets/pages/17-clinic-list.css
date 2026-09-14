@@ -1,0 +1,124 @@
+/* =========================================================================
+   17-clinic-list.html 據點列表頁專屬樣式（.clist- 前綴）
+   時段矩陣 .c-hours、NAP 排版與地圖佔位皆沿用 base.css／既有慣例，
+   這裡只處理「兩個院區並列」的版面比例。
+   ========================================================================= */
+
+.clist-hero__inner, .clist-site, .clist-step, .clist-cta__box { min-width: 0; }
+
+/* -- 1. Hero -------------------------------------------------------------- */
+.clist-hero { padding-block: var(--sp-8) var(--sp-7); }
+.clist-hero__title { margin-block: var(--sp-3) var(--sp-4); }
+.clist-hero__lede { font-size: var(--fs-md); color: var(--ink-70); max-width: 58ch; }
+
+/* -- 2. 院區區塊：上圖下資訊，兩欄並列 ------------------------------------ */
+.clist-sites { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-8); }
+.clist-site { display: flex; flex-direction: column; gap: var(--sp-4); }
+.clist-site__media { overflow: hidden; aspect-ratio: 3 / 2; background: var(--fill-media); }
+.clist-site__media img { width: 100%; height: 100%; object-fit: cover; }
+.clist-site__name { font-size: var(--fs-xl); }
+.clist-site__role { font-size: var(--fs-xs); color: var(--brand-600); font-weight: 600; letter-spacing: .1em; }
+.clist-site__desc { font-size: var(--fs-sm); }
+.clist-site__nap { font-size: var(--fs-sm); color: var(--ink-70); line-height: 2; }
+.clist-site__nap dt {
+  float: left; width: 4.5em; clear: left;
+  color: var(--ink-50); font-size: var(--fs-xs);
+}
+.clist-site__nap dd { margin: 0; padding-left: 4.5em; }
+.clist-site__nap a:hover { color: var(--brand); }
+.clist-site__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: auto; padding-top: var(--sp-2); }
+
+@media (max-width: 768px) {
+  .clist-sites { grid-template-columns: 1fr; gap: var(--sp-9); }
+}
+
+/* -- 3. 地圖佔位 ----------------------------------------------------------
+   正式站改為嵌入地圖；mockup 階段以同比例佔位框呈現，避免載入外部資源。
+   兩院區步行可達是這頁的重點主張，佔位框改放兩根標示各自院區的地標圖釘，
+   比一塊寫著「地圖」兩字的灰底更有份量，也把「相距很近」的訊息視覺化。 */
+.clist-map {
+  position: relative;
+  aspect-ratio: 16 / 7;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--fill-media);
+}
+.clist-map__grid {
+  position: absolute; inset: 0;
+  background:
+    repeating-linear-gradient(0deg, var(--line-soft) 0 1px, transparent 1px 56px),
+    repeating-linear-gradient(90deg, var(--line-soft) 0 1px, transparent 1px 56px);
+}
+.clist-map__pin {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
+  transform: translate(-50%, -100%);
+}
+.clist-map__pin svg {
+  width: 34px; height: 34px;
+  color: var(--brand-600);
+  filter: drop-shadow(0 4px 6px rgba(18, 54, 92, .3));
+}
+.clist-map__pin em {
+  font-style: normal;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink-70);
+  background: var(--paper);
+  padding: .2em .6em;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.clist-map__pin--a { top: 48%; left: 34%; }
+.clist-map__pin--b { top: 66%; left: 60%; }
+.clist-map__pin--b svg { color: var(--accent); }
+
+.clist-map__foot {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+.clist-map__label { font-size: var(--fs-sm); color: var(--ink-70); }
+
+.clist-transport { margin-top: var(--sp-7); }
+
+@media (max-width: 480px) {
+  .clist-map__pin em { font-size: 11px; padding: .15em .5em; }
+}
+
+/* -- 4. 就診流程 ---------------------------------------------------------- */
+.clist-step { padding-top: var(--sp-5); border-top: 1px solid var(--line); }
+.clist-step__no {
+  font-family: var(--font-base);
+  font-size: var(--fs-eyebrow); font-weight: 700; letter-spacing: .18em;
+  color: var(--brand-600);
+}
+.clist-step h3 { margin-block: var(--sp-2) var(--sp-2); font-size: var(--fs-md); }
+.clist-step p { font-size: var(--fs-sm); }
+
+/* -- 5. 頁尾 CTA（與 03 分類頁同款深底方塊）------------------------------- */
+.clist-cta { padding-block: var(--sp-8); }
+.clist-cta__box {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-7); flex-wrap: wrap;
+  padding: var(--sp-7);
+  background: var(--brand-700);
+  border-radius: var(--radius-md);
+}
+.clist-cta__text { max-width: 46ch; }
+.clist-cta__text .u-eyebrow { color: #fff; opacity: .8; }
+.clist-cta__text h2 { color: #fff; margin-block: var(--sp-2) var(--sp-2); }
+.clist-cta__text p { color: rgba(255,255,255,.75); font-size: var(--fs-sm); }
+.clist-cta__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); flex: none; }
+.clist-cta__actions .btn--line { background: transparent; color: #fff; border-color: rgba(255,255,255,.5); }
+.clist-cta__actions .btn--line:hover { background: rgba(255,255,255,.1); border-color: #fff; }
+
+@media (max-width: 768px) {
+  .clist-cta__box { padding: var(--sp-6); }
+  .clist-cta__actions { width: 100%; }
+  .clist-cta__actions .btn { flex: 1; }
+}

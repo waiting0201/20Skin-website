@@ -1,0 +1,57 @@
+/* =========================================================================
+   20-404.html 找不到頁面專屬樣式（.nf- 前綴／not found）
+
+   這一頁在改版遷移期特別重要：舊站約 770 條網址會改變，即使 301 全數
+   設定完成，仍會有孤兒頁面與外部書籤落到這裡（見 docs/01-sitemap.md §4）。
+   因此版面重點不是「抱歉」，而是「你要找的東西可能在這幾個地方」。
+   ========================================================================= */
+
+.nf-hero__layout, .nf-entry { min-width: 0; }
+
+.nf-hero { padding-block: var(--sp-9) var(--sp-7); }
+.nf-hero__layout {
+  display: grid;
+  grid-template-columns: 1fr .8fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+/* 404 這個數字用宋體大字，與全站標題同一套語彙，不做圖形化處理 */
+.nf-hero__code {
+  font-family: var(--font-serif);
+  font-size: clamp(4rem, 2.6rem + 6vw, 8rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: .04em;
+  color: var(--brand-700);
+}
+.nf-hero__code span { color: var(--brand); }
+.nf-hero__title { margin-block: var(--sp-5) var(--sp-4); }
+.nf-hero__lede { font-size: var(--fs-md); color: var(--ink-70); }
+
+.nf-hero__media { overflow: hidden; aspect-ratio: 4 / 5; background: var(--fill-media); }
+.nf-hero__media img { width: 100%; height: 100%; object-fit: cover; }
+
+.nf-search { display: flex; gap: var(--sp-2); max-width: 480px; margin-top: var(--sp-7); }
+.nf-search__input {
+  flex: 1 1 auto; min-width: 0;
+  padding: .85em 1em;
+  font-family: var(--font-base);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  background: var(--surface-alt);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+.nf-search__input:focus { outline: none; border-color: var(--brand-600); background: var(--paper); }
+
+.nf-entry { padding-top: var(--sp-5); border-top: 1px solid var(--line); }
+.nf-entry h3 { font-size: var(--fs-md); margin-bottom: var(--sp-2); }
+.nf-entry h3 a:hover { color: var(--brand); }
+.nf-entry p { font-size: var(--fs-sm); }
+
+.nf-actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-7); }
+
+@media (max-width: 1024px) {
+  .nf-hero__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+  .nf-hero__media { order: -1; max-width: 420px; }
+}

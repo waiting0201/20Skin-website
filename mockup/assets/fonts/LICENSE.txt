@@ -1,0 +1,6 @@
+Noto Serif TC — SIL Open Font License, Version 1.1
+Copyright 2014-2021 Adobe (http://www.adobe.com/), Google LLC.
+https://openfontlicense.org/
+
+本目錄的 woff2 為上述字型的子集化產物，授權條件相同。
+重新產生：./scripts/build-mockup-fonts.sh

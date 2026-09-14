@@ -1,0 +1,111 @@
+/* =========================================================================
+   療程分類頁（光療美顏）專屬版面樣式（.tcat- 前綴）。
+   元件本體樣式一律在 assets/base.css，這裡只處理這一頁特有的排版比例／
+   間距組合，不建立與 base.css 重複的元件。
+   ========================================================================= */
+
+/* -- 0. 溢出防呆（沿用既有慣例，belt-and-suspenders）-------------------- */
+.tcat-hero__layout,
+.tcat-catnav__row,
+.tcat-concerns,
+.tcat-cta__box { min-width: 0; }
+
+/* -- 1. 分類 Hero -------------------------------------------------------- */
+.tcat-hero { padding-block: var(--sp-8) var(--sp-7); }
+.tcat-hero__layout {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.tcat-hero__title { margin-block: var(--sp-3) var(--sp-4); }
+.tcat-hero__lede { font-size: var(--fs-md); color: var(--ink-70); max-width: 52ch; }
+
+.tcat-hero__media { position: relative; }
+.tcat-hero__frame {
+  overflow: hidden;
+  aspect-ratio: 3 / 2;
+  background: var(--fill-media);
+}
+.tcat-hero__frame img { width: 100%; height: 100%; object-fit: cover; }
+
+@media (max-width: 1024px) {
+  .tcat-hero__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+  .tcat-hero__media { order: -1; }
+}
+
+/* -- 2. 四大分類次導覽（.c-tabs 變體，跨頁連結而非分頁切換）------------- */
+.tcat-catnav {
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+  position: sticky;
+  top: var(--header-h);
+  z-index: 50;
+}
+.tcat-catnav__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+.tcat-catnav__row .c-tabs__list { border-bottom: 0; flex: 1; }
+.tcat-catnav__more { flex: none; padding-block: var(--sp-3); }
+
+@media (max-width: 1024px) {
+  .tcat-catnav { position: static; }
+}
+@media (max-width: 768px) {
+  .tcat-catnav__row { gap: var(--sp-2); }
+  .tcat-catnav__row .c-tabs__list { gap: 0; }
+}
+
+/* -- 3. 療程卡片格：機台圖淺底方框 + 英文名 / 標籤 / 了解更多 ------------ */
+.tcat-card__eng {
+  display: block;
+  font-size: var(--fs-eyebrow);
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--brand-600);
+}
+.tcat-card__tags { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); }
+.tcat-card__more {
+  margin-top: var(--sp-1);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--brand-600);
+}
+.c-card--treatment:hover .tcat-card__more { color: var(--brand-700); }
+
+.tcat-note { margin-top: var(--sp-7); }
+
+/* -- 4. 困擾標籤列（反向連回困擾頁）--------------------------------------- */
+.tcat-concerns { display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-5); }
+.tcat-concerns .c-tag { font-size: var(--fs-sm); }
+
+
+/* -- 5. 頁尾 CTA 區 -------------------------------------------------------- */
+.tcat-cta { padding-block: var(--sp-8); }
+.tcat-cta__box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-7);
+  flex-wrap: wrap;
+  padding: var(--sp-7);
+  background: var(--brand-700);
+  border-radius: var(--radius-md);
+}
+.tcat-cta__text { max-width: 46ch; }
+.tcat-cta__text .u-eyebrow { color: #fff; opacity: .8; }
+.tcat-cta__text h2 { color: #fff; margin-block: var(--sp-2) var(--sp-2); }
+.tcat-cta__text p { color: rgba(255,255,255,.75); font-size: var(--fs-sm); }
+.tcat-cta__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); flex: none; }
+.tcat-cta__actions .btn--line { background: transparent; color: #fff; border-color: rgba(255,255,255,.5); }
+.tcat-cta__actions .btn--line:hover { background: rgba(255,255,255,.1); border-color: #fff; }
+
+@media (max-width: 768px) {
+  .tcat-cta__box { padding: var(--sp-6); }
+  .tcat-cta__actions { width: 100%; }
+  .tcat-cta__actions .btn { flex: 1; }
+}

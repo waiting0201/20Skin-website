@@ -1,0 +1,165 @@
+# 後端 API → 獨立的 Azure Functions App（func-20skin-web-api-prod、.NET 10 isolated、
+# Flex Consumption）。前後台共用的應用程式 API 全在這裡（CLAUDE.md 決策 7）。
+#
+# 這個 repo 的 GitHub main 分支由 tools/sync-public.sh 從 master 產生，所以一次部署是
+# 「commit → sync-public.sh → push Remote_GitHub」，不是 commit 完就上線。
+#
+# 觸發：functions/** 或本檔變更時。前台的 web.yml 是另一條線，兩者互不影響 ——
+# 改前台不會重新部署 API，改 API 也不會重跑那條要十幾分鐘的 1845 頁預渲染。
+# ⚠️ 兩條的 paths 必須互斥且完整，新增目錄時兩邊都要補，否則會出現
+#    「改了程式卻沒部署」這種很難查的狀況（docs/07 §5）。
+#
+# ⚠️ 用 OIDC 聯合身分登入，不是 publish profile —— Flex Consumption 不支援
+#    publish profile，而且 OIDC 沒有長期憑證要保管。
+#
+# 🔴 這條 workflow 尚未在 GitHub 上實跑過（2026-09-14 寫）。在此之前 Function App
+#    是手動或 tools/deploy-api.sh 部署的。第一次觸發請盯著輸出，跑通後更新 STATUS.md §六。
+#
+# 需要的 GitHub 設定（缺一整條會失敗，而訊息不見得指得到原因）：
+#   secrets: AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID
+#   vars:    FUNCTION_APP_NAME=func-20skin-web-api-prod
+#            AZURE_RESOURCE_GROUP=rg-20skin-web-prod
+#            SQL_SERVER_NAME / SQL_DATABASE
+# 🔴 服務主體要跑得動遷移，必須先在 Azure SQL 建成使用者並給 DDL 權限 ——
+#    它與執行期的 Managed Identity 是**兩個不同的身分**（docs/07 §6、docs/08 §J-3）。
+name: api
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - 'global.json'
+      - '.github/workflows/api.yml'
+  workflow_dispatch:
+
+# OIDC 需要這兩個權限。少了 id-token 會在 azure/login 拿不到 token，
+# 錯誤訊息是「Unable to get ACTIONS_ID_TOKEN_REQUEST_URL」，不會指向這裡。
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: api-deploy
+  cancel-in-progress: false # 遷移或部署中途取消會留下半套版本，寧可排隊
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  PROJECT: functions/Skin20.Api.csproj
+  OUTPUT_PATH: ${{ github.workspace }}/output
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # 0 warning 是合併門檻（docs/11 §15），csproj 已設 TreatWarningsAsErrors，
+      # 所以這一步同時是品質閘。
+      - name: Build
+        run: dotnet build ${{ env.PROJECT }} -c Release --nologo
+
+      # ⚠️ 範本（docs/templates/deploy-api.yml）有一步 `dotnet test functions/Skin20.Api.Tests`，
+      #    **那個專案不存在**（2026-09-14 確認）—— 照抄會讓每一次部署都失敗在那裡。
+      #    目前 API 的驗收靠 tools/api-smoke/read.mjs 與本檔最後的 smoke test。
+      #    日後補了測試專案請把那步加回來，且不可設 continue-on-error：沒有 staging，
+      #    這裡是僅有的關卡（CLAUDE.md 決策 5）。
+
+      - name: Publish
+        run: dotnet publish ${{ env.PROJECT }} -c Release --no-build -o ${{ env.OUTPUT_PATH }} --nologo
+
+      # csproj 設了 CopyToPublishDirectory=Never，這裡再確認一次：local.settings.json
+      # 含連線字串與 JWT secret，跟著產物上去等於把密鑰放進 Function App 的檔案系統。
+      - name: Assert no local settings in output
+        run: |
+          if [ -f "${{ env.OUTPUT_PATH }}/local.settings.json" ]; then
+            echo "::error::local.settings.json 出現在部署產物中，請檢查 csproj 的 CopyToPublishDirectory。"
+            exit 1
+          fi
+
+      # ── 資料庫遷移 ──────────────────────────────────────────────────
+      # 🔴 CLAUDE.md 決策 8：**絕不在執行期呼叫 Database.Migrate()**，所以遷移在這裡跑。
+      #    順序是「先遷移、後部署」—— 中間有一段新 schema 配舊程式，因此遷移必須向後相容。
+      - name: Install EF Core tools
+        run: dotnet tool install --global dotnet-ef
+
+      # 模型改了卻忘了 add migration 是這個組合最常見的錯誤，這裡當場擋下。
+      - name: Check for pending model changes
+        run: dotnet ef migrations has-pending-model-changes -p ${{ env.PROJECT }}
+
+      # 產生「可人工檢閱」的冪等 SQL 留存。不是拿來執行的（執行走下面的 bundle），
+      # 而是出事時要有東西可以看、可以交給別人判讀。
+      - name: Generate idempotent SQL script (artifact)
+        run: dotnet ef migrations script --idempotent -p ${{ env.PROJECT }} -o migrations.sql
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: migrations-sql-${{ github.sha }}
+          path: migrations.sql
+          retention-days: 90
+
+      # bundle 是單一執行檔，交易與錯誤處理行為比直接跑 SQL 腳本一致，
+      # 且 EF Core 9+ 會自動取得資料庫層級的遷移鎖。
+      - name: Build migration bundle
+        run: dotnet ef migrations bundle --self-contained -r linux-x64 -p ${{ env.PROJECT }} -o efbundle --force
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # GitHub runner 的 IP 是浮動的，「允許 Azure 服務存取」也涵蓋不到它
+      # （runner 不是 Azure 資源）。開一條當次執行專用的規則，最後一定要收掉。
+      - name: Open SQL firewall for this runner
+        id: fw
+        run: |
+          IP=$(curl -s https://api.ipify.org)
+          RULE="gha-${{ github.run_id }}"
+          echo "rule=$RULE" >> "$GITHUB_OUTPUT"
+          az sql server firewall-rule create \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --server "${{ vars.SQL_SERVER_NAME }}" \
+            --name "$RULE" --start-ip-address "$IP" --end-ip-address "$IP"
+
+      # 不用密碼：azure/login 已建立 OIDC 登入，Active Directory Default 沿用該身分。
+      - name: Apply migrations
+        run: |
+          ./efbundle \
+            --connection "Server=tcp:${{ vars.SQL_SERVER_NAME }}.database.windows.net,1433;Database=${{ vars.SQL_DATABASE }};Authentication=Active Directory Default;Encrypt=True;"
+
+      - name: Close SQL firewall
+        if: always() # 上一步失敗也要收掉，否則會留下一條長期開放的規則
+        run: |
+          az sql server firewall-rule delete \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --server "${{ vars.SQL_SERVER_NAME }}" \
+            --name "${{ steps.fw.outputs.rule }}" || true
+
+      # ── 部署 ────────────────────────────────────────────────────────
+      - name: Deploy
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ vars.FUNCTION_APP_NAME }}
+          package: ${{ env.OUTPUT_PATH }}
+
+      # 部署本身顯示成功、App 卻起不來是常見狀況（設定缺一項就會這樣），
+      # 所以要等到 health 真的回 200。
+      # ⚠️ routePrefix 是 api/v1（functions/host.json），不是預設的 api ——
+      #    路徑寫錯會 404 而看起來像部署失敗。
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' \
+              "https://${{ vars.FUNCTION_APP_NAME }}.azurewebsites.net/api/v1/health" || true)
+            if [ "$code" = "200" ]; then echo "health 回應 200"; exit 0; fi
+            echo "等待啟動…（第 $i 次，收到 $code）"; sleep 10
+          done
+          echo "::error::health 端點在 2 分鐘內沒有回應 200，請檢查 Application Insights 的啟動日誌。"
+          exit 1

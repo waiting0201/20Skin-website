@@ -1,0 +1,109 @@
+/* =========================================================================
+   19-search.html 搜尋結果頁專屬樣式（.search- 前綴）
+
+   結果不是卡片而是「一行一筆」的清單：搜尋結果混合了療程、文章、醫師、
+   困擾與 FAQ 五種型別，卡片牆會讓不同型別看起來一樣重；清單加上型別標記
+   才讀得出「這一筆是什麼」。
+   ========================================================================= */
+
+.search-hero__inner, .search-result, .search-empty { min-width: 0; }
+
+/* -- 1. Hero ＋ 搜尋框 ----------------------------------------------------- */
+.search-hero { padding-block: var(--sp-8) var(--sp-6); }
+.search-hero__title { margin-block: var(--sp-3) var(--sp-5); }
+.search-hero__form { display: flex; gap: var(--sp-2); max-width: 560px; }
+.search-hero__input {
+  flex: 1 1 auto; min-width: 0;
+  padding: .85em 1em;
+  font-family: var(--font-base);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  background: var(--surface-alt);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+.search-hero__input:focus { outline: none; border-color: var(--brand-600); background: var(--paper); }
+
+/* 搜尋結果的「質感」全靠字級層次做出來——不用圖片：大字級宋體數字＋細線，
+   取代原本一整行同大小的敘述句，讓「找到幾筆」一眼可辨。 */
+.search-hero__stat {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-4);
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--line);
+}
+.search-hero__stat-num {
+  font-family: var(--font-serif);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  color: var(--brand-700);
+  line-height: 1;
+}
+.search-hero__stat-label { font-size: var(--fs-sm); color: var(--ink-50); max-width: 40ch; }
+.search-hero__stat-label strong { color: var(--ink); font-weight: 600; }
+
+/* 沿用於「熱門搜尋：」小標（無結果狀態區塊） */
+.search-hero__summary { font-size: var(--fs-sm); color: var(--ink-50); }
+
+/* -- 2. 型別篩選 ---------------------------------------------------------- */
+.search-filters { border-bottom: 1px solid var(--line); }
+.search-filters .c-tabs__list { border-bottom: 0; }
+
+/* -- 3. 結果清單 ---------------------------------------------------------- */
+.search-list { border-top: 1px solid var(--line); }
+.search-result {
+  position: relative;
+  padding-block: var(--sp-5);
+  border-bottom: 1px solid var(--line);
+}
+.search-result__type {
+  font-family: var(--font-base);
+  font-size: var(--fs-xs); font-weight: 600;
+  letter-spacing: .08em; color: var(--ink-50);
+}
+.search-result__title {
+  margin-block: var(--sp-2) var(--sp-2);
+  font-size: var(--fs-md);
+  transition: color var(--dur) var(--ease);
+}
+.search-result:hover .search-result__title { color: var(--brand); }
+.search-result__title a::after { content: ""; position: absolute; inset: 0; }
+.search-result__excerpt { font-size: var(--fs-sm); color: var(--ink-70); }
+/* 命中詞：不用黃底螢光筆，改為品牌藍字 ＋ 底線，與整站的克制配色一致 */
+.search-result__excerpt mark {
+  background: none;
+  color: var(--brand-700);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.search-result__path {
+  display: block;
+  margin-top: var(--sp-2);
+  font-family: var(--font-base);
+  font-size: var(--fs-xs);
+  color: var(--ink-50);
+  letter-spacing: .02em;
+}
+
+/* -- 4. 熱門搜尋／無結果建議 ---------------------------------------------- */
+.search-suggest { display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-5); margin-top: var(--sp-4); }
+.search-suggest .c-tag { font-size: var(--fs-sm); }
+
+.search-empty { padding: var(--sp-7) 0; border-top: 1px solid var(--line); }
+.search-empty h2 { font-size: var(--fs-lg); margin-bottom: var(--sp-3); }
+.search-empty p { font-size: var(--fs-sm); }
+.search-empty__list { margin-top: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
+.search-empty__list li { position: relative; padding-left: 1.4em; font-size: var(--fs-sm); color: var(--ink-70); }
+.search-empty__list li::before {
+  content: ""; position: absolute; left: .2em; top: .75em;
+  width: 4px; height: 4px; border-radius: 50%; background: var(--ink-50);
+}
+
+/* -- 5. 「用瀏覽的也可以」四欄 -------------------------------------------- */
+.search-browse { padding-top: var(--sp-5); border-top: 1px solid var(--line); }
+.search-browse h3 { font-size: var(--fs-md); margin-bottom: var(--sp-2); }
+.search-browse h3 a:hover { color: var(--brand); }
+.search-browse p { font-size: var(--fs-sm); }

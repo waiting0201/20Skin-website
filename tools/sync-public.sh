@@ -9,12 +9,14 @@
 # ⚠️ EXCLUDE 必須涵蓋「歷史上出現過的路徑」，不只是現在的路徑：
 #   reference/   院方提供的原始照片與設計樣板（32MB，最大的單檔 17MB）
 #   output/      客戶交付的 PDF 與其 HTML 來源（4.7MB）—— 交付物不公開
-#   mockup/      客戶定案的設計稿與院方實景照（13MB，今已 gitignore）
+#   mockup/      客戶定案的設計稿（13MB）—— ⚠️ **mockup/assets 例外，要留下**：
+#                CI 建前台靠它（`sync:assets` 找不到就 exit 1），那些檔案本來就公開
+#                掛在網站上。擋的是設計稿 HTML 與院方實景照。
 #   mockup2/     落選方向 B（2.7MB，今已 gitignore）
 #   mockup3/     落選方向 C（4.1MB，今已 gitignore）
 #   .wrangler/   Cloudflare 部署快取
 #
-# 三份 mockup 現在就被 .gitignore 擋著、根本不會進 master，列在這裡是因為
+# 三份 mockup 的**設計稿本體**被 .gitignore 擋著、根本不會進 master，列在這裡是因為
 # NTI 踩過的坑：`planning/` 當初只存在於舊 commit，光看現在的樹會漏掉。
 # 這份清單防的是「日後有人把它們 commit 進去、之後才發現」。
 #
@@ -35,7 +37,9 @@ cd "$(git rev-parse --show-toplevel)"
 
 SRC=master
 DST=public
-EXCLUDE="reference output mockup mockup2 mockup3 .wrangler"
+# ⚠️ `:!mockup/assets` 是 git 的排除型 pathspec —— 讓 mockup 其餘內容照樣被剔除，
+#    只留下 CI 需要的素材。拿掉它，public 分支就建不起前台。
+EXCLUDE="reference output mockup mockup2 mockup3 .wrangler :!mockup/assets"
 MAX_PACK_MB=50    # 封包總量
 MAX_BLOB_MB=2     # 單一檔案
 

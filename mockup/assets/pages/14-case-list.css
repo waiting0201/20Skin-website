@@ -1,0 +1,116 @@
+/* =========================================================================
+   14-case-list.html 案例列表頁專屬樣式（.cases- 前綴）
+
+   ⚠️ 案例照片一律不使用院區情境圖或素材庫圖片充當 —— 案例區塊的圖片若
+   不是真實個案紀錄，就是誤導。因此本頁的術前／術後一律是「待提供」的
+   佔位框，正式上線前由院方提供，並依院方內部確認流程處理。
+   ========================================================================= */
+
+.cases-hero__layout, .cases-filters__row, .cases-cta__box, .cases-band__layout { min-width: 0; }
+
+/* -- 1. Hero：左文右圖，圖為非療效意象圖（黑白疊石）------------------------ */
+.cases-hero { padding-block: var(--sp-8) var(--sp-6); }
+.cases-hero__layout {
+  display: grid;
+  grid-template-columns: 1fr .9fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.cases-hero__title { margin-block: var(--sp-3) var(--sp-4); }
+.cases-hero__lede { font-size: var(--fs-md); color: var(--ink-70); max-width: 44ch; }
+.cases-hero__note { margin-top: var(--sp-6); }
+.cases-hero__media { overflow: hidden; aspect-ratio: 3 / 2; background: var(--fill-media); }
+.cases-hero__media img { width: 100%; height: 100%; object-fit: cover; }
+
+@media (max-width: 1024px) {
+  .cases-hero__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+  .cases-hero__media { order: -1; }
+}
+
+/* -- 2. 篩選列 ------------------------------------------------------------ */
+.cases-filters { border-bottom: 1px solid var(--line); padding-bottom: var(--sp-4); }
+.cases-filters__row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-4); }
+.cases-filters .c-tabs__list { border-bottom: 0; flex: 1; }
+.cases-filters__by { display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-4); flex: none; }
+.cases-filters__label { font-size: var(--fs-xs); color: var(--ink-50); }
+
+/* -- 3. 案例卡：術前／術後兩格對照 ---------------------------------------- */
+.cases-card__ba {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;                       /* 中間留一道細縫，靠底色透出來當分隔線 */
+  background: var(--line);
+  aspect-ratio: 8 / 5;
+}
+.cases-card__pane {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--fill-media);
+  overflow: hidden;
+}
+.cases-card__pane img { width: 100%; height: 100%; object-fit: cover; }
+.cases-card__badge {
+  position: absolute; top: var(--sp-2); left: var(--sp-2);
+  font-family: var(--font-base);
+  font-size: var(--fs-eyebrow);
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: var(--ink-50);
+}
+
+.cases-card__body { padding: var(--sp-4) 0 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.cases-card__title { font-size: var(--fs-md); font-weight: 600; line-height: 1.5; transition: color var(--dur) var(--ease); }
+.c-card:hover .cases-card__title { color: var(--brand); }
+.cases-card__title a::after { content: ""; position: absolute; inset: 0; }
+.cases-card__facts {
+  display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3);
+  font-family: var(--font-base);
+  font-size: var(--fs-xs); color: var(--ink-50);
+}
+.cases-card__facts span::before { content: "\00b7"; margin-inline-end: var(--sp-1); color: var(--line); }
+.cases-card__facts span:first-child::before { content: none; margin: 0; }
+.cases-card__tags { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); }
+
+/* -- 4. 頁尾 CTA ---------------------------------------------------------- */
+.cases-cta { padding-block: var(--sp-8); }
+.cases-cta__box {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-7); flex-wrap: wrap;
+  padding: var(--sp-7);
+  background: var(--brand-700);
+  border-radius: var(--radius-md);
+}
+.cases-cta__text { max-width: 46ch; }
+.cases-cta__text .u-eyebrow { color: #fff; opacity: .8; }
+.cases-cta__text h2 { color: #fff; margin-block: var(--sp-2) var(--sp-2); }
+.cases-cta__text p { color: rgba(255,255,255,.75); font-size: var(--fs-sm); }
+.cases-cta__actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); flex: none; }
+.cases-cta__actions .btn--line { background: transparent; color: #fff; border-color: rgba(255,255,255,.5); }
+.cases-cta__actions .btn--line:hover { background: rgba(255,255,255,.1); border-color: #fff; }
+
+@media (max-width: 768px) {
+  .cases-cta__box { padding: var(--sp-6); }
+  .cases-cta__actions { width: 100%; }
+  .cases-cta__actions .btn { flex: 1; }
+}
+
+/* -- 5. 「怎麼看案例」三欄（與其他頁的三欄同款：上緣細線分欄）------------ */
+.cases-how { padding-top: var(--sp-5); border-top: 1px solid var(--line); }
+.cases-how h3 { font-size: var(--fs-md); margin-bottom: var(--sp-2); }
+.cases-how p { font-size: var(--fs-sm); }
+
+/* -- 6. 「看完案例，然後呢」收尾意象圖（左圖右文，比照 09-about #view）---- */
+.cases-band__layout {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: var(--sp-9);
+  align-items: center;
+}
+.cases-band__media { overflow: hidden; aspect-ratio: 4 / 3; background: var(--fill-media); }
+.cases-band__media img { width: 100%; height: 100%; object-fit: cover; }
+.cases-band__copy .c-sechead { margin-bottom: var(--sp-4); }
+.cases-band__copy p { font-size: var(--fs-sm); max-width: 42ch; }
+
+@media (max-width: 1024px) {
+  .cases-band__layout { grid-template-columns: 1fr; gap: var(--sp-6); }
+}
