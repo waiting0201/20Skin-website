@@ -127,7 +127,9 @@ const erlinNap = nap('/clinics/erlin/')
 
 import { CONTENT, REL, img, parseBlocks, relationsOf, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
-import { CLINIC_NAP } from '~/data/navigation'
+// ⚠️ CLINIC_NAP 已在檔案上方 import 過（2026-09-11 搬遷時這裡多了一份重複的）。
+//    Vite 會把相同的 import 去重，所以前台建置一直是綠的，但在標準 ES module
+//    裡「同一個識別字宣告兩次」是語法錯誤 —— dump.mjs 用裸 Node 跑就會當場失敗。
 
 /** 版面字串：與內容無關，改版面才會動。 */
 const PRESENTATION: Record<string, {

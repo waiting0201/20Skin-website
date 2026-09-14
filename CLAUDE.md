@@ -115,7 +115,9 @@ node tools/content-import/import.mjs /tmp/frontend-data.json # → 資料庫（�
 pnpm --filter web export:content                             # 資料庫 → apps/web/content/*.json
                                                              #   順帶產出 robots.txt／sitemap*.xml／
                                                              #   faq.json／llms*.txt（見 docs/07 §4）
-node tools/content-import/upload-images.mjs /tmp/frontend-data.json  # 圖片 → Blob（含對帳）
+node tools/content-import/upload-images.mjs                   # 圖片 → Blob（含對帳）
+                                                             # ⚠️ 來源是 image-sources.json，不吃 dump
+                                                             #    需要 az 身分有 Storage Blob Data Contributor
 
 # 前後台建置（⚠️ 順序不可顛倒：先 admin 後 web）
 pnpm --filter admin build && pnpm --filter web build

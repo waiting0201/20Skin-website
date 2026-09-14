@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const DATA_DIR = join(ROOT, 'apps/web/app/data')
+const CONTENT_DIR = join(ROOT, 'apps/web/content')
 
 // Node 的型別剝離要求相對 import 帶副檔名，而 Nuxt 的別名 ~/data/* 在這裡也不存在。
 // 複製一份到暫存目錄改寫，不動原始檔。
@@ -30,8 +31,19 @@ const files = readdirSync(work).filter((f) => f.endsWith('.ts')).sort()
 for (const f of files) {
   const p = join(work, f)
   const src = readFileSync(p, 'utf8')
-    .replace(/from '~\/data\/([a-z-]+)'/g, "from './$1.ts'")
-    .replace(/from '\.\/([a-z-]+)'/g, "from './$1.ts'")
+    // ⚠️ 字元集要含底線 —— 有 _content.ts 與 _presentation.ts 這類檔名，
+    //    漏掉會以「Cannot find module '…/_content'」失敗（2026-09-14 踩到）。
+    .replace(/from '~\/data\/([a-z_-]+)'/g, "from './$1.ts'")
+    .replace(/from '\.\/([a-z_-]+)'/g, "from './$1.ts'")
+    // 2026-09-11 內容搬進資料庫之後，_content.ts 改成 import '~~/content/*.json'。
+    // ⚠️ 兩件事在裸 Node 都不成立：`~~` 是 Nuxt 的 rootDir 別名，而 JSON import
+    //    在 Node ESM 需要 import attribute。兩個都要改寫，否則這支會以
+    //    「Cannot find package '~~'」失敗（2026-09-14 踩到）。
+    // ⚠️ content/*.json 不進版控 —— 跑這支之前要先 `pnpm --filter web export:content`。
+    .replace(
+      /from '~~\/content\/([a-z-]+)\.json'/g,
+      (_, name) => `from '${pathToFileURL(join(CONTENT_DIR, `${name}.json`)).href}' with { type: 'json' }`,
+    )
   writeFileSync(p, src)
 }
 

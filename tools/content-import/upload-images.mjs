@@ -1,18 +1,28 @@
 #!/usr/bin/env node
 // 把 mockup 的內容圖片上傳到 Azure Blob。
 //
-// 用法：node tools/content-import/upload-images.mjs <frontend-data.json> [--dry-run]
+// 用法：node tools/content-import/upload-images.mjs [--dry-run]
 //
 // 🔴 **這支要對正式儲存體跑，而且只有你能跑** —— 需要 az 登入的身分對
 //    st20skinweb 有寫入權限。⚠️ `st20skinprod` 是**線上預約系統的**儲存體
 //    （CLAUDE.md 決策 5），名字只差一個字，指錯不會有任何錯誤訊息。
 //
+// 🔴 **來源是 `image-sources.json`，不是 dump 出來的資料。**
+//    2026-09-11 內容搬進資料庫之後，`app/data/*.ts` 裡的圖片欄位變成 **Blob 網址** ——
+//    再 dump 一次拿到的是 `https://st20skinweb.blob.core.windows.net/...`，
+//    對應不回本機檔名，這支就永遠找不到來源檔（2026-09-14 踩到）。
+//    而 blob 路徑是 `md5(用途|原始檔名)`，所以**原始檔名是算出正確路徑的必要輸入**，
+//    不能用 Blob 網址的檔名代替。那份對照表因此固化進版控，不再從資料推導。
+//
+// ⚠️ 對照表由搬遷前的資料（commit 0bf8486）產生，**內容不會再變動** ——
+//    日後新增圖片是走後台上傳（`POST /admin/upload/sas`），不經過這支腳本。
+//
 // ⚠️ **路徑與匯入器算的是同一組**（images.mjs 的決定性雜湊）——所以這支與匯入器
 //    可以分開跑、任意順序、重跑也安全。資料庫裡的 URL 不會因為重跑而改變。
 //
-// 🔴 **59 個來源檔 → 163 個 blob。** 同一張圖被不同欄位引用時各自上傳一份，
-//    因為「一個欄位獨佔一個 blob」是刪檔安全的前提（CLAUDE.md 決策 13）。
-//    若共用，有人在後台換掉文章的作者頭像，醫師個人頁的照片會跟著消失。
+// ⚠️ 同一張圖被不同欄位引用時**各自上傳一份**，因為「一個欄位獨佔一個 blob」是
+//    刪檔安全的前提（CLAUDE.md 決策 13）。若共用，有人在後台換掉文章的作者頭像，
+//    醫師個人頁的照片會跟著消失。
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
@@ -23,41 +33,16 @@ import { ACCOUNT, CONTAINER, blobFor } from './images.mjs'
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const SOURCE_DIR = join(ROOT, 'mockup/assets/img')
 
-const [, , dataPath, ...rest] = process.argv
-if (!dataPath) {
-  console.error('用法：node tools/content-import/upload-images.mjs <frontend-data.json> [--dry-run]')
+const rest = process.argv.slice(2)
+const dryRun = rest.includes('--dry-run')
+
+const SOURCES = join(ROOT, 'tools/content-import/image-sources.json')
+if (!existsSync(SOURCES)) {
+  console.error(`找不到 ${SOURCES} —— 那份對照表是這支腳本的唯一來源，見檔頭說明。`)
   process.exit(1)
 }
-const dryRun = rest.includes('--dry-run')
-const data = JSON.parse(readFileSync(dataPath, 'utf8'))
-
-// ⚠️ 這份清單必須與 import.mjs 呼叫 imageField() 的位置一一對應。
-//    對不上的後果是資料庫裡有 URL、Blob 上沒有檔案 —— 前台顯示破圖，而建置不會失敗。
-const usages = []
-const add = (usage, src) => { if (src) usages.push({ usage, src }) }
-
-for (const d of data.doctors.DOCTORS) add(`doctor/${d.slug}/photo`, d.photo?.src)
-
-for (const t of data.treatments.treatments) {
-  const u = `treatment/${t.slug}`
-  add(`${u}/cover`, t.cardImage?.src)
-  add(`${u}/mechanism`, t.mechanismImage?.src)
-  ;(t.gallery ?? []).forEach((g, i) => add(`${u}/gallery/${i}`, g.src))
-}
-for (const c of data.treatments.treatmentCategories) add(`term/${c.slug}/cover`, c.image?.src)
-
-for (const c of data.concerns.CONCERNS) {
-  add(`concern/${c.slug}/cover`, c.heroImage?.src)
-  add(`concern/${c.slug}/symptom`, c.detail?.symptomMedia?.src)
-}
-
-for (const a of data.articles.ARTICLES) add(`article/${a.slug}/cover`, a.cover?.src)
-for (const c of data.clinics.CLINICS) add(`clinic/${c.slug}/photo/0`, c.heroPhoto?.src)
-
-for (const [slug, p] of Object.entries(data.pages.STORY_PAGES)) add(`page/${slug}/hero`, p.heroImage?.src)
-
-data.home.HERO_SLIDES.forEach((s, i) => add(`home/hero/${i}`, s.imagePath))
-data.home.SPECIALTIES.forEach((s) => add(`home/specialty/${s.slug}`, s.imagePath))
+const usages = Object.entries(JSON.parse(readFileSync(SOURCES, 'utf8')))
+  .map(([usage, src]) => ({ usage, src }))
 
 // ── 上傳 ─────────────────────────────────────────────────────────────
 const missing = []
