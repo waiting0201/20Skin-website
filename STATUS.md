@@ -836,31 +836,29 @@ node tools/content-import/upload-images.mjs        # 28 張產品圖 → Blob
 ⚠️ **兩項的外連對不到站內文章**：`sylfirm` 連的是 blog 的搜尋結果頁（站內有 7 篇可選）、
 `hydrafacial` 連的是分類頁（站內有 2 篇）。挑哪一篇是編輯決定，沒有自動猜。
 
-### 🔴 本機資料庫已經領先正式庫（2026-09-14）
+### 🟡 正式庫已同步，但站台還沒重建（2026-09-14）
 
-今天補的院區 NAP 與療程資料**只進了本機**。兩支匯入腳本的預設 API 是
-`http://localhost:7077/api/v1`，而本機 `func` 連的是 docker 的 `20skin-website`；
-正式的 Function App 連的是 `20skin-website.database.windows.net` / `20Skin-website`，
-是另一個資料庫。實測已部署的站台（`jolly-hill-015d56f1e.5.azurestaticapps.net`）：
-`/clinics/siji/` 仍是 `○○路○○號`，`/treatments/microneedle/ellanse/` 回 **404**。
+院區 NAP 與療程資料已由 Tim 同步進正式庫（`20skin-website.database.windows.net` /
+`20Skin-website`）。正式 API（`func-20skin-web-api-prod`）健康檢查 200。
 
-🔴 **唯一的例外是圖**：28 張產品圖已經傳進**正式** Blob（`st20skinweb/media`），
-但指向它們的資料列只在本機 —— 也就是說那 28 個 blob 現在是正式環境裡的孤兒檔。
-無害（路徑是決定性的），而且**之後往正式庫匯入時不用重傳圖**。
+⚠️ **已部署的站台仍是舊內容** —— SWA 沒有 ISR，內容變更一定要重跑 build
+（[11](docs/11-backend-design.md) §10）。實測 `jolly-hill-015d56f1e.5.azurestaticapps.net`：
+`/clinics/siji/` 還是 `○○路○○號`，`/treatments/microneedle/ellanse/` 仍回 **404**。
 
-往正式庫補的作法是同樣的腳本加 `--api`：
+還要做的兩步：
 
 ```bash
-node tools/legacy-import/import-contact.mjs    --api https://func-20skin-web-api-prod.azurewebsites.net/api/v1
-node tools/legacy-import/import-treatments.mjs --api https://func-20skin-web-api-prod.azurewebsites.net/api/v1
+SKIN20_EXPORT_SQL='…正式庫唯讀連線字串…' pnpm --filter web export:content
+pnpm --filter admin build && pnpm --filter web build && pnpm --filter web verify
+./tools/deploy-swa.sh
 ```
 
-⚠️ 那是對正式環境寫入，先確認再跑。`api.20skin.tw` 目前連不上（DNS 未切，符合規劃）。
+⚠️ **repo 裡的 `apps/web/public/*` 是從本機庫匯出的**（commit 3614273）。
+以正式庫重跑 `export:content` 之後那批檔案會再變一次 —— 文章排序與部分 `lastmod`
+會回到正式庫的值。這也正好會解掉先前記下的「產物與本機庫對不上」那件事。
 
-⚠️ **還有一件沒查清楚的**：已提交的 `apps/web/public/*` 產物與本機資料庫對不上 ——
-文章排序不同、療程的 `lastmod` 是 09-14 而本機是 09-11。那批產物比較像是從**正式庫**
-匯出的。所以「本機比較新」只在今天做的事情上成立；正式庫在別的地方是不是反而比本機新，
-沒有它的連線資訊，尚未查證。
+✅ **圖不用再傳** —— 28 張產品圖 2026-09-14 就已經在正式 Blob（`st20skinweb/media`）上，
+blob 路徑是決定性的（`md5(用途|原始檔名)`），正式庫匯入後指向的就是同一批檔案。
 
 ### 🔴 待院方或主機商提供
 
