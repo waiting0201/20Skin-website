@@ -75,9 +75,9 @@ async function submitContactForm(payload: ContactPayload): Promise<void> {
     throw new Error('無法載入自動化驗證（可能被瀏覽器擴充套件或網路環境擋下）。請關閉阻擋類擴充套件後重試，或直接致電院所。')
   }
 
-  const response = await $fetch<{ success: boolean; code: string | null; message: string | null }>(
-    `${apiBaseUrl}/contact`,
-    {
+  let response: { success: boolean; code: string | null; message: string | null } | undefined
+  try {
+    response = await $fetch(`${apiBaseUrl}/contact`, {
       method: 'POST',
       body: {
         name: payload.name,
@@ -90,9 +90,18 @@ async function submitContactForm(payload: ContactPayload): Promise<void> {
         botCheckToken,
       },
       // 非 2xx 不要讓 $fetch 直接丟掉回應內容 —— 錯誤碼在 body 裡。
+      // ⚠️ 這只處理「有回應但不是 2xx」。連不上（DNS、CORS、斷線）仍然會 throw，
+      //    所以下面那個 catch 不能省。
       ignoreResponseError: true,
-    },
-  )
+    })
+  } catch {
+    // 🔴 **不要把原始錯誤丟給病人看。** `$fetch` 連不上時丟的是
+    //    `[POST] "https://api.20skin.tw/api/v1/contact": <no response> Failed to fetch` ——
+    //    2026-09-14 在驗收站上實際看到的就是這一句。
+    //    ⚠️ DNS 查不到、CORS 沒放行、使用者斷線，在瀏覽器端長得一模一樣，
+    //    所以訊息不要猜原因，直接給替代做法。
+    throw new Error('目前連不上表單服務，可能是網路問題。請稍後再試，或直接致電院所。')
+  }
 
   if (!response?.success) {
     throw new Error(errorTextFor(response?.code ?? null, response?.message ?? null))

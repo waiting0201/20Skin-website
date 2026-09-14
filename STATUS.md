@@ -36,7 +36,11 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 
 **剩下兩個缺口**：`Redirects` 表 0 列（真實 301 清單未匯入）、
 CI workflow 未進 repo（目前靠本機腳本部署）。
-🔴 **正式 Function App 仍是舊組建**，且**有七支遷移尚未套用到正式庫** —— 見 §六。
+✅ **2026-09-14：10 支遷移全部套用到正式庫，Function App 也部署了新組建**（見 §六）。
+
+🔴 **但驗收站的前台表單與後台都還連不上 API** —— 建置時寫死的 `https://api.20skin.tw/api/v1`
+**沒有 DNS 紀錄，也沒綁到 Function App**。驗收網域是 `20skin.4webdemo.com`（已綁上 SWA、
+CORS 也只放行它），少的是 API 那一半的網域。見 §六。
 
 ---
 
@@ -61,7 +65,7 @@ CI workflow 未進 repo（目前靠本機腳本部署）。
 | 技術架構與規格 | ✅ | [07](docs/07-deployment.md) 部署、[08](docs/08-database.md) 資料庫、[09](docs/09-frontend.md) 前端、[10](docs/10-api.md) API 契約、[11](docs/11-backend-design.md) 後端施工標準 |
 | **前台開發** | 🟡 | 21 個模板切版完成、SEO 與 JSON-LD 落地；內容全部來自資料庫；`/contact/` 與 AI FAQ 開關已接執行期端點（§二） |
 | **後台開發** | 🟡 | **30／30 畫面完成**，**已接上真 API**（2026-09-12，§三） |
-| **資料模型與 migrations** | ✅ | 35 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四）。⚠️ 共 9 支遷移，正式庫只套到第 2 支，**還有 7 支未套**（§六） |
+| **資料模型與 migrations** | ✅ | 35 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四）。共 10 支遷移，**2026-09-14 全部套用到正式庫**（§六） |
 | **API** | ✅ | 端點、服務、三支 Timer 完成，**已對真 SQL Server 端到端驗證**（§五） |
 | 部署與 CI/CD | 🟡 | **已部署並實測**（前台 ＋ 後台 ＋ 兩個 API）；workflow 未進 repo，目前靠 `tools/deploy-swa.sh` 本機部署（§六） |
 | 內容遷移（約 800 篇） | ⬜ | 需先有資料庫 |
@@ -488,10 +492,44 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 |---|---|
 | 方案 | **Basic**（2 GB／5 DTU） |
 | 定序 | **`Chinese_Taiwan_Stroke_CI_AS`** ✅（docs/08 §0 決策三） |
-| schema | **35 張表 ＋ 165 列種子已套用**，用 `efbundle`（docs/11 §13）。⚠️ **只套到第 2 支**，見下方 |
+| schema | **35 張表 ＋ 165 列種子已套用**，用 `efbundle`（docs/11 §13）。**10 支遷移全部套用**（2026-09-14），見下方 |
 | 驗證 | `InitialSchema` 當時：表數 37、匿名約束 0、AI FAQ 開關 `false`、外部網域 2 筆 |
 
-### 🟡 第 3–10 支遷移（**全部尚未套用到正式庫**）
+### 🔴 驗收站連不上 API（2026-09-14 發現）
+
+`20skin.4webdemo.com` 已綁上 SWA、狀態 Ready，Function App 也是最新組建 ——
+但兩個前端在**建置時**把 `https://api.20skin.tw/api/v1` 烤進產物，而那個主機名稱
+**公開 DNS 查不到，Function App 上也沒有綁任何自訂網域**（只有
+`func-20skin-web-api-prod.azurewebsites.net`）。
+
+實測（2026-09-14，`20skin.4webdemo.com`）：
+
+| 功能 | 現況 |
+|---|---|
+| `/contact/` 送出 | ❌ `ERR_NAME_NOT_RESOLVED` |
+| `/admin/` 登入 | ❌ 同上 —— **後台完全無法使用** |
+| 站內搜尋 | ✅ 索引是靜態檔，不受影響（未命中回寫靜默失敗，設計如此） |
+| AI FAQ 開關 | ✅ 讀不到就退回建置期的值，設計如此 |
+
+兩條路，**建議第一條**：
+
+1. **把 `api.20skin.tw` 綁到 Function App**。它是全新子網域，目前沒有任何東西指向它 ——
+   綁它**不會動到線上的 `www.20skin.tw`**，可以獨立於主站切換先做。做完前端不用重建。
+2. 用 `NUXT_PUBLIC_API_BASE_URL` / `VITE_API_BASE_URL` 指到
+   `func-20skin-web-api-prod.azurewebsites.net` 重新建置。缺點是驗收用的產物與上線的不同一份。
+
+⚠️ CORS 目前只放行 `https://20skin.4webdemo.com`。**上線前要加 `https://20skin.tw`**
+（以及院方決定的 www 形式），否則切 DNS 當天表單與後台會同時停擺。
+
+### ✅ 第 3–10 支遷移（2026-09-14 全部套用到正式庫）
+
+以本機 `efbundle` 執行，身分是伺服器的 Entra 管理員。⚠️ **順序是「先遷移、後部署」**
+（CLAUDE.md 決策 8）—— 新版程式會讀 `Facts`、`RecommendationIntro`、主幹的 `Summary`，
+先部署會炸在缺欄位上。
+
+⚠️ 第 4 支（`MoveSummaryToContentTrunk`）會 `DROP COLUMN Articles.Summary`，
+但**在那之前先把資料複製到 `ContentItems.Summary`**（產生的 SQL 逐行確認過），沒有遺失。
+回復點：Azure SQL 的 PITR 涵蓋到 2026-09-11 09:10Z。
 
 | # | 遷移 | 內容 |
 |---|---|---|
@@ -678,6 +716,8 @@ STATUS 先前寫的「301 種子約 772 筆」指的是**後台畫面的 mock �
 - [ ] 遷移在正式資料庫的實際行為（先在可丟棄的庫演練一次完整遷移與回滾）
 - [ ] 全站 404 掃描、301 迴圈檢查、結構化資料驗證、CWV
 - [ ] **種子密碼 `Admin@123` 更換**（🔴 沒有雙因素，帳密是唯一憑證）
+- [ ] **`api.20skin.tw` 綁到 Function App** ＋ **CORS 加上正式前台來源** —— 🔴 不做的話切 DNS 當天表單與後台同時停擺
+- [ ] **SMTP 設定**（`Smtp__Host`／`Smtp__FromAddress`…）與 `contact.recipientEmail` —— 🔴 目前**都沒設**，表單就算通過驗證也不會寄出任何通知信，只會在 log 留 warning
 - [ ] **`aifaq.enabled` 在正式庫必須是 `false`**（docs/04 §4）—— 匯入腳本曾把它蓋成 `true`（已修，見 §二）
 - [ ] **reCAPTCHA v3 的金鑰對**（[10](docs/10-api.md) §5.1）—— 🔴 **三個地方要一起設**：
       `BotCheck__SecretKey`（Function App）、`NUXT_PUBLIC_RECAPTCHA_SITE_KEY`（前台建置）、
