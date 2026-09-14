@@ -53,7 +53,7 @@
     { "route": "/index2.php", "redirect": "/", "statusCode": 301 },
     { "route": "/doctor.php", "redirect": "/team/", "statusCode": 301 },
     { "route": "/contact.php", "redirect": "/clinics/", "statusCode": 301 },
-    { "route": "/product01.php", "redirect": "/treatments/laser/", "statusCode": 301 },
+    { "route": "/product01.php", "redirect": "/treatments/", "statusCode": 301 },
     { "route": "/product02.php", "redirect": "/treatments/microneedle/", "statusCode": 301 },
     { "route": "/product03.php", "redirect": "/treatments/photoelectric/", "statusCode": 301 },
     { "route": "/product04.php", "redirect": "/treatments/skincare/", "statusCode": 301 }

@@ -266,3 +266,51 @@ node tools/content-import/upload-images.mjs      # 需要 az 身分對 st20skinw
 前台的判斷式是 `summary && facts?.length`（`pages/treatments/[category]/[slug].vue`），
 所以 26 頁仍然顯示精簡版並且 `noindex`。**這是刻意的**：一個對外說「建置中」的療程頁
 比沒有那一頁更糟，它會進 sitemap、會被 Google 索引、會被 AI 當成院方對該療程的正式說明。
+
+---
+
+## 301 對照表：兩份 CSV，不可合併
+
+```bash
+node tools/legacy-import/build-redirects.mjs      # → redirects-pages.csv（固定頁／療程／列表）
+node tools/legacy-import/import-redirects.mjs     # 兩份都匯（需先啟動 func）
+node tools/legacy-import/import-redirects.mjs tools/legacy-import/redirects-pages.csv --overwrite
+```
+
+| 檔案 | 條數 | 內容 | 產生者 |
+|---|---|---|---|
+| `redirects.csv` | 780 | 文章內頁 709 ＋ blog slug 位移 71 | `import.mjs`，**每次跑都整份覆寫** |
+| `redirects-pages.csv` | 220 | 固定頁 6、療程 18、分享列表 196 | `build-redirects.mjs` |
+
+🔴 **寫進同一個檔案的話，跑一次文章匯入就會把另一半弄不見。**
+
+### 三個做了判斷的地方
+
+**① 分頁一律轉到第 1 頁。** 舊站一頁 10 篇、新站一頁 12 篇，第 7 頁根本不是同一批文章 ——
+照頁碼轉會把人送到不相干的內容，比轉到第 1 頁糟。
+
+**② `product01.php` 轉到 `/treatments/` 總覽，不是某個分類。**
+舊站「光療美顏」那 11 項在新站散在 laser 4／photoelectric 5／skincare 2。
+`staticwebapp.config.json` 原本指 `/treatments/laser/`，會讓 7 項的訪客落在錯的分類頁，
+已一併改成總覽。另外三個是乾淨的（02→microneedle 6/7、03→photoelectric 6/6、04→skincare 4/4）。
+
+**③ 年份與頁碼逐一取自舊站真正列出的連結**，不是猜一段範圍。
+各分類的年份不一樣（演講授課從 2015 開始、皮膚新知到 2026），猜範圍會多出一批不存在的規則。
+
+### ⚠️ 設定檔與資料庫有 7 條是重複的，而且刻意一模一樣
+
+SWA 的 `routes` 先於 `navigationFallback`，所以 `index2.php`／`doctor.php`／`contact.php`／
+`product01–04.php` 這 7 條**永遠走設定檔**，資料庫那幾列只是備份。
+兩邊給不同答案是最難查的那種錯：沒有人會去比對，而且改了資料庫看起來沒生效。
+
+### 🔴 `build-redirects.mjs` 會擋下「301 到 404」
+
+每個 `ToPath` 都要在 `apps/web/.output/public` 裡找得到 `index.html`，對不上就中止。
+轉址表最糟的失效方式不是漏掉一條，是把人從舊網址 301 到一個新的 404 ——
+搜尋引擎會把兩邊都丟掉，而且沒有任何既有的測試會發現。
+
+這道檢查當場抓到一個既有問題：`ContentItems.UrlPath` 說「新中式美學」在
+`/new-chinese-aesthetics/`，但前台實際在 `/about/new-chinese-aesthetics/`
+（`app/pages/about/[slug].vue`），而 **sitemap 是從 `UrlPath` 產的** ——
+於是 sitemap 收了兩個會 404 的網址。轉址已指向實際存在的那個；
+資料庫的 `UrlPath` 要不要跟著改是資訊架構的決定，還沒動。
