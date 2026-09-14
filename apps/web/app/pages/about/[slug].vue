@@ -2,8 +2,9 @@
 // 模板 3 —— 長版故事（mockup/10-story.html）
 //
 // 兩個網址共用一個模板：/about/new-chinese-aesthetics/、/about/makeup-style/
-// （docs/01-sitemap.md §1）。mockup 只把「新中式美學」寫成完整的一篇，
-// 「彩妝式輕醫美」目前只有零散的句子（見 ~/data/pages.ts 的註解），
+// （docs/01-sitemap.md §1）。mockup 只把 new-chinese-aesthetics 寫成完整的一篇，
+// makeup-style（同樣叫「新中式美學」，2026-09-14 更名）目前只有零散的句子
+// （見 ~/data/pages.ts 的註解），
 // 所以這一頁的部分區塊（目錄／常見疑問／相關療程）用 v-if 依資料是否存在顯示，
 // 不是所有故事頁都會長得一樣豐富。
 import { STORY_PAGES } from '~/data/pages'

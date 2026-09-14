@@ -491,7 +491,7 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 | schema | **35 張表 ＋ 165 列種子已套用**，用 `efbundle`（docs/11 §13）。⚠️ **只套到第 2 支**，見下方 |
 | 驗證 | `InitialSchema` 當時：表數 37、匿名約束 0、AI FAQ 開關 `false`、外部網域 2 筆 |
 
-### 🟡 第 3–9 支遷移（**全部尚未套用到正式庫**）
+### 🟡 第 3–10 支遷移（**全部尚未套用到正式庫**）
 
 | # | 遷移 | 內容 |
 |---|---|---|
@@ -502,6 +502,7 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 | 7 | `AddConcernToConcernRelation` | 新的 `RelationType` |
 | 8 | `AddSitemapFilesSetting`（2026-09-12） | 種子加一列 `seo.sitemapFiles`（sitemap 分檔設定）。**只 INSERT 一列，向後相容** |
 | 9 | `SeedRobotsTxtGuardrails`（2026-09-12） | robots.txt 的種子值加上兩行警語（不封鎖 AI 爬蟲、不要寫 `Disallow: /admin/`）。⚠️ **只在值仍是原始種子時才更新** —— EF 產出的 `UpdateData` 是無條件覆蓋，會把院方改過的 robots.txt 靜靜蓋掉 |
+| 10 | `RenameMakeupStylePageTitle`（2026-09-14） | 頁面 1114（`/about/makeup-style/`）的種子標題「彩妝式輕醫美」→「新中式美學」。只 `UpdateData` 一格，向後相容。⚠️ **這只改種子／工作副本的 `ContentItems.Title`** —— 前台匯出讀的是已核准的版本快照（`tools/content-export` 的 `TitleOf`），正式庫要改名還是得在後台改完後**重新發布**該頁 |
 
 第 3 支的四個欄位（已對本機 `Skin20_Dev` 實跑）：
 
@@ -687,6 +688,13 @@ STATUS 先前寫的「301 種子約 772 筆」指的是**後台畫面的 mock �
 - [ ] **確認 reCAPTCHA 的聲明文字有顯示**（`/contact/` 與 `/admin/` 登入頁）——
       徽章是隱藏的，Google 的條款要求顯示那段文字與兩個連結，拿掉聲明就不可以隱藏徽章
 - [ ] AI 爬蟲以實際 UA 逐一驗證回應 200
+- [ ] **`/about/makeup-style/` 在正式庫已改名為「新中式美學」**（2026-09-14 更名）——
+      repo 端（種子、遷移 10、前台文案、mockup、docs、客戶 PDF）都改完了，
+      但**資料庫裡的頁面標題、導覽選單標籤與內文仍是舊名**。
+      要在後台改完 → **重新發布該頁**（匯出讀的是已核准的版本快照，不是 `ContentItems.Title`）
+      → 重跑 `pnpm --filter web export:content`。
+      ⚠️ 連帶三處目前會出現重複字樣，需院方決定要不要合併：
+      首頁品牌理念兩格同名、AI FAQ 兩題重複、`/about/` 底下兩個同名頁面
 
 ---
 

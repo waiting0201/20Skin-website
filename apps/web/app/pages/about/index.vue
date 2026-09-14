@@ -5,7 +5,7 @@ import { ABOUT_PILLARS, ABOUT_TIMELINE, ABOUT_TEAM_PREVIEW, ABOUT_CLINICS } from
 usePageHead({
   title: '品牌理念',
   description:
-    '20SKIN 美醫集團的品牌理念——以皮膚科專科為底，結合新中式美學與彩妝式輕醫美，追求整體協調而非單一標準的樣貌。',
+    '20SKIN 美醫集團的品牌理念——以皮膚科專科為底，結合新中式美學與新中式美學，追求整體協調而非單一標準的樣貌。',
   pageCss: '/assets/pages/09-about.css',
   path: '/about/',
   jsonLd: breadcrumbJsonLd([

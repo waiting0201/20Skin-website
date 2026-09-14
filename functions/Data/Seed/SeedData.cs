@@ -336,7 +336,7 @@ public static class SeedData
         // 自由頁 6
         AddPage(1112, PageKind.Free, null, "about", "/about/", "品牌理念", 1);
         AddPage(1113, PageKind.Free, null, "new-chinese-aesthetics", "/about/new-chinese-aesthetics/", "新中式美學", 2);
-        AddPage(1114, PageKind.Free, null, "makeup-style", "/about/makeup-style/", "彩妝式輕醫美", 3);
+        AddPage(1114, PageKind.Free, null, "makeup-style", "/about/makeup-style/", "新中式美學", 3);
         // 法務三頁限超級管理員：條款文字有法律效力，不宜由行銷調整
         AddPage(1115, PageKind.Free, null, "privacy", "/privacy/", "隱私權政策", 4, superAdminOnly: true);
         AddPage(1116, PageKind.Free, null, "terms", "/terms/", "服務條款", 5, superAdminOnly: true);

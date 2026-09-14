@@ -46,7 +46,7 @@ usePageHead({
         <span class="u-eyebrow">WELCOME TO 20SKIN</span>
         <h1 class="home-hero__title">要自然<span class="home-hero__title-dot">‧</span><br>找四季</h1>
         <p class="home-hero__lede">人生最大的快樂，來自對美的欣賞，而「藝術」是美的最高境界。</p>
-        <p class="home-hero__desc">20SKIN 結合皮膚科專科醫療與個人化精準評估，以「彩妝式輕醫美」的節制手法，為每一位求美者規劃屬於自己的自然樣貌，而非單一標準的臉孔。</p>
+        <p class="home-hero__desc">20SKIN 結合皮膚科專科醫療與個人化精準評估，以「新中式美學」的節制手法，為每一位求美者規劃屬於自己的自然樣貌，而非單一標準的臉孔。</p>
         <div class="home-hero__cta">
           <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
         </div>
@@ -286,7 +286,7 @@ usePageHead({
             <p>以古為師，將東方的美學藝術與醫美微整形創新結合，追求歷久彌新的自然樣貌。</p>
           </div>
           <div class="home-philosophy__point">
-            <h4 class="c-heading-bar">彩妝式輕醫美</h4>
+            <h4 class="c-heading-bar">新中式美學</h4>
             <p>強調五官與氣質的整體協調，而非單一標準的網紅罐頭臉。</p>
           </div>
         </div>

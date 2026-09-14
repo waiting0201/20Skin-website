@@ -15,7 +15,7 @@
 │
 ├─ /about/                           品牌理念            ← index2.php#about
 │   ├─ /about/new-chinese-aesthetics/   新中式美學       ← news-art.php
-│   └─ /about/makeup-style/             彩妝式輕醫美     ← make-up-style.php
+│   └─ /about/makeup-style/             新中式美學     ← make-up-style.php
 │
 ├─ /team/                            醫療團隊總覽        ← doctor.php
 │   └─ /team/{doctor-slug}/             醫師個人頁 ×14  【新增】
