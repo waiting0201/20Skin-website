@@ -1,6 +1,6 @@
 # 09 — 前端技術架構（前台 ＋ 後台）
 
-> 範圍：`apps/` 底下的兩個套件 —— 前台 `apps/web/`（Nuxt 3 純靜態，約 950 頁預渲染 HTML）與後台 `apps/admin/`（Vite ＋ Vue 3 的 SPA，掛在 `/admin/`）。pnpm workspace，見 [07-deployment.md](07-deployment.md) §1、§5。
+> 範圍：`apps/` 底下的兩個套件 —— 前台 `apps/web/`（Nuxt 3 純靜態，1845 頁預渲染 HTML）與後台 `apps/admin/`（Vite ＋ Vue 3 的 SPA，掛在 `/admin/`）。pnpm workspace，見 [07-deployment.md](07-deployment.md) §1、§5。
 >
 > 設計來源是 `mockup/`（方向 A，客戶 2026-08-27 選定）。切版一律以 mockup 為準，不做視覺重新詮釋。
 >
@@ -87,7 +87,7 @@ apps/
 deploy-site.yml
   ① scripts/export-content  ── Dapper／唯讀連線 ──▶ apps/web/content/*.json
   ② scripts/build-sitemap / build-llms / build-swa-config（吃同一份 JSON）
-  ③ nuxt generate            ── 只讀 content/*.json ──▶ .output/public（約 950 頁）
+  ③ nuxt generate            ── 只讀 content/*.json ──▶ .output/public（1845 頁）
   ④ 產物大小檢查（180 MB 警告 / 230 MB 擋下）
   ⑤ 上傳 .output/public ＋ api/ → smoke test
 ```

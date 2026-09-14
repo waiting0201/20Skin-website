@@ -20,7 +20,7 @@
      ├──▶ 20skin.tw / www.20skin.tw
      │    ┌──────────────────────────────────────┐
      │    │  Azure Static Web Apps（Standard）    │
-     │    │  · 預渲染 HTML 約 950 頁（nuxt generate）│
+     │    │  · 預渲染 HTML 1845 頁（nuxt generate）  │
      │    │  · /admin/* 後台 SPA（apps/admin）    │
      │    │  · /api/fallback ← 約 770 條 301（§2） │
      │    │      唯一的 Managed Function          │
@@ -278,7 +278,7 @@
 ```
 pnpm-workspace.yaml                 ← packages = apps/*
 apps/
-  web/             Nuxt 3 純靜態前台（21 個模板、約 950 頁預渲染）
+  web/             Nuxt 3 純靜態前台（21 個模板、1845 頁預渲染）
     public/staticwebapp.config.json ← 原樣複製到 .output/public 根目錄
     public/admin/                   ← apps/admin 的建置產物，不進版控
     .output/public/                 ← 建置產物，上傳的就是這一包

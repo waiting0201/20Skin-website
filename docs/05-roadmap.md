@@ -62,7 +62,7 @@
 | **孤兒頁面未盤點完整** | 301 條數是下限而非定數，可能上線後才發現遺漏 | 開工前務必取得檔案系統清單與 Search Console 匯出 |
 | AI 爬蟲政策變動 | 各引擎爬蟲名稱與規則持續變化 | WAF 規則每季複查；GEO 引用率異常下降時優先檢查可存取性 |
 | **301 落地方式與原規劃不同** | `staticwebapp.config.json` 有 20 KB 上限且不比對 query string，約 770 條放不進去 | 改由 `/api/fallback` 查 SQL 對照表回 301。**此機制須在開工第一週先做技術驗證**。見 [07-deployment.md](07-deployment.md) §2 |
-| **SWA Free 單一環境 250 MB** | 約 950 頁預渲染估約 90 MB，文章數持續成長會撞牆。**該估算在框架定案前做，未計入 Nuxt 每路由一份的 `_payload.json`** | 上傳檔案全走 Blob Storage、字型子集化、CI 內建大小檢查（含 payload 量測）。**列為長期監控指標** |
+| **SWA Free 單一環境 250 MB** | 該估算（約 950 頁／90 MB）在框架定案前做，未計入 Nuxt 每路由一份的 `_payload.json`。**2026-09-14 實測：1845 頁、58.2 MB**，方案也已改為 Standard（500 MB） | 上傳檔案全走 Blob Storage、字型子集化、CI 內建大小檢查（含 payload 量測）。**列為長期監控指標** |
 | **全站 build 時間隨文章數線性成長** | 內容更新到上線的延遲可能不可接受 | 第一次完整 build 出來就要判斷是否改增量建置；發布觸發做聚合窗口 |
 | 仍有一組 SQL 唯讀連線字串明文存放 | SWA Free 不支援 Managed Identity，`/api/fallback` 查 301 對照表只能用連線字串。**應用程式 API 已改用 Managed Identity，不再有密鑰** | 唯讀最小權限專用帳號、密碼輪替流程。可評估把對照表改為建置期產物以徹底消滅（[07](07-deployment.md) §2）。**需院方知情** |
 | **跨來源（CORS）設定錯誤** | 前台 `20skin.tw` 與 API `api.20skin.tw` 不同源，設定漏了會讓後台整個不能用，且瀏覽器端錯誤訊息無資訊 | CORS 由院方設定，但納入 PR 驗收項目；特別確認 4xx／5xx 回應也帶 CORS 標頭。見 [07](07-deployment.md) §8 |
