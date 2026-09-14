@@ -19,7 +19,7 @@ STATUS.md              ★ 進度總表：做到哪裡了（狀態的單一真�
 pnpm-workspace.yaml    packages = apps/*
 .github/workflows/     web.yml（前台＋後台＋/api/fallback）、api.yml（獨立 Function App）
                        ⚠️ 觸發分支是 main —— 那是本機 public 推上 GitHub 之後的名字
-                       （refspec public:main，比照 NTI）。⚠️ 尚未實跑，見 STATUS.md §六
+                       （refspec public:main，比照 NTI）。⚠️ 已觸發但缺 secrets，見 STATUS.md §六
 apps/
   web/                 前台：Nuxt 3 純靜態（21 個模板、1845 頁預渲染）
                        樣式照抄 mockup/，由 pnpm verify 把關

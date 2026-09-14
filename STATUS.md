@@ -73,7 +73,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 | **後台開發** | 🟡 | **30／30 畫面完成**，**已接上真 API**（2026-09-12，§三） |
 | **資料模型與 migrations** | ✅ | 35 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四）。共 10 支遷移，**2026-09-14 全部套用到正式庫**（§六） |
 | **API** | ✅ | 端點、服務、三支 Timer 完成，**已對真 SQL Server 端到端驗證**（§五） |
-| 部署與 CI/CD | 🟡 | **已部署並實測**（前台 ＋ 後台 ＋ 兩個 API）。兩條 workflow **2026-09-14 進 repo**（`.github/workflows/{web,api}.yml`，比照 NTI），但**尚未在 GitHub 上實跑過**，且 secrets／vars 與 CI 遷移身分都還沒設 —— 在那之前仍靠 `tools/deploy-swa.sh` 本機部署（§六） |
+| 部署與 CI/CD | 🟡 | **已部署並實測**（前台 ＋ 後台 ＋ 兩個 API）。兩條 workflow **2026-09-14 進 repo**（`.github/workflows/{web,api}.yml`，比照 NTI），**2026-09-14 首次實跑：兩條都正常觸發**，止於 `azure/login`（OIDC secrets 未設，見 §六）。在那之前仍靠 `tools/deploy-swa.sh` 本機部署 |
 | 內容遷移（約 800 篇） | ⬜ | 需先有資料庫 |
 | 療程內容（**28 項**） | 🟡 | 適應症、許可證字號、產品圖、標題、療程↔文章關聯已全部按舊站補齊（§下）。**但 28 項的療程時間／術後照護／禁忌症舊站一項都沒有，仍需醫師投入 —— Phase 1 最大瓶頸沒有改變**，27 頁仍是 noindex 的「建置中」 |
 | 上線前驗收 | ⬜ | checklist 見 §七 |
@@ -630,7 +630,7 @@ reCAPTCHA v3 的 action 只接受 `A-Za-z/_`。原本用的是 **`questions-miss
 （建置順序、CLI 必給的兩個旗標、404 頁要複製進 API 產物、`api/` 是 net9.0）——
 `.github/workflows/web.yml` 就是照它翻寫的，那四件事逐條寫在步驟的註解裡。
 
-#### 🟡 CI（2026-09-14 進 repo，尚未實跑）
+#### 🟡 CI（2026-09-14 進 repo，已首次實跑）
 
 `.github/workflows/web.yml`（前台＋後台＋`/api/fallback`）與 `api.yml`（獨立 Function App），
 骨架比照 `/Users/tim/webapps/NTI`（同一套雙 remote 機制，那兩條是實際在跑的）。三件與範本不同的事：
@@ -643,6 +643,26 @@ reCAPTCHA v3 的 action 只接受 `A-Za-z/_`。原本用的是 **`questions-miss
    所以 **`pnpm verify:css` 在 CI 上跑不了**，樣式照抄的驗收只能在有設計稿的機器上做。
 3. **範本那步 `dotnet test functions/Skin20.Api.Tests` 拿掉了** —— 那個專案不存在，
    照抄會讓每次部署都失敗在那裡。API 的驗收目前靠 `tools/api-smoke/read.mjs` 與 workflow 末段的 smoke test。
+
+**首次實跑結果（2026-09-14，run 34833565528／34833565521）**：兩條都正常觸發。
+`api` 這條通過了 build（0 warning）、publish、`local.settings.json` 不在產物中、
+**`ef migrations has-pending-model-changes`**、冪等 SQL 產物與 bundle 共 11 步；
+`web` 這條通過 checkout 與 `pnpm install`。兩條都**止於 `azure/login`** ——
+OIDC 的三個 secret 還沒設，這是預期的。`Close SQL firewall` 因為寫了 `if: always()`
+仍然執行並成功收尾，這一點也確認可用。
+
+⬜ **要讓它們真的跑完，缺的是 Azure 那邊的東西**（我這裡做不到）：
+
+| 缺什麼 | 給誰 |
+|---|---|
+| OIDC 服務主體 ＋ 聯合認證 | `AZURE_CLIENT_ID`／`AZURE_TENANT_ID`／`AZURE_SUBSCRIPTION_ID`（secrets） |
+| SWA 部署權杖（`az staticwebapp secrets list`） | `AZURE_STATIC_WEB_APPS_API_TOKEN`（secret） |
+| 建置期**唯讀**連線字串 | `SKIN20_EXPORT_SQL`（secret） |
+| 名稱與網址 | vars：`SITE_URL`／`API_BASE_URL`／`RECAPTCHA_SITE_KEY`／`FUNCTION_APP_NAME`／`AZURE_RESOURCE_GROUP`／`SQL_SERVER_NAME`／`SQL_DATABASE` |
+| **服務主體在 SQL 裡建成使用者並給 DDL** | 否則 `efbundle` 連得上也套不了遷移（docs/08 §J-3 的第三組身分） |
+
+⚠️ 另有一則不影響執行的警告：`actions/checkout@v4` 等幾個 action 仍標 Node.js 20，
+runner 已強制改用 Node 24。等官方出 v5 再換，不要現在為了消警告去釘版本。
 
 | 項目 | 狀態 |
 |---|---|
