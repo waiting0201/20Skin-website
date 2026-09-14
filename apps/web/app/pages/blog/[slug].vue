@@ -93,7 +93,7 @@ usePageHead({
        麵包屑
        ===================================================================== -->
   <nav class="c-breadcrumb" aria-label="麵包屑導覽">
-    <div class="container--narrow">
+    <div class="container">
       <ol class="c-breadcrumb__list">
         <li><a href="/">首頁</a></li>
         <li><a href="/blog/">臻美分享</a></li>
@@ -107,10 +107,12 @@ usePageHead({
        文章頁首（分類標籤／H1／AI 摘要，直答式段落作為第一段可見文字）
        ===================================================================== -->
   <header class="article-head">
-    <div class="container--narrow">
-      <a class="c-tag" :href="`/blog/${category.slug}/`">{{ category.label }}</a>
-      <h1>{{ article.title }}</h1>
-      <p class="article-excerpt">{{ article.aiSummary ?? article.summary }}</p>
+    <div class="container">
+      <div class="article-head__inner">
+        <a class="c-tag" :href="`/blog/${category.slug}/`">{{ category.label }}</a>
+        <h1>{{ article.title }}</h1>
+        <p class="article-excerpt">{{ article.aiSummary ?? article.summary }}</p>
+      </div>
     </div>
   </header>
 
@@ -118,54 +120,76 @@ usePageHead({
        封面圖
        ===================================================================== -->
   <figure class="article-cover">
-    <div class="container--narrow">
-      <div class="article-cover__frame">
-        <img :src="article.cover.src" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height">
+    <div class="container">
+      <div class="article-cover__inner">
+        <div class="article-cover__frame">
+          <img :src="article.cover.src" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height">
+        </div>
+        <figcaption>{{ article.summary }}</figcaption>
       </div>
-      <figcaption>{{ article.summary }}</figcaption>
     </div>
   </figure>
 
   <!-- =====================================================================
-       Byline（作者／審閱／發布與更新日期／閱讀時間）
+       內文版面：閱讀欄（左，主要）＋ 側欄（右，作者／目錄／預約 CTA）。
+       側欄在 DOM 順序上排在前面——窄螢幕收成單欄時，讀者會先看到作者與
+       目錄再讀內文，符合原本的閱讀順序；桌機再用 grid-column 把側欄移到
+       視覺右側，不影響 DOM 順序。側欄有 CTA 墊底，文章沒有 H2／目錄是空的
+       時候側欄也不會整段留白（見 07-article-detail.css）。
        ===================================================================== -->
-  <div class="container--narrow">
-    <div class="article-byline">
-      <a v-if="article.author.doctorSlug" class="article-byline__author" :href="`/team/${article.author.doctorSlug}/`">
-        <img v-if="article.author.avatarSrc" class="article-byline__avatar" :src="article.author.avatarSrc" :alt="article.author.name" width="48" height="48">
-        <span>
-          <span class="article-byline__name">{{ article.author.name }}</span>
-          <span v-if="article.author.role" class="article-byline__role">{{ article.author.role }}</span>
-        </span>
-      </a>
-      <div v-else class="article-byline__author">
-        <span>
-          <span class="article-byline__name">{{ article.author.name }}</span>
-        </span>
-      </div>
+  <div class="container article-layout">
 
-      <div class="article-byline__facts">
-        <p v-if="article.reviewer" class="article-byline__reviewed">
-          <strong>本文由 {{ article.reviewer.name }} 審閱</strong><template v-if="reviewedOnText">・審閱日期 {{ reviewedOnText }}</template>
-        </p>
-        <div class="article-byline__meta">
-          <span>發布日期 {{ displayDateText }}</span>
-          <span v-if="dateModifiedText && dateModifiedText !== displayDateText">最後更新 {{ dateModifiedText }}</span>
-          <span>閱讀時間 約 {{ article.readingMinutes }} 分鐘</span>
+    <aside class="article-aside">
+      <!-- =====================================================================
+           Byline（作者／審閱／發布與更新日期／閱讀時間）
+           ===================================================================== -->
+      <div class="article-byline">
+        <a v-if="article.author.doctorSlug" class="article-byline__author" :href="`/team/${article.author.doctorSlug}/`">
+          <img v-if="article.author.avatarSrc" class="article-byline__avatar" :src="article.author.avatarSrc" :alt="article.author.name" width="48" height="48">
+          <span>
+            <span class="article-byline__name">{{ article.author.name }}</span>
+            <span v-if="article.author.role" class="article-byline__role">{{ article.author.role }}</span>
+          </span>
+        </a>
+        <div v-else class="article-byline__author">
+          <span>
+            <span class="article-byline__name">{{ article.author.name }}</span>
+          </span>
+        </div>
+
+        <div class="article-byline__facts">
+          <p v-if="article.reviewer" class="article-byline__reviewed">
+            <strong>本文由 {{ article.reviewer.name }} 審閱</strong><template v-if="reviewedOnText">・審閱日期 {{ reviewedOnText }}</template>
+          </p>
+          <div class="article-byline__meta">
+            <span>發布日期 {{ displayDateText }}</span>
+            <span v-if="dateModifiedText && dateModifiedText !== displayDateText">最後更新 {{ dateModifiedText }}</span>
+            <span>閱讀時間 約 {{ article.readingMinutes }} 分鐘</span>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- =====================================================================
-         目錄（依 H2 產生的錨點清單）
-         ===================================================================== -->
-    <nav v-if="toc.length" class="article-toc" aria-label="文章目錄">
-      <p class="article-toc__title">本文目錄</p>
-      <ul class="article-toc__list">
-        <li v-for="heading in toc" :key="heading.id"><a :href="`#${heading.id}`">{{ heading.text }}</a></li>
-      </ul>
-    </nav>
+      <!-- =====================================================================
+           目錄（依 H2 產生的錨點清單；沒有 H2 的文章不會出現這段）
+           ===================================================================== -->
+      <nav v-if="toc.length" class="article-toc" aria-label="文章目錄">
+        <p class="article-toc__title">本文目錄</p>
+        <ul class="article-toc__list">
+          <li v-for="heading in toc" :key="heading.id"><a :href="`#${heading.id}`">{{ heading.text }}</a></li>
+        </ul>
+      </nav>
 
+      <!-- =====================================================================
+           側欄預約 CTA（僅桌機顯示；行動版底部已有一段完整 CTA，這裡不重複）
+           ===================================================================== -->
+      <div class="article-aside__cta">
+        <p class="article-aside__cta-title">想進一步了解適合自己的規劃？</p>
+        <p class="article-aside__cta-desc">實際適合的保養與療程方向因人而異，建議先與醫師面診評估後再規劃。</p>
+        <a class="btn btn--primary btn--sm ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+      </div>
+    </aside>
+
+    <div class="article-main">
     <!-- =====================================================================
          內文
          ===================================================================== -->
@@ -208,13 +232,14 @@ usePageHead({
       </template>
     </article>
 
-    <!-- =====================================================================
-         關聯困擾
-         ===================================================================== -->
-    <div v-if="article.relatedConcerns?.length" class="article-related-block">
-      <span class="article-related-block__label">相關肌膚困擾</span>
-      <div class="article-tag-list">
-        <a v-for="concern in article.relatedConcerns" :key="concern.slug" class="c-tag" :href="`/concerns/${concern.slug}/`">{{ concern.label }}</a>
+      <!-- =====================================================================
+           關聯困擾
+           ===================================================================== -->
+      <div v-if="article.relatedConcerns?.length" class="article-related-block">
+        <span class="article-related-block__label">相關肌膚困擾</span>
+        <div class="article-tag-list">
+          <a v-for="concern in article.relatedConcerns" :key="concern.slug" class="c-tag" :href="`/concerns/${concern.slug}/`">{{ concern.label }}</a>
+        </div>
       </div>
     </div>
   </div>

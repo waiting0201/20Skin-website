@@ -3,15 +3,41 @@
    元件本體樣式一律在 assets/base.css，這裡只處理本頁特有的排版比例／
    間距組合，不建立新元件，優先重用 base.css 既有 class。
 
-   版面策略：全頁以 .container--narrow（720px）做為閱讀欄寬，維持左緣
-   對齊一致；只有卡片式區塊（關聯療程／相關文章）改用寬版 .container，
-   以區塊背景／間距做出視覺區隔，而非硬做側欄破壞窄欄對齊。
+   版面策略（2026-09-14 改版）：原本全頁鎖 .container--narrow（720px）
+   置中，1440px 螢幕兩側各空約 360px，且 h1 吃全站 --fs-display
+   （40–68px）在 720px 欄寬裡長標題會斷成三行。改為：
+     - 頁首（分類標籤／H1／摘要）retained 單欄置左，但容器改寬版
+       .container，並用 .article-head__inner 控制內容最大寬度；
+       h1 在此作用域覆寫成較克制的字級，不動全站 token。
+     - 封面圖維持窄欄（.container--narrow），份量與其他頁面的
+       hero 圖一致。
+     - Byline／目錄／內文／關聯困擾改用 .article-layout 兩欄：
+       閱讀欄（主）＋ 側欄（作者卡／目錄／預約 CTA），比照
+       06-blog-list.css 的 .blog-layout、21-legal.css 的
+       .legal-layout 同一套「桌機兩欄、≤1024px 收單欄、側欄
+       sticky」語彙，不是新發明的版面手勢。
+     - 卡片式區塊（關聯療程／相關文章）維持原本的寬版 .container。
    ========================================================================= */
 
 /* -- 1. 文章頁首（分類標籤／H1／摘要） ------------------------------------ */
 .article-head { padding-block: var(--sp-6) 0; }
 .article-head .c-tag { margin-bottom: var(--sp-4); }
-.article-head h1 { margin-bottom: var(--sp-4); }
+/* h1 撐版問題：原本吃全站 --fs-display（40–68px），在窄欄裡長標題會斷成
+   三行、整個第一屏只剩標題。這裡只在文章頁作用域覆寫字級，不動
+   --fs-display——其餘 20 個模板的 h1 不受影響（CLAUDE.md 硬性限制）。 */
+.article-head h1 {
+  font-size: clamp(1.75rem, 1.3rem + 2vw, 2.5rem); /* 28–40px，原 40–68px */
+  margin-bottom: var(--sp-4);
+}
+/* 頁首與封面**不**跟著 .article-layout 切兩欄，但寬度與左緣要跟閱讀欄一致：
+   三者都在同一個 .container 裡，內容寬度＝容器寬扣掉側欄與欄間距，算出來
+   就是主欄（閱讀欄）的寬度。
+   ⚠️ 這裡不能寫死一個約略值（曾經是 780px）—— .article-head__inner 若同時
+   掛在 .container 上，`margin-inline:auto` 會把它置中，於是頁首、封面、內文
+   出現三條對不齊的左緣，在 1440px 螢幕上一眼就看得出來是意外而不是設計。
+   所以頁首與封面各自是 .container 裡的一層子元素，寬度用 calc 跟著側欄走。 */
+.article-head__inner,
+.article-cover__inner { max-width: calc(100% - 300px - var(--sp-9)); }
 .article-excerpt { font-size: var(--fs-md); color: var(--ink-70); max-width: 62ch; }
 
 /* -- 2. 封面圖 ------------------------------------------------------------ */
@@ -28,22 +54,79 @@
   text-align: right;
 }
 
-/* -- 3. Byline 區（作者／審閱／日期／閱讀時間） --------------------------- */
+/* -- 3. 版面：閱讀欄 ＋ 側欄 ------------------------------------------------
+   桌機兩欄、≤1024px 收單欄、側欄 sticky——同一套語彙見 06-blog-list.css
+   的 .blog-layout、21-legal.css 的 .legal-layout。
+
+   ⚠️ .article-aside 在標記順序上排在 .article-main 前面（先作者／目錄，
+   後內文），這樣 ≤1024px 收單欄時讀者仍是先看到作者與目錄再讀內文，跟
+   原本的閱讀順序一致。桌機用 grid-column 把側欄視覺移到右側（閱讀欄放左
+   邊、主要），不用調整標記順序去換視覺順序。 */
+.article-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--sp-9);
+  align-items: start;
+}
+.article-layout, .article-main, .article-aside { min-width: 0; }
+/* ⚠️ `grid-row: 1` 兩個都要寫。側欄在標記順序上排前面，佔掉第 1 列第 2 欄之後，
+   自動排版的游標就停在第 2 欄；接著主欄指定第 1 欄——比游標「往回退」，
+   規範要求此時換到下一列，於是主欄掉到第 2 列，側欄左邊開一個與側欄等高的
+   大洞（短文章上特別明顯）。明確指定列就不會。 */
+.article-aside { grid-column: 2; grid-row: 1; }
+.article-main { grid-column: 1; grid-row: 1; }
+
+.article-aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  position: sticky;
+  top: calc(var(--header-h) + var(--sp-5));
+}
+
+@media (max-width: 1024px) {
+  .article-layout { grid-template-columns: 1fr; gap: var(--sp-7); }
+  .article-aside, .article-main { grid-column: 1; grid-row: auto; }
+  .article-aside { position: static; }
+  /* 收單欄之後沒有側欄可以扣，頁首與封面回到整個容器寬 */
+  .article-head__inner,
+  .article-cover__inner { max-width: none; }
+}
+
+/* 側欄預約 CTA：文章沒有 H2（目錄是空的）、作者又沒有頭像時，側欄不能
+   整段留白——這張卡永遠在。行動版底部本來就有一段完整的頁尾 CTA，這裡
+   只在桌機顯示，避免讀者還沒開始讀內文就先看到兩次同樣的邀約。 */
+.article-aside__cta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+.article-aside__cta-title { font-family: var(--font-serif); font-size: var(--fs-md); font-weight: 700; color: var(--ink); }
+.article-aside__cta-desc { font-size: var(--fs-sm); color: var(--ink-70); }
+
+@media (max-width: 1024px) {
+  .article-aside__cta { display: none; }
+}
+
+/* -- 4. Byline（作者／審閱／日期／閱讀時間） --------------------------- */
+/* 側欄只有 300px，原本「頭像＋姓名靠左、日期資訊靠右」的橫向排列會被
+   擠壞，改成統一的直式卡片——同一份排版桌機側欄與 ≤1024px 收單欄後都
+   適用，不需要另外寫斷點切換方向。 */
 .article-byline {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-5);
-  margin-block: var(--sp-6);
-  padding: var(--sp-5) 0;
-  border-block: 1px solid var(--line);
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--line);
 }
 .article-byline__author {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  flex: none;
 }
 .article-byline__avatar {
   width: 48px; height: 48px;
@@ -57,26 +140,18 @@
 .article-byline__author:hover .article-byline__name { color: var(--brand-600); }
 .article-byline__role { display: block; font-size: var(--fs-xs); color: var(--ink-50); }
 
-.article-byline__facts { flex: 1 1 260px; min-width: 0; }
 .article-byline__reviewed { font-size: var(--fs-sm); color: var(--ink); margin-bottom: var(--sp-2); }
 .article-byline__reviewed strong { color: var(--brand-700); }
 .article-byline__meta {
-  display: flex; flex-wrap: wrap;
-  gap: var(--sp-1) var(--sp-3);
+  display: flex; flex-direction: column;
+  gap: var(--sp-1);
   font-size: var(--fs-xs); color: var(--ink-50);
 }
-.article-byline__meta span::before { content: "\00b7"; margin-inline-end: var(--sp-1); color: var(--ink-50); }
-.article-byline__meta span:first-child::before { content: none; margin: 0; }
 
-@media (max-width: 480px) {
-  .article-byline { flex-direction: column; align-items: flex-start; }
-}
-
-/* -- 4. 目錄（TOC） -------------------------------------------------------- */
+/* -- 5. 目錄（TOC） -------------------------------------------------------- */
 .article-toc {
-  margin-block: 0 var(--sp-8);
-  padding: var(--sp-5) 0;
-  border-block: 1px solid var(--line);
+  padding-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--line);
 }
 .article-toc__title {
   font-size: var(--fs-eyebrow);
@@ -86,12 +161,14 @@
   margin-bottom: var(--sp-3);
 }
 .article-toc__list {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--sp-2) var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
 }
-@media (min-width: 600px) {
-  .article-toc__list { grid-template-columns: 1fr 1fr; }
+/* 兩欄排版只在「收成單欄、但螢幕仍有餘裕」的範圍內開——桌機側欄只有
+   300px，硬擠兩欄目錄會比單欄還難讀；純手機（<600px）也擠不下。 */
+@media (min-width: 600px) and (max-width: 1024px) {
+  .article-toc__list { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2) var(--sp-5); }
 }
 .article-toc__list a {
   display: flex;
@@ -110,7 +187,7 @@
   background: var(--ink-50);
 }
 
-/* -- 5. 內文排版（H2/H3/段落/清單/表格/圖說/提醒框） ----------------------- */
+/* -- 6. 內文排版（H2/H3/段落/清單/表格/圖說/提醒框） ----------------------- */
 .article-content { padding-bottom: var(--sp-2); }
 .article-content h2,
 .article-content h3 {
@@ -192,15 +269,20 @@
 
 /* -- 插圖 + 圖說 ------------------------------------------------------------ */
 .article-figure { margin-top: var(--sp-7); margin-bottom: var(--sp-7); }
-/* ⚠️ 比例下在「框」上、圖片再 height:100% —— 直接把 aspect-ratio 寫在 <img>
-   上，在這個專案裡會被圖片原生比例蓋過去（1800×1197 的圖會整張撐開版面）。
-   base.css 的 .c-card__media 也是同一個寫法。 */
+/* ⚠️ 2026-09-14 拿掉框上的 aspect-ratio + img 的 object-fit:cover。
+   舊站搬過來的文章圖很多是寬版資訊圖（圖上壓著中文標籤），固定裁成
+   16:10 會把兩側或上下的字直接切掉——內文插圖的原始寬高比從 0.96
+   （近方形／直式）到 2.43（超寬）都有，沒有一個固定比例框得住所有圖
+   還不切字。改成讓 <img> 用自己的原生比例決定高度：width:100% +
+   height:auto，配合 img 本來就有的 width/height 屬性（HTML 規範會據此
+   算出 intrinsic aspect-ratio），一樣不會有版面跳動，只是不再裁切。
+   封面圖（.article-cover__frame）不在此列——封面只有一張、且會被列表
+   頁／分享卡沿用同一個裁切比例，維持裁切才能跟其他頁面的卡片視覺一致。 */
 .article-figure__frame {
   overflow: hidden;
-  aspect-ratio: 16 / 10;
   background: var(--fill-media);
 }
-.article-figure__frame img { width: 100%; height: 100%; object-fit: cover; }
+.article-figure__frame img { display: block; width: 100%; height: auto; }
 .article-figure figcaption {
   margin-top: var(--sp-3);
   font-size: var(--fs-xs);
@@ -208,28 +290,32 @@
   text-align: center;
 }
 
-/* 插圖比閱讀欄再寬一些：閱讀欄本身只有 720px（含 padding），跨頁最主要的
-   插圖需要比文字更有份量。用 min() 算出「比欄寬多一些、但絕不超出視窗」
-   的寬度，再用負的 margin-inline 對齊置中——calc 全部相對於父層（.container
-   --narrow 的內容寬），不依賴假設某個固定斷點下容器剛好是幾px，所以在任何
-   螢幕寬度都不會產生水平溢出。窄螢幕算出來的寬度會自然收斂回欄寬，等於
+/* 插圖比閱讀欄再寬一些：用 min() 算出「比欄寬多一些、但絕不超出視窗」
+   的寬度，再用負的 margin-inline 對齊置中——calc 全部相對於父層（閱讀欄
+   的內容寬）,不依賴假設某個固定斷點下容器剛好是幾px，所以在任何螢幕
+   寬度都不會產生水平溢出。窄螢幕算出來的寬度會自然收斂回欄寬，等於
    沒有破格，不需要另外寫 media query 關掉它。 */
+/* ⚠️ 上限要跟著欄寬收。破格的前提是「整頁只有一條閱讀欄」；現在右邊有一條
+   300px 的 sticky 側欄，960px 的圖會往兩側各溢出近 100px，右半邊直接壓在
+   側欄上。桌機兩欄時就不破格，圖與內文同寬。 */
 .article-figure--wide {
-  --fig-w: min(960px, calc(100vw - var(--sp-5) * 3));
+  --fig-w: min(100%, calc(100vw - var(--sp-5) * 3));
+}
+@media (max-width: 1024px) {
+  .article-figure--wide { --fig-w: min(960px, calc(100vw - var(--sp-5) * 3)); }
 }
 .article-figure--wide .article-figure__frame {
   width: var(--fig-w);
   margin-inline: calc((100% - var(--fig-w)) / 2);
-  aspect-ratio: 16 / 9;
 }
 
 .article-content .c-note,
 .article-content .c-note--warn { margin-top: var(--sp-5); }
 
-/* -- 6. 關聯療程（後台「關聯療程」欄位自動產生） --------------------------- */
+/* -- 7. 關聯療程（後台「關聯療程」欄位自動產生） --------------------------- */
 /* 關聯療程區改白底——本頁的唯一一段灰底留給末尾 CTA */
 
-/* -- 7. 相關困擾／標籤列 ---------------------------------------------------- */
+/* -- 8. 相關困擾／標籤列 ---------------------------------------------------- */
 .article-related-block { margin-block: var(--sp-8) 0; }
 .article-related-block__label {
   display: block;
@@ -241,7 +327,7 @@
 }
 .article-tag-list { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 
-/* -- 8. 作者資訊卡（文末） -------------------------------------------------- */
+/* -- 9. 作者資訊卡（文末） -------------------------------------------------- */
 .article-authorcard {
   display: flex;
   gap: var(--sp-5);
@@ -266,7 +352,7 @@
   .article-authorcard { flex-direction: column; align-items: flex-start; gap: var(--sp-3); }
 }
 
-/* -- 9. 分享列（純外觀） ----------------------------------------------------- */
+/* -- 10. 分享列（純外觀） ----------------------------------------------------- */
 .article-share {
   display: flex;
   flex-wrap: wrap;
@@ -277,7 +363,7 @@
 .article-share__label { font-size: var(--fs-sm); font-weight: 600; color: var(--ink-50); }
 .article-share__btns { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
 
-/* -- 10. 頁尾 CTA 區（深底方塊，與 09／10 頁同款收尾）----------------------- */
+/* -- 11. 頁尾 CTA 區（深底方塊，與 09／10 頁同款收尾）----------------------- */
 .article-cta__box {
   display: flex;
   align-items: center;
