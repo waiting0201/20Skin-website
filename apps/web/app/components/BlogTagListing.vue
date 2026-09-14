@@ -1,5 +1,7 @@
 <script setup lang="ts">
-// 模板 11 —— 臻美分享／標籤彙整（mockup/06-blog-list.html）
+// 模板 11 —— 臻美分享／標籤彙整的版面與資料（mockup/06-blog-list.html）。
+//
+// ⚠️ 路由在 pages/blog/tag/[tag]/index.vue 與 pages/blog/tag/[tag]/page/[n].vue。
 //
 // ⚠️ noindex 是刻意的，不是漏掉：docs/02-backend-cms.md §1 —— 30–60 個標籤頁
 // 內容單薄，全開索引會稀釋約 800 篇文章的索引預算，個別標籤養出內容後再手動
@@ -13,18 +15,28 @@
 // 標籤不是像分類一樣的固定四選一封閉清單（docs/02 §1：標籤頁 30–60 個、
 // 會隨內容成長），所以這裡不驗證 tag 是否在既有清單裡 —— 查無符合的文章時
 // 顯示空狀態，而不是 404。
-import { getTagLabel, listArticlesByTag, POPULAR_TAGS, POPULAR_TREATMENTS_FOR_BLOG, formatDisplayDate } from '~/data/articles'
+import { getTagLabel, listArticlesByTag, formatDisplayDate, paginate } from '~/data/articles'
 
-const route = useRoute()
-const tagSlug = route.params.tag as string
+// ⚠️ `page` 由兩個路由各自傳進來：`/blog/tag/{標籤}/` 與 `/blog/tag/{標籤}/page/{n}/`。
+const props = withDefaults(defineProps<{ tagSlug: string; page?: number }>(), { page: 1 })
+
+const tagSlug = props.tagSlug
 const tagLabel = getTagLabel(tagSlug)
 const articles = listArticlesByTag(tagSlug)
+const paged = paginate(articles, props.page)
+
+if (props.page !== paged.page) {
+  throw createError({ statusCode: 404, statusMessage: 'Page Not Found' })
+}
+
+/** 第 1 頁不帶 `/page/1/`。 */
+const hrefFor = (n: number) => (n === 1 ? `/blog/tag/${tagSlug}/` : `/blog/tag/${tagSlug}/page/${n}/`)
 
 usePageHead({
-  title: `標籤：${tagLabel}`,
+  title: props.page === 1 ? `標籤：${tagLabel}` : `標籤：${tagLabel}（第 ${props.page} 頁）`,
   description: `「${tagLabel}」相關文章列表。`,
   pageCss: '/assets/pages/06-blog-list.css',
-  path: `/blog/tag/${tagSlug}/`,
+  path: hrefFor(paged.page),
   noIndex: true,
   jsonLd: breadcrumbJsonLd([
     { label: '首頁', href: '/' },
@@ -83,8 +95,8 @@ usePageHead({
   <section class="section section--tight">
     <div class="container blog-layout">
       <div class="blog-main">
-        <div v-if="articles.length" class="grid grid--3 blog-grid">
-          <article v-for="article in articles" :key="article.slug" class="c-card c-card--article">
+        <div v-if="paged.items.length" class="grid grid--3 blog-grid">
+          <article v-for="article in paged.items" :key="article.slug" class="c-card c-card--article">
             <div class="c-card__media" :class="{ 'blog-grid__media--pad': article.cover.src.endsWith('.png') }">
               <img :src="article.cover.src" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height" loading="lazy">
             </div>
@@ -100,42 +112,11 @@ usePageHead({
           </article>
         </div>
         <p v-else>這個標籤目前沒有符合的文章。</p>
+
+        <BlogPager :page="paged.page" :total-pages="paged.totalPages" :href-for="hrefFor" />
       </div>
 
-      <aside class="blog-aside" aria-label="側邊資訊">
-        <div class="blog-aside__block">
-          <h3 class="c-heading-bar">站內搜尋</h3>
-          <form class="blog-search" role="search" action="/search/" method="get">
-            <label class="visually-hidden" for="blogSearchInput">搜尋文章</label>
-            <input class="blog-search__input" id="blogSearchInput" name="q" type="search" placeholder="輸入關鍵字…">
-            <button class="btn btn--primary btn--sm" type="submit" aria-label="搜尋">
-              <svg class="btn__icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14Z"/></svg>
-            </button>
-          </form>
-        </div>
-
-        <div class="blog-aside__block">
-          <h3 class="c-heading-bar">熱門標籤</h3>
-          <div class="blog-tags">
-            <a v-for="tag in POPULAR_TAGS" :key="tag.slug" class="c-tag" :href="`/blog/tag/${tag.slug}/`">{{ tag.label }}</a>
-          </div>
-        </div>
-
-        <div class="blog-aside__block">
-          <h3 class="c-heading-bar">熱門療程</h3>
-          <ul class="blog-mini-list">
-            <li v-for="item in POPULAR_TREATMENTS_FOR_BLOG" :key="item.slug" class="blog-mini">
-              <a class="blog-mini__media" :href="`/treatments/${item.categorySlug}/${item.slug}/`">
-                <img :src="item.image.src" :alt="item.image.alt" :width="item.image.width" :height="item.image.height" loading="lazy">
-              </a>
-              <div class="blog-mini__body">
-                <span class="c-tag c-tag--outline">{{ item.categoryLabel }}</span>
-                <h4 class="blog-mini__title"><a :href="`/treatments/${item.categorySlug}/${item.slug}/`">{{ item.name }}</a></h4>
-              </div>
-            </li>
-          </ul>
-        </div>
-      </aside>
+      <BlogAside />
     </div>
   </section>
 </template>

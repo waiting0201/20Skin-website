@@ -86,10 +86,14 @@ export interface ArticleTagRef {
   label: string
 }
 
-/** 側欄「熱門標籤」（mockup/06-blog-list.html）。 */
-
+/**
+ * 標籤 slug → 顯示名稱。
+ * ⚠️ **要查全部標籤，不是 POPULAR_TAGS** —— 後者只有前 12 個，
+ *    查不到就會退回 slug，而標籤 slug 多半是百分號編碼的中文（`%e7%9a%ae…`），
+ *    那會直接印在 `/blog/tag/{slug}/` 的標題上。
+ */
 export function getTagLabel(slug: string): string {
-  return POPULAR_TAGS.find((t) => t.slug === slug)?.label ?? slug
+  return termsOf(TERM.articleTag).find((t) => t.slug === slug)?.title ?? slug
 }
 
 export interface ArticleImage {
@@ -143,16 +147,12 @@ export interface Article {
   aiSummary?: string
   readingMinutes: number
   featured?: boolean
-  body?: ArticleBodyBlock[]
+  /** 這篇有沒有內文。內文本身用 `getArticleBody(slug)` 取，見該函式說明。 */
+  hasBody: boolean
   relatedTreatments?: RelatedTreatmentRef[]
   relatedConcerns?: RelatedConcernRef[]
   authorBio?: string
 }
-
-export const POPULAR_TAGS: ArticleTagRef[] = termsOf(TERM.articleTag).map((t) => ({
-  slug: t.slug as string,
-  label: t.title,
-}))
 
 /** 署名：醫師帶「醫師」，非醫師（藝術總監）不帶。 */
 const doctorByline = (d: ContentRecord): string => (d.fields.isPhysician ? `${d.title} 醫師` : d.title)
@@ -199,7 +199,9 @@ function toArticle(record: ContentRecord): Article {
     metaDescription: (record.seo?.metaDescription as string) ?? undefined,
     aiSummary: (record.seo?.aiSummary as string) ?? undefined,
     readingMinutes: (f.readingMinutes as number) ?? 0,
-    body: f.bodyBlocks ? (JSON.parse(f.bodyBlocks as string) as ArticleBodyBlock[]) : undefined,
+    // ⚠️ **內文不在這裡** —— 見 getArticleBody()。這一欄留著只是為了讓
+    //    「有沒有內文」可以在不載入內文的情況下判斷（清單頁用不到內文）。
+    hasBody: f.bodyBlocks !== null && f.bodyBlocks !== undefined,
     relatedTreatments: CONTENT.treatments
       .filter((t) => t.relations.some((r) => r.relationType === REL.treatmentToArticle && r.toSlug === record.slug))
       .map((t) => ({
@@ -220,6 +222,68 @@ export const ARTICLES: Article[] = CONTENT.articles
   .slice()
   .sort((a, b) => String(b.fields.displayDate ?? '').localeCompare(String(a.fields.displayDate ?? '')))
   .map(toArticle)
+
+/**
+ * 列表每頁幾篇。
+ * ⚠️ **這是必要的，不是排版偏好。** 列表頁原本把全部文章渲染在同一頁 ——
+ *    種子資料 11 篇時沒問題，搬進舊站的 1100 篇之後 `/blog/` 會變成
+ *    約 3.8 MB 的 HTML 加 1111 個 `<img>`（2026-09-14 估算）。
+ * ⚠️ 12 ＝ 三欄 × 四列，對齊 mockup/06-blog-list.html 的版面。
+ */
+export const ARTICLES_PER_PAGE = 12
+
+export interface PagedArticles {
+  items: Article[]
+  page: number
+  totalPages: number
+  total: number
+}
+
+/**
+ * 切出某一頁。
+ * ⚠️ 空清單時 `totalPages` 回 1 而不是 0 —— 「第 1 頁，共 0 頁」是壞掉的文案，
+ *    而且會讓 `page > totalPages` 的 404 判斷把唯一一頁空狀態也擋掉。
+ */
+export function paginate(articles: Article[], page: number, perPage = ARTICLES_PER_PAGE): PagedArticles {
+  const total = articles.length
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
+  const clamped = Math.min(Math.max(1, Math.trunc(page) || 1), totalPages)
+  return {
+    items: articles.slice((clamped - 1) * perPage, clamped * perPage),
+    page: clamped,
+    totalPages,
+    total,
+  }
+}
+
+/** 側欄「熱門標籤」要顯示幾個。⚠️ 不是排版偏好，是上限 —— 見 POPULAR_TAGS。 */
+const POPULAR_TAG_LIMIT = 12
+
+/**
+ * 側欄「熱門標籤」——**依實際被引用的篇數取前 N 個**，不是全部標籤。
+ *
+ * ⚠️ 這裡原本是 `termsOf(TERM.articleTag)`（＝所有標籤）。種子資料只有 10 個標籤時
+ *    看不出差別，搬進舊站的 391 篇之後標籤有 396 個，側欄會變成一面標籤牆，
+ *    而且元件名字叫「熱門」卻列出全部，本來就自相矛盾。
+ *
+ * ⚠️ **這不影響標籤頁的預渲染。** `/blog/tag/{slug}/` 是靠 `crawlLinks` 從連結爬出來的，
+ *    而文章內頁會列出自己的每一個標籤（blog/[slug].vue），所以沒進側欄的標籤照樣有頁面。
+ */
+export const POPULAR_TAGS: ArticleTagRef[] = (() => {
+  const count = new Map<string, { label: string; n: number }>()
+  for (const a of ARTICLES) {
+    for (const t of a.tags) {
+      const cur = count.get(t.slug)
+      if (cur) cur.n++
+      else count.set(t.slug, { label: t.label, n: 1 })
+    }
+  }
+  // 篇數相同時用標籤名排序，讓建置產物是決定性的（同樣的資料要產出同樣的 HTML）。
+  return [...count.entries()]
+    .sort((a, b) => b[1].n - a[1].n || a[1].label.localeCompare(b[1].label, 'zh-Hant'))
+    .slice(0, POPULAR_TAG_LIMIT)
+    .map(([slug, v]) => ({ slug, label: v.label }))
+})()
 
 export const POPULAR_TREATMENTS_FOR_BLOG: RelatedTreatmentRef[] = [
   {
@@ -251,6 +315,30 @@ function byDisplayDateDesc(a: Article, b: Article) {
 
 export function getArticleBySlug(slug: string): Article | undefined {
   return ARTICLES.find((a) => a.slug === slug)
+}
+
+/**
+ * 文章內文，**一篇一個 chunk，用到才載**。
+ *
+ * 🔴 **不要改回從 `content/articles.json` 直接讀。**
+ *    `_content.ts` 是靜態 import，Vite 會把整份 JSON 內聯進一個**每一頁都要下載**的
+ *    共用 chunk。種子資料只有 11 篇、內文全是 null 時看不出問題；
+ *    搬進舊站的 1100 篇之後光內文就 4.5 MB —— 首頁訪客要先下載全站文章的全文
+ *    才看得到畫面，而建置完全不會有任何警告。
+ *    所以 `tools/content-export` 把內文拆成 `content/article-bodies/{slug}.json`，
+ *    這裡用 `import.meta.glob` 動態載入 —— Vite 會為每一篇產生獨立的 chunk。
+ *
+ * ⚠️ 預渲染時內文會被寫進該頁的 HTML 與 `_payload.json`，
+ *    所以讀者實際上不會多發一個請求。
+ */
+const BODY_MODULES = import.meta.glob<{ default: ArticleBodyBlock[] }>('~~/content/article-bodies/*.json')
+
+export async function getArticleBody(slug: string): Promise<ArticleBodyBlock[]> {
+  // glob 的鍵是完整路徑，比對結尾即可。⚠️ 用 `includes(slug)` 會讓
+  // `emface` 命中 `emface-vs-thermage` —— 一定要比對到副檔名為止。
+  const entry = Object.entries(BODY_MODULES).find(([path]) => path.endsWith(`/${slug}.json`))
+  if (!entry) return []
+  return (await entry[1]()).default
 }
 
 export function listAllArticles(): Article[] {

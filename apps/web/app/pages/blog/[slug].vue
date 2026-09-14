@@ -6,6 +6,7 @@
 // regex 攔截走，其餘字串（真正的文章 slug）才會落到這裡。
 import {
   formatDisplayDate,
+  getArticleBody,
   getArticleBySlug,
   getArticleCategory,
   getRelatedArticles,
@@ -23,11 +24,19 @@ if (!article) {
 const category = getArticleCategory(article.categorySlug)!
 const relatedArticles = getRelatedArticles(article, 3)
 
+// ⚠️ **內文是動態載入的**（一篇一個 chunk，見 data/articles.ts 的 getArticleBody）。
+//    用 useAsyncData 取，預渲染時會被寫進這一頁的 HTML 與 _payload.json，
+//    讀者不會多發一個請求。直接在 setup 裡 await 也能過，但那樣內文就不會進 payload，
+//    hydration 時會再抓一次 chunk。
+const { data: body } = await useAsyncData(`article-body:${slug}`, () => getArticleBody(slug), {
+  default: (): ArticleBodyBlock[] => [],
+})
+
 // 目錄只收 H2（有 id 的才會被連結，H3 是段落內的次標題，mockup 本來就不放進目錄）。
-const toc = (article.body ?? []).filter(
+const toc = computed(() => (body.value ?? []).filter(
   (b): b is Extract<ArticleBodyBlock, { type: 'heading' }> & { id: string } =>
     b.type === 'heading' && b.level === 2 && !!b.id,
-)
+))
 
 const displayDateText = formatDisplayDate(article.displayDate)
 const dateModifiedText = article.dateModified ? formatDisplayDate(article.dateModified) : null
@@ -160,8 +169,8 @@ usePageHead({
     <!-- =====================================================================
          內文
          ===================================================================== -->
-    <article v-if="article.body?.length" class="article-content">
-      <template v-for="(block, i) in article.body" :key="i">
+    <article v-if="body?.length" class="article-content">
+      <template v-for="(block, i) in body" :key="i">
         <p v-if="block.type === 'lead'" class="article-lead">{{ block.text }}</p>
         <h2 v-else-if="block.type === 'heading' && block.level === 2" :id="block.id">{{ block.text }}</h2>
         <h3 v-else-if="block.type === 'heading' && block.level === 3">{{ block.text }}</h3>

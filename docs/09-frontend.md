@@ -92,6 +92,22 @@ deploy-site.yml
   ⑤ 上傳 .output/public ＋ api/ → smoke test
 ```
 
+> 🔴 **文章內文不在 `articles.json` 裡，在 `content/article-bodies/{slug}.json`。**
+> `app/data/_content.ts` 是 `import articlesJson from '~~/content/articles.json'` ——
+> **Vite 會把整份 JSON 內聯進一個每一頁都要下載的共用 chunk**。
+> 種子資料只有 11 篇、內文全是 null 時看不出問題；搬進舊站的 1100 篇之後，
+> 光內文就 4.5 MB，等於首頁訪客要先下載全站文章的全文才看得到畫面，
+> **而建置不會有任何警告**（2026-09-14 實測共用 chunk 384 KB，index.html 直接引用）。
+>
+> 所以 `tools/content-export` 把內文拆成一篇一個檔，前台用
+> `import.meta.glob` 動態載入（`data/articles.ts` 的 `getArticleBody()`），
+> Vite 為每一篇產生獨立 chunk。預渲染時內文會被寫進該頁的 HTML 與 `_payload.json`，
+> 讀者不會多發一個請求。
+>
+> ⚠️ 判斷準則：**放進 `content/*.json` 的東西，每一位訪客都會下載。**
+> 清單頁要用的欄位（標題、摘要、封面、日期）留在裡面是對的；
+> 只有單一頁面會用到又很大的東西，要拆出去。
+
 **為什麼要中間這層 JSON，而不是讓 Nuxt 在 prerender 時直接查資料庫：**
 
 | 理由 | 說明 |

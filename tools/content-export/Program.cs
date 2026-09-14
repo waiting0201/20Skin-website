@@ -113,6 +113,48 @@ foreach (var group in grouped)
     }
 
     var name = unitNames[group.Key];
+
+    // 🔴 **文章內文要拆出去，不能留在 articles.json 裡。**
+    //    `app/data/_content.ts` 是 `import articlesJson from '~~/content/articles.json'` ——
+    //    Vite 會把整份 JSON 內聯成一個**每一頁都要下載**的共用 chunk。
+    //    種子資料只有 11 篇、內文全是 null 時看不出問題；搬進舊站的 1100 篇之後，
+    //    光內文就 4.5 MB，等於首頁訪客要先下載全站文章的全文才看得到畫面。
+    //    拆成一篇一檔之後，前台用 `import.meta.glob` 動態載入，只有那一頁會載到它。
+    //    ⚠️ 其他單元不拆 —— 頁面（pages）也有 bodyBlocks，但只有 6 筆。
+    if (name == "articles")
+    {
+        var bodyDir = Path.Combine(outDir, "article-bodies");
+        // ⚠️ 每次重建都清空：文章刪掉或改 slug 之後，舊檔留著會被 glob 撈進去，
+        //    產生一個沒有任何文章指向它的 chunk（不會壞，但會一直長大）。
+        if (Directory.Exists(bodyDir)) Directory.Delete(bodyDir, recursive: true);
+        Directory.CreateDirectory(bodyDir);
+
+        var bodies = 0;
+        foreach (var snapshot in items.OfType<JsonObject>())
+        {
+            if (snapshot["fields"] is not JsonObject fields) continue;
+            var body = fields["bodyBlocks"];
+            if (body is null || body.GetValueKind() == JsonValueKind.Null) continue;
+
+            // 檔名用 slug —— 前台是以 slug 查內文的。slug 的字元集由 API 限死
+            //    （^[a-z0-9]+(-[a-z0-9]+)*$），不會有路徑跳脫的問題。
+            var slug = snapshot["slug"]?.GetValue<string>();
+            if (string.IsNullOrEmpty(slug)) continue;
+
+            // ⚠️ `bodyBlocks` 在快照裡是**一個 JSON 字串**（API 存的是 `GetRawText()`），
+            //    不是物件。直接 ToJsonString() 會把它再編碼一次，寫出
+            //    `"[{\"type\":…}]"` 這種雙層字串 —— 前台 import 進來會拿到 string 而不是陣列。
+            var raw = body.GetValueKind() == JsonValueKind.String
+                ? body.GetValue<string>()
+                : body.ToJsonString(jsonOptions);
+            await File.WriteAllTextAsync(Path.Combine(bodyDir, slug + ".json"),
+                raw + "\n", new UTF8Encoding(false));
+            fields["bodyBlocks"] = null;
+            bodies++;
+        }
+        Console.WriteLine($"  {"內文",-12} {bodies,4} 篇 → {bodyDir}{Path.DirectorySeparatorChar}{{slug}}.json");
+    }
+
     var path = Path.Combine(outDir, name + ".json");
     await File.WriteAllTextAsync(path, items.ToJsonString(jsonOptions) + "\n", new UTF8Encoding(false));
     Console.WriteLine($"  {name,-12} {group.Count(),4} 筆 → {path}");

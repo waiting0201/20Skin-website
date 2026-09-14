@@ -10,21 +10,63 @@
 
 const ENVELOPE_FAIL = (r) => `${r.code ?? 'ERROR'}：${r.message ?? '未知錯誤'}`
 
+/**
+ * 暫時性錯誤的重試。
+ * 🔴 **這是搬 1100 篇時實際踩到的。** 匯入走本機 func 打 westus2 的 Azure SQL，
+ * 同時間若有其他東西在佔網路（例如同一台機器正在上傳 617 MB 的圖到 Blob），
+ * SQL 連線會 `SocketException (60): Operation timed out`，API 回 500 ——
+ * 而那一筆在 Promise.all 裡就會把整批匯入中斷（2026-09-14）。
+ * ⚠️ 只重試**沒有送達**或 **5xx** 的請求。4xx 是資料本身的問題，重試幾次答案都一樣。
+ */
+const MAX_ATTEMPTS = 4
+const BACKOFF_MS = 1500
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
 export class ApiClient {
   constructor(baseUrl) {
     this.baseUrl = baseUrl.replace(/\/$/, '')
     this.token = null
+    /** 供 token 過期時自動重新登入用，見 #send。 */
+    this.credentials = null
+    this.relogin = null
   }
 
-  async #send(method, path, body) {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
+  /**
+   * token 過期時重新登入。
+   * 🔴 **匯入大批內容時這條路一定會走到。** access token 預設只有 30 分鐘
+   * （`Jwt:AccessTokenMinutes`），而搬 1100 篇舊站文章要跑更久 ——
+   * 沒有這段的話，過了 30 分鐘之後**剩下的每一筆都會失敗**，
+   * 而且錯誤訊息是 401，看起來像權限設定有問題而不是「跑太久」。
+   * ⚠️ 用單一 in-flight promise：並行的請求同時撞到過期時只重新登入一次。
+   */
+  async #reloginOnce() {
+    if (!this.credentials) return false
+    this.relogin ??= (async () => {
+      const { userName, password } = this.credentials
+      const data = await this.#send('POST', '/auth/login', { userName, password }, { retryAuth: false })
+      this.token = data.accessToken
+      return true
+    })().finally(() => { this.relogin = null })
+    return this.relogin
+  }
+
+  async #send(method, path, body, { retryAuth = true, attempt = 1 } = {}) {
+    let res
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+    } catch (e) {
+      // 連線層失敗（對方還沒回應）——重試是安全的，請求根本沒送達。
+      if (attempt >= MAX_ATTEMPTS) throw new Error(`${method} ${path} → ${e.message}（${MAX_ATTEMPTS} 次）`)
+      await sleep(BACKOFF_MS * attempt)
+      return this.#send(method, path, body, { retryAuth, attempt: attempt + 1 })
+    }
 
     const text = await res.text()
     let payload
@@ -36,6 +78,16 @@ export class ApiClient {
 
     // ⚠️ 一律走統一信封（docs/10 §2）。HTTP 200 但 success=false 也是失敗。
     if (!res.ok || payload.success === false) {
+      // token 過期就重新登入再試一次（見 #reloginOnce）。只重試一次 ——
+      // 真的沒有權限時無限重登只會把 LoginThrottles 的計數打爆。
+      if (retryAuth && res.status === 401 && await this.#reloginOnce()) {
+        return this.#send(method, path, body, { retryAuth: false })
+      }
+      // 伺服器端的暫時性失敗（多半是 SQL 連線逾時）——退避後重試。
+      if (res.status >= 500 && attempt < MAX_ATTEMPTS) {
+        await sleep(BACKOFF_MS * attempt)
+        return this.#send(method, path, body, { retryAuth, attempt: attempt + 1 })
+      }
       const detail = payload.errors?.length ? `｜${payload.errors.join('；')}` : ''
       throw new Error(`${method} ${path} → ${ENVELOPE_FAIL(payload)}${detail}`)
     }
@@ -63,6 +115,8 @@ export class ApiClient {
     }
 
     this.token = data.accessToken
+    // 記下來供 token 過期時自動重登（見 #reloginOnce）。⚠️ 只放在記憶體裡。
+    this.credentials = { userName, password: newPassword ?? password }
     return data
   }
 

@@ -34,3 +34,14 @@ apps/web/content/
 
 # 黃金樣本（tools/content-import/golden-diff.sh）
 .golden-html/
+
+# ── 舊站抓取的原始檔 ─────────────────────────────────────────────────
+# tools/legacy-import 的抓取快取（舊站 HTML／WP JSON／原圖）。
+# ⚠️ 這是「對正式站發過的請求」的存檔，重跑解析不必再敲對方主機 ——
+#    不要因為它佔空間就刪掉，刪了就得整批重抓 1100 次。
+tools/legacy-import/.cache/
+# 解析產物（可由 .cache 重跑產生）。parsed-*.json 合計 10 MB，
+# 超過 .githooks/pre-push 的單檔 2 MB 上限。
+tools/legacy-import/discovered-*.json
+tools/legacy-import/parsed-*.json
+tools/legacy-import/images.json
