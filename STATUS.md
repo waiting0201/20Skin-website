@@ -38,9 +38,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 CI workflow 未進 repo（目前靠本機腳本部署）。
 ✅ **2026-09-14：10 支遷移全部套用到正式庫，Function App 也部署了新組建**（見 §六）。
 
-🔴 **但驗收站的前台表單與後台都還連不上 API** —— 建置時寫死的 `https://api.20skin.tw/api/v1`
-**沒有 DNS 紀錄，也沒綁到 Function App**。驗收網域是 `20skin.4webdemo.com`（已綁上 SWA、
-CORS 也只放行它），少的是 API 那一半的網域。見 §六。
+✅ **2026-09-14：測試站 `20skin.4webdemo.com` 整條鏈打通，端到端驗過**（見 §六）。
 
 ---
 
@@ -495,31 +493,46 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 | schema | **35 張表 ＋ 165 列種子已套用**，用 `efbundle`（docs/11 §13）。**10 支遷移全部套用**（2026-09-14），見下方 |
 | 驗證 | `InitialSchema` 當時：表數 37、匿名約束 0、AI FAQ 開關 `false`、外部網域 2 筆 |
 
-### 🔴 驗收站連不上 API（2026-09-14 發現）
+### ✅ 測試站 `20skin.4webdemo.com`（2026-09-14 打通）
 
-`20skin.4webdemo.com` 已綁上 SWA、狀態 Ready，Function App 也是最新組建 ——
-但兩個前端在**建置時**把 `https://api.20skin.tw/api/v1` 烤進產物，而那個主機名稱
-**公開 DNS 查不到，Function App 上也沒有綁任何自訂網域**（只有
-`func-20skin-web-api-prod.azurewebsites.net`）。
+測試網域是 **`20skin.4webdemo.com`**（已綁上 SWA、狀態 Ready，CORS 只放行它）。
+🔴 **正式網域 `20skin.tw` 尚未進場** —— 相關的 DNS 與自訂網域綁定都還沒做。
 
-實測（2026-09-14，`20skin.4webdemo.com`）：
+原本兩個前端在建置時把 `https://api.20skin.tw/api/v1` 烤進產物，而那個主機名稱
+公開 DNS 查不到 —— 表單送出與後台登入都是 `ERR_NAME_NOT_RESOLVED`。
+**測試期改指 Function App 的預設主機名稱**，不必動任何 DNS：
 
-| 功能 | 現況 |
+```bash
+API='https://func-20skin-web-api-prod.azurewebsites.net/api/v1'
+NUXT_PUBLIC_API_BASE_URL="$API" VITE_API_BASE_URL="$API" \
+NUXT_PUBLIC_RECAPTCHA_SITE_KEY='<site key>' VITE_RECAPTCHA_SITE_KEY='<site key>' \
+  tools/deploy-swa.sh
+```
+
+⚠️ **上線時要再重建一次**，把位址換回 `api.20skin.tw`，那時才需要做子網域綁定
+（DNS 加 CNAME ＋ Azure 加自訂網域 ＋ 簽憑證）。已列進 §七。
+
+端到端驗證（真瀏覽器 → 真 reCAPTCHA token → 真 API → 真 Google siteverify），**8 項全過**：
+
+| 驗什麼 | 結果 |
 |---|---|
-| `/contact/` 送出 | ❌ `ERR_NAME_NOT_RESOLVED` |
-| `/admin/` 登入 | ❌ 同上 —— **後台完全無法使用** |
-| 站內搜尋 | ✅ 索引是靜態檔，不受影響（未命中回寫靜默失敗，設計如此） |
-| AI FAQ 開關 | ✅ 讀不到就退回建置期的值，設計如此 |
+| `GET /site-settings/public`（CORS 有放行） | ✅ |
+| 站內搜尋查無結果 → `POST /questions/miss` | ✅ **Google 判定為真人並放行** |
+| 後台登入頁的 reCAPTCHA 聲明文字 | ✅ |
+| 錯誤帳密 → 通過機器人驗證、擋在帳密 | ✅ 證明 token 有效 |
+| 種子帳號登入 → 導向「首登強制改密碼」 | ✅ |
 
-兩條路，**建議第一條**：
+### 🔴 只有端到端才抓得到的一個 bug：action 名稱不可有連字號
 
-1. **把 `api.20skin.tw` 綁到 Function App**。它是全新子網域，目前沒有任何東西指向它 ——
-   綁它**不會動到線上的 `www.20skin.tw`**，可以獨立於主站切換先做。做完前端不用重建。
-2. 用 `NUXT_PUBLIC_API_BASE_URL` / `VITE_API_BASE_URL` 指到
-   `func-20skin-web-api-prod.azurewebsites.net` 重新建置。缺點是驗收用的產物與上線的不同一份。
+reCAPTCHA v3 的 action 只接受 `A-Za-z/_`。原本用的是 **`questions-miss`** ——
+`grecaptcha.execute` **不會丟例外**，只在 console 印一行 `Invalid action name`
+然後把 action 丟掉，伺服器端的比對就永遠對不上，使用者看到的是一般的
+「自動化驗證未通過」。`contact` 與 `login` 沒有連字號，所以只有這一支壞掉。
 
-⚠️ CORS 目前只放行 `https://20skin.4webdemo.com`。**上線前要加 `https://20skin.tw`**
-（以及院方決定的 www 形式），否則切 DNS 當天表單與後台會同時停擺。
+⚠️ **本機那套假的 siteverify 抓不到這個** —— 它給什麼就回什麼。這是只有對真的 Google
+跑才會現形的一類錯誤。已改為 `questions_miss`，並在兩支前端取 token 的模組加上格式檢查
+（不合法當場丟例外，不要等上線）。
+⚠️ 速率限制的鍵仍是 `questions-miss`（`LoginThrottles` 裡的既有資料列），刻意不同名。
 
 ### ✅ 第 3–10 支遷移（2026-09-14 全部套用到正式庫）
 
@@ -716,7 +729,10 @@ STATUS 先前寫的「301 種子約 772 筆」指的是**後台畫面的 mock �
 - [ ] 遷移在正式資料庫的實際行為（先在可丟棄的庫演練一次完整遷移與回滾）
 - [ ] 全站 404 掃描、301 迴圈檢查、結構化資料驗證、CWV
 - [ ] **種子密碼 `Admin@123` 更換**（🔴 沒有雙因素，帳密是唯一憑證）
-- [ ] **`api.20skin.tw` 綁到 Function App** ＋ **CORS 加上正式前台來源** —— 🔴 不做的話切 DNS 當天表單與後台同時停擺
+- [ ] **`api.20skin.tw` 綁到 Function App**（DNS 加 CNAME ＋ Azure 加自訂網域 ＋ 簽憑證）
+      ＋ **用該位址重建前台與後台**（測試期指的是 `func-20skin-web-api-prod.azurewebsites.net`）
+      ＋ **CORS 加上正式前台來源** —— 🔴 三件缺一，切 DNS 當天表單與後台就同時停擺
+- [ ] **reCAPTCHA 後台的網域清單加上正式網域**（測試網域 `20skin.4webdemo.com` 已驗證可用）
 - [ ] **SMTP 設定**（`Smtp__Host`／`Smtp__FromAddress`…）與 `contact.recipientEmail` —— 🔴 目前**都沒設**，表單就算通過驗證也不會寄出任何通知信，只會在 log 留 warning
 - [ ] **`aifaq.enabled` 在正式庫必須是 `false`**（docs/04 §4）—— 匯入腳本曾把它蓋成 `true`（已修，見 §二）
 - [ ] **reCAPTCHA v3 的金鑰對**（[10](docs/10-api.md) §5.1）—— 🔴 **三個地方要一起設**：

@@ -96,7 +96,13 @@ public sealed class FormHandler(
         var source = ParseSource(body.Source);
         var ip = RequestContext.IpAddress(req);
 
-        await botCheck.EnsureHumanAsync(body.BotCheckToken, "questions-miss");
+        // 🔴 **action 名稱不可以有連字號。** reCAPTCHA v3 只接受 `A-Za-z/_`
+        //    （`grecaptcha.execute` 會在 console 印 "Invalid action name" 然後把 action 丟掉），
+        //    伺服器端的 action 比對就永遠對不上 —— 而且回的是一般的「驗證未通過」，
+        //    指不到真正的原因。2026-09-14 對正式環境做端到端時抓到：原本是 `questions-miss`。
+        //    ⚠️ 這一格與下一行的速率限制鍵**刻意不同名**：後者是 LoginThrottles 裡的
+        //    既有資料列，改它等於把已經累積的計數丟掉。
+        await botCheck.EnsureHumanAsync(body.BotCheckToken, "questions_miss");
         await rateLimit.EnsurePublicQuotaAsync("questions-miss", ip);
 
         await RecordQuestionInboxAsync(questionText, source);

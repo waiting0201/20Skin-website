@@ -243,7 +243,15 @@
 ## 5.1 機器人驗證：reCAPTCHA v3（2026-09-12 定案）
 
 套用於三支對公網開放的寫入端點：`POST /contact`、`POST /questions/miss`、`POST /auth/login`。
-請求欄位一律是 **`botCheckToken`**，前端動作名稱一律是 **`contact`／`questions-miss`／`login`**。
+請求欄位一律是 **`botCheckToken`**，前端動作名稱一律是 **`contact`／`questions_miss`／`login`**。
+
+🔴 **action 名稱只能包含 `A-Za-z/_`** —— 不可有連字號或數字。帶了不合法的字元時
+`grecaptcha.execute` **不會丟例外**，只在 console 印一行 `Invalid action name` 然後
+把 action 丟掉，伺服器端的比對就永遠對不上，而使用者看到的是一般的「自動化驗證未通過」。
+2026-09-14 對正式環境做端到端時才抓到（原本是 `questions-miss`）。
+前端兩支取 token 的模組已加上格式檢查，不合法會當場丟例外。
+⚠️ `/questions/miss` 的**速率限制鍵**仍是 `questions-miss`（`LoginThrottles` 裡的既有資料列），
+與 action 名稱刻意不同名 —— 改它等於把已累積的計數丟掉。
 
 ⚠️ **介面與欄位命名不帶供應商名稱**（`IBotCheckService`、`botCheckToken`）——
 換成 Turnstile 時只有 `functions/Services/BotCheckService.cs` 與前端那兩支

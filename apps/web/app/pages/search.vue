@@ -118,7 +118,7 @@ async function reportMiss(q: string) {
     // ⚠️ 這裡取不到 token 也**照樣送**，與 `/contact/` 相反 —— 那邊取不到就要停下來
     //    並告訴使用者，因為送出失敗會讓病人以為詢問已經送到。這裡送不成功只是
     //    少一筆題庫資料，使用者完全不需要知道。
-    const botCheckToken = await useBotCheck().getToken('questions-miss')
+    const botCheckToken = await useBotCheck().getToken('questions_miss')
     await $fetch(`${apiBaseUrl}/questions/miss`, {
       method: 'POST',
       body: { questionText: q, source: 'search', botCheckToken },

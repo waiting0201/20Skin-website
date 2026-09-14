@@ -24,6 +24,25 @@ declare global {
   }
 }
 
+/**
+ * reCAPTCHA v3 的 action 名稱只接受 `A-Za-z/_`。
+ *
+ * 🔴 帶了連字號或數字，`grecaptcha.execute` **不會丟例外** —— 它只在 console 印一行
+ *    "Invalid action name" 然後把 action 丟掉。伺服器端的 action 比對就永遠對不上，
+ *    而使用者看到的是一般的「自動化驗證未通過」，指不到真正的原因。
+ *    2026-09-14 對正式環境做端到端時才抓到（`questions-miss`）。
+ * ⚠️ 所以這裡**主動擋下**：寧可在開發時當場炸掉，也不要讓它安靜地上線。
+ */
+const VALID_ACTION = /^[A-Za-z_/]+$/
+
+function assertValidAction(action: string) {
+  if (!VALID_ACTION.test(action)) {
+    throw new Error(
+      `reCAPTCHA 的 action 名稱「${action}」不合法：只能包含 A-Za-z/_（不可有連字號或數字）。`,
+    )
+  }
+}
+
 let scriptPromise: Promise<boolean> | null = null
 
 /** 載入 Google 的 script，只載一次。回傳是否成功。 */
@@ -76,6 +95,7 @@ export function useBotCheck() {
    * @returns 權杖；沒有啟用驗證時回 `null`（正常），取不到時也回 `null`（呼叫端要當錯誤處理）。
    */
   async function getToken(action: string): Promise<string | null> {
+    assertValidAction(action)
     if (!enabled) return null
 
     const ok = await loadScript(recaptchaSiteKey as string)
