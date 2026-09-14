@@ -58,9 +58,9 @@ function defaultSitemapFiles(): SitemapFileConfig[] {
 const DEFAULT_ROBOTS_TXT = `User-agent: *
 Disallow: /search/
 
-# AI 爬蟲：本站刻意放行，見 docs/03-seo-geo.md §1（GEO 策略的先決條件）。
+# AI 爬蟲：本站刻意放行——讀得到內容是 GEO 策略的先決條件。
 # 不要在這裡加 Disallow 擋 GPTBot／ClaudeBot／PerplexityBot 等，
-# 也不要加 Disallow: /admin/——原因見 docs/03-seo-geo.md §1。
+# 也不要加 Disallow: /admin/——寫進這個公開檔案等於標示後台位置。
 
 Sitemap: https://www.20skin.tw/sitemap.xml
 `
@@ -72,7 +72,7 @@ export function checkRobotsTxt(text: string): string | null {
     .split(/\r?\n/)
     .some((line) => /^\s*disallow\s*:/i.test(line) && /\/admin/i.test(line))
   if (hasAdminDisallow) {
-    return '偵測到 Disallow 規則指向 /admin——docs/03-seo-geo.md §1：這等於在公開檔案裡標示後台路徑位置，反而幫攻擊者省一步。擋索引已經由後台路由的 X-Robots-Tag 處理，不需要也不應該寫在這裡。'
+    return '偵測到 Disallow 規則指向 /admin——這等於在公開檔案裡標示後台路徑位置，反而幫攻擊者省一步。擋索引已經由後台路由的 X-Robots-Tag 處理，不需要也不應該寫在這裡。'
   }
   return null
 }

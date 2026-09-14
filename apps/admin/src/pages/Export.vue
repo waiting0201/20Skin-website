@@ -88,7 +88,7 @@ function download(key: TabKey) {
         <p class="ex-note">
           <strong>這個畫面只做預覽與下載。</strong>
           正式的 <code>faq.json</code>／<code>llms.txt</code>／<code>llms-full.txt</code> 是在建置期（<code>nuxt generate</code>）
-          自動產生、隨前台一起部署（docs/07-deployment.md §4）——不是在這裡按一顆按鈕就會發布到網站上。
+          自動產生、隨前台一起部署——不是在這裡按一顆按鈕就會發布到網站上。
           這裡的用途是讓你在內容還沒 merge、還沒跑一次完整建置之前，先看到「如果現在建置，語料檔會長什麼樣子」。
         </p>
       </div>

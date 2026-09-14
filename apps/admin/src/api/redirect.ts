@@ -275,7 +275,7 @@ function evaluateRows(
     }
 
     if (normalizedTo && !/^https?:\/\//i.test(normalizedTo) && normalizedTo !== '/' && !normalizedTo.endsWith('/') && !/\.[a-z0-9]+$/i.test(normalizedTo)) {
-      issues.push({ level: 'warning', code: 'NO_TRAILING_SLASH', message: '目標路徑沒有結尾斜線，與新站網址慣例不一致，可能導致多跳一次轉址（docs/07 §2）。' })
+      issues.push({ level: 'warning', code: 'NO_TRAILING_SLASH', message: '目標路徑沒有結尾斜線，與新站網址慣例不一致，可能導致多跳一次轉址。' })
     }
 
     results.push({ row: idx + 1, input, normalizedFrom, normalizedTo, issues, conflictsWithId })

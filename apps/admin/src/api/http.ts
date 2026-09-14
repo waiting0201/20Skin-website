@@ -122,7 +122,7 @@ async function rawFetch(path: string, init: RequestInit & { auth?: boolean } = {
   } catch {
     throw new ApiError(
       NETWORK_ERROR_CODE,
-      `連不上 ${API_BASE}。可能是網路中斷，也可能是 API 的 CORS 沒有放行這個來源 —— 瀏覽器對這兩種情況給的錯誤一模一樣，請一併檢查（docs/10 §2）。`,
+      `連不上 ${API_BASE}。可能是網路中斷，也可能是 API 的 CORS 沒有放行這個來源 —— 瀏覽器對這兩種情況給的錯誤一模一樣，請一併檢查。`,
     )
   }
 }

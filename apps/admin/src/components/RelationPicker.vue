@@ -57,7 +57,7 @@ function updateNote(id: number, note: string) {
 <template>
   <div class="adm-relation">
     <p v-if="!field.editable" class="adm-relation__readonly-note">
-      唯讀——這個關聯由「{{ UNIT_REGISTRY[field.targetUnit].label }}」的編輯畫面維護（docs/08-database.md §D：雙向關聯一律單向存）。
+      唯讀——這個關聯由「{{ UNIT_REGISTRY[field.targetUnit].label }}」的編輯畫面維護（雙向關聯一律單向存）。
     </p>
 
     <div class="adm-relation__picked">

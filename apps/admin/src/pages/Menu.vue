@@ -250,7 +250,7 @@ function removeSocialLink(index: number) {
       <div>
         <h1 class="adm-page__title">導覽選單與頁尾</h1>
         <p class="adm-page__desc">
-          限超級管理員。排序／升降層／刪除立即生效；欄位編輯改完要按「儲存」才會送出（docs/08 §I：不走審核也沒有留痕，請小心確認）。
+          限超級管理員。排序／升降層／刪除立即生效；欄位編輯改完要按「儲存」才會送出（不走審核也沒有留痕，請小心確認）。
         </p>
       </div>
     </header>

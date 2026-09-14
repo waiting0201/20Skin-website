@@ -183,7 +183,7 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布
       <div>
         <h1 class="adm-page__title">首頁版位編排</h1>
         <p class="adm-page__desc">
-          七個版位，只能挑選已存在的內容——避免首頁又變回一份跟內頁對不上的自由文案（docs/02 §3）。
+          七個版位，只能挑選已存在的內容——避免首頁又變回一份跟內頁對不上的自由文案。
         </p>
       </div>
     </header>
@@ -207,7 +207,7 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布
                   內容來源：{{ UNIT_REGISTRY[section.targetUnit].label }}——只能從既有的{{ UNIT_REGISTRY[section.targetUnit].label }}挑選，不能另打文案。
                 </p>
                 <p v-else class="adm-field__hint">
-                  唯一例外：沒有對應的內容模型，CTA 與外部導流連結存在版位設定裡（docs/08 §G-2）。
+                  唯一例外：沒有對應的內容模型，CTA 與外部導流連結存在版位設定裡。
                 </p>
               </div>
               <div class="adm-page__actions">
@@ -260,7 +260,7 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布
               </div>
 
               <div class="adm-field adm-field--span2" style="margin-top: var(--sp-4)">
-                <label class="adm-field__label">輪播圖片（示意用網址輸入，正式上傳見 docs/09 §9）</label>
+                <label class="adm-field__label">輪播圖片（示意用網址輸入）</label>
                 <div class="adm-repeater">
                   <div v-for="(img, idx) in section.heroSettings.images" :key="idx" class="adm-repeater__row">
                     <div class="adm-repeater__fields">

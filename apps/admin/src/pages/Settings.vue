@@ -154,7 +154,7 @@ async function save() {
             <div class="adm-field">
               <label class="adm-field__label">`/contact/` 表單收件信箱</label>
               <input v-model="form.contactEmail" class="adm-input" type="email" :disabled="!canEdit">
-              <p class="adm-field__hint">表單只寄通知信，後台不留存收件紀錄（docs/02 §2）。</p>
+              <p class="adm-field__hint">表單只寄通知信，後台不留存收件紀錄。</p>
             </div>
             <div class="adm-field adm-field--span2">
               <label class="adm-field__label">追蹤碼</label>
@@ -166,7 +166,7 @@ async function save() {
         <div class="adm-card">
           <p class="adm-fieldset__legend">全站 NAP 主資料</p>
           <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
-            必須與各據點頁、頁尾逐字一致——AI 靠交叉比對建立實體信心，任何不一致都會降低確信度（docs/03 §4 ③）。
+            必須與各據點頁、頁尾逐字一致——AI 靠交叉比對建立實體信心，任何不一致都會降低確信度。
           </p>
 
           <div v-for="(entry, idx) in form.nap" :key="idx" class="adm-repeater__row" style="flex-direction: column; align-items: stretch; gap: var(--sp-2)">
@@ -203,7 +203,7 @@ async function save() {
         </div>
 
         <div class="adm-card">
-          <p class="adm-fieldset__legend">AI 問答面板（浮動 CTA，docs/04-ai-faq.md §4）</p>
+          <p class="adm-fieldset__legend">AI 問答面板（浮動 CTA）</p>
           <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
             FAQ 題目不在這裡挑選——面板內容由 AI 依站內語料生成，這裡只管開關與面板文案。
           </p>
@@ -214,7 +214,7 @@ async function save() {
                 啟用浮動 AI 問答入口
               </label>
               <p class="adm-field__hint">
-                ⚠️ 正式環境種子值是「關閉」——Phase 1 只交付介面，AI 未串接前不對外顯示（docs/08 §J-4 步驟 7）。
+                ⚠️ 預設為「關閉」——AI 還沒串接前不對外顯示，面板文案可以先設定好放著。
               </p>
             </div>
             <div class="adm-field">
@@ -241,8 +241,8 @@ async function save() {
           <span class="adm-muted">最後修改：{{ form.updatedAt ? new Date(form.updatedAt).toLocaleString('zh-TW') : '尚無紀錄' }}</span>
         </div>
         <p class="adm-workflow__note">
-          ⚠️ 這裡沒有版本歷程——設定類不留痕（2026-09-11 定案不做操作日誌），上面的「最後修改時間」
-          只是顯示用，查不到是誰、從什麼值改成什麼值。控管手段只剩「限超級管理員」這道權限門檻（docs/08 §I）。
+          ⚠️ 這裡沒有版本歷程——設定類不留痕，上面的「最後修改時間」
+          只是顯示用，查不到是誰、從什麼值改成什麼值。控管手段只剩「限超級管理員」這道權限門檻。
         </p>
       </form>
     </template>

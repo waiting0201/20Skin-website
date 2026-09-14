@@ -24,7 +24,7 @@ export const caseUnit: UnitDefinition = {
       type: 'textarea',
       required: true,
       group: '法規揭露（必填）',
-      hint: '資料庫層 NOT NULL，遷移腳本繞過 API 時仍會被擋下（docs/08 §C-5）。',
+      hint: '必填——沒有這一欄，案例存不起來。',
     },
     { key: 'hasWrittenConsent', label: '當事人書面同意', type: 'boolean', required: true, group: '法規揭露（必填）' },
     { key: 'consentReference', label: '同意書編號／存放位置', type: 'text', required: true, group: '法規揭露（必填）', hint: '只存索引，同意書本身不進系統。' },

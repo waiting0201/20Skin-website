@@ -320,7 +320,7 @@ async function restore(versionNo: number) {
                     <input v-model="bodyForm.includeInSitemap" type="checkbox" :disabled="!canEditBody">
                     輸出至 sitemap
                   </label>
-                  <p class="adm-field__hint">與 SEO 區塊的 noIndex 是兩件事，兩者都要設才不會自相矛盾（docs/08 §B-4）。</p>
+                  <p class="adm-field__hint">與 SEO 區塊的 noIndex 是兩件事，兩者都要設才不會自相矛盾。</p>
                 </div>
               </div>
             </div>
@@ -488,7 +488,7 @@ async function restore(versionNo: number) {
                   </p>
                   <p v-if="field.riskScan && riskHitsFor(bodyForm.fields[field.key]).length" class="adm-risk-hit">
                     ⚠️ 偵測到高風險字詞：<strong>{{ riskHitsFor(bodyForm.fields[field.key]).join('、') }}</strong>
-                    ——不會擋下輸入，但送審時會一併記錄供審核者重點檢視（docs/02-backend-cms.md §5）。
+                    ——不會擋下輸入，但送審時會一併記錄供審核者重點檢視。
                   </p>
                 </div>
               </div>
@@ -519,7 +519,7 @@ async function restore(versionNo: number) {
 
         <!-- ============================ 共用 SEO 區塊 ============================ -->
         <form class="adm-card" @submit.prevent="saveSeo">
-          <p class="adm-fieldset__legend">SEO（docs/02-backend-cms.md §1 共用區塊）</p>
+          <p class="adm-fieldset__legend">SEO（共用區塊）</p>
           <div class="adm-field-grid">
             <div class="adm-field adm-field--span2">
               <label class="adm-field__label">SEO 標題</label>
@@ -533,7 +533,7 @@ async function restore(versionNo: number) {
             <div class="adm-field adm-field--span2">
               <label class="adm-field__label">AI 摘要（40–60 字直答式段落）</label>
               <textarea v-model="seoForm.aiSummary" class="adm-textarea" :disabled="!canEditSeo" />
-              <p class="adm-field__hint">docs/03-seo-geo.md GEO 策略落地欄位；渲染在頁面最上方，同時輸出至結構化資料。</p>
+              <p class="adm-field__hint">GEO 策略落地欄位；渲染在頁面最上方，同時輸出至結構化資料。</p>
               <p class="adm-field__count" :class="{ 'is-out-of-range': (seoForm.aiSummary ?? '').length > 0 && ((seoForm.aiSummary ?? '').length < 40 || (seoForm.aiSummary ?? '').length > 60) }">
                 {{ (seoForm.aiSummary ?? '').length }} 字（建議 40–60 字）
               </p>
@@ -591,7 +591,7 @@ async function restore(versionNo: number) {
           <div class="adm-field">
             <label class="adm-field__label">最早生效時間</label>
             <input v-model="scheduleForm.publishAt" class="adm-input" type="datetime-local">
-            <p class="adm-field__hint">⚠️ 不是精確發布時間——到點後仍需一次全站重建才會上線（docs/11 §7）。</p>
+            <p class="adm-field__hint">⚠️ 不是精確發布時間——到點後仍需一次全站重建才會上線。</p>
           </div>
           <div class="adm-field">
             <label class="adm-field__label">下架時間</label>

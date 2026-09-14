@@ -126,9 +126,6 @@ function onLogout() {
           </div>
         </nav>
 
-        <div class="adm-sidebar__foot">
-          docs/06 §5：31 個後台畫面。
-        </div>
       </aside>
 
       <div>

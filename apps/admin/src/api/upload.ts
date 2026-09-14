@@ -89,7 +89,7 @@ export const uploadApi = {
     } catch {
       throw new ApiError(
         'UPLOAD_TYPE',
-        '直傳到儲存體失敗。多半是儲存體帳戶的 CORS 沒有放行這個來源 —— 它與 API 的 CORS 是兩套獨立設定（docs/07 §6）。',
+        '直傳到儲存體失敗。多半是儲存體帳戶的 CORS 沒有放行這個來源 —— 它與 API 的 CORS 是兩套獨立設定。',
       )
     }
 

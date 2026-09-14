@@ -176,7 +176,7 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
         <h2 class="adm-card__title">分檔設定</h2>
         <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
           每個分檔實際收錄哪些內容，在建置期由「內容型別 ＋ 個別項目的 IncludeInSitemap ＋ 已發布 ＋ 有網址」算出來
-          （docs/08-database.md §H：sitemap 本身不建表）。這裡設定的是分檔要不要整個納入 sitemap index，
+          （sitemap 本身不建表）。這裡設定的是分檔要不要整個納入 sitemap index，
           以及該分檔預設的 changefreq／priority。
         </p>
 
@@ -226,7 +226,7 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
       <div class="adm-card">
         <h2 class="adm-card__title">NoIndex 與 IncludeInSitemap 一致性檢查</h2>
         <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
-          這兩個是兩件不同的事（docs/08-database.md §B-4）：<strong>IncludeInSitemap</strong> 決定要不要把這頁寫進
+          這兩個是兩件不同的事：<strong>IncludeInSitemap</strong> 決定要不要把這頁寫進
           sitemap.xml「主動告訴」搜尋引擎；<strong>NoIndex</strong>（在各單元編輯畫面的 SEO 區塊）是告訴搜尋引擎
           「不要收錄這頁」。兩者反過來搭配是常見且正確的（例如標籤頁通常兩者都關——不主動送出、也不希望被收錄）；
           <strong>但兩者都開會自相矛盾</strong>——sitemap 把頁面送出去了，同一頁卻標著不要收錄。下面只列出這種矛盾組合。
@@ -254,7 +254,7 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
         <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
           最後更新：{{ robotsUpdatedAt ? new Date(robotsUpdatedAt).toLocaleString('zh-TW') : '—' }}。
           ⚠️ <strong>不要加 <code>Disallow: /admin</code></strong>——後台位置寫進這個公開檔案等於主動標示給人看，
-          擋索引已經由後台路由的 <code>X-Robots-Tag: noindex, nofollow</code> 處理（docs/03-seo-geo.md §1）。
+          擋索引已經由後台路由的 <code>X-Robots-Tag: noindex, nofollow</code> 處理。
           也不要用這裡擋 AI 爬蟲（GPTBot／ClaudeBot…）——GEO 策略的先決條件就是讓它們進得來。
         </p>
         <textarea v-model="robotsText" class="adm-textarea adm-textarea--tall" :readonly="!canEdit" spellcheck="false"></textarea>

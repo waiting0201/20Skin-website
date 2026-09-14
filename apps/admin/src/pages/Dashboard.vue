@@ -103,8 +103,7 @@ const unitKeys = Object.keys(UNIT_REGISTRY) as UnitKey[]
           </div>
           <hr class="adm-divider">
           <p class="adm-workflow__note">
-            ⚠️ 退回不寄信——帳號沒有必填 email，退回通知一律由這個待辦清單呈現
-            （docs/11-backend-design.md §7；docs/08-database.md §B-3）。
+            ⚠️ 退回不寄信——帳號沒有必填 email，退回通知一律由這個待辦清單呈現。
           </p>
         </div>
       </div>

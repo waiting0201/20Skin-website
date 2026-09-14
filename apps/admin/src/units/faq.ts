@@ -25,7 +25,7 @@ export const faqUnit: UnitDefinition = {
       required: true,
       optionsFromTermType: 3,
       group: '基本資料',
-      hint: '引用「分類與標籤」模型，不自行維護第二份清單（docs/02 §6）。',
+      hint: '引用「分類與標籤」模型，不自行維護第二份清單。',
     },
     {
       key: 'webAnswer',
@@ -45,7 +45,7 @@ export const faqUnit: UnitDefinition = {
       required: true,
       group: '答案',
       riskScan: true,
-      hint: '60–100 字，語意需自足——這是 FAQPage JSON-LD、faq.json、llms-full.txt 的唯一來源，缺一則該題無法輸出（docs/08 §C-6）。',
+      hint: '60–100 字，語意需自足——這是 FAQPage JSON-LD、faq.json、llms-full.txt 的唯一來源，缺一則該題無法輸出。',
       minLength: 60,
       maxLength: 100,
     },

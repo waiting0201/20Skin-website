@@ -126,7 +126,7 @@ async function remove(item: QuestionInboxRecord) {
     <p class="adm-workflow__note">
       來源涵蓋站內搜尋無結果、AI FAQ 未命中的提問、聯絡表單提問（僅問題文字，不含任何送出者資訊）與手動輸入。
       目的是讓 FAQ 題庫隨真實提問成長——處理完的題目建議直接「建立為 FAQ 草稿」，回填後兩個出口
-      （<code>/faq/</code> 頁面與 AI FAQ 面板）會同時受惠（docs/04-ai-faq.md §3）。
+      （<code>/faq/</code> 頁面與 AI FAQ 面板）會同時受惠。
     </p>
 
     <div class="adm-filters">

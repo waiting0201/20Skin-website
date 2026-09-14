@@ -26,7 +26,7 @@ export const articleUnit: UnitDefinition = {
       type: 'date',
       required: true,
       group: '基本資料',
-      hint: '⚠️ 與右側「排程發布」的最早生效時間是兩回事——這一欄是 datePublished 的來源，遷移文章時要帶入舊站原始日期（docs/08 §C-4）。',
+      hint: '⚠️ 與右側「排程發布」的最早生效時間是兩回事——這一欄是 datePublished 的來源，遷移文章時要帶入舊站原始日期。',
     },
     { key: 'cover', label: '封面圖', type: 'image', group: '圖片', hint: '建議尺寸 1600×1000（16:10）。' },
     { key: 'summary', label: '摘要', type: 'textarea', required: true, group: '內容' },
@@ -42,7 +42,7 @@ export const articleUnit: UnitDefinition = {
         { value: '1', label: '主站 share.php' },
         { value: '2', label: '20skinblog.com' },
       ],
-      hint: '遷移用欄位，供日後篩出 blog 站文章（其跨網域 301 不在本專案範圍，docs/08 §C-4）。',
+      hint: '唯讀。標示這篇文章是從哪個舊站搬過來的，供日後篩選使用。',
     },
   ],
   relations: [

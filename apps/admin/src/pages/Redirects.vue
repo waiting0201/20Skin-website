@@ -243,7 +243,7 @@ const previewRowsToShow = computed(() => importPreview.value?.rows.slice(0, PREV
           <code>staticwebapp.config.json</code> 放不下約 770 條規則（20 KB 上限約只放得下 200 條），
           且它<strong>不比對 query string</strong>——舊網址像
           <code>share.php?class=醫美新知</code> 這類帶中文參數的頁面，只有靠
-          <code>/api/fallback</code> 讀 <code>x-ms-original-url</code> 查這張表才做得到（docs/07 §2）。
+          <code>/api/fallback</code> 讀 <code>x-ms-original-url</code> 查這張表才做得到。
           <strong>最高流量的十幾條</strong>已直接寫進設定檔走最快路徑，不經過 Function，下面列出目前是哪幾條。
         </p>
         <p class="r-note">

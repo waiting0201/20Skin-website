@@ -23,7 +23,7 @@ export const doctorUnit: UnitDefinition = {
       type: 'boolean',
       required: true,
       group: '基本資料',
-      hint: '⚠️ 14 位團隊成員是 13 醫師 ＋ 1 藝術總監（安喬／許媖琄，兼執行長，非醫師）。這一欄決定前台「本文由 ○○ 醫師審閱」與 Physician JSON-LD 會不會掛錯人，不是預設全開（docs/08 §C-2）。',
+      hint: '⚠️ 14 位團隊成員是 13 醫師 ＋ 1 藝術總監（安喬／許媖琄，兼執行長，非醫師）。這一欄決定前台「本文由 ○○ 醫師審閱」與 Physician JSON-LD 會不會掛錯人，不是預設全開。',
     },
     { key: 'specialty', label: '專科', type: 'text', group: '基本資料' },
     { key: 'photo', label: '大頭照', type: 'image', group: '基本資料', hint: '建議尺寸 900×1200（3:4 直式），對齊頭部裁切。' },
@@ -32,7 +32,7 @@ export const doctorUnit: UnitDefinition = {
       label: '學歷與經歷',
       type: 'repeater',
       group: '學經歷',
-      hint: '可重複欄位（docs/02 §1）。型別：現職／學歷／經歷／證照與學會資格。⚠️ 「現職」與「經歷」是個人頁時間軸上兩種不同的標籤，不要混用。',
+      hint: '可重複欄位。型別：現職／學歷／經歷／證照與學會資格。⚠️ 「現職」與「經歷」是個人頁時間軸上兩種不同的標籤，不要混用。',
       repeaterFields: [
         {
           key: 'type',
@@ -48,8 +48,8 @@ export const doctorUnit: UnitDefinition = {
         { key: 'text', label: '內容', type: 'text' },
       ],
     },
-    { key: 'tags', label: '專長標籤', type: 'tags', group: '學經歷', hint: '列表卡片上的標籤。刻意不走「分類與標籤」模型——專長標籤不產生 URL、不需要 SEO 欄位（docs/02 §1）。' },
-    { key: 'expertiseTags', label: '擅長項目', type: 'tags', group: '學經歷', hint: '個人頁的「擅長項目」區塊，與上面的專長標籤是兩個不同的區塊（docs/08 §C-2 DoctorTags.Type）。' },
+    { key: 'tags', label: '專長標籤', type: 'tags', group: '學經歷', hint: '列表卡片上的標籤。刻意不走「分類與標籤」模型——專長標籤不產生 URL、不需要 SEO 欄位。' },
+    { key: 'expertiseTags', label: '擅長項目', type: 'tags', group: '學經歷', hint: '個人頁的「擅長項目」區塊，與上面的專長標籤是兩個不同的區塊（DoctorTags.Type）。' },
     { key: 'bio', label: '簡介', type: 'richtext', group: '簡介', riskScan: true },
     { key: 'publications', label: '著作', type: 'textarea', group: '簡介' },
     {

@@ -22,7 +22,7 @@ export const concernUnit: UnitDefinition = {
       label: '建議療程／諮詢醫師的區段引言',
       type: 'textarea',
       group: '內容',
-      hint: '⚠️ 與下方每一筆關聯的「推薦理由」不是同一件事：那是逐筆的，這是整個區段的開場白（docs/08 §C-3）。',
+      hint: '⚠️ 與下方每一筆關聯的「推薦理由」不是同一件事：那是逐筆的，這是整個區段的開場白。',
     },
     { key: 'cover', label: '封面圖', type: 'image', group: '圖片' },
   ],
