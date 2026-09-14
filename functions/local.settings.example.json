@@ -34,7 +34,7 @@
     "Jwt__Audience": "20skin-admin",
     "Jwt__AccessTokenMinutes": "60",
     "Jwt__RefreshTokenDays": "14",
-    "//ratelimit": "🔴 後台唯一的防線（docs/02 §4）。帳號與來源 IP 雙維度，狀態存 LoginThrottles。 PublicQuota 是 /contact 與 /questions/miss 的頻率限制，沿用同一張表（見 STATUS.md §八）。",
+    "//ratelimit": "🔴 後台唯一的硬防線（docs/02 §4）。只以帳號計數（來源 IP 維度 2026-09-14 拿掉），狀態存 LoginThrottles。 PublicQuota 是 /contact 與 /questions/miss 的頻率限制，沿用同一張表的 IP 維度（見 STATUS.md §八）。",
     "RateLimit__Login__MaxFailedAttempts": "5",
     "RateLimit__Login__FailureWindowMinutes": "15",
     "RateLimit__Login__LockoutMinutes": "15",
