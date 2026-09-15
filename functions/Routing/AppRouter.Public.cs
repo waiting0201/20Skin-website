@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Skin20.Api.Common;
 
 namespace Skin20.Api.Routing;
 
@@ -7,9 +8,15 @@ namespace Skin20.Api.Routing;
 /// 前台公開路由（docs/10-api.md §3.1）。
 ///
 /// <para>
-/// 🔴 <b>只有四支。</b> 前台是建置期預渲染的靜態站，療程、文章、醫師這些資料
-/// <b>不經由 API 提供給前台</b> —— 它們在建置期由匯出腳本直接查 SQL 烤進 HTML
-/// （docs/09 §3）。這是純靜態架構的直接結果，不是遺漏。
+/// 🔴 <b>2026-09-15 起這裡多了內容讀取端點。</b> 在那之前只有四支 ——
+/// 前台是建置期預渲染的靜態站，療程、文章、醫師這些資料不經由 API 提供，
+/// 而是建置期由匯出腳本直接查 SQL 烤進 HTML。前台改成執行期 SSR 之後
+/// （翻掉原決策 6），同一批資料必須能在請求當下拿得到。
+/// </para>
+/// <para>
+/// ⚠️ <b>全站唯一的內容出口，而且每一個頁面請求都會打到它。</b>
+/// 快取標頭由 <c>CacheControl.Public</c> 統一給，真正的失效是發布時主動通知
+/// （見 <c>Common/CacheControl.cs</c>）。
 /// </para>
 /// <para>
 /// ⚠️ 白名單是<b>列舉式</b>的：新增前台端點時必須補進 <see cref="IsPublicRoute"/>，
@@ -42,6 +49,11 @@ public sealed partial class AppRouter
             ("POST", ["questions", "miss"]) => true,
             ("GET", ["site-settings", "public"]) => true,
 
+            // 前台內容（SSR）。⚠️ `content` 這個字段刻意不與九個單元代號重疊，
+            //    否則 `/{unit}` 與 `/content` 在同一層會互相吃掉。
+            ("GET", ["content"]) => true,
+            ("GET", [var unit]) when UnitCodes.IsValid(unit) => true,
+
             _ => false,
         };
 
@@ -59,6 +71,9 @@ public sealed partial class AppRouter
             ("POST", ["contact"]) => Wrap(forms.SubmitContactAsync(req)),
             ("POST", ["questions", "miss"]) => Wrap(forms.RecordMissedQuestionAsync(req)),
             ("GET", ["site-settings", "public"]) => Wrap(settings.GetPublicAsync()),
+
+            ("GET", ["content"]) => Wrap(publicContent.GetByPathAsync(req)),
+            ("GET", [var unit]) when UnitCodes.IsValid(unit) => Wrap(publicContent.ListAsync(req, unit)),
 
             _ => Task.FromResult<IActionResult?>(null),
         };

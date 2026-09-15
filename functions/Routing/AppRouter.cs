@@ -27,6 +27,7 @@ public sealed partial class AppRouter(
     AuthHandler auth,
     FormHandler forms,
     SettingHandler settings,
+    PublicContentHandler publicContent,
     // ── 後台（docs/10 §3.3、§3.4）──────────────────────────────────
     DashboardHandler dashboard,
     ContentHandler content,

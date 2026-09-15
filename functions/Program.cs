@@ -103,6 +103,7 @@ builder.Services.AddScoped<HealthHandler>();
 builder.Services.AddScoped<AuthHandler>();
 builder.Services.AddScoped<FormHandler>();
 builder.Services.AddScoped<SettingHandler>();
+builder.Services.AddScoped<PublicContentHandler>();
 builder.Services.AddScoped<DashboardHandler>();
 builder.Services.AddScoped<ContentHandler>();
 builder.Services.AddScoped<ReviewHandler>();
@@ -123,6 +124,7 @@ builder.Services.AddScoped<IAccountReadService, AccountReadService>();
 builder.Services.AddScoped<IQuestionReadService, QuestionReadService>();
 builder.Services.AddScoped<IRedirectReadService, RedirectReadService>();
 builder.Services.AddScoped<IExportReadService, ExportReadService>();
+builder.Services.AddScoped<IPublicContentReadService, PublicContentReadService>();
 
 builder.Services.AddScoped<AppRouter>();
 builder.Services.AddHttpContextAccessor();
