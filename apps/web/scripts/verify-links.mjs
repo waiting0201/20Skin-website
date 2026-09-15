@@ -55,6 +55,21 @@ for await (const file of walk(OUT)) {
 }
 
 console.log(`· 掃描 ${pages} 頁，檢查 ${checked} 個站內連結`)
+
+// 🔴 **沒有東西可掃的時候一定要當掉，不可以回報通過。**
+//    2026-09-15 改成執行期 SSR 之後踩到：產物裡不再有頁面 HTML，這支於是
+//    「掃描 1 頁、檢查 0 個連結」然後印出「✓ 全數通過」。一道什麼都沒檢查、
+//    卻給綠燈的閘，比沒有這道閘更危險 —— CI 會一路綠燈放行。
+//    ⚠️ 這只是讓它不能說謊。真正的修法是改成對執行中的 SSR 站爬連結，
+//    排在第 3 段（sitemap／robots 改成執行期路由）一起做。
+const MIN_PAGES = 50
+if (pages < MIN_PAGES) {
+  console.error(
+    `\n✗ 只掃到 ${pages} 頁（門檻 ${MIN_PAGES}），這不是「沒有斷鏈」，是「沒有東西可檢查」。\n`
+    + '  執行期 SSR 的產物裡沒有頁面 HTML，這支要改成對執行中的站台爬連結才有意義。',
+  )
+  process.exit(1)
+}
 console.log(`· href="#" 佔位連結 ${placeholders} 個（mockup 遺留，不算錯誤）`)
 
 if (broken.size) {

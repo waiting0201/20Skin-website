@@ -47,7 +47,9 @@ export function usePageHead(options: PageHeadOptions) {
     link: [
       { rel: 'canonical', href: canonical },
       // 該頁專屬樣式。base.css 在 nuxt.config 全站掛上，這裡只加頁面層。
-      ...(options.pageCss ? [{ rel: 'stylesheet', href: options.pageCss }] : []),
+      // ⚠️ 一定要過 stampAsset —— /assets/* 是一年 immutable，沒有版號就改不動了
+      //    （SSR 之後 postbuild 改寫不到算繪出來的 HTML，見 scripts/build-asset-version.mjs）。
+      ...(options.pageCss ? [{ rel: 'stylesheet', href: stampAsset(options.pageCss) }] : []),
     ],
     script: blocks.map((block) => ({
       type: 'application/ld+json',

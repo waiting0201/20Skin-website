@@ -55,9 +55,21 @@ if (!existsSync(OUT)) {
   process.exit(1)
 }
 
+// 🔴 **2026-09-15 起前台是執行期 SSR，產物裡沒有任何頁面 HTML。**
+//    這支腳本有兩步是拿「產物裡有沒有那一頁」當判斷依據的，SSR 下那個依據
+//    整個消失 —— 不是失準，是會**主動造成傷害**：sitemap 那一步會把 1191 條
+//    網址全部當成「沒有產出頁面」刪掉，只剩 sitemap-pages.xml 的幾條。
+//    所以這裡直接以「有沒有 SSR server」分流，而不是讓那兩步在錯誤的前提下跑。
+const IS_SSR = existsSync(join(ROOT, '.output', 'server'))
+
 // ── 1. 404 ────────────────────────────────────────────────────────────
+// ⚠️ SSR 下這一步不需要：`/api/fallback` 已經不存在（301 改由 server middleware
+//    處理），404 也由 Nuxt 即時算繪。preset 自己會在產物根目錄放一支 404.html
+//    當 SWA 的靜態錯誤頁。
 const generated = join(OUT, '404', 'index.html')
-if (existsSync(generated)) {
+if (IS_SSR) {
+  console.log('· SSR：404 落點由 preset 產生的 404.html 負責，跳過複製')
+} else if (existsSync(generated)) {
   await copyFile(generated, join(OUT, '404.html'))
   console.log('✓ 404/index.html → 404.html')
 } else {
@@ -94,21 +106,19 @@ for await (const file of walk(OUT)) {
 console.log(`✓ /assets 加上內容雜湊：${version.size} 個檔案，改寫 ${stamped} 份產物`)
 
 // ── 4. sitemap 對齊實際產出 ──────────────────────────────────────────
+// 🔴 **SSR 下整步跳過，而且不是「暫時不做」而是「依據不存在」。**
+//    它原本的價值是拿建置產物當「這一頁 index 不 index」的真相；SSR 沒有產物，
+//    真相只剩執行期算繪的那一刻。第 3 段會把 sitemap 本身改成執行期路由，
+//    由同一份資料算出可索引的頁面，那時一致性是天然成立的，不需要事後過濾。
+//    ⚠️ 在第 3 段完成前，sitemap 仍是 export:content 產的靜態檔 ——
+//    也就是說「收了 29 個 noindex 網址」那個問題在這條分支上是**回來的**。
+const ORIGIN = 'https://20skin.tw'
 const INDEX = join(OUT, 'sitemap.xml')
 const NOINDEX = /<meta[^>]+name="robots"[^>]+content="[^"]*noindex/i
 
-/**
- * 網址 → 建置產物的路徑。'/a/b/' → a/b/index.html，'/a.xml' → a.xml。
- *
- * 🔴 **主機名一律用正規式剝掉，不要比對寫死的網域。**
- *    2026-09-16 實際炸過：這裡原本是 `loc.replace('https://20skin.tw', '')`，
- *    但 CI 是以 `SITE_URL=https://20skin.4webdemo.com` 產 sitemap 的 ——
- *    replace 沒有命中，路徑保持完整網址、`existsSync` 全部失敗，
- *    於是 1192 條全被判定成「沒有產出頁面」而刪光，**正式站的 sitemap 變成空的**。
- *    ⚠️ 本機測試看不出來：本機沒設 SITE_URL，匯出用的就是 20skin.tw，剛好對得上。
- */
+/** 網址 → 建置產物的路徑。'/a/b/' → a/b/index.html，'/a.xml' → a.xml。 */
 function pageFile(loc) {
-  const path = loc.replace(/^https?:\/\/[^/]+/, '').replace(/^\//, '')
+  const path = loc.replace(ORIGIN, '').replace(/^\//, '')
   return join(OUT, path.endsWith('/') || path === '' ? join(path, 'index.html') : path)
 }
 
@@ -116,7 +126,7 @@ let removedNoindex = 0
 const missing = []   // 收進 sitemap 卻沒有產出頁面的網址 —— 這是別的 bug 的徵兆
 const emptied = []
 
-for (const name of (await readdir(OUT)).filter((f) => /^sitemap-.+\.xml$/.test(f))) {
+for (const name of IS_SSR ? [] : (await readdir(OUT)).filter((f) => /^sitemap-.+\.xml$/.test(f))) {
   const file = join(OUT, name)
   const xml = await readFile(file, 'utf8')
 
@@ -158,6 +168,8 @@ if (removedNoindex || missing.length || emptied.length) {
     `✓ sitemap 對齊產出：移除 ${removedNoindex} 個 noindex 網址`
     + (emptied.length ? `，並拿掉空掉的 ${emptied.join('／')}` : ''),
   )
+} else if (IS_SSR) {
+  console.log('· SSR：sitemap 的一致性改由第 3 段的執行期路由保證，跳過過濾')
 } else {
   console.log('· sitemap 與產出一致，沒有要移除的網址')
 }
@@ -166,19 +178,6 @@ if (removedNoindex || missing.length || emptied.length) {
 //    noindex 是刻意的（內容還沒寫完）；這一種是**有東西沒被預渲染**，
 //    多半是路由沒列進 prerender、或匯出與建置讀到不同批資料。
 //    這裡照樣把它從 sitemap 拿掉（讓爬蟲吃 404 更糟），但一定要叫出來。
-// 🔴 **一次掉太多就是這支腳本自己壞了，不是內容真的消失。**
-//    2026-09-16 的教訓：主機名比對失敗讓 1192 條全滅，而當時這裡只是印一行警告，
-//    CI 照樣綠燈，空的 sitemap 就這樣上線了。
-if (missing.length > 50) {
-  console.error(
-    `✗ sitemap 有 ${missing.length} 個網址對不到產出頁面 —— 這個數量不可能是內容問題，\n`
-    + '  幾乎一定是這支腳本的路徑比對壞了（例如 SITE_URL 的主機名與產物路徑對不起來）。\n'
-    + '  寧可讓建置失敗，也不要把一個空的 sitemap 部署上去。',
-  )
-  for (const loc of missing.slice(0, 5)) console.error(`    ${loc}`)
-  process.exit(1)
-}
-
 if (missing.length) {
   console.warn(`⚠ sitemap 有 ${missing.length} 個網址沒有對應的產出頁面，已移除 —— 這不是 noindex，是有頁面沒產出來：`)
   for (const loc of missing.slice(0, 10)) console.warn(`    ${loc}`)

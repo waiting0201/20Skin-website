@@ -50,3 +50,7 @@ tools/legacy-import/.cache/
 tools/legacy-import/discovered-*.json
 tools/legacy-import/parsed-*.json
 tools/legacy-import/images.json
+
+# azure-swa preset 每次建置都會產生這一份（見 nuxt.config.ts 的 nitro.azure.config）
+apps/web/staticwebapp.config.json
+apps/web/app/assets-version.json

@@ -9,7 +9,7 @@
 //    換來的是「每一頁的行為與 mockup 逐字相同」。
 //    後台 /admin/** 是 SPA，不載入 app.js，也不受這條限制。
 useHead({
-  script: [{ src: '/assets/app.js', tagPosition: 'bodyClose' }],
+  script: [{ src: stampAsset('/assets/app.js'), tagPosition: 'bodyClose' }],
 })
 </script>
 
