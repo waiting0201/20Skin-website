@@ -67,7 +67,17 @@ public interface IPublicContentReadService
     /// </summary>
     Task<IReadOnlyList<RelationTargetRow>> GetRelationTargetsAsync(
         IReadOnlyCollection<int> ids, CancellationToken ct = default);
+
+    /// <summary>
+    /// sitemap 要收的網址。條件與 docs/08 §H 末段一致：
+    /// <c>可見性 ＋ IncludeInSitemap = 1 ＋ UrlPath IS NOT NULL</c>。
+    /// <para>⚠️ FAQ 沒有獨立網址（<c>UrlPath</c> 為 NULL），標籤頁 <c>IncludeInSitemap = 0</c>。</para>
+    /// </summary>
+    Task<IReadOnlyList<SitemapUrlRow>> GetSitemapEntriesAsync(CancellationToken ct = default);
 }
+
+/// <summary>sitemap 的一列。<c>LastModified</c> 給 <c>&lt;lastmod&gt;</c> 用。</summary>
+public sealed record SitemapUrlRow(byte ContentType, string UrlPath, DateTime LastModified);
 
 /// <inheritdoc cref="IPublicContentReadService"/>
 public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IPublicContentReadService
@@ -148,6 +158,24 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
 
         return await connection.QuerySingleOrDefaultAsync<PublicContentRow>(new CommandDefinition(
             sql, new { UrlPath = urlPath, Now = Clock.UtcNow }, cancellationToken: ct));
+    }
+
+    public async Task<IReadOnlyList<SitemapUrlRow>> GetSitemapEntriesAsync(CancellationToken ct = default)
+    {
+        using var connection = factory.Create();
+
+        var sql = $"""
+            SELECT ci.ContentType, ci.UrlPath, ci.UpdatedAt AS LastModified
+            FROM ContentItems ci
+            WHERE {Visibility.PublicFilter}
+              AND ci.IncludeInSitemap = 1
+              AND ci.UrlPath IS NOT NULL
+            ORDER BY ci.ContentType, ci.SortOrder, ci.Id
+            """;
+
+        var items = await connection.QueryAsync<SitemapUrlRow>(new CommandDefinition(
+            sql, new { Now = Clock.UtcNow }, cancellationToken: ct));
+        return items.AsList();
     }
 
     public async Task<IReadOnlyList<RelationTargetRow>> GetRelationTargetsAsync(

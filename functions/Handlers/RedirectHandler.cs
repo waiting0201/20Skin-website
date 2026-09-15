@@ -38,6 +38,45 @@ public sealed class RedirectHandler(Skin20DbContext db, ISqlConnectionFactory sq
     //    只差 Program.cs 補一行 AddScoped<IRedirectReadService, RedirectReadService>()。
     private readonly IRedirectReadService reads = new RedirectReadService(sqlFactory);
 
+    /// <summary>
+    /// <c>GET /redirects/resolve?path=…</c>：前台（SSR）解析一個舊網址。
+    ///
+    /// <para>
+    /// 🔴 <b>2026-09-15 取代 <c>api/fallback</c>。</b> 前台改成執行期 SSR 之後，
+    /// 那支 SWA Managed Function 與 Nuxt 的 SSR function 互斥（兩者都要佔
+    /// <c>api_location</c>），所以 301 的查詢搬到這裡，由 Nuxt 的 server middleware 呼叫。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ <b>正規化留在這一端，不要搬進 Nuxt。</b> <see cref="NormalizePath"/> 同時是
+    /// 寫入端（後台新增與 CSV 匯入）用的那一份 —— 讀寫共用同一段是這條規則能成立的前提。
+    /// 搬進前端等於再造一份，而分岔的症狀是「後台看得到規則，但線上不轉址」，
+    /// 只有上線後才會發現（docs/08 §H）。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ 未命中回 <b>404</b>，不是 200 帶空值 —— 呼叫端（Nuxt middleware）就是拿
+    /// 「有沒有命中」決定要 301 還是繼續算繪，用狀態碼表達最不會被誤用。
+    /// </para>
+    /// </summary>
+    public async Task<IActionResult> ResolveAsync(HttpRequest req)
+    {
+        var raw = req.Query["path"].ToString();
+        if (string.IsNullOrWhiteSpace(raw))
+            throw AppException.BadRequest(ErrorCodes.ValidationFormat, "缺少 path 參數。");
+
+        // ⚠️ 兩個鍵都查：進來的網址可能是百分比編碼過的，也可能不是。
+        //    Uri.UnescapeDataString 對沒有編碼的字串是無害的（原樣回傳）。
+        var decodedKey = NormalizePath(Uri.UnescapeDataString(raw));
+        var encodedKey = NormalizePath(raw);
+
+        var hit = await reads.ResolveAsync(decodedKey, encodedKey)
+            ?? throw AppException.NotFound($"轉址規則 {decodedKey}");
+
+        CacheControl.Public(req.HttpContext.Response);
+        return new OkObjectResult(ApiResponse.Ok(hit));
+    }
+
     public async Task<IActionResult> ListAsync(HttpRequest req)
     {
         var page = Paging.Page(req.Query["page"]);

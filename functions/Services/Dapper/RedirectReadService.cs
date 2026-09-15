@@ -43,7 +43,45 @@ public interface IRedirectReadService
     Task<HashSet<string>> GetExistingFromPathsAsync(CancellationToken ct = default);
 
     Task<bool> ContentItemExistsAsync(int id, CancellationToken ct = default);
+
+    /// <summary>
+    /// 前台（SSR）解析一個舊網址：<b>單筆 seek，不 join、不載入整張表</b>。
+    ///
+    /// <para>
+    /// 🔴 <b>2026-09-15 由 <c>api/Fallback.cs</c> 搬過來。</b> 前台改成執行期 SSR 之後
+    /// 那支 SWA Managed Function 不再存在（它與 Nuxt 的 SSR function 互斥，
+    /// 兩者都要佔 <c>api_location</c>）。搬過來的連帶好處是**路徑正規化只剩一份**——
+    /// 原本 <c>api/Fallback.cs</c> 與 <c>RedirectHandler.NormalizePath</c> 各有一份，
+    /// 檔頭警告它們必須逐字一致，分岔的症狀是「後台看得到規則，但線上不轉址」。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ <b>兩個鍵都要查。</b> 進來的網址可能是百分比編碼過的，也可能不是；
+    /// 兩者相同時 <c>IN</c> 不會多做事，<c>ORDER BY</c> 讓兩者都命中時有穩定結果。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ <c>IsActive = 1</c> 讓後台能停用一筆規則而不必刪除。
+    /// </para>
+    /// </summary>
+    Task<RedirectResolution?> ResolveAsync(string decodedKey, string encodedKey, CancellationToken ct = default);
 }
+
+/// <summary>
+/// 轉址解析結果。只有前台真正需要的兩個欄位。
+///
+/// <para>
+/// 🔴 <b><see cref="StatusCode"/> 一定要是 <c>short</c>，不可以寫 <c>int</c>。</b>
+/// 資料庫那一欄是 <c>smallint</c>，而 <b>Dapper 對 record 的建構式比對不做型別轉換</b>——
+/// 宣告成 <c>int</c> 會在**執行期**丟
+/// 「A parameterless default constructor or one matching signature … is required」，
+/// <b>編譯完全看不出來</b>，而且只有在「真的命中一筆規則」時才會發生：
+/// 未命中走的是 <c>QuerySingleOrDefault</c> 的 null 路徑，測起來一切正常。
+/// ⚠️ 2026-09-15 真的踩到，症狀是「查得到的舊網址回 500、查不到的回 404」。
+/// 同一個坑在 <c>ExportReadService</c> 的 <c>LastReviewedOn</c>（DateOnly）上也記過一次。
+/// </para>
+/// </summary>
+public sealed record RedirectResolution(string ToPath, short StatusCode);
 
 /// <inheritdoc cref="IRedirectReadService"/>
 public sealed class RedirectReadService(ISqlConnectionFactory factory) : IRedirectReadService
@@ -146,6 +184,22 @@ public sealed class RedirectReadService(ISqlConnectionFactory factory) : IRedire
         var paths = await connection.QueryAsync<string>(
             new CommandDefinition("SELECT FromPath FROM Redirects", cancellationToken: ct));
         return new HashSet<string>(paths, StringComparer.Ordinal);
+    }
+
+    public async Task<RedirectResolution?> ResolveAsync(
+        string decodedKey, string encodedKey, CancellationToken ct = default)
+    {
+        using var connection = factory.Create();
+
+        const string sql = """
+            SELECT TOP (1) ToPath, StatusCode
+            FROM Redirects
+            WHERE FromPath IN (@Decoded, @Encoded) AND IsActive = 1
+            ORDER BY CASE WHEN FromPath = @Decoded THEN 0 ELSE 1 END
+            """;
+
+        return await connection.QuerySingleOrDefaultAsync<RedirectResolution>(new CommandDefinition(
+            sql, new { Decoded = decodedKey, Encoded = encodedKey }, cancellationToken: ct));
     }
 
     public async Task<bool> ContentItemExistsAsync(int id, CancellationToken ct = default)

@@ -126,6 +126,31 @@ public sealed class PublicContentHandler(
         return new OkObjectResult(ApiResponse.Ok(shaped[0]));
     }
 
+    /// <summary>
+    /// <c>GET /sitemap</c>：sitemap 的**資料**，XML 由前台產生。
+    ///
+    /// <para>
+    /// 🔴 <b>條件與「這一頁前台看不看得到」是同一個判定式。</b> 靜態時代 sitemap 是
+    /// 建置期產的檔案，而「要不要 noindex」是前台算繪時才決定的 —— 兩個系統不知道
+    /// 對方的存在，結果 sitemap 收了 29 個 noindex 的網址（2026-09-15 發現，
+    /// Search Console 會直接報錯，也白吃爬取預算）。
+    /// 改成即時算繪之後這件事自然消失：sitemap 與頁面讀的是同一批資料、同一個時點。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ 仍然要排除 <c>UrlPath IS NULL</c>（FAQ 沒有獨立網址）與
+    /// <c>IncludeInSitemap = 0</c>（標籤頁 noindex 不收），條件與 docs/08 §H 末段一致。
+    /// </para>
+    /// </summary>
+    public async Task<IActionResult> SitemapAsync(HttpRequest req)
+    {
+        var entries = await content.GetSitemapEntriesAsync();
+
+        // sitemap 比一般內容可以放久一點：它變動的頻率是「有沒有新內容發布」。
+        CacheControl.Public(httpContextAccessor.HttpContext?.Response, 900);
+        return new OkObjectResult(ApiResponse.Ok(entries));
+    }
+
     // ════════════════════════════════════════════════════════════════════
     // 組形狀
     // ════════════════════════════════════════════════════════════════════
