@@ -148,7 +148,7 @@ Nuxt 3 純靜態，21 個模板 → **1846 頁 HTML、59.1 MB**（2026-09-15 重
 | **服務條款、醫療免責聲明無條文** | 「待院方法務提供」骨架 ＋ `noIndex` |
 | ~~站內搜尋~~ | ✅ **2026-09-12 完成**。建置期由 `content/*.json` 產生 `search-index.json`（**1228 筆／564 KB**，2026-09-15 實計；搬遷前是 127 筆／48 KB），client 端子字串比對 ＋ 型別篩選 ＋ 關鍵字標記；查無結果時回寫 `POST /questions/miss`。已用 Playwright 對建置產物實測（結果數、篩選、標記、空狀態、只回報一次、摘要有逸出） |
 | ~~`/contact/` 表單~~ | ✅ **2026-09-12 已接上 `POST /contact`**。只寄通知信、不落庫；失敗照實顯示錯誤碼（429／機器人驗證／欄位），不吞錯 |
-| ~~`sitemap.xml`／`llms.txt`／`faq.json`~~ | ✅ **2026-09-12 完成**，連同 `robots.txt` 一起由 `tools/content-export` 產生（詳見 [07](docs/07-deployment.md) §4）。sitemap **1192 個網址 ÷ 5 個分檔**（blog 1124／療程 28／頁面 18／醫師 14／困擾 8，2026-09-15 實計；標籤頁 noindex 不收）；robots.txt 改成從 `SiteSettings.seo.robotsTxt` 產生，後台改得動了 |
+| ~~`sitemap.xml`／`llms.txt`／`faq.json`~~ | ✅ **2026-09-12 完成**，連同 `robots.txt` 一起由 `tools/content-export` 產生（詳見 [07](docs/07-deployment.md) §4）。sitemap **1161 個網址 ÷ 5 個分檔**（blog 1124／頁面 14／醫師 14／困擾 8／療程 1，2026-09-15 實計）。⚠️ 匯出產的是 1192 條，postbuild 再濾掉 31 條指向 `noindex` 或不存在頁面的網址（見 §八）；robots.txt 改成從 `SiteSettings.seo.robotsTxt` 產生，後台改得動了 |
 | **4691 個 `href="#"`** | mockup 遺留的佔位連結，`verify:links` 會列出數量，不會無聲增加。數字隨頁數等比長大（每頁外框都有幾個），不是新缺口 |
 
 ### ✅ 執行期端點已接上（2026-09-12）
@@ -968,7 +968,7 @@ Function App 的 `GITHUB_REPO`／`GITHUB_DISPATCH_TOKEN`，**目前還沒設**�
 ✅ **圖不用再傳** —— 28 張產品圖 2026-09-14 就已經在正式 Blob（`st20skinweb/media`）上，
 blob 路徑是決定性的（`md5(用途|原始檔名)`），正式庫匯入後指向的就是同一批檔案。
 
-### 🔴 sitemap 收了 29 個 `noindex` 的網址（2026-09-15 發現，未修）
+### ✅ sitemap 收了 29 個 `noindex` 的網址（2026-09-15 發現並修掉）
 
 Search Console 會把這個組合直接報成錯誤（"Submitted URL marked 'noindex'"），
 也白白吃掉爬取預算 —— 而 1108 篇文章的索引預算本來就是這個站最緊的資源（docs/06）。
@@ -991,11 +991,81 @@ Search Console 會把這個組合直接報成錯誤（"Submitted URL marked 'noi
 醫師把療程內容寫完的那一天沒有人會記得去打開它 —— 頁面變成可索引了卻不在 sitemap 裡，
 問題只是換了個方向，而且更難發現。
 
-建議的修法是**在 `postbuild.mjs` 依實際產出的 HTML 過濾 sitemap**：
+**修法：`postbuild.mjs` 依實際產出的 HTML 過濾 sitemap**（§4）。
 建置產物是「這一頁到底 index 不 index」唯一的真相，而且醫師補完內容、
 頁面不再 `noindex` 的那一刻它會自己回到 sitemap，不需要任何人記得。
 （postbuild 已經在做 404 落點與 `/assets` 雜湊，是同一個「知道真實產出之後」的階段。）
-⚠️ 連帶要處理：某個分檔被濾到空的時候，`sitemap.xml` 索引也要跟著拿掉那一筆。
+分檔被濾到空的時候，連檔案帶 `sitemap.xml` 索引裡那一筆一起拿掉。
+
+結果 **1192 → 1161 條**：
+
+| 分檔 | 前 | 後 |
+|---|---|---|
+| `sitemap-treatments.xml` | 28 | **1** |
+| `sitemap-pages.xml` | 18 | **14** |
+| blog／醫師／困擾 | 1124／14／8 | 不變 |
+
+⚠️ 療程只剩 1 條是**對的**，不是壞掉 —— 28 項裡只有 `picosure-pro` 有內容，
+其餘 27 頁本來就是 `noindex`。醫師把內容寫完，它們會自己回來。
+
+⚠️ 順帶修掉 postbuild 一個既有地雷：`/assets` 的 `?v=` 雜湊**重跑會疊第二次**
+（`/assets/base.css?v=ab12?v=ab12`），而且檔案照樣載得到、看不出有錯。
+加了 `(?!\?v=)` 之後這支腳本重跑安全。
+
+---
+
+### 🔴 兩個頁面的 `UrlPath` 在正式庫是錯的，根因在 API（2026-09-15 發現）
+
+上面那個過濾器順手抓到第二件事，而且比 `noindex` 那件嚴重：
+
+```
+sitemap 有 2 個網址沒有對應的產出頁面 —— 這不是 noindex，是有頁面沒產出來：
+    https://20skin.tw/new-chinese-aesthetics/
+    https://20skin.tw/makeup-style/
+```
+
+正確的網址是 **`/about/new-chinese-aesthetics/`** 與 **`/about/makeup-style/`**
+（[01-sitemap](docs/01-sitemap.md) §1 與 §301 對照表，`news-art.php`／`make-up-style.php` 都轉到這兩個）。
+**種子裡寫的也是對的**（`SeedData.cs:338-339`）—— 是資料庫裡的值被壓平了。
+
+🔴 **根因是 [`ContentHandler.cs:1271`](functions/Handlers/ContentHandler.cs#L1271) 的網址計算表達不出巢狀頁面：**
+
+```csharp
+case UnitCodes.Page:
+    return page.PageKind == PageKind.System ? entity.UrlPath : $"/{entity.Slug}/";
+```
+
+非系統頁一律算成 `/{slug}/`。於是**種子給的 `/about/...` 只要那一頁被存過一次就被壓平**，
+而內容匯入正是對每一頁做了一次 `PUT`。`Page` 沒有 `ParentId`（也不該隨便加，
+[08](docs/08-database.md) §0 決策二），`PageKind` 只有 Free／System 兩種。
+
+**已確認的影響**（2026-09-15 逐項測過）：
+
+| | 狀況 |
+|---|---|
+| 線上頁面 | ✅ `/about/new-chinese-aesthetics/`、`/about/makeup-style/` 都回 **200**，前台路由是對的 |
+| 自動 301 | ✅ **沒有**把活著的頁面轉去 404（測過，兩個正確網址都是 200 不是 301）—— 這是最壞的情況，沒有發生 |
+| sitemap | 🔴 收了兩個 404 網址 → **已由 postbuild 濾掉**（治標） |
+| **站內搜尋** | 🔴 **使用者看得到的 bug**：搜「新中式美學」會給一筆連到 `/new-chinese-aesthetics/` 的結果，點下去 404。`search-index.json` 吃的是同一個 `urlPath` |
+| 後台 | 🔴 內容列表的「查看頁面」連結指到 404 |
+
+**要修兩件事，缺一不可：**
+
+1. **資料**（治標，立刻可做）：把正式庫那兩筆的 `UrlPath` 改回 `/about/...`
+   → **重新發布該頁** → 重跑 `export:content` → 重建。
+   ⚠️ 但**只要那一頁再被存一次就會again被壓平**，所以第 2 件不做的話這是暫時的。
+2. **程式**（治本，需要定案怎麼表達巢狀）。三個選項：
+   **(a)** 儲存時保留既有 `UrlPath` 的父層前綴、只重算最後一段 —— 不動 schema，
+   種子給的位置變成權威值；代價是「頁面能不能搬家」沒有可編輯的表示法（但現在也沒有）。
+   **(b)** 為 `Page` 加父層欄位 —— 與 [08](docs/08-database.md) §0 決策二「不預留未定案的欄位」相衝，需明確定案。
+   **(c)** 把這兩頁改成 System 頁 —— **不建議**：System 的語意是首頁／聯絡／404 那種，
+   還牽動後台欄位與「系統頁不用 BodyBlocks」，是拿錯誤的語意去繞過網址計算。
+
+⚠️ **在定案之前不要自行改 `ComputeUrlPathAsync`。** 它決定全站網址，
+而且改到的那一刻會對每一筆存檔觸發自動 301。
+
+⚠️ 這也解釋了上線前 checklist 那條「`/about/makeup-style/` 更名」為什麼一直沒動 ——
+**不要在後台改完標題就以為結束**，那一頁存檔的同時 `UrlPath` 會再被壓平一次。
 
 ---
 

@@ -22,8 +22,26 @@
 //    immutable 也才名副其實。
 //    ⚠️ CSS 內部參照的字型不在這裡處理（改寫 CSS 會破壞「逐 byte 照抄」的
 //    前提）—— 字型改走較短的 TTL，見 public/staticwebapp.config.json。
+//
+// 4) sitemap 對齊實際產出：拿掉指向 noindex 頁面、或根本沒產出頁面的網址。
+//    2026-09-15 發現 sitemap 收了 **29 個 noindex 的網址**（27 個「內容建置中」
+//    的療程頁 ＋ /terms/ 與 /medical-disclaimer/ 兩個無條文的骨架頁）。
+//    Search Console 會把這個組合直接報成錯誤（"Submitted URL marked 'noindex'"），
+//    也白白吃掉爬取預算 —— 而 1108 篇文章的索引預算是這個站最緊的資源（docs/06）。
+//
+//    ⚠️ **兩邊都沒有寫錯，是兩個系統不知道對方的存在**：
+//      · 進不進 sitemap → tools/content-export 讀資料庫的 IncludeInSitemap（建置**前**）
+//      · 要不要 noindex → 前台頁面在**算繪時**依內容完不完整自己決定
+//        （treatments/[category]/[slug].vue 的 !hasFullContent、legal.vue 的 sections.length === 0）
+//    匯出那一端看不到前台的判斷式，所以它照 IncludeInSitemap 照收。
+//
+//    ⚠️ **不要改用「把那幾筆的 IncludeInSitemap 關掉」來修。** 那是手動值，
+//    醫師把療程內容寫完的那一天沒有人會記得去打開它 —— 頁面變成可索引了卻不在
+//    sitemap 裡，問題只是換了個方向，而且更難發現。這裡以**建置產物**為準：
+//    它是「這一頁到底 index 不 index」唯一的真相，而且內容補完、頁面不再 noindex
+//    的那一刻，網址會自己回到 sitemap，不需要任何人記得。
 
-import { copyFile, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { copyFile, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
@@ -57,7 +75,10 @@ if (existsSync(ASSETS)) {
 }
 
 // 只認得出現在標記／腳本裡的副檔名；沒登記在 version 裡的路徑原樣保留。
-const ASSET_REF = /\/assets\/[A-Za-z0-9/_.-]+?\.(?:css|js|jpg|jpeg|png|svg|webp|woff2?)/g
+// ⚠️ 尾巴的 `(?!\?v=)` 是為了讓這支腳本**重跑安全**：少了它，對同一份產物再跑
+//    一次會變成 `/assets/base.css?v=ab12?v=ab12`，而且第二個查詢字串會被
+//    當成值的一部分，檔案照樣載得到、看不出有錯。
+const ASSET_REF = /\/assets\/[A-Za-z0-9/_.-]+?\.(?:css|js|jpg|jpeg|png|svg|webp|woff2?)(?!\?v=)/g
 const stamp = (text) => text.replace(ASSET_REF, (m) => (version.has(m) ? `${m}?v=${version.get(m)}` : m))
 
 let stamped = 0
@@ -71,6 +92,77 @@ for await (const file of walk(OUT)) {
   }
 }
 console.log(`✓ /assets 加上內容雜湊：${version.size} 個檔案，改寫 ${stamped} 份產物`)
+
+// ── 4. sitemap 對齊實際產出 ──────────────────────────────────────────
+const ORIGIN = 'https://20skin.tw'
+const INDEX = join(OUT, 'sitemap.xml')
+const NOINDEX = /<meta[^>]+name="robots"[^>]+content="[^"]*noindex/i
+
+/** 網址 → 建置產物的路徑。'/a/b/' → a/b/index.html，'/a.xml' → a.xml。 */
+function pageFile(loc) {
+  const path = loc.replace(ORIGIN, '').replace(/^\//, '')
+  return join(OUT, path.endsWith('/') || path === '' ? join(path, 'index.html') : path)
+}
+
+let removedNoindex = 0
+const missing = []   // 收進 sitemap 卻沒有產出頁面的網址 —— 這是別的 bug 的徵兆
+const emptied = []
+
+for (const name of (await readdir(OUT)).filter((f) => /^sitemap-.+\.xml$/.test(f))) {
+  const file = join(OUT, name)
+  const xml = await readFile(file, 'utf8')
+
+  // 逐個 <url>…</url> 區塊處理。格式是匯出工具自己產的、固定縮排，
+  // 不需要動用 XML 解析器；真要改格式，這個正規式會整批漏掉而不是悄悄少幾筆。
+  const kept = []
+  const blocks = [...xml.matchAll(/[ \t]*<url>[\s\S]*?<\/url>\n?/g)]
+  for (const m of blocks) {
+    const loc = m[0].match(/<loc>([^<]+)<\/loc>/)?.[1]
+    const target = loc && pageFile(loc)
+    if (!target || !existsSync(target)) { missing.push(loc ?? '(無 loc)'); continue }
+    if (NOINDEX.test(await readFile(target, 'utf8'))) { removedNoindex++; continue }
+    kept.push(m[0])
+  }
+
+  if (kept.length === blocks.length) continue
+
+  if (kept.length === 0) {
+    // 整個分檔空掉：連檔案帶索引裡那一筆一起拿掉，不要留一個空的 urlset。
+    emptied.push(name)
+    await rm(file)
+    continue
+  }
+  const head = xml.slice(0, blocks[0].index)
+  await writeFile(file, head + kept.join('') + '</urlset>\n')
+}
+
+if (emptied.length && existsSync(INDEX)) {
+  const idx = await readFile(INDEX, 'utf8')
+  await writeFile(
+    INDEX,
+    idx.replace(/[ \t]*<sitemap>[\s\S]*?<\/sitemap>\n?/g, (block) =>
+      emptied.some((n) => block.includes(`/${n}<`)) ? '' : block),
+  )
+}
+
+if (removedNoindex || missing.length || emptied.length) {
+  console.log(
+    `✓ sitemap 對齊產出：移除 ${removedNoindex} 個 noindex 網址`
+    + (emptied.length ? `，並拿掉空掉的 ${emptied.join('／')}` : ''),
+  )
+} else {
+  console.log('· sitemap 與產出一致，沒有要移除的網址')
+}
+
+// ⚠️ 「收進 sitemap 卻沒有產出頁面」跟 noindex 不是同一件事，**不要一起帶過**。
+//    noindex 是刻意的（內容還沒寫完）；這一種是**有東西沒被預渲染**，
+//    多半是路由沒列進 prerender、或匯出與建置讀到不同批資料。
+//    這裡照樣把它從 sitemap 拿掉（讓爬蟲吃 404 更糟），但一定要叫出來。
+if (missing.length) {
+  console.warn(`⚠ sitemap 有 ${missing.length} 個網址沒有對應的產出頁面，已移除 —— 這不是 noindex，是有頁面沒產出來：`)
+  for (const loc of missing.slice(0, 10)) console.warn(`    ${loc}`)
+  if (missing.length > 10) console.warn(`    …另外 ${missing.length - 10} 筆`)
+}
 
 // ── 2. 大小 ───────────────────────────────────────────────────────────
 const WARN = 350 * 1024 * 1024
