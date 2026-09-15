@@ -791,7 +791,7 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
 | 項目 | 說明 |
 |---|---|
 | **workflow 第一次實跑** | ✅ **2026-09-14 兩條都跑成功**（`api` 34838913060、`web` 34839861953）。中間失敗五輪，四個坑都記在 §六：immutable subject、SQL 使用者未建、密碼含 `;`、`FROM EXTERNAL PROVIDER` 解析不出服務主體 |
-| **`favicon.ico`** | ⬜ **2026-09-15 覆核仍 404**，`apps/web/public/` 裡也沒有這個檔案。手上唯一的素材是 `mockup/assets/img/banner-logo.png`（181×184 灰階＋alpha）—— 做得出來但畫質勉強，**值得順便向院方要原始 logo**。⚠️ `sitemap.xml`／`robots.txt`／`llms.txt` **已解決** —— 2026-09-14 由 CI 的 `export:content` 產出，三者皆 200（sitemap 是索引檔，含 5 個子 sitemap） |
+| **`favicon.ico`** | ✅ **2026-09-15 做好，待下次部署上線**。`scripts/build-favicon.py` 由 `mockup/assets/logo.jpg` 產出 `favicon.ico`（16／32／48／64）與 `apple-touch-icon.png`（180）。<br>⚠️ **來源不是 `banner-logo.png`** —— 那張是白色浮水印版，做出來會是看不見的白方塊。<br>🔴 來源只有 167×164，48 與 64 是放大的；16px 只讀得出藍色外環，裡面的字是解析度極限。**拿到院方的向量原檔要重跑一次並補到 256**。⚠️ `sitemap.xml`／`robots.txt`／`llms.txt` **已解決** —— 2026-09-14 由 CI 的 `export:content` 產出，三者皆 200（sitemap 是索引檔，含 5 個子 sitemap） |
 | ~~部署程式碼~~ | ✅ **已部署**（見上方） |
 | ~~Azure SQL~~ | ✅ **已就緒**（見下方） |
 | 自訂網域 | `20skin.tw`／`www.20skin.tw`／`api.20skin.tw` 都還沒綁 |

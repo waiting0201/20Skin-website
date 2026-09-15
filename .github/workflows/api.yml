@@ -12,8 +12,7 @@
 # ⚠️ 用 OIDC 聯合身分登入，不是 publish profile —— Flex Consumption 不支援
 #    publish profile，而且 OIDC 沒有長期憑證要保管。
 #
-# 🔴 這條 workflow 尚未在 GitHub 上實跑過（2026-09-14 寫）。在此之前 Function App
-#    是手動或 tools/deploy-api.sh 部署的。第一次觸發請盯著輸出，跑通後更新 STATUS.md §六。
+# ✅ 2026-09-14 首次實跑成功（run 34838913060，3m04s）。tools/deploy-api.sh 已退為備援。
 #
 # 需要的 GitHub 設定（缺一整條會失敗，而訊息不見得指得到原因）：
 #   secrets: AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID

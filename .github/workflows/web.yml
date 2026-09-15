@@ -7,9 +7,9 @@
 #    那一支 Managed Function，它與前台是同一個部署單位、必須一起上傳；
 #    `functions/` 那個獨立 Function App 由 api.yml 部署，不隨內容重建。
 #
-# 🔴 這條 workflow 尚未在 GitHub 上實跑過（2026-09-14 寫）。本機等價物是
-#    tools/deploy-swa.sh —— 下面每一個「⚠️」都是那支腳本在正式環境實際踩出來的，
-#    不要因為看起來多餘就拿掉。第一次觸發請盯著輸出，跑通後更新 STATUS.md §六。
+# ✅ 2026-09-14 首次實跑成功（run 34839861953，3m11s）。本機等價物是
+#    tools/deploy-swa.sh，已退為備援 —— 下面每一個「⚠️」都是那支腳本在正式環境
+#    實際踩出來的，不要因為看起來多餘就拿掉。
 #
 # 需要的 GitHub 設定：
 #   secrets: AZURE_STATIC_WEB_APPS_API_TOKEN（az staticwebapp secrets list 取得）
