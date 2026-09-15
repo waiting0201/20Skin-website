@@ -15,7 +15,21 @@ import {
   LATEST_ARTICLES,
   SPECIALTIES,
 } from '~/data/home'
+import { DOCTORS } from '~/data/doctors'
 import { SITE_SETTINGS } from '~/data/site-settings'
+import { treatments } from '~/data/treatments'
+import { ORIGIN } from '~/composables/usePageHead'
+
+// 這三個數字**推導、不要手寫**。2026-09-15 修：原本寫死「27項療程」，
+// 而療程早在 09-14 就變成 28（Radiesse 與 Ellansé 本來被併成一筆）——
+// 寫死的數字沒有任何東西會在它過期時出聲，這一頁是全站唯一對外宣告
+// 「我們有多大」的地方，講錯比沒講更糟。
+//
+// ⚠️ 安喬（許媖琄）是藝術總監、不是醫師，所以醫師數要用 isPhysician 濾過。
+// 「14 位醫師」是 CLAUDE.md 關鍵數字明確列為錯誤的敘述（13 位醫師＋1 位藝術總監），
+// mockup 原文就寫錯了，結構化資料不要跟著錯。
+const physicianCount = DOCTORS.filter((d) => d.isPhysician).length
+const nonPhysicianCount = DOCTORS.length - physicianCount
 
 // SEO title 取首頁主標語（hero <h1> 的純文字），不是自己編的字句。
 usePageHead({
@@ -27,11 +41,24 @@ usePageHead({
     '@context': 'https://schema.org',
     '@type': 'MedicalOrganization',
     name: '20SKIN 美醫集團',
-    // ⚠️ 內容依 CLAUDE.md 關鍵數字修正：mockup 原文寫「共14位醫師」，
-    // 但 14 人中安喬是藝術總監、不是醫師（13 位醫師＋1 位藝術總監）。
-    // 「14 位醫師」是 CLAUDE.md 明確列為錯誤的敘述，結構化資料不應繼續帶著這個誤植。
+    // ⚠️ `url` 與 `logo` 是 Google 認 Organization 這個實體的依據，缺了它
+    //    知識面板組不起來。2026-09-15 補 —— 在此之前這個節點只有 name
+    //    與 description 兩個欄位，是全站最重要卻最空的一筆結構化資料。
+    url: ORIGIN,
+    logo: `${ORIGIN}/assets/logo.jpg`,
     description:
-      '20SKIN美醫集團設四季診所與二林四季皮膚科，由13位醫師與1位藝術總監組成團隊，提供27項醫美與皮膚科療程，以新中式美學為理念服務全台。',
+      `20SKIN美醫集團設四季診所與二林四季皮膚科，由${physicianCount}位醫師與${nonPhysicianCount}位藝術總監組成團隊，`
+      + `提供${treatments.length}項醫美與皮膚科療程，以新中式美學為理念服務全台。`,
+    // 兩個院區掛在品牌底下，讓「20SKIN」與兩個實體地點連得起來。
+    // ⚠️ 這裡只給識別用的最小欄位 —— 完整的營業時間、地圖、科別在各自的
+    //    據點頁上（MedicalClinic），同一份資料不要在首頁再抄一次。
+    department: HOME_CLINICS.map((clinic) => ({
+      '@type': 'MedicalClinic',
+      name: clinic.name,
+      url: ORIGIN + clinic.urlPath,
+      address: clinic.address,
+      telephone: clinic.phone,
+    })),
   },
 })
 </script>

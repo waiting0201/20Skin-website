@@ -4,7 +4,9 @@
 // 留空時由內容自動組出 —— 組法要與後台編輯畫面的預覽一致。
 
 const SITE_NAME = '20SKIN 美醫集團'
-const ORIGIN = 'https://20skin.tw'
+
+/** 正式網域。JSON-LD 的 url／logo 也要絕對網址，所以對外開放。 */
+export const ORIGIN = 'https://20skin.tw'
 
 export interface PageHeadOptions {
   /** <title> 的前半段。最終輸出為「{title}｜20SKIN 美醫集團」。 */

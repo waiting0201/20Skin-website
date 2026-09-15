@@ -102,7 +102,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 
 ## 二、前台（`apps/web`）🟡
 
-Nuxt 3 純靜態，21 個模板 → **1846 頁 HTML、68 MB**（2026-09-15 量測 `.output/public`）。
+Nuxt 3 純靜態，21 個模板 → **1846 頁 HTML、59.1 MB**（2026-09-15 重建後由建置腳本自己回報）。
 ⚠️ 舊敘述「220 條預渲染路由、106 頁」是搬遷 1100 篇文章**之前**的數字，已作廢。
 
 ### ✅ 已完成
@@ -115,7 +115,7 @@ Nuxt 3 純靜態，21 個模板 → **1846 頁 HTML、68 MB**（2026-09-15 量�
 | SEO | 逐頁 Title／Meta／canonical／OG／JSON-LD；8 類 schema 依模板分派；麵包屑全站 |
 | **`verify:css`** | 樣式與 mockup **逐 byte 相同**、前台零自建樣式、零發明 class（27 個樣式／腳本／字型檔 ＋ 37 個元件 × 21 頁 mockup 標記）。2026-09-15 重跑通過 |
 | **`verify:links`** | 掃 **1848 頁、120289 個站內連結，零斷鏈**（2026-09-15 重跑）|
-| 產物大小閘 | **68 MB**（350 MB 警告／450 MB 擋下，對應 SWA **Standard** 的 500 MB）。搬進 1100 篇文章後由 14.7 MB 長到這裡，距警告線仍有五倍餘裕 |
+| 產物大小閘 | **59.1 MB**（350 MB 警告／450 MB 擋下，對應 SWA **Standard** 的 500 MB）。搬進 1100 篇文章後由 14.7 MB 長到這裡，距警告線仍有近六倍餘裕。<br>⚠️ **不要拿 `du -sh` 的數字比這個門檻** —— 產物有 3885 個檔案，`du` 算的是磁碟區塊會多報成 71 MB。閘門與 SWA 配額看的都是檔案大小總和，以建置腳本印的為準 |
 | 404 落點 | postbuild 把 `404/index.html` 複製成根目錄 `404.html`（`api/fallback` 要讀它） |
 
 ### ✅ 內容已全部來自資料庫（2026-09-11）
@@ -512,7 +512,7 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 `This subscription has too many static sites with SKU: Free`，配額已被既有專案用滿。
 連帶影響（`docs/07` §3 已全面更新）：單一環境儲存 **250 MB → 500 MB**、自訂網域 2 → 5、
 **有 SLA**、IP 範圍限制變成可用。產物大小閘同步放寬為 350 MB 警告／450 MB 擋下
-（**目前 68 MB**，2026-09-15 實計；搬進 1100 篇文章前是 14.7 MB）。
+（**目前 59.1 MB**，2026-09-15 實計；搬進 1100 篇文章前是 14.7 MB）。
 
 ### ✅ Azure SQL 已就緒（2026-09-11）
 
@@ -825,7 +825,7 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
       **preflight（OPTIONS）與 5xx 還沒驗**
 - [ ] Managed Identity 連 SQL 與 Blob — 🟡 **SQL 那半已證明**：Function App 的設定裡**只有 `SQL_SERVER`／`SQL_DATABASE`、沒有任何連線字串**，
       而 `GET /site-settings/public` 2026-09-15 讀得回真資料 → 連線只可能走受控識別。**Blob 那半（user delegation key 簽 SAS）還沒驗**
-- [x] ~~build 產物大小~~ — ✅ **68 MB / 3883 個檔案**（2026-09-15 實計，含每路由一份的 `_payload.json`）。上限是 SWA **Standard 的 500 MB**，不是 250 MB
+- [x] ~~build 產物大小~~ — ✅ **59.1 MB / 3885 個檔案**（2026-09-15 重建後實計，含每路由一份的 `_payload.json`）。上限是 SWA **Standard 的 500 MB**，不是 250 MB。⚠️ `du -sh` 會報 71 MB，那是磁碟區塊不是檔案大小
 - [ ] 全站 `nuxt generate` 時間 — 🟡 間接證據：CI 的 `web` job **全程 3m11s**（含資料庫匯出、admin SPA、1846 頁 generate、SWA 部署、四項 smoke test），沒有逼近逾時。**單獨的 generate 時間還沒單獨量**
 - [ ] Blob 直傳鏈路（Storage CORS、SAS 效期、`Cache-Control`）
 - [ ] **換圖與移除真的把舊檔從 Blob 刪掉**（docs/11 §9.2）——本機只驗到「刪不掉也不會翻掉存檔」，真的刪成功還沒驗過
@@ -833,9 +833,14 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
 - [ ] 冷啟動對 301 與後台操作的實際延遲
 - [x] ~~`api/` 實際可用的 .NET 版本~~ — ✅ **`dotnet-isolated:9.0` 實測可用**（同第一條，2026-09-11 起一直在服務 301）
 - [ ] 遷移在正式資料庫的實際行為（先在可丟棄的庫演練一次完整遷移與回滾）
-- [ ] 全站 404 掃描、301 迴圈檢查、結構化資料驗證、CWV — 🟡 **轉址那半已驗**：
-      2026-09-15 把兩份 CSV 的 **808 個轉址目標**逐一對建置產物比對，**全部有對應頁面、零 301→404**。
-      站內連結也零斷鏈（`verify:links` 掃 1848 頁 / 120289 條）。**結構化資料與 CWV 還沒做**
+- [ ] 全站 404 掃描、301 迴圈檢查、結構化資料驗證、CWV — 🟡 **三項已驗，只剩 CWV**：
+      **① 轉址**：兩份 CSV 的 **808 個目標**逐一對建置產物比對，全部有對應頁面、**零 301→404**；
+      站內連結零斷鏈（`verify:links` 掃 1848 頁 / 120289 條）。
+      **② 結構化資料**：掃 1847 頁、**3175 個 JSON-LD 區塊**，parse 全過、零空值、零佔位字串、
+      麵包屑 `position` 全連續、FAQPage 結構完整。型別分佈也對得上專案數字
+      （`Physician` 13 ＋ `Person` 1 ＝ 14 位團隊成員；`MedicalProcedure` 只有 1 筆，
+      對應 27 頁建置中不輸出）。**修掉一筆**：首頁 `MedicalOrganization` 缺 `url` 與 `logo`（見 §八）。
+      **③ CWV 還沒做。**
 - [ ] **種子密碼 `Admin@123` 更換**（🔴 沒有雙因素，帳密是唯一憑證）
       ⚠️ **2026-09-14 起 `sa@system.local` 的 `MustChangePassword` 已關閉**，登入不再強制改密碼，
       後台畫面也不會再顯示「密碼未更換」。**這一條現在沒有任何系統提示在背後撐著，只能靠這份清單。**
@@ -962,6 +967,37 @@ Function App 的 `GITHUB_REPO`／`GITHUB_DISPATCH_TOKEN`，**目前還沒設**�
 
 ✅ **圖不用再傳** —— 28 張產品圖 2026-09-14 就已經在正式 Blob（`st20skinweb/media`）上，
 blob 路徑是決定性的（`md5(用途|原始檔名)`），正式庫匯入後指向的就是同一批檔案。
+
+### 🔴 sitemap 收了 29 個 `noindex` 的網址（2026-09-15 發現，未修）
+
+Search Console 會把這個組合直接報成錯誤（"Submitted URL marked 'noindex'"），
+也白白吃掉爬取預算 —— 而 1108 篇文章的索引預算本來就是這個站最緊的資源（docs/06）。
+
+| 分檔 | 條數 | 是哪些 |
+|---|---|---|
+| `sitemap-treatments.xml` | **27** | 全部「內容建置中」的療程頁 |
+| `sitemap-pages.xml` | **2** | `/terms/`、`/medical-disclaimer/`（無條文的骨架頁）|
+
+**兩邊都沒有寫錯，是兩個系統不知道對方的存在**：
+
+| | 誰決定 | 依據 |
+|---|---|---|
+| 進不進 sitemap | `tools/content-export`（建置前） | 資料庫的 `IncludeInSitemap` 欄位 |
+| 頁面要不要 `noindex` | 前台頁面（**算繪時**） | 內容完不完整 —— `!hasFullContent`（`treatments/[category]/[slug].vue:89`）、`sections.length === 0`（`legal.vue:32`）|
+
+匯出那一端**看不到**前台的判斷式，所以它照 `IncludeInSitemap` 照收。
+
+⚠️ **不要用「把那 29 筆的 `IncludeInSitemap` 關掉」來修。** 那是手動值，
+醫師把療程內容寫完的那一天沒有人會記得去打開它 —— 頁面變成可索引了卻不在 sitemap 裡，
+問題只是換了個方向，而且更難發現。
+
+建議的修法是**在 `postbuild.mjs` 依實際產出的 HTML 過濾 sitemap**：
+建置產物是「這一頁到底 index 不 index」唯一的真相，而且醫師補完內容、
+頁面不再 `noindex` 的那一刻它會自己回到 sitemap，不需要任何人記得。
+（postbuild 已經在做 404 落點與 `/assets` 雜湊，是同一個「知道真實產出之後」的階段。）
+⚠️ 連帶要處理：某個分檔被濾到空的時候，`sitemap.xml` 索引也要跟著拿掉那一筆。
+
+---
 
 ### 🔴 待院方或主機商提供
 
