@@ -68,6 +68,21 @@ Azure SQL 上要一個多小時。瓶頸是往返延遲不是資料庫（實測 
 需要的話用 `--limit` 或另外挑出來處理。日後若常常要補跑，值得加一個
 「內容沒變就跳過」的比對（目前沒有，因為資料庫沒有存內容雜湊）。
 
+🔴 **`.cache/import-failed.json` 不會在成功時被清掉 —— 它現在留著的 391 筆是舊帳，不是待辦。**
+那批是「關聯端點收裸陣列、不收 `{ relations: [...] }`」造成的，已修並重跑成功。
+2026-09-15 覆核：391 篇 blog 全在 `apps/web/content/articles.json` 裡，**且每一篇的標籤關聯都在**。
+**判斷有沒有漏，要拿匯出對，不要看這個檔案**：
+
+```bash
+node -e "
+const arr=require('./apps/web/content/articles.json');
+const failed=require('./tools/legacy-import/.cache/import-failed.json');
+const slugs=new Set(arr.map(a=>a.slug));
+const miss=failed.filter(f=>!slugs.has(f.slug));
+console.log('失敗清單', failed.length, '其中真的不在匯出裡的', miss.length);
+"
+```
+
 ⚠️ **重跑期間前台不會斷。** 匯出讀的是已核准的版本快照，
 工作副本回到草稿不影響已經上線的那一版（docs/11 §6.4）。
 

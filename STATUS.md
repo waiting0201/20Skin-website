@@ -5,7 +5,7 @@
 > 分工：本檔記錄**狀態**；[`docs/`](docs/README.md) 的十二份文件記錄各領域的**規格與施工標準**；
 > [`CLAUDE.md`](CLAUDE.md) 記錄**專案規範、關鍵數字與已定案決策**。三份不要互相抄，各司其職。
 
-**最後更新**：2026-09-14
+**最後更新**：2026-09-15
 
 ---
 
@@ -13,7 +13,7 @@
 
 **規劃、前台、後台、資料庫、API 全部完成，且已實際部署到 Azure 的正式環境（尚未切 DNS）。**
 
-`apps/web` 的 21 個模板全數完成（220 條預渲染路由），`apps/admin` **30／30 個畫面全數完成**。
+`apps/web` 的 21 個模板全數完成（**1846 頁預渲染**，含搬遷回來的 1100 篇舊站文章），`apps/admin` **30／30 個畫面全數完成**。
 **資料庫 schema 也完成了** —— 35 張表的 EF Core migration 已在真的 SQL Server 2022 上
 實測建立成功，種子資料 165 列。
 
@@ -23,7 +23,7 @@
 ⚠️ **2026-09-11 改動：不做媒體庫**（客戶指定）。後台的「媒體庫」畫面整個拿掉（31 → 30），
 `MediaAssets`／`MediaUsages` 兩張表刪除（37 → 35），圖片改成擁有者表上的內嵌欄位。
 遷移 `20260911100157_RemoveMediaLibrary` **已套用到正式 Azure SQL**（2026-09-11，本機 `efbundle`）。
-🔴 **但正式 Function App 還是舊組建，尚未重新部署** —— 見 §六。
+~~🔴 但正式 Function App 還是舊組建，尚未重新部署~~ → ✅ 2026-09-14 已部署新組建（見 §六）。
 決策與連帶後果見 CLAUDE.md 決策 13。
 
 **已部署並驗收** —— <https://jolly-hill-015d56f1e.5.azurestaticapps.net>。
@@ -47,10 +47,20 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 以「用正式庫內容重建前台、比對產出 HTML」驗過：**107 頁裡 95 頁逐字相同，
 其餘 12 頁唯一的差異是 `dateModified` 09-11 → 09-14**（匯入日期本身）。
 
-🔄 **2026-09-14 進行中：舊站 1100 篇文章的搬遷**（`tools/legacy-import/`）。
+✅ **2026-09-14：舊站 1100 篇文章的搬遷已完成**（`tools/legacy-import/`）。
 主站 **709** 篇 ＋ blog 站 **391** 篇 —— 兩個都是實數，
 且 **blog 站的「101 篇」是錯的**（見 CLAUDE.md 關鍵數字與 docs/06 §4）。
 五個階段的腳本與踩過的坑見 [tools/legacy-import/README.md](tools/legacy-import/README.md)。
+匯出端實數：`articles.json` **1111 筆**（1100 搬遷 ＋ 11 種子）、`terms.json` 406 筆。
+
+⚠️ **`.cache/import-failed.json` 那 391 筆是修好之前的舊檔，不是待辦。**
+那批失敗是「關聯端點收裸陣列、不收 `{ relations: [...] }`」，已修並重跑成功 ——
+2026-09-15 覆核：391 篇 blog 全部在匯出裡，且**每一篇的標籤關聯都在**。
+腳本不會在成功時清掉這個檔案，所以它會一直留著；**看它之前先用匯出對一次**。
+
+✅ **2026-09-15 覆核：站台已是搬遷後的內容，不是舊的。**
+`20skin.4webdemo.com` 上 blog 內頁與 `/treatments/microneedle/ellanse/` 都回 200，
+建置產物 **1846 頁 / 68 MB**（`.output/public`，2026-09-14 21:49）。
 
 ---
 
@@ -70,7 +80,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 
 | 階段（[05-roadmap](docs/05-roadmap.md)） | 狀態 | 備註 |
 |---|---|---|
-| 現況診斷與資訊架構 | ✅ | [00](docs/00-site-audit.md)、[01](docs/01-sitemap.md)。約 950 URL、約 770 條 301 |
+| 現況診斷與資訊架構 | ✅ | [00](docs/00-site-audit.md)、[01](docs/01-sitemap.md)。**1845 URL 實例（實數）、1000 條 301（實數）** —— 原估「約 950／約 770」都是下限 |
 | UI/UX 設計定稿 | ✅ | `mockup/` 方向 A，客戶 2026-08-27 選定。21 個模板全數完成 |
 | 技術架構與規格 | ✅ | [07](docs/07-deployment.md) 部署、[08](docs/08-database.md) 資料庫、[09](docs/09-frontend.md) 前端、[10](docs/10-api.md) API 契約、[11](docs/11-backend-design.md) 後端施工標準 |
 | **前台開發** | 🟡 | 21 個模板切版完成、SEO 與 JSON-LD 落地；內容全部來自資料庫；`/contact/` 與 AI FAQ 開關已接執行期端點（§二） |
@@ -78,9 +88,9 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 | **資料模型與 migrations** | ✅ | 35 張表 ＋ 種子，**已對真 SQL Server 實測建立成功**（§四）。共 10 支遷移，**2026-09-14 全部套用到正式庫**（§六） |
 | **API** | ✅ | 端點、服務、三支 Timer 完成，**已對真 SQL Server 端到端驗證**（§五） |
 | 部署與 CI/CD | ✅ | **CI/CD 2026-09-14 全線打通並實跑驗證**：`api` 3m04s、`web` 3m11s，兩條都綠。`api` 走完 build → `efbundle` 遷移 → 部署 → health smoke test；`web` 走完資料庫匯出 → admin SPA → `nuxt generate` → SWA 部署 → 四項 smoke test。從此 `main` 合併即上線，`tools/deploy-swa.sh` 退為本機備援。踩過的四個坑見 §六 |
-| 內容遷移（約 800 篇） | ⬜ | 需先有資料庫 |
+| 內容遷移（**1100 篇**，實數） | ✅ | 主站 709 ＋ blog 391，2026-09-14 全部匯入正式庫並發布；匯出 1111 筆（含 11 筆種子）。管線與坑見 [tools/legacy-import/README.md](tools/legacy-import/README.md) |
 | 療程內容（**28 項**） | 🟡 | 適應症、許可證字號、產品圖、標題、療程↔文章關聯已全部按舊站補齊（§下）。**但 28 項的療程時間／術後照護／禁忌症舊站一項都沒有，仍需醫師投入 —— Phase 1 最大瓶頸沒有改變**，27 頁仍是 noindex 的「建置中」 |
-| 上線前驗收 | ⬜ | checklist 見 §七 |
+| 上線前驗收 | 🟡 | checklist 見 §七。2026-09-15 起 301 端到端、轉址目標零 404、錯誤回應帶 CORS 三項已驗過；其餘多數卡在院方與 DNS |
 | — 線上購物／線上預約 | ⛔ | 僅外部導流連結（CLAUDE.md 決策 4） |
 | — 多語系 | ⛔ | 單一語系繁中（決策 12） |
 | — 操作日誌 | ⛔ | 2026-09-11 定案不做（[08](docs/08-database.md) §I） |
@@ -92,7 +102,8 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 
 ## 二、前台（`apps/web`）🟡
 
-Nuxt 3 純靜態，21 個模板 → **220 條預渲染路由、106 頁 HTML**。
+Nuxt 3 純靜態，21 個模板 → **1846 頁 HTML、68 MB**（2026-09-15 量測 `.output/public`）。
+⚠️ 舊敘述「220 條預渲染路由、106 頁」是搬遷 1100 篇文章**之前**的數字，已作廢。
 
 ### ✅ 已完成
 
@@ -102,9 +113,9 @@ Nuxt 3 純靜態，21 個模板 → **220 條預渲染路由、106 頁 HTML**。
 | 共用外框 | Header／Footer／浮動諮詢面板，標記照抄 `mockup/` |
 | 動效系統 | `mockup/assets/app.js` 原樣載入（客戶指定保留，CLAUDE.md 決策 11） |
 | SEO | 逐頁 Title／Meta／canonical／OG／JSON-LD；8 類 schema 依模板分派；麵包屑全站 |
-| **`verify:css`** | 樣式與 mockup **逐 byte 相同**、前台零自建樣式、零發明 class（29 個元件 × 21 頁 mockup 標記） |
-| **`verify:links`** | 掃產出的 HTML，6134 個站內連結**零斷鏈** |
-| 產物大小閘 | 14.7 MB（350 MB 警告／450 MB 擋下，對應 SWA **Standard** 的 500 MB） |
+| **`verify:css`** | 樣式與 mockup **逐 byte 相同**、前台零自建樣式、零發明 class（27 個樣式／腳本／字型檔 ＋ 37 個元件 × 21 頁 mockup 標記）。2026-09-15 重跑通過 |
+| **`verify:links`** | 掃 **1848 頁、120289 個站內連結，零斷鏈**（2026-09-15 重跑）|
+| 產物大小閘 | **68 MB**（350 MB 警告／450 MB 擋下，對應 SWA **Standard** 的 500 MB）。搬進 1100 篇文章後由 14.7 MB 長到這裡，距警告線仍有五倍餘裕 |
 | 404 落點 | postbuild 把 `404/index.html` 複製成根目錄 `404.html`（`api/fallback` 要讀它） |
 
 ### ✅ 內容已全部來自資料庫（2026-09-11）
@@ -112,13 +123,15 @@ Nuxt 3 純靜態，21 個模板 → **220 條預渲染路由、106 頁 HTML**。
 `資料庫 →（Dapper 唯讀）→ apps/web/content/*.json →（Vite 內聯）→ 靜態產物`。
 `app/data/*.ts` 從內容本體變成形狀轉接層（3507 → 2148 行），30 個消費端一行未改。
 
-| 單元 | 筆數 |
+| 單元 | 筆數（2026-09-15 由 `apps/web/content/*.json` 實計）|
 |---|---|
-| 療程 27／醫師 14／困擾 8／文章 11／FAQ 36／據點 2／案例 1／頁面 17／分類標籤 23 | **139 筆已發布** |
-| 關聯 103 筆、首頁 7 個版位、導覽選單與頁尾、全站設定 | |
+| **文章 1111**／分類標籤 406／療程 28／醫師 14／困擾 8／FAQ 36／據點 2／案例 1／頁面 17 | |
+| 首頁 7 個版位、導覽選單與頁尾、全站設定 16 項 | |
+
+⚠️ 舊數字「139 筆」是搬遷 1100 篇文章**之前**的，文章那格的 11 與療程那格的 27 也都作廢。
 
 驗收：`golden-diff.sh` 比對重建後的 107 頁與搬遷前的黃金樣本；
-`verify:css`／`verify:links` 全過、零斷鏈、220 條路由。
+`verify:css`／`verify:links` 全過、零斷鏈。
 剩餘差異都可解釋：圖片改成 Blob 網址、顯示名稱改用資料庫正式名稱、
 時段表格改由 `businessHours` 推導（**修正**：mockup 那份手寫表格早就與實際門診時間分岔）。
 
@@ -128,15 +141,15 @@ Nuxt 3 純靜態，21 個模板 → **220 條預渲染路由、106 頁 HTML**。
 |---|---|
 | 🔴 **`aifaq.enabled` 曾被匯入腳本蓋成 `true`** | 種子刻意是 `false`（docs/04 §4：AI 未串接前不對外顯示，「一顆點下去沒反應的常駐按鈕比沒有按鈕更糟」），但搬遷前的 `app/data/site-settings.ts` 寫死 `true`（樣稿要展示那個面板），匯入腳本把它一起搬了過去。2026-09-12 發現並修掉 —— **功能開關不是內容，不由匯入決定**。本機 `Skin20_Dev` 已改回 `false`；🔴 **正式庫上線前要確認這個值** |
 | ~~**圖片尚未上傳到 Blob**~~ | ✅ **2026-09-14 完成**，61 個 blob 已在 `st20skinweb/media`。⚠️ 需要 az 身分對該帳戶有 `Storage Blob Data Contributor` —— **訂閱層級的 Owner 不等於 Blob 資料層存取權**，這兩件事在 Azure 是分開的 |
-| **26 個療程頁沒有內容** | 顯示「內容建置中」，已加 `noIndex` 且不輸出 `MedicalProcedure`。正式站這些是草稿，根本不會產生該頁 |
-| **文章只有 11 篇、全屬「醫美新知」** | 其餘三個分類顯示空狀態。三個空分類的 Hero 文案是改寫的通用句，**待院方補真文案** |
+| **27 個療程頁沒有內容** | 28 項裡只有 1 項有 `facts`。顯示「內容建置中」，已加 `noIndex` 且不輸出 `MedicalProcedure`。⚠️ 適應症與許可證字號 28 項都補齊了，**缺的是療程時間／術後照護／禁忌症**，要醫師寫（§八）|
+| ~~**文章只有 11 篇、全屬「醫美新知」**~~ | ✅ **2026-09-14 解除** —— 舊站 1100 篇已搬入，四個分類都有文章。三個原本空分類的 Hero 文案仍是改寫的通用句，**待院方補真文案** |
 | 🔴 **案例列表從 9 則變成 1 則** | 另外 8 則缺四個法規揭露必填欄位（個案差異聲明、拍攝條件、書面同意、同意書索引，[08](docs/08-database.md) §C-5 全部 NOT NULL）。**捏造是法規紅線**，所以沒有進資料庫。要恢復列表必須由院方補齊那四個欄位 —— 這是內容問題不是程式問題 |
 | **7 個困擾頁只有一句話簡述** | AI 摘要 30–38 字（規範 40–60），沒有為了湊字數編醫療內容 |
 | **服務條款、醫療免責聲明無條文** | 「待院方法務提供」骨架 ＋ `noIndex` |
-| ~~站內搜尋~~ | ✅ **2026-09-12 完成**。建置期由 `content/*.json` 產生 `search-index.json`（127 筆／48 KB），client 端子字串比對 ＋ 型別篩選 ＋ 關鍵字標記；查無結果時回寫 `POST /questions/miss`。已用 Playwright 對建置產物實測（結果數、篩選、標記、空狀態、只回報一次、摘要有逸出） |
+| ~~站內搜尋~~ | ✅ **2026-09-12 完成**。建置期由 `content/*.json` 產生 `search-index.json`（**1228 筆／564 KB**，2026-09-15 實計；搬遷前是 127 筆／48 KB），client 端子字串比對 ＋ 型別篩選 ＋ 關鍵字標記；查無結果時回寫 `POST /questions/miss`。已用 Playwright 對建置產物實測（結果數、篩選、標記、空狀態、只回報一次、摘要有逸出） |
 | ~~`/contact/` 表單~~ | ✅ **2026-09-12 已接上 `POST /contact`**。只寄通知信、不落庫；失敗照實顯示錯誤碼（429／機器人驗證／欄位），不吞錯 |
-| ~~`sitemap.xml`／`llms.txt`／`faq.json`~~ | ✅ **2026-09-12 完成**，連同 `robots.txt` 一起由 `tools/content-export` 產生（詳見 [07](docs/07-deployment.md) §4）。sitemap 91 個網址 ÷ 5 個分檔；robots.txt 改成從 `SiteSettings.seo.robotsTxt` 產生，後台改得動了 |
-| 208 個 `href="#"` | mockup 遺留的佔位連結，`verify:links` 會列出數量，不會無聲增加 |
+| ~~`sitemap.xml`／`llms.txt`／`faq.json`~~ | ✅ **2026-09-12 完成**，連同 `robots.txt` 一起由 `tools/content-export` 產生（詳見 [07](docs/07-deployment.md) §4）。sitemap **1192 個網址 ÷ 5 個分檔**（blog 1124／療程 28／頁面 18／醫師 14／困擾 8，2026-09-15 實計；標籤頁 noindex 不收）；robots.txt 改成從 `SiteSettings.seo.robotsTxt` 產生，後台改得動了 |
+| **4691 個 `href="#"`** | mockup 遺留的佔位連結，`verify:links` 會列出數量，不會無聲增加。數字隨頁數等比長大（每頁外框都有幾個），不是新缺口 |
 
 ### ✅ 執行期端點已接上（2026-09-12）
 
@@ -302,10 +315,12 @@ schema 的真實來源是 `functions/Data/Migrations/`（docs/07 §5）。
 2. `ContentRelations` 的 `PageToFeatured`（12）**目標型別未指定**，CHECK 暫時放寬為除 Page 外皆可
 3. `Pages.ListSortRule` **沒有值域列舉**，只有 tinyint 範圍
 
-### ⬜ 未做
+### 🟡 未做
 
-內容匯入（約 800 篇，需先有 API 或直連腳本）、`efbundle` 的 CI 步驟、
-本機開發用的 `docker` 建庫腳本（目前是手動指令）
+~~內容匯入（約 800 篇）~~ ✅ **2026-09-14 完成，實數 1100 篇**（`tools/legacy-import/`）。
+~~`efbundle` 的 CI 步驟~~ ✅ **2026-09-14 完成並實跑**（`api` workflow）。
+
+剩下：本機開發用的 `docker` 建庫腳本（目前是手動指令）
 
 ---
 
@@ -497,7 +512,7 @@ Function App 的受控識別已授予 Storage 的 **Blob Data Contributor** 與 
 `This subscription has too many static sites with SKU: Free`，配額已被既有專案用滿。
 連帶影響（`docs/07` §3 已全面更新）：單一環境儲存 **250 MB → 500 MB**、自訂網域 2 → 5、
 **有 SLA**、IP 範圍限制變成可用。產物大小閘同步放寬為 350 MB 警告／450 MB 擋下
-（目前 14.7 MB）。
+（**目前 68 MB**，2026-09-15 實計；搬進 1100 篇文章前是 14.7 MB）。
 
 ### ✅ Azure SQL 已就緒（2026-09-11）
 
@@ -776,19 +791,19 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
 | 項目 | 說明 |
 |---|---|
 | **workflow 第一次實跑** | ✅ **2026-09-14 兩條都跑成功**（`api` 34838913060、`web` 34839861953）。中間失敗五輪，四個坑都記在 §六：immutable subject、SQL 使用者未建、密碼含 `;`、`FROM EXTERNAL PROVIDER` 解析不出服務主體 |
-| **`favicon.ico`** | ⬜ 線上實測仍 404。⚠️ `sitemap.xml`／`robots.txt`／`llms.txt` **已解決** —— 2026-09-14 由 CI 的 `export:content` 產出，三者皆 200（sitemap 是索引檔，含 5 個子 sitemap） |
+| **`favicon.ico`** | ⬜ **2026-09-15 覆核仍 404**，`apps/web/public/` 裡也沒有這個檔案。手上唯一的素材是 `mockup/assets/img/banner-logo.png`（181×184 灰階＋alpha）—— 做得出來但畫質勉強，**值得順便向院方要原始 logo**。⚠️ `sitemap.xml`／`robots.txt`／`llms.txt` **已解決** —— 2026-09-14 由 CI 的 `export:content` 產出，三者皆 200（sitemap 是索引檔，含 5 個子 sitemap） |
 | ~~部署程式碼~~ | ✅ **已部署**（見上方） |
 | ~~Azure SQL~~ | ✅ **已就緒**（見下方） |
 | 自訂網域 | `20skin.tw`／`www.20skin.tw`／`api.20skin.tw` 都還沒綁 |
 | CORS | Function App 的 allow-list 由院方設定 |
-| 其餘應用程式設定 | `GITHUB_REPO`／`GITHUB_DISPATCH_TOKEN`（待 repo 上 GitHub）、`Smtp__*`（待院方）、`BotCheck__SecretKey`（供應商未定） |
+| 其餘應用程式設定 | 2026-09-15 用 `az functionapp config appsettings list` 逐項核對正式 Function App：<br>🔴 **`GITHUB_REPO`／`GITHUB_DISPATCH_TOKEN` 兩個鍵根本不存在** —— repo 已上 GitHub，但沒設這兩個值，**後台那顆「重新發布網站」按下去只會在 log 留一行 error、什麼都不會發生**（`Services/RebuildService.cs:151`）。`Rebuild__AggregateWindowMinutes` 倒是設了。<br>🔴 **`Smtp__*` 一個都沒有** —— `/contact/` 表單就算通過驗證也不會寄信。<br>✅ `BotCheck__SecretKey`／`BotCheck__MinimumScore` **已設**（測試站可用；正式網域要加進 reCAPTCHA 後台的清單）。 |
 
 ### ✅ 版控與分流已就緒
 
 | | master → `Remote_NAS` | public → `Remote_GitHub` |
 |---|---|---|
 | 內容 | 完整（含 `reference/` 32 MB、`output/` 4.7 MB） | 去除上述兩者 |
-| 狀態 | ✅ 已推 | 🔴 **remote URL 未設定** |
+| 狀態 | ✅ 已推 | ✅ 已推（`waiting0201/20Skin-website`，兩條 workflow 已在上面實跑成功）|
 | 封包 | — | 0.5 MB |
 
 機制：`tools/sync-public.sh`（index plumbing 重建 tree、append-only、永不需 force push）
@@ -803,18 +818,24 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
 全部要在**切 DNS 之前**、對尚未對外的正式環境完成（[07](docs/07-deployment.md) §8 —— 沒有 staging、沒有 PR 預覽）。
 
 - [x] ~~**`/api/fallback` 部署得起來、接得到 SQL**~~ — ✅ 2026-09-11。`dotnet-isolated:9.0` 在 SWA 上可用（docs/07 §8 原本標「不通就退 8.0」的疑慮解除）
-- [ ] **`/api/fallback` 真的轉得成**（`x-ms-original-url` 帶不帶得到 query string）— 🔴 **`Redirects` 表 0 列，沒有資料可以打中**。正規化已用離線平價測試驗過 9 組（§六），但端到端還缺一次真命中
-- [ ] 跨來源鏈路（preflight、Bearer、**4xx／5xx 是否也帶 CORS 標頭**）
-- [ ] Managed Identity 連 SQL 與 Blob
-- [ ] build 產物大小 vs 250 MB（含 Nuxt 每路由一份的 `_payload.json`）
-- [ ] 全站 `nuxt generate` 時間（950 頁）
+- [x] ~~**`/api/fallback` 真的轉得成**（`x-ms-original-url` 帶不帶得到 query string）~~ — ✅ **2026-09-15 端到端真命中**。
+      `share_info.php?no=842` → 301 → `/blog/share-842/`（**query string 帶得到**）、`doctor.php` → `/team/`、`contact.php` → `/clinics/`
+- [ ] 跨來源鏈路 — 🟡 **一半驗過**：2026-09-15 對正式 Function App 打一支帶 `Origin` 的壞 token，
+      **401 有帶 `access-control-allow-origin` 與 `-credentials`**（這是最容易漏、又最難除錯的一種）。
+      **preflight（OPTIONS）與 5xx 還沒驗**
+- [ ] Managed Identity 連 SQL 與 Blob — 🟡 **SQL 那半已證明**：Function App 的設定裡**只有 `SQL_SERVER`／`SQL_DATABASE`、沒有任何連線字串**，
+      而 `GET /site-settings/public` 2026-09-15 讀得回真資料 → 連線只可能走受控識別。**Blob 那半（user delegation key 簽 SAS）還沒驗**
+- [x] ~~build 產物大小~~ — ✅ **68 MB / 3883 個檔案**（2026-09-15 實計，含每路由一份的 `_payload.json`）。上限是 SWA **Standard 的 500 MB**，不是 250 MB
+- [ ] 全站 `nuxt generate` 時間 — 🟡 間接證據：CI 的 `web` job **全程 3m11s**（含資料庫匯出、admin SPA、1846 頁 generate、SWA 部署、四項 smoke test），沒有逼近逾時。**單獨的 generate 時間還沒單獨量**
 - [ ] Blob 直傳鏈路（Storage CORS、SAS 效期、`Cache-Control`）
 - [ ] **換圖與移除真的把舊檔從 Blob 刪掉**（docs/11 §9.2）——本機只驗到「刪不掉也不會翻掉存檔」，真的刪成功還沒驗過
 - [ ] **孤兒檔對帳工具**（回報成功但沒按存檔的檔案；要掃十個內嵌圖片欄位 ＋ `BodyBlocks`，docs/08 §E）
 - [ ] 冷啟動對 301 與後台操作的實際延遲
-- [ ] `api/` 實際可用的 .NET 版本（9.0 未證實，兩份 Azure 文件互相矛盾）
+- [x] ~~`api/` 實際可用的 .NET 版本~~ — ✅ **`dotnet-isolated:9.0` 實測可用**（同第一條，2026-09-11 起一直在服務 301）
 - [ ] 遷移在正式資料庫的實際行為（先在可丟棄的庫演練一次完整遷移與回滾）
-- [ ] 全站 404 掃描、301 迴圈檢查、結構化資料驗證、CWV
+- [ ] 全站 404 掃描、301 迴圈檢查、結構化資料驗證、CWV — 🟡 **轉址那半已驗**：
+      2026-09-15 把兩份 CSV 的 **808 個轉址目標**逐一對建置產物比對，**全部有對應頁面、零 301→404**。
+      站內連結也零斷鏈（`verify:links` 掃 1848 頁 / 120289 條）。**結構化資料與 CWV 還沒做**
 - [ ] **種子密碼 `Admin@123` 更換**（🔴 沒有雙因素，帳密是唯一憑證）
       ⚠️ **2026-09-14 起 `sa@system.local` 的 `MustChangePassword` 已關閉**，登入不再強制改密碼，
       後台畫面也不會再顯示「密碼未更換」。**這一條現在沒有任何系統提示在背後撐著，只能靠這份清單。**
@@ -822,18 +843,25 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
       ＋ **用該位址重建前台與後台**（測試期指的是 `func-20skin-web-api-prod.azurewebsites.net`）
       ＋ **CORS 加上正式前台來源** —— 🔴 三件缺一，切 DNS 當天表單與後台就同時停擺
 - [ ] **reCAPTCHA 後台的網域清單加上正式網域**（測試網域 `20skin.4webdemo.com` 已驗證可用）
-- [ ] **SMTP 設定**（`Smtp__Host`／`Smtp__FromAddress`…）與 `contact.recipientEmail` —— 🔴 目前**都沒設**，表單就算通過驗證也不會寄出任何通知信，只會在 log 留 warning
-- [ ] **`aifaq.enabled` 在正式庫必須是 `false`**（docs/04 §4）—— 匯入腳本曾把它蓋成 `true`（已修，見 §二）
-- [ ] **reCAPTCHA v3 的金鑰對**（[10](docs/10-api.md) §5.1）—— 🔴 **三個地方要一起設**：
-      `BotCheck__SecretKey`（Function App）、`NUXT_PUBLIC_RECAPTCHA_SITE_KEY`（前台建置）、
-      `VITE_RECAPTCHA_SITE_KEY`（後台建置）。
-      ⚠️ 只設後端不設前端＝**所有送出與登入都被擋**，而錯誤訊息指不到這個原因
+- [ ] **SMTP 設定**（`Smtp__Host`／`Smtp__FromAddress`…）與 `contact.recipientEmail` —— 🔴 **2026-09-15 以 `az` 確認：`Smtp__*` 一個鍵都沒有**。表單就算通過驗證也不會寄出任何通知信，只會在 log 留 warning
+- [ ] **`GITHUB_REPO` 與 `GITHUB_DISPATCH_TOKEN` 設進 Function App** —— 🔴 **2026-09-15 以 `az` 確認：兩個鍵都不存在**。
+      後台那顆「重新發布網站」按下去只會在 log 留一行 error（`functions/Services/RebuildService.cs:151`）。
+      ⚠️ 這是院方改完內容之後**唯一**的自助上線途徑（SWA 沒有 ISR），缺了它只能等下一次 `main` 合併
+- [x] ~~**`aifaq.enabled` 在正式庫必須是 `false`**~~（docs/04 §4）—— ✅ **2026-09-15 對正式 API 實測 `aiFaqEnabled: false`**。匯入腳本曾把它蓋成 `true`（已修，見 §二）
+- [x] ~~**reCAPTCHA v3 的金鑰對**~~（[10](docs/10-api.md) §5.1）—— ✅ **2026-09-15 逐處核對，三個地方都設了**：
+      `BotCheck__SecretKey`＋`BotCheck__MinimumScore`（Function App，`az` 確認存在）、
+      GitHub repo variable `RECAPTCHA_SITE_KEY`（同一個值餵給 `NUXT_PUBLIC_RECAPTCHA_SITE_KEY`
+      與 `VITE_RECAPTCHA_SITE_KEY`，見 `web.yml:129,139`），且已烤進部署出去的 `/contact/`。
+      ⚠️ 教訓留著：只設後端不設前端＝**所有送出與登入都被擋**，而錯誤訊息指不到這個原因。
+      **剩下的是把正式網域加進 reCAPTCHA 後台的清單**（下一條）
 - [ ] **reCAPTCHA 的分數分佈**（App Insights）—— 上線頭幾天看一次真實分數，
       再決定 `BotCheck__MinimumScore` 要不要動。**預設 0.5 不要先調高**
 - [ ] **確認 reCAPTCHA 的聲明文字有顯示**（`/contact/` 與 `/admin/` 登入頁）——
-      徽章是隱藏的，Google 的條款要求顯示那段文字與兩個連結，拿掉聲明就不可以隱藏徽章
+      徽章是隱藏的，Google 的條款要求顯示那段文字與兩個連結，拿掉聲明就不可以隱藏徽章。
+      🟡 **2026-09-15：`/contact/` 有**（HTML 裡找得到「受 reCAPTCHA 保護，適用 Google 的…」）。
+      **`/admin/` 還沒驗** —— 它是 SPA，登入頁是 client 端算出來的，抓 HTML 看不到，要開瀏覽器
 - [ ] AI 爬蟲以實際 UA 逐一驗證回應 200
-- [ ] **`/about/makeup-style/` 在正式庫已改名為「新中式美學」**（2026-09-14 更名）——
+- [ ] **`/about/makeup-style/` 在正式庫已改名為「新中式美學」**（2026-09-14 更名）—— 🔴 **2026-09-15 覆核未改**：線上該頁 `<title>` 仍是「彩妝式輕醫美｜20SKIN 美醫集團」。
       repo 端（種子、遷移 10、前台文案、mockup、docs、客戶 PDF）都改完了，
       但**資料庫裡的頁面標題、導覽選單標籤與內文仍是舊名**。
       要在後台改完 → **重新發布該頁**（匯出讀的是已核准的版本快照，不是 `ContentItems.Title`）
@@ -849,7 +877,6 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
 
 | 項目 | 說明 |
 |---|---|
-| **`Remote_GitHub` 的 URL** | 沒有它推不了 public 分支 |
 | **FAQ 五大分類，兩份文件對不上** | [08](docs/08-database.md) §C-9 種子（品牌與診所／療程相關／肌膚困擾／醫師與看診／費用與流程）vs `mockup/16-faq.html`（療程相關／術後照護／看診與預約／費用與付款／院所資訊）。**建議以 mockup 為準** —— 前者沒有 slug，且「肌膚困擾」與 `/concerns/` 整段重複。動到網址結構，所以先不改 |
 | 圖片衍生尺寸誰產 | 瀏覽器端上傳前轉檔 vs Function 端 sharp（[07](docs/07-deployment.md) §3） |
 | 301 對照表是否改建置期烤 `redirects.json` | 可省掉 SWA 上唯一的明文密鑰（[07](docs/07-deployment.md) §2） |
@@ -915,26 +942,23 @@ node tools/content-import/upload-images.mjs        # 28 張產品圖 → Blob
 ⚠️ **兩項的外連對不到站內文章**：`sylfirm` 連的是 blog 的搜尋結果頁（站內有 7 篇可選）、
 `hydrafacial` 連的是分類頁（站內有 2 篇）。挑哪一篇是編輯決定，沒有自動猜。
 
-### 🟡 正式庫已同步，但站台還沒重建（2026-09-14）
+### ✅ 正式庫已同步，站台也已重建（2026-09-14；2026-09-15 覆核）
 
 院區 NAP 與療程資料已由 Tim 同步進正式庫（`20skin-website.database.windows.net` /
 `20Skin-website`）。正式 API（`func-20skin-web-api-prod`）健康檢查 200。
 
-⚠️ **已部署的站台仍是舊內容** —— SWA 沒有 ISR，內容變更一定要重跑 build
-（[11](docs/11-backend-design.md) §10）。實測 `jolly-hill-015d56f1e.5.azurestaticapps.net`：
-`/clinics/siji/` 還是 `○○路○○號`，`/treatments/microneedle/ellanse/` 仍回 **404**。
+~~⚠️ 已部署的站台仍是舊內容~~ → **已重建並部署**。2026-09-15 對兩個主機名各驗一次：
 
-還要做的兩步：
+| | `jolly-hill-015d56f1e.5.azurestaticapps.net` | `20skin.4webdemo.com` |
+|---|---|---|
+| `/clinics/siji/` | 彰化縣二林鎮儒林路二段310號 | 同左 |
+| `/treatments/microneedle/ellanse/` | 200 | 200 |
+| blog 內頁（搬遷後的 1100 篇）| 200 | 200 |
 
-```bash
-SKIN20_EXPORT_SQL='…正式庫唯讀連線字串…' pnpm --filter web export:content
-pnpm --filter admin build && pnpm --filter web build && pnpm --filter web verify
-./tools/deploy-swa.sh
-```
-
-⚠️ **repo 裡的 `apps/web/public/*` 是從本機庫匯出的**（commit 3614273）。
-以正式庫重跑 `export:content` 之後那批檔案會再變一次 —— 文章排序與部分 `lastmod`
-會回到正式庫的值。這也正好會解掉先前記下的「產物與本機庫對不上」那件事。
+⚠️ **這一條的教訓留著：SWA 沒有 ISR，內容變更一定要重跑 build**
+（[11](docs/11-backend-design.md) §10）。院方在後台改完字**不會自己上線** ——
+要嘛等下一次 `main` 合併，要嘛靠後台那顆「重新發布網站」（⚠️ 它需要
+Function App 的 `GITHUB_REPO`／`GITHUB_DISPATCH_TOKEN`，**目前還沒設**，見上表）。
 
 ✅ **圖不用再傳** —— 28 張產品圖 2026-09-14 就已經在正式 Blob（`st20skinweb/media`）上，
 blob 路徑是決定性的（`md5(用途|原始檔名)`），正式庫匯入後指向的就是同一批檔案。
