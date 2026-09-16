@@ -39,6 +39,7 @@ string? Arg(string name)
     return i >= 0 && i + 1 < args_.Length ? args_[i + 1] : null;
 }
 var doDelete = args_.Contains("--delete");
+
 var account = Arg("--account") ?? "st20skinweb";
 var container = Arg("--container") ?? "media";
 
@@ -46,6 +47,9 @@ var container = Arg("--container") ?? "media";
 //    那個檔案在資料庫裡「本來就還不該有引用」。把它當孤兒刪掉，編輯按下儲存時
 //    就會存進一個指向 404 的網址，而且沒有任何錯誤訊息。
 var minAgeHours = double.TryParse(Arg("--min-age-hours"), out var h) ? h : 24;
+
+// 指向本容器的絕對網址前綴，給 AddPath 判斷用。
+var containerUrlPrefix = $"https://{account}.blob.core.windows.net/{container}/";
 
 var connectionString = Environment.GetEnvironmentVariable("SKIN20_EXPORT_SQL");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -56,6 +60,10 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 await using var db = new SqlConnection(connectionString);
 await db.OpenAsync();
+
+// ⚠️ 對帳是離線作業，不是使用者在等的請求 —— 逾時放寬。正式庫是 Azure SQL Basic（5 DTU），
+// 掃全站快照本來就慢。
+const int CommandTimeoutSeconds = 600;
 
 Console.WriteLine($"· 資料庫 {db.Database}　容器 {account}/{container}");
 Console.WriteLine($"· 模式：{(doDelete ? "🔴 會真的刪檔" : "只報告（要刪請加 --delete）")}　保護期 {minAgeHours} 小時");
@@ -76,8 +84,9 @@ var blobPathColumns = (await db.QueryAsync<(string Table, string Column)>("""
 
 foreach (var (table, column) in blobPathColumns)
 {
-    var values = await db.QueryAsync<string?>(
-        $"SELECT [{column}] FROM [{table}] WHERE [{column}] IS NOT NULL AND [{column}] <> ''");
+    var values = await db.QueryAsync<string?>(new CommandDefinition(
+        $"SELECT [{column}] FROM [{table}] WHERE [{column}] IS NOT NULL AND [{column}] <> ''",
+        commandTimeout: CommandTimeoutSeconds));
     foreach (var v in values) if (!string.IsNullOrWhiteSpace(v)) referenced.Add(v!);
 }
 Console.WriteLine($"· 欄位引用：{blobPathColumns.Count} 個 *BlobPath 欄位 → {referenced.Count} 個檔案");
@@ -94,8 +103,13 @@ var jsonColumns = (await db.QueryAsync<(string Table, string Column)>("""
 
 foreach (var (table, column) in jsonColumns)
 {
-    var values = await db.QueryAsync<string?>(
-        $"SELECT [{column}] FROM [{table}] WHERE [{column}] LIKE '%blobPath%'");
+    // 🔴 **兩個條件都要**：舊站匯入的內文圖只有 `src` 網址、**沒有 `blobPath` 鍵**。
+    //    只比對 `blobPath` 的話，工作副本裡的內文圖一個都收不到 ——
+    //    未發布的草稿若有新的內文圖，就會被誤判成孤兒（已發布的那些還有快照救，草稿沒有）。
+    var values = await db.QueryAsync<string?>(new CommandDefinition(
+        $"SELECT [{column}] FROM [{table}] "
+        + $"WHERE [{column}] LIKE '%blobPath%' OR [{column}] LIKE '%{account}.blob.core.windows.net%'",
+        commandTimeout: CommandTimeoutSeconds));
     foreach (var v in values) CollectFromJson(v, referenced);
 }
 Console.WriteLine($"· JSON 欄位引用：{jsonColumns.Count} 個長字串欄位 → 再加 {referenced.Count - beforeJson} 個");
@@ -106,13 +120,19 @@ Console.WriteLine($"· JSON 欄位引用：{jsonColumns.Count} 個長字串欄�
 //    ⚠️ 只取「已發布的那一版」，不是所有版本：舊版本本來就允許指向已刪除的圖片
 //    （docs/11 §9：版本還原救不回已刪除的圖片），全算進來等於永遠不能清。
 var beforeSnap = referenced.Count;
-var snapshots = await db.QueryAsync<string?>("""
+// ⚠️ **不要在這裡加 `WHERE Snapshot LIKE '%blobPath%'`。** 看起來像優化（少傳幾列），
+//    實際上是對 NVARCHAR(MAX) 做全表字串掃描 —— 正式庫是 Azure SQL Basic（5 DTU），
+//    2026-09-16 實測那樣會**直接逾時**。整包讀回來在記憶體裡篩反而快得多
+//    （全站快照約 16 MB，讀取本身只要一兩秒）。
+//    這與站內搜尋那 23 秒是同一個病因，見 Common/SearchTextBuilder.cs。
+var snapshots = await db.QueryAsync<string?>(new CommandDefinition("""
     SELECT cv.Snapshot
     FROM ContentItems ci
     INNER JOIN ContentVersions cv ON cv.Id = ci.PublishedVersionId
-    WHERE cv.Snapshot LIKE '%blobPath%'
-    """);
-foreach (var snap in snapshots) CollectFromJson(snap, referenced);
+    """, commandTimeout: CommandTimeoutSeconds));
+foreach (var snap in snapshots)
+    if (snap is not null && snap.Contains("blobPath", StringComparison.Ordinal))
+        CollectFromJson(snap, referenced);
 Console.WriteLine($"· 已發布快照引用：再加 {referenced.Count - beforeSnap} 個");
 Console.WriteLine($"· 合計仍被引用：{referenced.Count} 個檔案");
 
@@ -203,10 +223,20 @@ foreach (var b in orphans)
 Console.WriteLine($"✓ 已刪除 {deleted} / {orphans.Count} 個。");
 return 0;
 
-// 從一段 JSON 裡收出所有 `blobPath` 的值。
+// 從一段 JSON 裡收出所有指向本容器的檔案。
+//
+// 🔴 **兩種形式都要認，這是這支工具最容易致命的地方。**
+//    ① 後台上傳的圖片值：`{ "blobPath": "2026/09/….png", "url": "https://…" }`
+//    ② **舊站匯入的內文圖：`{ "src": "https://st20skinweb.blob.core.windows.net/media/…" }`
+//       —— 它沒有 `blobPath` 鍵。**
+//
+//    ⚠️ 2026-09-16 第一版只認 ①，於是把 **579 篇文章正在顯示的 3437 張內文圖**
+//    全部報成孤兒（佔容器的 74%）。加上刪除旗標就是把那些文章的圖全砍掉。
+//    擋下它的是比例安全閥 —— 那道閘不是防禦性編程，是**真的救過一次**。
+//
 // ⚠️ 用 JSON 解析而不是字串比對 —— 快照裡的中文是 `\uXXXX`，而檔名雖然是 ASCII，
 //    但用解析器才不會把「剛好出現在別的字串裡的一段路徑」誤收。
-static void CollectFromJson(string? json, HashSet<string> into)
+void CollectFromJson(string? json, HashSet<string> into)
 {
     if (string.IsNullOrWhiteSpace(json)) return;
     try
@@ -217,17 +247,38 @@ static void CollectFromJson(string? json, HashSet<string> into)
     catch (JsonException) { /* 不是 JSON 就跳過 */ }
 }
 
-static void Walk(JsonElement el, HashSet<string> into)
+// 把一個值正規化成「容器內的檔名」。
+// ⚠️ 只收指向**本容器**的網址 —— 外部圖床或 /assets/ 的版面素材不算引用，
+//    但也絕不能因為認不得就當成孤兒（它們本來就不在這個容器裡，不會出現在清單上）。
+void AddPath(string? value, HashSet<string> into)
+{
+    if (string.IsNullOrWhiteSpace(value)) return;
+
+    var v = value.Trim();
+    var marker = containerUrlPrefix;
+    var i = v.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+    if (i >= 0)
+    {
+        var name = v[(i + marker.Length)..].Split('?')[0];
+        if (name.Length > 0) into.Add(Uri.UnescapeDataString(name));
+        return;
+    }
+
+    // 相對形式（blobPath 欄位存的就是這個）
+    if (!v.Contains("://", StringComparison.Ordinal) && !v.StartsWith('/')) into.Add(v);
+}
+
+void Walk(JsonElement el, HashSet<string> into)
 {
     switch (el.ValueKind)
     {
         case JsonValueKind.Object:
             foreach (var p in el.EnumerateObject())
             {
-                if (p.NameEquals("blobPath") && p.Value.ValueKind == JsonValueKind.String)
+                if (p.Value.ValueKind == JsonValueKind.String
+                    && (p.NameEquals("blobPath") || p.NameEquals("src") || p.NameEquals("url")))
                 {
-                    var v = p.Value.GetString();
-                    if (!string.IsNullOrWhiteSpace(v)) into.Add(v!);
+                    AddPath(p.Value.GetString(), into);
                 }
                 // ⚠️ 區塊欄位在快照裡可能是「一個 JSON 字串」，要再解析一層。
                 else if (p.Value.ValueKind == JsonValueKind.String)
