@@ -7,7 +7,7 @@
     "dev": "npm run sync:assets && npm run build:asset-version && nuxt dev",
     "build": "npm run sync:assets && npm run build:asset-version && nuxt build && node scripts/postbuild.mjs",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare",
+    "postinstall": "npm run sync:assets && npm run build:asset-version && nuxt prepare",
     "verify:css": "node scripts/verify-css.mjs",
     "verify": "npm run verify:css && npm run verify:links",
     "verify:links": "node scripts/verify-links.mjs",

@@ -14,6 +14,10 @@
 //    與動效腳本走 app/utils/asset.ts 的 stampAsset()，兩邊用的是同一份對照表。
 // 🔴 這個 import 讓「沒跑過 build-asset-version」變成**建置當場失敗**，
 //    而不是安靜地產出一批沒有版號、被一年 immutable 鎖住的網址。
+// ⚠️ 連帶：`postinstall` 的 `nuxt prepare` 也會載入這個設定檔，所以那支腳本
+//    **必須排在 `nuxt prepare` 之前**（見 package.json）。2026-09-16 踩過 ——
+//    本機一直有前幾次建置留下的 assets-version.json，所以只有 CI 的乾淨 checkout
+//    會炸，而且是在 `pnpm install` 階段失敗，看起來完全不像前台的問題。
 import ASSET_VERSION from './app/assets-version.json'
 
 export default defineNuxtConfig({
