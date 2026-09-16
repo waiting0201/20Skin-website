@@ -21,8 +21,23 @@ if (!article) {
   throw createError({ statusCode: 404, statusMessage: 'Article Not Found' })
 }
 
-const category = getArticleCategory(article.categorySlug)!
+// 🔴 `await` 不可省。`getArticleCategory` 在資料層改成執行期取值之後是 **async**，
+//    少了它 `category` 會是一個 Promise —— 而 Promise 沒有 `slug` 也沒有 `label`，
+//    於是分類麵包屑變成空字串、三個連結全指向 `/blog/undefined/`。
+//    ⚠️ **不會有任何錯誤訊息**：`!` 把 undefined 斷言掉，樣板讀不存在的屬性也只是渲染空白。
+//    2026-09-16 由 verify:links 抓到（1111 篇文章頁全中）。
+const category = (await getArticleCategory(article.categorySlug))!
 const relatedArticles = await getRelatedArticles(article, 3)
+
+// ⚠️ **樣板不能 await，所以分類標籤要先在這裡查好。**
+//    原本樣板裡寫的是 `getArticleCategory(related.categorySlug)?.label` ——
+//    那支是 async，`?.label` 取到的是 Promise 上不存在的屬性，於是相關文章卡片的
+//    分類標籤全部是空白，而且不會有任何錯誤訊息。與上面那個 `/blog/undefined/`
+//    是同一類錯誤（資料層改成執行期取值時漏掉的），2026-09-16 一起修。
+const relatedCategoryLabels = new Map(
+  await Promise.all(relatedArticles.map(async (r) =>
+    [r.slug, (await getArticleCategory(r.categorySlug))?.label ?? ''] as const)),
+)
 
 // ⚠️ **內文是動態載入的**（一篇一個 chunk，見 data/articles.ts 的 getArticleBody）。
 //    用 useAsyncData 取，預渲染時會被寫進這一頁的 HTML 與 _payload.json，
@@ -329,7 +344,7 @@ usePageHead({
             <img :src="related.cover.src" :alt="related.cover.alt" :width="related.cover.width" :height="related.cover.height" loading="lazy">
           </div>
           <div class="c-card__body">
-            <span class="c-tag c-card__tag">{{ getArticleCategory(related.categorySlug)?.label }}</span>
+            <span class="c-tag c-card__tag">{{ relatedCategoryLabels.get(related.slug) }}</span>
             <h3 class="c-card__title"><a :href="`/blog/${related.slug}/`">{{ related.title }}</a></h3>
             <p class="c-card__excerpt">{{ related.summary }}</p>
             <div class="c-card__meta">

@@ -131,15 +131,33 @@ export async function unitRecords(unit: string): Promise<ContentRecord[]> {
  * ⚠️ `authorDoctorId` 一定要交給 API 篩 —— 撈回 1100 筆再用前端過濾，
  *    等於每次開醫師個人頁都傳 2.3 MB。
  */
+/**
+ * 文章列表的一頁。
+ *
+ * 🔴 **`opts` 每加一個篩選條件，下面的 query 也要跟著加。**
+ *    2026-09-16 踩過：`categoryTermId` 與 `tagTermId` 有人從 `data/articles.ts` 傳進來，
+ *    但這裡的型別沒宣告、query 也沒帶 —— 參數就這樣被默默丟掉，
+ *    結果是 **4 個分類頁與 393 個標籤頁全部顯示未篩選的全站文章列表**
+ *    （每一頁都是 1111 篇、93 頁分頁器），而畫面看起來完全正常。
+ *    ⚠️ 這個專案沒有跑 tsc，型別的多餘屬性檢查擋不到它 —— 是 `verify:links`
+ *    爬出 `/blog/tag/{每一個標籤}/page/93/` 這種網址才露出馬腳。
+ */
 export const articlePage = (
   page = 1,
   pageSize = 12,
-  opts: { authorDoctorId?: number, latest?: boolean } = {},
+  opts: {
+    authorDoctorId?: number
+    latest?: boolean
+    categoryTermId?: number
+    tagTermId?: number
+  } = {},
 ) =>
   apiGet<PagedContent>('/article', {
     page,
     pageSize,
     authorDoctorId: opts.authorDoctorId,
+    categoryTermId: opts.categoryTermId,
+    tagTermId: opts.tagTermId,
     sort: opts.latest ? 'latest' : undefined,
   }).then((r) => r ?? { items: [], page, pageSize, totalCount: 0 })
 

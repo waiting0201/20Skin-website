@@ -142,7 +142,14 @@ pnpm --filter admin build && pnpm --filter web build
 #    只會給一個沒有任何資訊的 network error，看起來像斷線（docs/10 §2）。
 
 # 驗收閘（改完前台一定要跑）
-pnpm --filter web verify      # verify:css 樣式照抄 ＋ verify:links 站內連結
+pnpm --filter web verify:css  # 樣式照抄，不需要跑著的站台
+
+# 🔴 verify:links 需要一個**跑著的站台**（而站台需要跑得動的 API）——
+#    SSR 之下頁面是算繪當下才存在的，沒有 API 就沒有 HTML 可檢查。
+#    ⚠️ 它同時拿 sitemap 當種子，所以會一併檢查「sitemap 收的網址打不打得開」。
+cd functions && func start                                     # 1. API
+cd apps/web && NUXT_PUBLIC_API_BASE_URL=http://localhost:7071/api/v1 npx nuxt dev   # 2. 站台
+VERIFY_BASE_URL=http://localhost:3000 pnpm --filter web verify:links                # 3. 爬
 
 # API 煙霧測試（改完 API 或後台資料層一定要跑，說明見 tools/api-smoke/README.md）
 node tools/api-smoke/read.mjs                  # 唯讀，可對任何環境跑
