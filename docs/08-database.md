@@ -213,7 +213,17 @@ UNIQUE (`ContentItemId`, `VersionNo`)
 
 保留策略建議**每筆內容留最近 30 版**，超出的由 Timer trigger 清掉。
 
-> ⚠️ **這是功能單元「版本歷程與還原」，不是操作日誌。** [02](02-backend-cms.md) §4 明列「可比對差異、一鍵還原」是後台功能，所以本次保留。若院方連版本功能也不要，刪掉這張表與 `ContentItems.PublishedVersionId` 即可，其餘 schema 不受影響。
+> ⚠️ **這是功能單元「版本歷程與還原」，不是操作日誌。** [02](02-backend-cms.md) §4 明列「可比對差異、一鍵還原」是後台功能。
+>
+> 🔴 **舊敘述「若院方連版本功能也不要，刪掉這張表與 `ContentItems.PublishedVersionId` 即可，其餘 schema 不受影響」已作廢（2026-09-16 更正）。**
+> 這張表**不是可選的附加功能，它就是發布機制本身**：前台每一個查詢都是
+> `FROM ContentItems ci INNER JOIN ContentVersions cv ON cv.Id = ci.PublishedVersionId`
+> （`PublicContentReadService.FromPublished`），而可見性條件的第一行就是
+> `ci.PublishedVersionId IS NOT NULL`（`Visibility.PublicFilter`）。
+> 刪掉它等於**整個前台沒有內容可以輸出**，且 `ContentReviews.VersionId`（審核佇列）也失去指向。
+>
+> ⚠️ 可以拿掉的是**後台那個「版本歷程」卡片與還原按鈕**（UI 功能），
+> 快照機制必須留著 —— 兩者不是同一件事，見下方說明。
 
 ### B-3 `ContentReviews`
 
