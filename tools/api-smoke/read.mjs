@@ -68,8 +68,9 @@ r = await call('GET', '/admin/risk-term')
 check('GET /admin/risk-term', r.json?.success && Array.isArray(r.json.data) && r.json.data.length > 0,
       `${r.status} ${r.json?.data?.length} 個字詞`)
 
-r = await call('GET', '/admin/rebuild')
-check('GET /admin/rebuild', r.json?.success && typeof r.json.data?.pending === 'boolean', JSON.stringify(r.json?.data))
+// ⚠️ 這裡原本有 `GET /admin/rebuild` 的檢查。**2026-09-16 隨整套「重建」機制一起刪除** ——
+//    全站改成執行期 SSR 之後沒有建置期，也就沒有「待重建」這個狀態可以查
+//    （院方按下發布，下一個請求就看得到）。不要因為看到舊文件就把它加回來。
 
 r = await call('GET', '/admin/redirect/stats')
 check('GET /admin/redirect/stats', r.json?.success && typeof r.json.data?.totalCount === 'number', JSON.stringify(r.json?.data))

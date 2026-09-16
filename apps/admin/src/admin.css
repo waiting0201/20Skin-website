@@ -286,7 +286,7 @@
 }
 .adm-risk-hit strong { text-decoration: underline; text-decoration-color: var(--adm-danger); text-underline-offset: 3px; }
 
-/* -- 上傳欄位（此輪先做流程與版面，實際上傳留 TODO，見 client.ts media）-- */
+/* -- 上傳欄位（瀏覽器直傳 Blob 的三步流程已實作，見 src/api/upload.ts）-- */
 .adm-upload { display: flex; flex-direction: column; gap: var(--sp-2); }
 .adm-upload__preview {
   width: 100%;

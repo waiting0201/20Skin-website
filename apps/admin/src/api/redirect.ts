@@ -135,8 +135,8 @@ export interface RedirectImportResult {
 
 // ── 已知的站內頂層路徑（給「目標路徑是否存在」核對用的靜態補充） ──────────
 //
-// 系統頁（page-home／page-team…）在 mock 裡沒有 slug、urlPath 為 null
-// （client.ts 的 recomputeUrlPath：無 slug 一律 null），單靠
+// 系統頁（page-home／page-team…）的 `UrlPath` 由後端決定，而總覽類頁面
+// （/treatments/、/blog/…）本來就不是「某一筆內容」，資料庫裡沒有對應的列，單靠
 // adminApi.content 撈不到這些頂層網址。這裡先手動列出 21 個模板裡「總覽∕
 // 固定」類頁面的正式網址，Redirects.vue 會把這份清單和即時撈到的內容網址
 // 合併，一起當作「目標路徑存在」的核對依據。

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 // 角色權限設定（/roles）—— 規格見 docs/02 §4、docs/10 §4。
 //
-// ⚠️⚠️ `src/permissions.ts` 是這份矩陣的權威且唯讀（本輪規範明講不要動它）。
-// 這個畫面初始顯示的授權狀態，是逐碼呼叫 permissions.ts 已匯出的
-// hasPermission() 算出來的，如實反映「現在後台實際會出現哪些按鈕」；
-// 但畫面上可以編輯、儲存的是另一份獨立的 mock RolePermissions 資料
-// （src/api/account.ts 的 roleStore）。**儲存之後不會回頭改變
-// permissions.ts、也不會改變這次登入 session 看到的按鈕與路由**——
-// 那些讀的是寫死在程式碼裡的權威表。真正串接 api.20skin.tw 後，後端會
-// 依 RolePermissions 動態決定授權，這個落差才會消失（見下方頁面上的提示）。
+// 🔴 **這個畫面存的是真的**（2026-09-12 起）：矩陣由 `GET /admin/role/matrix` 取得，
+// 儲存走 `PUT /admin/role/{id}/permissions`，後端依 `RolePermissions` 判斷授權。
+// ⚠️ 2026-09-16 修正：這裡原本有一整段（含顯示在畫面上的警語）說「儲存只落在 mock 的
+//    示範資料裡」。那是 2026-09-12 接上真 API 之前的敘述 —— **它在告訴院方
+//    「你改的不會生效」，而那已經是錯的**。
+// ⚠️ 仍然成立的一件事：**改完之後，當下這個 session 的選單與按鈕不會立刻變**。
+//    權限碼是登入時由 `POST /auth/login` 一起發下來的（permissions.ts 查那一份），
+//    要重新登入才會換成新的。後端的授權判斷則是立即生效的。
 //
 // ⚠️ UI 的權限判斷只管看不看得到，不是安全邊界（docs/09 §8）。
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -122,11 +122,8 @@ const marketingHasExtraEdit = computed(() =>
     </div>
 
     <p class="adm-workflow__note roles-mock-note">
-      ⚠️ <strong>這裡的儲存只落在 mock 的示範資料裡。</strong>
-      <code>src/permissions.ts</code> 是目前實際決定「畫面看不看得到、按鈕按不按得下去」的權威表，
-      依規範本輪不能修改它——所以在這裡調整並儲存後，<strong>這次登入所看到的選單與按鈕不會跟著變</strong>。
-      正式串接 <code>api.20skin.tw</code> 後，後端會依 <code>RolePermissions</code> 這張表動態決定授權，
-      屆時前端也會改成向後端拿權限，這個落差才會消失。
+      ⚠️ 儲存後<strong>後端的授權立即生效</strong>，但<strong>目前登入中的人要重新登入</strong>，
+      畫面上的選單與按鈕才會跟著變 —— 權限是登入當下發下來的。
     </p>
 
     <p v-if="!canEditRoles" class="adm-empty">沒有編輯角色權限的權限，以下為唯讀檢視。</p>

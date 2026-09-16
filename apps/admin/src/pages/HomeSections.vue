@@ -7,7 +7,13 @@
 // 內容模型編輯畫面的「關聯」欄位同一顆元件），選項一律來自 adminApi.taxonomy
 // .unitOptions()，UI 上沒有任何自由文字輸入欄位可以填內容本文。
 //
-// ⚠️ 已知缺口（如實回報，不要隱藏）：版位編排走送審流程（home.submit／
+// ✅ 2026-09-16 覆核：**下面這段「已知缺口」已經不成立，保留是為了說明它曾經存在。**
+//    版位編排的送審現在走的就是共用的審核佇列 —— 送審是
+//    `POST /admin/page/{homeId}/submit`、核准是 `POST /admin/review/{id}/approve`
+//    （見 src/api/site.ts），與九個內容模型同一張 ContentReviews 表。
+//    舊敘述來自接上真 API 之前那版的 mock store（`src/api/mock-store.ts` 已不存在）。
+//
+// ⚠️（歷史）已知缺口：版位編排走送審流程（home.submit／
 // home.publish），但這是本畫面自己的一套簡化狀態機，**沒有併入
 // client.ts 共用的 ContentReviews 佇列**，所以審核者不會在「審核佇列」
 // 畫面看到這筆送審——要在本頁下方的工作流卡片直接審。原因：docs/08 §G-2

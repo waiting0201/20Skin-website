@@ -40,6 +40,16 @@ node tools/api-smoke/write.mjs
 帳密由 `SKIN20_SMOKE_USER`／`SKIN20_SMOKE_PASSWORD` 覆蓋。
 ⚠️ 登入識別是 `sa@system.local`，**不是 `sa`**，也不是 email 格式（docs/08 §A-1）。
 
+🔴 **這兩支不能對正式環境跑，而失敗的樣子會誤導你**（2026-09-16 實測）：
+`POST /auth/login` 在正式環境有 reCAPTCHA v3，而腳本沒有、也拿不到有效的
+`botCheckToken`，所以會收到 **`BOT_CHECK_FAILED`** —— 接著所有後台檢查一路 401。
+那**不是**帳密錯、也不是端點壞掉。要驗正式環境的後台，只能用真的瀏覽器登入後台。
+
+⚠️ **首登強制改密碼會讓所有後台檢查回 403。** 種子帳號在
+`MustChangePassword=1` 的狀態下，除了 `/auth/change-password` 與 `/auth/logout`
+以外一律被擋（AppRouter.cs）。症狀是「登入成功、其餘全 403」——
+先改一次密碼（`POST /auth/change-password`）再跑。
+
 ## 注意
 
 - ⚠️ **`dotnet ef` 會重建專案，而重建會把正在跑的 `func start` 弄掛**（它的檔案監看看到 `bin/` 被換掉）。先跑 migration，再啟動 host。

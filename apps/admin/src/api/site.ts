@@ -52,7 +52,7 @@ export interface SiteSettingsData {
   /** 全站 NAP 主資料。⚠️ 必須與據點頁、頁尾逐字一致（CLAUDE.md／docs/03 §4 ③）。 */
   nap: NapEntry[]
   /** 追蹤碼（GA／GTM／Meta Pixel 等），先以自由文字收納——docs/08 §G-1：
-   * 用 key-value 而非固定欄位，這裡的 mock 用一個多行文字欄位示意同一件事。 */
+   * 用 key-value 而非固定欄位，前端以一個多行文字欄位承接同一件事。 */
   trackingCodes: string
   /** `/contact/` 表單收件信箱。表單只寄通知信，後台不留存收件紀錄（docs/02 §2）。 */
   contactEmail: string
