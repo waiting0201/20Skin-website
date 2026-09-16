@@ -70,7 +70,9 @@ const isClosed = ref(true)
 const todayColumn = ref(-1)
 
 function toMinutes(hhmm: string) {
-  const [h, m] = hhmm.split(':').map(Number)
+  // ⚠️ 給不出「時:分」時回 0，不要讓 NaN 流進比較 —— NaN 的比較一律為 false，
+  //    那會讓「今天」那一欄永遠標不出來，而且不會有任何錯誤。
+  const [h = 0, m = 0] = hhmm.split(':').map(Number)
   return h * 60 + m
 }
 

@@ -181,7 +181,10 @@ function toDoctor(ctx: DoctorContext, record: ContentRecord): Doctor {
           title: a.title,
           excerpt: a.summary ?? '',
           href: a.urlPath ?? '#',
-          byline: record.name ?? record.title,
+          // ⚠️ `ContentRecord` 沒有 `name` 欄位（醫師的顯示名就是 `title`）——
+          //    原本寫 `record.name ?? record.title`，左邊永遠是 undefined，
+          //    等於一條永遠不會走到的路徑。2026-09-16 由 typecheck 抓到。
+          byline: record.title,
           date: String(a.fields.displayDate ?? '').slice(0, 10),
           image: { src: cover?.src ?? '', width: cover?.width ?? 0, height: cover?.height ?? 0, alt: cover?.alt ?? '' },
         }

@@ -90,6 +90,16 @@ jobs:
 
       # 🔴 順序：admin 一定要在 web 之前。apps/admin 的 vite 產物直接輸出到
       #    apps/web/public/admin/，反過來跑的話 nuxt generate 會把上一版的後台打包進去。
+      # 🔴 **型別檢查是一道真的閘，不是形式。** 2026-09-16 首次導入時當場抓到三個
+      #    **已經在正式站上的** bug，全部是「Vue 讀不存在的東西不會報錯，只渲染成空白」：
+      #    ① 四個分類頁與所有標籤頁的分類 tab 整排消失（樣板用了沒有取的變數）；
+      #    ② 首頁完全沒有 `<meta name="description">`（欄位名寫錯）；
+      #    ③ 首頁的看診時段表只有表頭（型別有兩份，首頁那份從來沒被正確填過）。
+      #    ⚠️ 擺在建置之前 —— 建置不會因為這些而失敗，所以只靠建置等於沒有檢查。
+      #    ⚠️ apps/admin 的 `build` 本來就會先跑 `vue-tsc -b`，缺的一直只有前台。
+      - name: Typecheck web
+        run: pnpm --filter web typecheck
+
       - name: Build admin SPA
         run: pnpm --filter admin build
         env:

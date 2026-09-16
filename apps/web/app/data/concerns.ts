@@ -110,6 +110,7 @@ export interface Concern {
 import {
   REL, TERM, UNIT, img, loadUnit, parseBlocks, relationsOf, termsOf, type ContentRecord,
 } from './_content'
+import { formatDisplayDate } from './articles'
 import { CONCERN_EYEBROW } from './_presentation'
 
 const toImage = (value: unknown, fallbackAlt = ''): Image => {
@@ -195,13 +196,22 @@ function toConcern(ctx: ConcernContext, record: ContentRecord): Concern {
           const faq = ctx.faqs.find((x) => x.slug === r.toSlug)
           return { q: faq?.title ?? (r.toTitle as string), a: (faq?.fields.webAnswer as string) ?? '' }
         }),
+        // ⚠️ `tag` 與 `meta` 不可省 —— 樣板的文章卡片兩個都會渲染
+        //    （`{{ article.tag }}` 與 `v-for="m in article.meta"`）。
+        //    2026-09-16 由 `nuxt typecheck` 抓到它們從來沒有被產生過：
+        //    Vue 讀不存在的屬性不會報錯，只是把那個位置渲染成空白。
         articles: relationsOf(record, REL.concernToArticle).map((r) => {
           const a = ctx.articles.find((x) => x.slug === r.toSlug)
+          const category = ctx.terms.find((t) => t.id === a?.fields.categoryTermId)
+          const displayDate = String(a?.fields.displayDate ?? '').slice(0, 10)
           return {
             title: a?.title ?? (r.toTitle as string),
             href: r.toUrlPath ?? '#',
+            tag: category?.title ?? '',
             excerpt: a?.summary ?? '',
             image: toImage(a?.fields.cover, a?.title ?? ''),
+            // ⚠️ 日期格式沿用 `formatDisplayDate`，不要在這裡另寫一份 replaceAll。
+            meta: displayDate ? [formatDisplayDate(displayDate)] : [],
           }
         }),
       }

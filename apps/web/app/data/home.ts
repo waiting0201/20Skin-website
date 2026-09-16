@@ -10,7 +10,6 @@
 // 圖片用 imagePath 是建置期產物的簡化表示 —— 正式站對應的是內嵌圖片欄位
 // （CoverUrl／CoverAlt／CoverWidth…，見 docs/08-database.md §0 決策五），不是資料庫的實際欄位名。
 
-import { CLINIC_NAP } from './navigation'
 
 // ── 1. hero：主視覺輪播 ──────────────────────────────────────────────────
 // 正式站對應 HomeSections.Settings 的 JSON（唯一沒有 ContentItemId 可引用的版位，
@@ -66,17 +65,18 @@ export interface HomeDoctor {
   photoWidth: number
   photoHeight: number
 }
-export interface ClinicHoursRow {
-  timeRangeLabel: string
-  /** 一～日（週一到週日）是否看診 */
-  openDays: [boolean, boolean, boolean, boolean, boolean, boolean, boolean]
-}
+// 🔴 **時段表的形狀只有一份**：`ClinicHoursTableRow`（clinics.ts）。
+//    這裡原本另外定義了一個 `ClinicHoursRow{timeRangeLabel, openDays}`，
+//    與據點頁的 `{label, days}` 是同一個東西的第二個名字 ——
+//    而首頁那一份**從來沒有被正確填過**（塞進去的是 NAP 的字串），
+//    結果首頁的看診時段表只有表頭、一列資料都沒有。
+//    2026-09-16 由 `nuxt typecheck` 抓到，並在正式站確認表格確實是空的。
 export interface HomeClinic {
   name: string
   urlPath: string
   phone: string
   address: string
-  hoursRows: ClinicHoursRow[]
+  hoursRows: ClinicHoursTableRow[]
   hoursFootnote: string
 }
 // ── 資料來源：content/home.json ＋ 各單元（docs/09 §3、docs/08 §G-2）──────
@@ -87,6 +87,7 @@ export interface HomeClinic {
 // ⚠️ 版位勾到草稿時匯出端已經濾掉（content-export），這裡拿到的都是已發布的。
 
 import { UNIT, img, loadUnit } from './_content'
+import { getClinics, type ClinicHoursTableRow } from './clinics'
 import { getClinicNap } from './navigation'
 
 interface HomeSection {
@@ -118,7 +119,9 @@ export async function getHomeData() {
     loadUnit(UNIT.treatment),
     loadUnit(UNIT.term),
     loadUnit(UNIT.doctor),
-    loadUnit(UNIT.clinic),
+    // ⚠️ 用 `getClinics()` 而不是 `loadUnit(UNIT.clinic)` —— 它已經把營業時間組成
+    //    表格列了（`hoursTableOf`）。在這裡自己再組一次就是第二份實作。
+    getClinics(),
     getClinicNap(),
   ])
 
@@ -210,15 +213,17 @@ export async function getHomeData() {
   })
 
   const homeClinics: HomeClinic[] = itemsOf('clinics').map((item) => {
-    const c = clinics.find((x) => x.id === item.contentItemId)
+    // ⚠️ `Clinic` 是**前台的形狀**（clinics.ts），它的識別是 slug／name，沒有帶資料庫 id ——
+    //    所以用名稱比對，與下一行的 NAP 一致。兩者的名稱同源（都是該筆內容的 title）。
+    const c = clinics.find((x) => x.name === item.title)
     const n = nap.find((x) => x.name === item.title)
     return {
       name: item.title,
       urlPath: item.urlPath ?? '#',
-      phone: (c?.fields.phone as string) ?? '',
-      address: (c?.fields.address as string) ?? '',
-      hoursRows: n?.hours ? [n.hours] : [],
-      hoursFootnote: '',
+      phone: c?.phone ?? n?.phone ?? '',
+      address: c?.address ?? n?.address ?? '',
+      hoursRows: c?.hoursTable ?? [],
+      hoursFootnote: c?.hoursFootnote ?? '',
     }
   })
 

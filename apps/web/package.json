@@ -9,14 +9,17 @@
     "preview": "nuxt preview",
     "postinstall": "npm run sync:assets && npm run build:asset-version && nuxt prepare",
     "verify:css": "node scripts/verify-css.mjs",
-    "verify": "npm run verify:css && npm run verify:links",
+    "typecheck": "nuxt typecheck",
+    "verify": "npm run typecheck && npm run verify:css && npm run verify:links",
     "verify:links": "node scripts/verify-links.mjs",
     "export:content": "cd ../.. && dotnet run --project tools/content-export -- apps/web/content",
     "build:asset-version": "node scripts/build-asset-version.mjs"
   },
   "devDependencies": {
     "nuxt": "^3.19.0",
+    "typescript": "^5.7.0",
     "vue": "^3.5.0",
-    "vue-router": "^4.5.0"
+    "vue-router": "^4.5.0",
+    "vue-tsc": "^2.2.0"
   }
 }

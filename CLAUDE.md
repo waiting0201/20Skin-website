@@ -142,6 +142,10 @@ pnpm --filter admin build && pnpm --filter web build
 #    只會給一個沒有任何資訊的 network error，看起來像斷線（docs/10 §2）。
 
 # 驗收閘（改完前台一定要跑）
+pnpm --filter web typecheck   # 🔴 型別檢查，不需要跑著的站台
+                              #   2026-09-16 首次導入就抓到四個**已經在正式站上**的 bug，
+                              #   全部是「Vue 讀不存在的東西不會報錯，只渲染成空白」。
+                              #   ⚠️ 這類錯誤**建置一律會成功**，只靠建置等於沒有檢查。
 pnpm --filter web verify:css  # 樣式照抄，不需要跑著的站台
 
 # 🔴 verify:links 需要一個**跑著的站台**（而站台需要跑得動的 API）——

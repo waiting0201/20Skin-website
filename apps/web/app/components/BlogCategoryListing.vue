@@ -67,9 +67,16 @@ if (import.meta.dev) {
   }
 }
 
-const [category, paged] = await Promise.all([
+// ⚠️ `ARTICLE_CATEGORIES` 是**樣板上那排分類 tab** 用的，缺一不可 ——
+//    2026-09-16 導入 `nuxt typecheck` 時抓到：它根本沒有在 setup 裡取，
+//    於是 `v-for="cat in ARTICLE_CATEGORIES"` 跑在一個不存在的變數上，
+//    **四個分類頁與所有標籤頁的分類 tab 整排消失，只剩「全部文章」**。
+//    🔴 Vue 樣板讀不存在的變數不會報錯，只是什麼都不渲染 —— 畫面看起來像設計就這樣。
+//    （`/blog/` 總覽頁沒事，因為 BlogAllListing 有取。）
+const [category, paged, ARTICLE_CATEGORIES] = await Promise.all([
   getArticleCategory(categorySlug),
   listArticlesByCategory(categorySlug, props.page),
+  getArticleCategories(),
 ])
 if (!category) {
   throw createError({ statusCode: 404, statusMessage: 'Category Not Found' })

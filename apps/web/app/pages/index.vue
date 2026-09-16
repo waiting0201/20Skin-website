@@ -31,7 +31,10 @@ const nonPhysicianCount = DOCTORS.length - physicianCount
 // SEO title 取首頁主標語（hero <h1> 的純文字），不是自己編的字句。
 usePageHead({
   title: '要自然‧找四季',
-  description: SITE_SETTINGS.description,
+  // ⚠️ 欄位名是 `siteDescription`。寫成 `description` 不會報錯，只會讓首頁
+  //    **完全沒有 <meta name="description">**（2026-09-16 由 typecheck 抓到，
+  //    並在正式站確認該標籤真的不存在）。
+  description: SITE_SETTINGS.siteDescription,
   pageCss: '/assets/pages/01-home.css',
   path: '/',
   jsonLd: {
@@ -112,7 +115,8 @@ usePageHead({
                 :aria-label="`第 ${index + 1} 張：${slide.caption}`"
               ></button>
             </div>
-            <p class="home-hero__caption" data-slider-caption>{{ HERO_SLIDES[0].caption }}</p>
+            <!-- ⚠️ 版位可能沒有任何一張圖（院方還沒設定），`HERO_SLIDES[0]` 會是 undefined。 -->
+            <p class="home-hero__caption" data-slider-caption>{{ HERO_SLIDES[0]?.caption }}</p>
           </div>
         </div>
       </div>
@@ -269,9 +273,11 @@ usePageHead({
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in clinic.hoursRows" :key="row.timeRangeLabel">
-                <th scope="row">{{ row.timeRangeLabel }}</th>
-                <td v-for="(open, dayIndex) in row.openDays" :key="dayIndex" :class="{ 'c-hours__cell--off': !open }">
+              <!-- ⚠️ 欄位名與據點頁同一組（label／days）—— 首頁原本用的是另一組名字，
+                   而那組從來沒有被填過，表格因此只有表頭。 -->
+              <tr v-for="row in clinic.hoursRows" :key="row.label">
+                <th scope="row">{{ row.label }}</th>
+                <td v-for="(open, dayIndex) in row.days" :key="dayIndex" :class="{ 'c-hours__cell--off': !open }">
                   <span v-if="open" class="c-hours__mark" aria-hidden="true"></span><span class="visually-hidden">{{ open ? '看診' : '休診' }}</span>
                 </td>
               </tr>

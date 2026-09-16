@@ -25,21 +25,68 @@ const pageIndex = async () => bySlug(await loadUnit(UNIT.page))
 const blocksOf = <T,>(index: Map<string, ContentRecord>, slug: string, fallback: T): T =>
   parseBlocks<T>(index.get(slug)?.fields.bodyBlocks, fallback)
 
+/**
+ * 品牌理念頁四個區塊的形狀。
+ *
+ * ⚠️ **這裡是唯一一份**。原本寫成 `typeof ABOUT_PILLARS` 之類，指向內容搬進資料庫時
+ *    就刪掉的常數 —— 型別位置不會有執行期錯誤，所以它壞了很久沒人發現，而
+ *    `getAboutPage()` 又用 `as` 把每一個區塊各自重寫了一份形狀，等於繞過檢查。
+ *    🔴 那些手寫形狀**比真實資料窄**（少了 `href`、`image.w/h`、`clinics.image`），
+ *    而樣板用得到它們 —— 照著型別去「修」樣板就會把畫面上的連結與圖片刪掉。
+ *    2026-09-16 導入 `nuxt typecheck` 時一起修好（真實資料以正式 API 的 `/about/` 核對過）。
+ */
+interface AboutImage {
+  src: string
+  alt: string
+  w?: number
+  h?: number
+}
+
+export interface AboutPillar {
+  no: string
+  title: string
+  body: string
+  image: AboutImage
+  href: string
+}
+
+export interface AboutTimelineEntry {
+  year: string
+  title: string
+  body: string
+}
+
+export interface AboutTeamMember {
+  name: string
+  role: string
+  image: AboutImage
+  href: string
+}
+
+export interface AboutClinic {
+  name: string
+  body: string
+  address: string
+  image: AboutImage
+  href: string
+}
+
 interface AboutDocument {
-  pillars: typeof ABOUT_PILLARS
-  timeline: typeof ABOUT_TIMELINE
-  teamPreview: typeof ABOUT_TEAM_PREVIEW
-  clinics: typeof ABOUT_CLINICS
+  pillars: AboutPillar[]
+  timeline: AboutTimelineEntry[]
+  teamPreview: AboutTeamMember[]
+  clinics: AboutClinic[]
 }
 
 /** 品牌理念頁的四個區塊。一次取齊，呼叫端解構即可。 */
 export async function getAboutPage() {
   const about = blocksOf<Partial<AboutDocument>>(await pageIndex(), 'about', {})
+  // ⚠️ 不要在這裡加 `as` —— 上面的介面就是契約，用轉型蓋過去等於把檢查關掉。
   return {
-    pillars: (about.pillars ?? []) as { no: string, title: string, body: string, image: { src: string, alt: string, w?: number, h?: number } }[],
-    timeline: (about.timeline ?? []) as { year: string, title: string, body: string }[],
-    teamPreview: (about.teamPreview ?? []) as { name: string, role: string, image: { src: string, alt: string } }[],
-    clinics: (about.clinics ?? []) as { name: string, body: string, address: string, href?: string }[],
+    pillars: about.pillars ?? [],
+    timeline: about.timeline ?? [],
+    teamPreview: about.teamPreview ?? [],
+    clinics: about.clinics ?? [],
   }
 }
 

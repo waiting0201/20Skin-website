@@ -1,0 +1,7 @@
+{
+  // Nuxt 產生的那份在 .nuxt/ 底下（`nuxt prepare` 寫的，不進版控）——
+  // 它帶著自動匯入、`~`／`#imports` 別名與 server 端的型別。
+  // ⚠️ 這個檔存在的唯一理由是讓 `nuxt typecheck` 找得到進入點；
+  //    規則本身不要寫在這裡，寫了就會與 Nuxt 產的那份分岔。
+  "extends": "./.nuxt/tsconfig.json"
+}
