@@ -7,17 +7,19 @@
 #    那一支 Managed Function，它與前台是同一個部署單位、必須一起上傳；
 #    `functions/` 那個獨立 Function App 由 api.yml 部署，不隨內容重建。
 #
-# ✅ 2026-09-14 首次實跑成功（run 34839861953，3m11s）。本機等價物是
-#    tools/deploy-swa.sh，已退為備援 —— 下面每一個「⚠️」都是那支腳本在正式環境
-#    實際踩出來的，不要因為看起來多餘就拿掉。
+# ✅ 2026-09-14 首次實跑成功（3m11s，當時是靜態版）。
+#    2026-09-16 改成執行期 SSR 並實際部署成功。本機等價物是 tools/deploy-swa-ssr.sh，
+#    已退為備援 —— 下面每一個「⚠️」都是在正式環境實際踩出來的，不要因為看起來多餘就拿掉。
+# ⚠️ **本機那支腳本能過，不代表這裡會過**：SWA CLI 有 `--swa-config-location`，
+#    這支 action 沒有那個輸入（2026-09-16 踩到，見 Stage SWA config 那一步）。
 #
 # 需要的 GitHub 設定：
 #   secrets: AZURE_STATIC_WEB_APPS_API_TOKEN（az staticwebapp secrets list 取得）
-#            SKIN20_EXPORT_SQL（建置期**唯讀**連線字串，docs/07 §6）
-#            AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID（OIDC，開 SQL 防火牆用）
-#   vars:    SITE_URL=https://20skin.tw（smoke test 與 sitemap 的絕對網址）
-#            AZURE_RESOURCE_GROUP=rg-20skin-web-prod、SQL_SERVER_NAME
-#            API_BASE_URL=https://api.20skin.tw/api/v1（烤進前台產物）
+#            ⚠️ 只需要這一個。2026-09-16 起這條工作流**完全不碰資料庫** ——
+#            SKIN20_EXPORT_SQL 與 OIDC 那三個（AZURE_CLIENT_ID／TENANT／SUBSCRIPTION）
+#            都不再使用，它們是給 api.yml 的遷移步驟用的。
+#   vars:    SITE_URL=https://20skin.tw（smoke test 用）
+#            API_BASE_URL（前台每一個請求都打它，烤進產物）
 #            RECAPTCHA_SITE_KEY（公開值；少了它前台送出表單會被後端擋下，docs/10 §5.1）
 name: web
 
@@ -76,46 +78,15 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # ── 內容快照 ────────────────────────────────────────────────────
-      # 🔴 apps/web/content/*.json **不進版控**，由這一步從資料庫產生
-      #    （docs/09 §3：執行期不查詢、不讀檔，內容在建置期內聯進靜態產物）。
-      #    少了它 nuxt generate 會在 import ~~/content/*.json 當場失敗。
-      #    順帶產出 robots.txt／sitemap*.xml／faq.json／llms*.txt（docs/07 §4）。
-      # ⚠️ 讀的是**已核准的版本快照**，不是 ContentItems 的即時欄位 ——
-      #    那份判定與 API 共用同一份原始碼（Visibility.cs），不要在這裡另寫一套。
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      # runner 的 IP 是浮動的，「允許 Azure 服務存取」也涵蓋不到它（runner 不是 Azure 資源）。
-      - name: Open SQL firewall for this runner
-        id: fw
-        run: |
-          IP=$(curl -s https://api.ipify.org)
-          RULE="gha-web-${{ github.run_id }}"
-          echo "rule=$RULE" >> "$GITHUB_OUTPUT"
-          az sql server firewall-rule create \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --server "${{ vars.SQL_SERVER_NAME }}" \
-            --name "$RULE" --start-ip-address "$IP" --end-ip-address "$IP"
-
-      - name: Export content from database
-        run: pnpm --filter web export:content
-        env:
-          # 建置期身分是**唯讀**的，與 API 的執行期身分、CI 的遷移身分都不同（docs/08 §J-3）。
-          SKIN20_EXPORT_SQL: ${{ secrets.SKIN20_EXPORT_SQL }}
-          SKIN20_SITE_ORIGIN: ${{ vars.SITE_URL }}
-
-      - name: Close SQL firewall
-        if: always() # 上一步失敗也要收掉，否則會留下一條長期開放的規則
-        run: |
-          az sql server firewall-rule delete \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --server "${{ vars.SQL_SERVER_NAME }}" \
-            --name "${{ steps.fw.outputs.rule }}" || true
+      # 🔴 **這裡以前有一整段「從資料庫匯出內容」**（Azure OIDC 登入 ＋ 開關 SQL 防火牆
+      #    ＋ `pnpm --filter web export:content`）。**2026-09-16 整段刪除。**
+      #    改成執行期 SSR 之後，前台的內容、SEO 產物與站內搜尋都是算繪當下打 API 取得，
+      #    `apps/web/content/*.json` 已經沒有任何消費者（最後一個是站內搜尋索引，
+      #    那一支也改成 `GET /search` 了）。
+      #    ⚠️ 連帶：這條工作流**不再需要任何資料庫存取** —— 不必登入 Azure、
+      #    不必為 runner 開一條 SQL 防火牆規則、也不再用到 `SKIN20_EXPORT_SQL`。
+      #    少開一條對外的防火牆規則本身就是收穫。
+      #    ⚠️ `tools/content-export` 仍保留，但用途只剩離線稽核（見 CLAUDE.md 目錄說明）。
 
       # 🔴 順序：admin 一定要在 web 之前。apps/admin 的 vite 產物直接輸出到
       #    apps/web/public/admin/，反過來跑的話 nuxt generate 會把上一版的後台打包進去。
