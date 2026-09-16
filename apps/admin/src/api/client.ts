@@ -497,7 +497,8 @@ const content = {
     return content.get(unit, id)
   },
 
-  /** ⚠️ 排程時間是「最早生效時間」，不是精確時間（docs/11 §7）。 */
+  /** 排程上線時間。⚠️ 2026-09-16 起是**精確的**（SSR 下由查詢條件即時判斷），
+   *  舊敘述「最早生效時間、還要等全站重建」已作廢。 */
   async schedule(unit: UnitKey, id: number, publishAt: string | null, unpublishAt: string | null, _userId: number): Promise<AdminRecord> {
     assertUnit(unit)
     await request<ServerDetail>(`/admin/${unit}/${id}/schedule`, { method: 'PATCH', body: { publishAt, unpublishAt } })

@@ -235,7 +235,7 @@ async function saveSchedule() {
     scheduleForm.unpublishAt ? new Date(scheduleForm.unpublishAt).toISOString() : null,
     user!.id,
   )
-  actionNotice.value = '已更新排程（最早生效時間，非精確發布時間）。'
+  actionNotice.value = '已更新排程。到這個時間點，前台就會看得到。'
 }
 
 async function removeRecord() {
@@ -575,9 +575,11 @@ async function restore(versionNo: number) {
         <div v-if="canPublish" class="adm-card">
           <p class="adm-card__title">排程</p>
           <div class="adm-field">
-            <label class="adm-field__label">最早生效時間</label>
+            <label class="adm-field__label">上線時間</label>
             <input v-model="scheduleForm.publishAt" class="adm-input" type="datetime-local">
-            <p class="adm-field__hint">⚠️ 不是精確發布時間——到點後仍需一次全站重建才會上線。</p>
+            <!-- ⚠️ 2026-09-16 改：原本寫「不是精確發布時間——到點後仍需一次全站重建才會上線」。
+                 那是靜態版的事實，SSR 之後已經不對，而且是**低估**了實際行為。 -->
+            <p class="adm-field__hint">到這個時間點，前台就會看得到（不需要重新建置）。留空＝核准後立即上線。</p>
           </div>
           <div class="adm-field">
             <label class="adm-field__label">下架時間</label>

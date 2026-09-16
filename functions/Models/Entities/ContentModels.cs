@@ -182,7 +182,7 @@ public sealed class Concern : ContentItem
 /// <para>
 /// 🔴 <b><see cref="DisplayDate"/> ≠ <see cref="ContentItem.PublishAt"/>。</b>
 /// 前者是對外顯示與 <c>datePublished</c> 的來源，遷移 800 篇時必須帶入舊站原始日期；
-/// 後者是排程用的「最早生效時間」，遷移進來的文章一律留 NULL。
+/// 後者是排程用的「上線時間」，遷移進來的文章一律留 NULL。
 /// <b>把這兩欄搞混，全站 800 篇文章的日期會統一變成遷移當天</b>，對 SEO 是直接傷害。
 /// </para>
 /// </summary>

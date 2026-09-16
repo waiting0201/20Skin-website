@@ -47,10 +47,15 @@ public class ContentItem
     public ContentStatus Status { get; set; } = ContentStatus.Draft;
 
     /// <summary>
-    /// 排程發布：<b>最早生效時間</b>，不是精確時間。
+    /// 排程上線時間。
     /// <para>
-    /// Timer 到點後還要跑一次全站重建才會出現在網站上（docs/07 §4），
-    /// 後台文案必須據此撰寫，不要寫「將於 14:00 發布」。
+    /// 🔴 <b>2026-09-16 起這是精確的。</b> 前台每一個請求都用查詢當下的時間判斷
+    /// （<c>Visibility.PublicFilter</c> 的 <c>PublishAt &lt;= @Now</c>），到點就看得到。
+    /// </para>
+    /// <para>
+    /// ⚠️ 舊敘述「最早生效時間，Timer 到點後還要跑一次全站重建」**已作廢** ——
+    /// 那是靜態版的限制，SSR 之後連那支 Timer 都刪掉了（docs/07 §4）。
+    /// 後台文案已同步改成「到這個時間點，前台就會看得到」。
     /// </para>
     /// <para>⚠️ 與 <c>Articles.DisplayDate</c> 是兩回事，見 <see cref="Article"/>。</para>
     /// </summary>

@@ -6,19 +6,28 @@
 
 ---
 
-## 1. 兩處 API，能力與職責完全不同
+## 1. API 只有一處：`functions/`
 
-**這是整份架構最容易搞錯的地方**（[07-deployment.md](07-deployment.md) §4）：
+🔴 **2026-09-16 起只有一個 API。** 舊敘述「兩處 API，能力與職責完全不同」**已作廢**
+（CLAUDE.md 決策 7）。
 
-| | `functions/` → `api.20skin.tw` | `api/` → SWA Managed Function |
-|---|---|---|
-| 內容 | **本文件的全部端點** | **只有 `/api/fallback` 一支**，約 770 條 301 |
-| 框架 | .NET 10 isolated ＋ EF Core ＋ Dapper | **最高 net9.0**，**Dapper only** |
-| HTTP 逾時 | 230 秒 | 45 秒 |
-| Timer／Managed Identity | ✅ | ❌ |
-| 部署 | 只在 `functions/**` 變更時 | 跟著每次內容重建 |
+`functions/` → **`api.20skin.tw`**（獨立 Azure Functions App）：
+.NET 10 isolated ＋ EF Core（寫入）＋ Dapper（讀取）、Managed Identity 連 SQL 與 Blob、
+HTTP 上限 230 秒、有 Timer trigger。**前台、後台與爬蟲要的一切都在這裡。**
 
-⚠️ **不要把應用程式 API 寫進 `api/`**，也不要用 SWA 的 Bring-your-own-API 串接（需 Standard 方案）。反過來，**`/api/fallback` 也不能搬到 `api.20skin.tw`** —— `navigationFallback` 只能 rewrite 到站內路徑，指不到外部網址。
+⚠️ **原本還有一個 `api/`（SWA Managed Function，只有 `fallback` 一支），整支已刪除。**
+它與 Nuxt 的 SSR function 互斥 —— 兩者都要佔 SWA 的 `api_location`，而前台改成執行期
+SSR 之後那個位置給了 Nuxt。它負責的 1000 條 301 改由前台的 `pages/[...slug].vue`
+查 `GET /redirects/resolve`。
+
+⚠️ 連帶的收穫：**路徑正規化從兩份變一份**。原本 `api/Fallback.cs` 與
+`RedirectHandler.NormalizePath` 各有一份，兩邊分岔的症狀是「後台看得到規則，但線上不轉址」。
+
+⚠️ 那個位置現在跑的是 Node 22（Nuxt），所以 SWA managed function 的 .NET 版本上限
+（`dotnet-isolated:9.0`）已不再是這個專案的限制。
+
+🔴 **前台每一個請求都會打這個 App**，它不再只是後台的後端 —— 它掛掉等於全站 503
+（前台以 5xx 表達，不會退化成 404 或空頁面，見 CLAUDE.md 決策 14）。
 
 ---
 
@@ -222,8 +231,6 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 | `GET|POST|PUT|DELETE /admin/user` | `account.manage` | 帳號管理（限超級管理員） |
 | `PUT /admin/user/{id}/password` | `account.manage` | 重設密碼 |
 | `GET /admin/role`、`PUT /admin/role/{id}/permissions` | `account.manage` | 角色權限設定（限超級管理員） |
-| `GET /admin/rebuild` | **登入即可** | 聚合窗口狀態。⚠️ 這是「重建請求送出去了沒有」，**不是建置進度** —— `repository_dispatch` 是射後不理。後台的「發布中／已上線」是樂觀顯示，不是部署成功的證據。權限刻意不是 `settings.edit`：內容編輯要看得到這個狀態字，但不該能自己觸發建置 |
-| `POST /admin/rebuild` | `settings.edit` | 手動觸發全站重建。**有聚合窗口**，見 [11](11-backend-design.md) §10 |
 | `GET /admin/risk-term` | **登入即可** | 啟用中的高風險字詞清單，供編輯器即時提示（[02](02-backend-cms.md) §5）。⚠️ **是提示不是閘門** —— 送審時伺服器仍會自己重掃一次，前端掃到什麼不影響能不能送審，兩邊結果不一致也不是錯誤 |
 | `GET /admin/export/{kind}` | `settings.edit` | 預覽 `faq.json`／`llms.txt`／`llms-full.txt`。**實際產物在建置期產生**，此端點只供後台畫面預覽（[07](07-deployment.md) §4） |
 

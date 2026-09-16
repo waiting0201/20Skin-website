@@ -176,7 +176,7 @@ MustChangePassword  1
 | **`UrlPath`** | nvarchar(300) NULL | **完整路徑**，如 `/treatments/laser/picosure-pro/`。儲存時由應用程式計算寫入 |
 | `Title` | nvarchar(200) NOT NULL | FAQ 的「問題」也放這裡 |
 | `Status` | tinyint NOT NULL | 1 草稿／2 送審中／3 已發布／4 已下架 |
-| `PublishAt` | datetime2 NULL | **排程發布：最早生效時間** |
+| `PublishAt` | datetime2 NULL | **排程上線時間（精確）**。留 NULL＝核准後立即上線 |
 | `UnpublishAt` | datetime2 NULL | 定時下架 |
 | `PublishedVersionId` | int NULL FK → `ContentVersions` | 前台輸出的是這一版 |
 | `SortOrder` | int NOT NULL | |
@@ -198,7 +198,8 @@ INDEX IX_ContentItems_UnpublishAt     ON ContentItems(UnpublishAt) WHERE Unpubli
 
 ⚠️ **`UrlPath` 的 filtered unique 是全站網址唯一性的唯一保證。** 950 個 URL 分散在九個模型裡，沒有這條約束就得靠九支程式各自檢查。
 
-⚠️ **`PublishAt` 是「最早生效時間」，不是精確時間。** Timer trigger 到點後還要跑一次全站重建才會出現在網站上（[07](07-deployment.md) §4）。後台文案必須據此撰寫，不要寫「將於 14:00 發布」。
+🔴 **`PublishAt` 是精確的上線時間**（2026-09-16 起）。前台每一個請求都用查詢當下的時間判斷（`Visibility.PublicFilter`），到點就看得到，不需要重建、也沒有輪詢。
+⚠️ 舊敘述「最早生效時間、Timer 到點後還要跑一次全站重建」**已作廢**（[07](07-deployment.md) §4）。
 
 ⚠️ **`Articles` 另有 `DisplayDate`，與 `PublishAt` 是兩回事**，見 §C-4。800 篇文章遷移時搞混這兩欄，全站文章日期就會變成遷移當天。
 
@@ -312,7 +313,7 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 | `ReadingMinutes` int NULL | 可由字數自動算 |
 | `SourceSite` tinyint | 1 主站 `share.php`／2 `20skinblog.com` |
 
-⚠️ **`DisplayDate` ≠ `ContentItems.PublishAt`。** 前者是對外顯示與 `datePublished` 的來源，遷移 800 篇時必須帶入舊站原始日期；後者是排程用的「最早生效時間」，遷移進來的文章一律留 NULL。**把這兩欄搞混，全站 800 篇文章的日期會統一變成遷移當天**，`datePublished` 全錯，對 SEO 是直接傷害。
+⚠️ **`DisplayDate` ≠ `ContentItems.PublishAt`。** 前者是對外顯示與 `datePublished` 的來源，遷移 800 篇時必須帶入舊站原始日期；後者是排程用的「上線時間」，遷移進來的文章一律留 NULL。**把這兩欄搞混，全站 800 篇文章的日期會統一變成遷移當天**，`datePublished` 全錯，對 SEO 是直接傷害。
 
 ⚠️ `SourceSite=2` 的 101 篇**保留原 slug**（[01](01-sitemap.md) 決策三）。這一欄的用途是遷移後還能篩出這批文章 —— 跨網域 301 由院方自行處置，若日後要盤點就靠它。
 

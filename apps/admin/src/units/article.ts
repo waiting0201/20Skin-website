@@ -26,7 +26,7 @@ export const articleUnit: UnitDefinition = {
       type: 'date',
       required: true,
       group: '基本資料',
-      hint: '⚠️ 與右側「排程發布」的最早生效時間是兩回事——這一欄是 datePublished 的來源，遷移文章時要帶入舊站原始日期。',
+      hint: '⚠️ 與右側的「上線時間」是兩回事——這一欄是 datePublished 的來源，遷移文章時要帶入舊站原始日期。',
     },
     { key: 'cover', label: '封面圖', type: 'image', group: '圖片', hint: '建議尺寸 1600×1000（16:10）。' },
     { key: 'summary', label: '摘要', type: 'textarea', required: true, group: '內容' },

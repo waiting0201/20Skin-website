@@ -106,7 +106,8 @@ export interface ContentItemBase {
   /** FAQ 的「問題」也放這裡。 */
   title: string
   status: ContentStatus
-  /** 排程發布：最早生效時間。不是精確時間，見 docs/11 §7。 */
+  /** 排程上線時間。⚠️ 2026-09-16 起是**精確的**——前台每個請求都用查詢當下的時間判斷
+   *  （`Visibility.PublicFilter`），不再需要等全站重建。舊敘述「最早生效時間」已作廢。 */
   publishAt: string | null
   /** 定時下架。 */
   unpublishAt: string | null
