@@ -86,12 +86,33 @@ public interface IPublicContentReadService
         IReadOnlyCollection<int> ids, CancellationToken ct = default);
 
     /// <summary>
+    /// 首頁那筆 Page **已核准版本**的快照 JSON（版位編排在裡面）。
+    ///
+    /// <para>
+    /// 🔴 <b>絕對不要改成讀 <c>HomeSections</c> 即時表。</b> 那兩張表是<b>工作副本</b>——
+    /// 版位編排的送審與版本歷程掛在 <c>SystemKey='home'</c> 的 ContentItem 上
+    /// （docs/08 §G-2、docs/11 §8）。直接讀即時表等於「編輯者拖一拖版位、還沒送審，
+    /// 下一個請求就上線了」，核准這道關卡完全被繞過。
+    /// 這與九個內容單元的規則是同一條（CLAUDE.md 決策 14）。
+    /// </para>
+    /// </summary>
+    Task<string?> GetHomeSnapshotAsync(CancellationToken ct = default);
+
+    /// <summary>導覽選單與頁尾（docs/08 §G-3）。不走 ContentItems。</summary>
+    Task<IReadOnlyList<PublicMenuRow>> GetMenuItemsAsync(CancellationToken ct = default);
+
+    /// <summary>
     /// sitemap 要收的網址。條件與 docs/08 §H 末段一致：
     /// <c>可見性 ＋ IncludeInSitemap = 1 ＋ UrlPath IS NOT NULL</c>。
     /// <para>⚠️ FAQ 沒有獨立網址（<c>UrlPath</c> 為 NULL），標籤頁 <c>IncludeInSitemap = 0</c>。</para>
     /// </summary>
     Task<IReadOnlyList<SitemapUrlRow>> GetSitemapEntriesAsync(CancellationToken ct = default);
 }
+
+/// <summary>選單一列。<c>Url</c> 為 NULL 時表示指向內容，網址由該內容的 UrlPath 決定。</summary>
+public sealed record PublicMenuRow(
+    int Id, string MenuKey, int? ParentId, string Label, byte LinkKind,
+    int? ContentItemId, string? Url, string? RelAttr, bool OpenInNewTab, int SortOrder);
 
 /// <summary>sitemap 的一列。<c>LastModified</c> 給 <c>&lt;lastmod&gt;</c> 用。</summary>
 public sealed record SitemapUrlRow(byte ContentType, string UrlPath, DateTime LastModified);
@@ -193,6 +214,37 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
 
         var items = await connection.QueryAsync<PublicContentRow>(new CommandDefinition(
             sql, new { Ids = ids, Now = Clock.UtcNow }, cancellationToken: ct));
+        return items.AsList();
+    }
+
+    public async Task<string?> GetHomeSnapshotAsync(CancellationToken ct = default)
+    {
+        using var connection = factory.Create();
+
+        const string sql = """
+            SELECT cv.Snapshot
+            FROM ContentItems ci
+            INNER JOIN Pages p ON p.Id = ci.Id
+            INNER JOIN ContentVersions cv ON cv.Id = ci.PublishedVersionId
+            WHERE p.SystemKey = 'home'
+            """;
+
+        return await connection.QuerySingleOrDefaultAsync<string>(
+            new CommandDefinition(sql, cancellationToken: ct));
+    }
+
+    public async Task<IReadOnlyList<PublicMenuRow>> GetMenuItemsAsync(CancellationToken ct = default)
+    {
+        using var connection = factory.Create();
+
+        const string sql = """
+            SELECT Id, MenuKey, ParentId, Label, LinkKind, ContentItemId, Url, RelAttr, OpenInNewTab, SortOrder
+            FROM MenuItems
+            ORDER BY SortOrder, Id
+            """;
+
+        var items = await connection.QueryAsync<PublicMenuRow>(
+            new CommandDefinition(sql, cancellationToken: ct));
         return items.AsList();
     }
 

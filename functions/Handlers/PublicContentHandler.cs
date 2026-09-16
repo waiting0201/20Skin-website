@@ -186,6 +186,144 @@ public sealed class PublicContentHandler(
         return new OkObjectResult(ApiResponse.Ok(entries));
     }
 
+    /// <summary>
+    /// <c>GET /home</c>：首頁的七個版位。
+    ///
+    /// <para>
+    /// 🔴 讀的是「首頁那筆 Page **已核准版本**的快照」，不是 <c>HomeSections</c> 即時表
+    /// —— 理由見 <c>IPublicContentReadService.GetHomeSnapshotAsync</c>。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ <b>版位「引用了哪幾筆」來自快照，但每一筆的顯示欄位用的是現在的值。</b>
+    /// 快照裡的標題是核准當下那一份；內容後來改了標題、改了網址（會自動補 301）
+    /// 都必須跟著走，否則首頁會出現連到舊網址的卡片。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ <b>只輸出前台看得到的引用。</b> 版位勾了一筆草稿時，不該渲染出一個連到 404 的卡片。
+    /// </para>
+    /// </summary>
+    public async Task<IActionResult> HomeAsync(HttpRequest req)
+    {
+        var snapshotJson = await content.GetHomeSnapshotAsync();
+        var sections = ReadHomeSections(snapshotJson);
+
+        var referencedIds = sections.SelectMany(s => s.ItemIds).Distinct().ToArray();
+        var referenced = (await content.GetRelationTargetsAsync(referencedIds))
+            .ToDictionary(t => t.Id);
+
+        var result = new JsonArray();
+        foreach (var section in sections)
+        {
+            var items = new JsonArray();
+            var sortOrder = 0;
+            foreach (var id in section.ItemIds)
+            {
+                if (!referenced.TryGetValue(id, out var item) || !item.IsVisible) continue;
+                items.Add(new JsonObject
+                {
+                    ["contentItemId"] = item.Id,
+                    ["contentType"] = item.ContentType,
+                    ["slug"] = item.Slug,
+                    ["urlPath"] = item.UrlPath,
+                    ["title"] = item.Title,
+                    ["sortOrder"] = sortOrder++,
+                });
+            }
+
+            result.Add(new JsonObject
+            {
+                ["sectionKey"] = section.SectionKey,
+                ["title"] = section.Title,
+                ["subtitle"] = section.Subtitle,
+                ["isEnabled"] = section.IsEnabled,
+                ["sortOrder"] = section.SortOrder,
+                // 版位設定在快照裡是 JSON 字串，這裡解析成物件 —— 前端不必再 parse 一次。
+                ["settings"] = string.IsNullOrWhiteSpace(section.Settings)
+                    ? null
+                    : JsonNode.Parse(section.Settings),
+                ["items"] = items,
+            });
+        }
+
+        CacheControl.Public(httpContextAccessor.HttpContext?.Response);
+        return new OkObjectResult(ApiResponse.Ok(result));
+    }
+
+    /// <summary>
+    /// <c>GET /menu</c>：導覽選單與頁尾（docs/08 §G-3）。
+    /// <para>⚠️ <c>linkKind=1</c>（指向內容）的網址由 <c>ContentItems.UrlPath</c> 決定，
+    /// <b>不在選單裡另存一份</b> —— 內容改網址時選單要跟著走。</para>
+    /// </summary>
+    public async Task<IActionResult> MenuAsync(HttpRequest req)
+    {
+        var rows = await content.GetMenuItemsAsync();
+
+        var targetIds = rows.Where(r => r.ContentItemId is not null)
+            .Select(r => r.ContentItemId!.Value).Distinct().ToArray();
+        var targets = (await content.GetRelationTargetsAsync(targetIds)).ToDictionary(t => t.Id);
+
+        JsonArray Build(string menuKey, int? parentId) =>
+            new(rows.Where(m => m.MenuKey == menuKey && m.ParentId == parentId)
+                .Select(m => (JsonNode)new JsonObject
+                {
+                    ["label"] = m.Label,
+                    ["linkKind"] = m.LinkKind,
+                    ["url"] = m.Url ?? targets.GetValueOrDefault(m.ContentItemId ?? 0)?.UrlPath,
+                    ["external"] = m.LinkKind == 3,
+                    ["relAttr"] = m.RelAttr,
+                    ["openInNewTab"] = m.OpenInNewTab,
+                    ["children"] = Build(menuKey, m.Id),
+                })
+                .ToArray());
+
+        CacheControl.Public(httpContextAccessor.HttpContext?.Response);
+        return new OkObjectResult(ApiResponse.Ok(new JsonObject
+        {
+            ["main"] = Build("main", null),
+            ["footer"] = Build("footer", null),
+        }));
+    }
+
+    /// <summary>從首頁快照裡讀出版位。快照沒有 <c>homeSections</c> 時回空清單。</summary>
+    private static List<HomeSectionShape> ReadHomeSections(string? snapshotJson)
+    {
+        var rows = new List<HomeSectionShape>();
+        if (string.IsNullOrWhiteSpace(snapshotJson)) return rows;
+
+        if (JsonNode.Parse(snapshotJson) is not JsonObject root
+            || root["homeSections"] is not JsonArray sections)
+        {
+            return rows;
+        }
+
+        foreach (var section in sections.OfType<JsonObject>())
+        {
+            var itemIds = (section["items"] as JsonArray ?? [])
+                .OfType<JsonObject>()
+                .Select(i => i["contentItemId"]?.GetValue<int>())
+                .Where(id => id is not null)
+                .Select(id => id!.Value)
+                .ToList();
+
+            rows.Add(new HomeSectionShape(
+                section["sectionKey"]?.GetValue<string>() ?? string.Empty,
+                section["title"]?.GetValue<string>(),
+                section["subtitle"]?.GetValue<string>(),
+                section["isEnabled"]?.GetValue<bool>() ?? true,
+                section["sortOrder"]?.GetValue<int>() ?? 0,
+                section["settings"]?.GetValue<string>(),
+                itemIds));
+        }
+
+        return rows;
+    }
+
+    private sealed record HomeSectionShape(
+        string SectionKey, string? Title, string? Subtitle, bool IsEnabled,
+        int SortOrder, string? Settings, List<int> ItemIds);
+
     // ════════════════════════════════════════════════════════════════════
     // 組形狀
     // ════════════════════════════════════════════════════════════════════

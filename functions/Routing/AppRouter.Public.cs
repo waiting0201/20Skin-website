@@ -55,6 +55,8 @@ public sealed partial class AppRouter
             ("GET", ["content", "batch"]) => true,
             ("GET", ["redirects", "resolve"]) => true,
             ("GET", ["sitemap"]) => true,
+            ("GET", ["home"]) => true,
+            ("GET", ["menu"]) => true,
             ("GET", [var unit]) when UnitCodes.IsValid(unit) => true,
 
             _ => false,
@@ -79,6 +81,8 @@ public sealed partial class AppRouter
             ("GET", ["content", "batch"]) => Wrap(publicContent.BatchAsync(req)),
             ("GET", ["redirects", "resolve"]) => Wrap(redirect.ResolveAsync(req)),
             ("GET", ["sitemap"]) => Wrap(publicContent.SitemapAsync(req)),
+            ("GET", ["home"]) => Wrap(publicContent.HomeAsync(req)),
+            ("GET", ["menu"]) => Wrap(publicContent.MenuAsync(req)),
             ("GET", [var unit]) when UnitCodes.IsValid(unit) => Wrap(publicContent.ListAsync(req, unit)),
 
             _ => Task.FromResult<IActionResult?>(null),
