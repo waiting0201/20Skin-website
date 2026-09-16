@@ -132,7 +132,7 @@ jobs:
       # ⚠️ mockup/assets 因此必須在版控裡（2026-09-14 放行，見 .gitignore）——
       #    找不到它這一步會直接 exit 1。設計稿 HTML 沒進版控，所以 pnpm verify:css
       #    在 CI 上跑不了，樣式照抄的驗收仍然只能在有設計稿的機器上做。
-      - name: Build web (nuxt generate)
+      - name: Build web (Nuxt SSR)
         run: pnpm --filter web build
         env:
           NUXT_PUBLIC_API_BASE_URL: ${{ vars.API_BASE_URL }}
@@ -162,6 +162,20 @@ jobs:
             exit 1
           fi
 
+      # 🔴 **設定檔必須搬進 app_location，否則部署會失敗在一個完全不像設定問題的訊息上。**
+      #    azure-swa preset 把 staticwebapp.config.json 產生在 apps/web/（專案根目錄），
+      #    而 Azure/static-web-apps-deploy@v1 **沒有指定設定檔位置的輸入**（本機那支
+      #    tools/deploy-swa-ssr.sh 能過，是因為 SWA CLI 有 --swa-config-location）。
+      #    找不到設定檔 ⇒ 讀不到 platform.apiRuntime ⇒ 部署當場停在
+      #    「Cannot deploy to the function app because Function language info isn't provided.」
+      #    2026-09-16 實際踩到。
+      - name: Stage SWA config into the app artifact
+        run: |
+          cp apps/web/staticwebapp.config.json apps/web/.output/public/staticwebapp.config.json
+          # 印出來留存 —— 這一行沒有東西就代表設定檔沒帶到，而部署會失敗在一個
+          # 看起來與設定無關的訊息上。
+          grep -o '"apiRuntime":[^,}]*' apps/web/.output/public/staticwebapp.config.json
+
       # 🔴 **api_location 指的是 Nuxt 的 SSR function，不再是 /api/fallback。**
       #    2026-09-16 改成執行期 SSR 之後，`api/Skin20.Fallback` 整支刪除 ——
       #    它與 Nuxt 的 SSR function 互斥（兩者都要佔 api_location），而 1000 條
@@ -176,8 +190,10 @@ jobs:
           output_location: ''
           # 已經自己 build 過了。讓 action 再 build 一次，在 pnpm workspace 下會產生
           # 巢狀路徑，結果是 CSS 與字型 404 而部署顯示成功。
+          # ⚠️ 只有 skip_app_build 是合法輸入。`skip_api_build` 不存在 ——
+          #    給了只會得到一行 warning，不會有任何效果（2026-09-16 確認）。
+          #    .output/server 已經是建好的 function，Oryx 會自己跳過。
           skip_app_build: true
-          skip_api_build: true
 
       # 上線後這一步失敗＝正式站已經壞了，要有人看到。
       # ⚠️ /admin/ 那條專門擋一個實際踩過的坑：staticwebapp.config.json 裡
