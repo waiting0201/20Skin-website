@@ -5,13 +5,32 @@
 > 分工：本檔記錄**狀態**；[`docs/`](docs/README.md) 的十二份文件記錄各領域的**規格與施工標準**；
 > [`CLAUDE.md`](CLAUDE.md) 記錄**專案規範、關鍵數字與已定案決策**。三份不要互相抄，各司其職。
 
-**最後更新**：2026-09-15
+**最後更新**：2026-09-16
 
 ---
 
 ## 一句話現況
 
 **規劃、前台、後台、資料庫、API 全部完成，且已實際部署到 Azure 的正式環境（尚未切 DNS）。**
+
+---
+
+🔴 **2026-09-16 起有兩條線，不要混在一起看：**
+
+| 分支 | 狀態 |
+|---|---|
+| `master` | **靜態版，這是目前正式站上跑的東西。** 可部署、已部署 |
+| `ssr-migration` | **執行期 SSR 改版，尚未部署到正式環境。** 第 1、2、3、5 段完成，第 6 段（文件）進行中 |
+
+改版的理由只有一個：**院方按下發布，下一個請求就要看得到**。
+靜態版最快是「CI 跑完一次全站建置」＝實測 3 分 11 秒，而那條路還需要一顆 GitHub PAT
+與後台一顆按鈕。詳見 CLAUDE.md 決策 6。
+
+⚠️ **代價已量到**（2026-09-15，同一批網址）：靜態 0.30–0.45 秒、SSR 0.61–0.74 秒，
+約兩倍；而那還是資料仍內聯的版本，接上 API 後每頁再加一次
+`Nuxt → Function App → SQL` 的往返。**完整的終點數字要等 API 部署到正式環境才量得到。**
+
+---
 
 `apps/web` 的 21 個模板全數完成（**1846 頁預渲染**，含搬遷回來的 1100 篇舊站文章），`apps/admin` **30／30 個畫面全數完成**。
 **資料庫 schema 也完成了** —— 35 張表的 EF Core migration 已在真的 SQL Server 2022 上
@@ -849,9 +868,11 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
       ＋ **CORS 加上正式前台來源** —— 🔴 三件缺一，切 DNS 當天表單與後台就同時停擺
 - [ ] **reCAPTCHA 後台的網域清單加上正式網域**（測試網域 `20skin.4webdemo.com` 已驗證可用）
 - [ ] **SMTP 設定**（`Smtp__Host`／`Smtp__FromAddress`…）與 `contact.recipientEmail` —— 🔴 **2026-09-15 以 `az` 確認：`Smtp__*` 一個鍵都沒有**。表單就算通過驗證也不會寄出任何通知信，只會在 log 留 warning
-- [ ] **`GITHUB_REPO` 與 `GITHUB_DISPATCH_TOKEN` 設進 Function App** —— 🔴 **2026-09-15 以 `az` 確認：兩個鍵都不存在**。
-      後台那顆「重新發布網站」按下去只會在 log 留一行 error（`functions/Services/RebuildService.cs:151`）。
-      ⚠️ 這是院方改完內容之後**唯一**的自助上線途徑（SWA 沒有 ISR），缺了它只能等下一次 `main` 合併
+- [x] ~~**`GITHUB_REPO` 與 `GITHUB_DISPATCH_TOKEN` 設進 Function App**~~
+      🔴 **2026-09-16：這一條連同整套機制刪除了，不是完成而是不再需要。**
+      SSR 改版之後沒有建置期，也就沒有東西要重建 —— `RebuildService`、後台那顆按鈕、
+      冷卻窗口、Blob 狀態檔、排程發布的 Timer 全部移除（`ssr-migration` 分支）。
+      ⚠️ **`master` 上這一條仍然成立** —— 靜態版還是需要它。兩條線分開看。
 - [x] ~~**`aifaq.enabled` 在正式庫必須是 `false`**~~（docs/04 §4）—— ✅ **2026-09-15 對正式 API 實測 `aiFaqEnabled: false`**。匯入腳本曾把它蓋成 `true`（已修，見 §二）
 - [x] ~~**reCAPTCHA v3 的金鑰對**~~（[10](docs/10-api.md) §5.1）—— ✅ **2026-09-15 逐處核對，三個地方都設了**：
       `BotCheck__SecretKey`＋`BotCheck__MinimumScore`（Function App，`az` 確認存在）、
@@ -873,6 +894,36 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
       → 重跑 `pnpm --filter web export:content`。
       ⚠️ 連帶三處目前會出現重複字樣，需院方決定要不要合併：
       首頁品牌理念兩格同名、AI FAQ 兩題重複、`/about/` 底下兩個同名頁面
+
+---
+
+## 七之二、SSR 改版（`ssr-migration` 分支）
+
+> 這一節記的是**還沒上正式環境**的東西。`master` 仍是靜態版，正式站跑的是它。
+
+### 已完成
+
+| 段 | 內容 | 驗證 |
+|---|---|---|
+| 1 | 部署形態：`azure-swa` preset、執行期算繪、`error.vue`、資產版號 | **在真的 SWA 預覽環境跑起來**（`jolly-hill-015d56f1e-ssr`），冷啟動 2.25s、暖機 0.61–1.22s |
+| 2 | 公開讀取 API（9 單元列表／by-path／batch／redirects.resolve／sitemap／home／menu）＋ 前台資料層改執行期取值 | 端點形狀與匯出產物**逐筆比對相同**；21 個內容頁本機實測 200 |
+| 3 | SEO 產物改執行期路由（robots／sitemap ×6／llms ×2／faq.json） | 六份與建置產物**逐字相同** |
+| 5 | 刪 `api/`、刪整套重建機制、工作流改指向 SSR function | 回歸 21 路徑全通過 |
+
+### 四個踩過的坑（每一個的症狀都會誤導人）
+
+| 症狀 | 真正的原因 |
+|---|---|
+| 16 頁裡 9 頁 500，其餘照常 | `useNuxtApp()` 在 `await` 之後失去 context。**沒有跨 await 呼叫的頁面照常 200**，看起來像「某幾頁的資料有問題」。解法是 `experimental.asyncContext` |
+| 分類頁建置失敗 | `definePageMeta` 是**編譯期巨集**，引用不到執行期才取回的分類清單 |
+| API 掛掉時 `/clinics/siji/` 回 **404** | 「查不到」與「拿不到」都回 `null`。404 對 Google 是「永久不存在」—— API 掛十分鐘就可能讓一批頁面被取消索引。改成主體內容連不上回 **503**，裝飾性資料才降級 |
+| sitemap 改執行期後又收了 31 條 `noindex` 網址 | 🔴 **我原本的判斷錯了** —— 以為改成執行期就會自然一致。改執行期只消除時間差，**判斷仍在兩處**。真正的解法是 `Common/Indexability.cs`：判一次，sitemap 與頁面都用 |
+
+### 剩下的
+
+- **第 6 段：文件同步** —— CLAUDE.md 已改（決策 5／6／7／9／14 ＋ 關鍵數字），docs/07、09、10、11 待改
+- **站內搜尋仍是建置期靜態索引**（`search-index.json`，1228 筆／564 KB）。它是 `content/*.json` 最後一個消費者 —— 改成 API 端點之後 `export:content` 就完全不必在建置期跑了
+- 🔴 **新的公開端點尚未部署到正式 Function App**，所以 SSR 分支現在**無法**對正式環境驗證，也量不到終點的延遲數字
 
 ---
 
