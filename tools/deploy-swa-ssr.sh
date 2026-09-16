@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # 把「執行期 SSR 版前台」部署到 SWA 的**預覽環境**。
 #
-# 🔴 這支是 ssr-migration 分支專用的驗證工具，不是正式部署腳本。
-#    正式站目前仍是靜態版，由 tools/deploy-swa.sh 與 .github/workflows/web.yml 負責。
+# 本機的備援部署（正式路徑是 .github/workflows/web.yml）。
 #
-# 為什麼需要它：SSR 換掉的是**部署形態**本身 ——
-#   靜態版： output=.output/public（1846 頁 HTML）＋ api=api/（/api/fallback，.NET 9）
-#   SSR 版： output=.output/public（只有靜態資產）＋ api=.output/server（Nuxt，Node 22）
-# 兩者的 api_location 互斥，所以不能共存，也沒辦法用同一支腳本切換。
+# 🔴 取代了原本的 tools/deploy-swa.sh —— 那支是靜態版的，2026-09-16 刪除。
+#    SSR 換掉的是**部署形態**本身：
+#      靜態版： output=.output/public（1846 頁 HTML）＋ api=api/（/api/fallback，.NET 9）
+#      SSR 版： output=.output/public（只有靜態資產）＋ api=.output/server（Nuxt，Node 22）
+#    兩者的 api_location 互斥，不可能共存，所以是換掉而不是並存。
 #
 # ⚠️ **--env 一定要給非 production 的名字。** 給 production 會直接蓋掉正式站。
 #    Standard 方案的預覽環境是獨立主機名（<default>-<env>.<region>.azurestaticapps.net），
@@ -32,9 +32,10 @@ fi
 
 cd "$(dirname "$0")/.."
 
-# 正式 Function App。⚠️ 新增的公開內容端點（/content、/{unit}、/redirects/resolve、
-#    /sitemap）**尚未部署到這台**，所以預覽站上的轉址會是 404，其餘頁面照常
-#    —— 資料仍來自建置期內聯的 content/*.json。
+# 正式 Function App。
+# 🔴 **前台的每一頁都要它** —— 內容、轉址、SEO 產物全部走那台。
+#    公開端點（/{unit}、/content、/content/batch、/redirects/resolve、/sitemap、
+#    /home、/menu、/seo/*）必須先部署上去，否則預覽站會整站 503。
 API_BASE="${NUXT_PUBLIC_API_BASE_URL:-https://func-20skin-web-api-prod.azurewebsites.net/api/v1}"
 
 echo "── 建置後台 SPA（順序不可顛倒：先 admin 後 web）──"

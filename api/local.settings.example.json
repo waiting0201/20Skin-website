@@ -1,8 +1,0 @@
-{
-  "IsEncrypted": false,
-  "Values": {
-    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
-    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "SKIN20_SQL_CONNECTION": "Server=tcp:20skin-website.database.windows.net,1433;Database=<db>;User ID=fallback_readonly;Password=<password>;Encrypt=True;TrustServerCertificate=False;Connection Timeout=10;"
-  }
-}

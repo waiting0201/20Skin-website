@@ -1,4 +1,4 @@
-# 前台 ＋ 後台 SPA ＋ /api/fallback → Azure Static Web Apps（swa-20skin-web-prod）。
+# 前台（執行期 SSR）＋ 後台 SPA → Azure Static Web Apps（swa-20skin-web-prod）。
 #
 # 這個 repo 的 GitHub main 分支由 tools/sync-public.sh 從 master 產生，所以一次部署是
 # 「commit → sync-public.sh → push Remote_GitHub」，不是 commit 完就上線。
@@ -138,10 +138,11 @@ jobs:
           NUXT_PUBLIC_API_BASE_URL: ${{ vars.API_BASE_URL }}
           NUXT_PUBLIC_RECAPTCHA_SITE_KEY: ${{ vars.RECAPTCHA_SITE_KEY }}
 
-      # SWA Standard 單一環境上限 500 MB。超過會部署失敗，而失敗訊息不見得指向大小 ——
-      # 沒有預覽環境可以先撞牆，這個檢查就是唯一的攔截點。
+      # SWA Standard 單一環境上限 500 MB。超過會部署失敗，而失敗訊息不見得指向大小。
       # staticwebapp.config.json 的 20 KB 是另一件事：301 規則寫太多會超過，
-      # 那正是 770 條轉址改走 /api/fallback 查 SQL 的原因（docs/07 §2）。
+      # 那正是 1000 條轉址改走資料庫查表的原因（docs/07 §2）。
+      # ⚠️ 設定檔的位置是 apps/web/（azure-swa preset 寫在專案根目錄），
+      #    不是產物目錄 —— 2026-09-16 改成 SSR 時一起搬的。
       - name: Check size limits
         run: |
           OUT=apps/web/.output/public
@@ -154,29 +155,24 @@ jobs:
           if [ "$SIZE_KB" -gt 300000 ]; then
             echo "::warning::產物已達 $((SIZE_KB / 1024)) MB，請檢視圖片是否誤入建置產物、字型是否已子集化"
           fi
-          CONFIG_BYTES=$(wc -c < "$OUT/staticwebapp.config.json")
+          CONFIG_BYTES=$(wc -c < apps/web/staticwebapp.config.json)
           echo "staticwebapp.config.json：${CONFIG_BYTES} bytes"
           if [ "$CONFIG_BYTES" -gt 20480 ]; then
             echo "::error::staticwebapp.config.json 超過 20 KB 上限（301 規則過多，只該留高流量那幾條）"
             exit 1
           fi
 
-      - name: Publish fallback function (net9.0)
-        run: dotnet publish api/Skin20.Fallback.csproj -c Release -o ${{ github.workspace }}/api-publish --nologo
-
-      # ⚠️ SWA 的 responseOverrides.404 對 function 回的 404 不生效（2026-09-11 實測），
-      #    而 navigationFallback 會把全站每一個找不到的請求都送進 /api/fallback，
-      #    所以 404 版面只能由那支 function 自己送 —— 它讀的是產物根目錄的 404.html。
-      - name: Copy 404 page into API output
-        run: cp apps/web/.output/public/404.html ${{ github.workspace }}/api-publish/404.html
-
+      # 🔴 **api_location 指的是 Nuxt 的 SSR function，不再是 /api/fallback。**
+      #    2026-09-16 改成執行期 SSR 之後，`api/Skin20.Fallback` 整支刪除 ——
+      #    它與 Nuxt 的 SSR function 互斥（兩者都要佔 api_location），而 1000 條
+      #    轉址改由 `pages/[...slug].vue` 查 API 的 /redirects/resolve。
       - name: Deploy
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           action: upload
           app_location: apps/web/.output/public
-          api_location: api-publish
+          api_location: apps/web/.output/server
           output_location: ''
           # 已經自己 build 過了。讓 action 再 build 一次，在 pnpm workspace 下會產生
           # 巢狀路徑，結果是 CSS 與字型 404 而部署顯示成功。
@@ -195,7 +191,18 @@ jobs:
             echo "GET $BASE$P → $CODE"
             [ "$CODE" = "200" ] || { echo "::error::$P 回應 $CODE"; exit 1; }
           done
-          # 301 走 /api/fallback，是部署後最容易壞掉的一條路徑（它是 1000 條轉址的唯一出口）
-          CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$BASE/index2.php")
-          echo "GET $BASE/index2.php → $CODE"
-          [ "$CODE" = "301" ] || { echo "::error::301 fallback 回應 $CODE，應為 301"; exit 1; }
+          # 301 是部署後最容易壞掉的一條路徑（1000 條轉址的唯一出口）。
+          # ⚠️ 用 /doctor.php 而不是 /index2.php —— 前者走**資料庫查表**
+          #    （pages/[...slug].vue → API 的 /redirects/resolve），後者在
+          #    staticwebapp.config.json 裡有快速路徑，就算整條查表鏈路壞掉它也會通過。
+          CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$BASE/doctor.php")
+          echo "GET $BASE/doctor.php → $CODE"
+          [ "$CODE" = "301" ] || { echo "::error::301 查表回應 $CODE，應為 301"; exit 1; }
+
+          # SEO 產物改成執行期路由（2026-09-16）——它們現在是 SSR function 的一部分，
+          # 不再是靜態檔，所以要實際打一次確認 function 起得來。
+          for P in "/sitemap.xml" "/robots.txt" "/sitemap-blog.xml"; do
+            CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$BASE$P")
+            echo "GET $BASE$P → $CODE"
+            [ "$CODE" = "200" ] || { echo "::error::$P 回應 $CODE"; exit 1; }
+          done
