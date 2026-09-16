@@ -297,7 +297,6 @@ CSV 匯入用的 —— 讀寫共用同一段是這條規則能成立的前提�
 | `robots.txt` | `SiteSettings.seo.robotsTxt`（後台可編輯）。⚠️ 原本是手寫靜態檔 —— 改成產生的，「後台改了卻沒作用」才不會發生 |
 | `sitemap.xml` ＋ 5 個分檔 | 收錄範圍＝`ContentType ＋ IncludeInSitemap ＋ 可見性 ＋ UrlPath IS NOT NULL`；分檔的旋鈕在 `SiteSettings.seo.sitemapFiles` |
 | `faq.json`／`llms.txt`／`llms-full.txt` | 已發布 FAQ 與站台索引 |
-| `search-index.json` | 由 `apps/web/scripts/build-search-index.mjs` 從 `content/*.json` 產生（[09](09-frontend.md) §4） |
 
 🔴 **語料檔的格式只有一份產生器**：`functions/Common/ExportFormats.cs`，
 由 `ContentExport.csproj` 以 `<Compile Include>` 連結。後台的 `GET /admin/export/{kind}`

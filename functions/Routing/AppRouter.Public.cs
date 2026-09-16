@@ -58,6 +58,7 @@ public sealed partial class AppRouter
             ("GET", ["sitemap"]) => true,
             ("GET", ["home"]) => true,
             ("GET", ["menu"]) => true,
+            ("GET", ["search"]) => true,
 
             // SEO 產物。⚠️ 由 Nuxt 的 server route 以同源路徑代理出去
             //    （/robots.txt、/sitemap.xml…），不是讓爬蟲直接打 api 網域。
@@ -94,6 +95,7 @@ public sealed partial class AppRouter
             ("GET", ["sitemap"]) => Wrap(publicContent.SitemapAsync(req)),
             ("GET", ["home"]) => Wrap(publicContent.HomeAsync(req)),
             ("GET", ["menu"]) => Wrap(publicContent.MenuAsync(req)),
+            ("GET", ["search"]) => Wrap(search.SearchAsync(req)),
 
             ("GET", ["seo", "robots.txt"]) => Wrap(seo.RobotsAsync(req)),
             ("GET", ["seo", "sitemap.xml"]) => Wrap(seo.SitemapIndexAsync(req)),

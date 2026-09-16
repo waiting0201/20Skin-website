@@ -1,31 +1,24 @@
 <script setup lang="ts">
 // 模板 19 —— 搜尋結果（mockup/19-search.html）
 //
-// 站內搜尋是**建置期產生的索引 ＋ client 端比對**（docs/09-frontend.md §4）。
-// 索引由 `scripts/build-search-index.mjs` 從 `content/*.json` 產生 ——
-// 與頁面渲染同一份資料，所以不會出現「搜尋得到、點進去 404」。
+// 站內搜尋**在伺服器端比對**（`GET /search`，docs/09-frontend.md §4）。
 //
-// ⚠️ **索引是獨立的 `/search-index.json`，不內聯進 bundle。** 文章有約 800 篇，
-//    內聯等於讓每一個訪客都下載整份索引，而絕大多數人不會用搜尋。
+// 🔴 **2026-09-16 改掉了「建置期索引 ＋ client 端比對」。** 舊做法有兩個問題，
+//    第二個才是換掉它的真正理由：
+//    ① 那份 `/search-index.json` 有 **564 KB**，每個用搜尋的人都要先下載整份；
+//    ② 🔴 它是**建置期**產物 —— 全站改 SSR 之後，它是唯一還需要等重新建置才會更新的東西。
+//       院方發布一篇新文章，站內搜尋卻搜不到，而畫面上不會有任何徵兆。
 //
-// ⚠️ **中文不斷詞，用子字串比對。** 站內這個量級（約 950 筆）夠用，
+// ⚠️ **比對範圍因此變大了，這是好事。** 舊索引的比對欄位只存了「標題＋摘要＋內文」的
+//    **前 600 字**，超過的部分搜不到。改成 API 之後比對整份已核准快照 ——
+//    2026-09-16 實測「皮秒雷射」由 71 筆變成 309 筆，且舊索引找得到的 **全部涵蓋**。
+//
+// ⚠️ **中文不斷詞，用子字串比對**（`LIKE`）。站內這個量級（約 1228 筆）夠用，
 //    而斷詞器對醫療專有名詞切得很差（「皮秒雷射」→「皮」「秒」「雷射」）。
 //
 // ⚠️ 這一頁 `noIndex` —— 結果依網址參數而變，不該進索引（robots 也擋了 /search/）。
 import { SEARCH_SUGGESTIONS } from '~/data/pages'
-
-interface IndexEntry {
-  /** 型別標籤（療程／文章／常見問題…） */
-  t: string
-  /** 網址 */
-  u: string
-  /** 標題 */
-  ti: string
-  /** 摘要 */
-  ex: string
-  /** 比對用的小寫全文 */
-  k: string
-}
+import { searchSite, type SearchHit } from '~/composables/useContentApi'
 
 const route = useRoute()
 const query = computed(() => (typeof route.query.q === 'string' ? route.query.q.trim() : ''))
@@ -42,34 +35,21 @@ usePageHead({
   ]),
 })
 
-const index = ref<IndexEntry[]>([])
-const loading = ref(false)
-const loadFailed = ref(false)
 const activeType = ref('')
 
-// ⚠️ 索引只抓一次，而且只在**真的有關鍵字**時才抓 —— 空著進來的人不需要付這 48 KB。
-async function loadIndex() {
-  if (index.value.length > 0 || loading.value) return
-  loading.value = true
-  try {
-    const data = await $fetch<{ entries: IndexEntry[] }>('/search-index.json')
-    index.value = data?.entries ?? []
-  } catch {
-    loadFailed.value = true
-  } finally {
-    loading.value = false
-  }
-}
+// ⚠️ **key 帶著關鍵字** —— 少了它，換一個關鍵字時 Nuxt 會沿用上一次的快取結果。
+// ⚠️ 空關鍵字不打 API（`searchSite` 自己擋掉），所以直接進 /search/ 的人不會產生查詢。
+//
+// 排序（標題命中優先）在 API 那端做，前端不要再排一次 —— 兩份排序規則遲早會不一樣。
+const { data: result, status } = await useAsyncData(
+  () => `search:${query.value}`,
+  () => searchSite(query.value),
+  { watch: [query], default: () => ({ ok: true, hits: [] as SearchHit[] }) },
+)
 
-const matches = computed<IndexEntry[]>(() => {
-  const q = query.value.toLowerCase()
-  if (!q || index.value.length === 0) return []
-  return index.value
-    .filter((e) => e.k.includes(q))
-    // 標題命中的排前面 —— 搜「皮秒雷射」時那個療程頁應該在第一個，
-    // 而不是某篇剛好提到它的文章。
-    .sort((a, b) => Number(b.ti.toLowerCase().includes(q)) - Number(a.ti.toLowerCase().includes(q)))
-})
+const loading = computed(() => status.value === 'pending')
+const loadFailed = computed(() => result.value?.ok === false)
+const matches = computed<SearchHit[]>(() => result.value?.hits ?? [])
 
 /** 型別 → 筆數，給篩選 tab 用。維持索引裡的出現順序，不另外排。 */
 const typeCounts = computed(() => {
@@ -129,19 +109,20 @@ async function reportMiss(q: string) {
   }
 }
 
-onMounted(() => {
-  if (query.value) void loadIndex()
-})
-
-watch(query, (q) => {
+watch(query, () => {
   activeType.value = ''
-  if (q) void loadIndex()
 })
 
-// 索引載入完、且確定沒有結果時才回報 —— 載入中就回報會把每一次搜尋都算成未命中。
-watch([matches, loading, query], ([list, isLoading, q]) => {
-  if (!isLoading && q && index.value.length > 0 && list.length === 0) void reportMiss(q)
-})
+// 🔴 **只有「API 正常回應、而且真的零筆」才回報**（`res.ok` 那個條件缺不得）——
+//    連不上時回報等於把故障寫成一堆假的未命中問題，理由見 `reportMiss` 的註解。
+// ⚠️ 還在查詢中不回報，否則每一次搜尋都會先被算成未命中。
+// ⚠️ 只在 client 端回報 —— SSR 期間送這個請求，來源 IP 會是伺服器，
+//    頻率限制會把整站的搜尋算成同一個人。
+watch([result, status, query], ([res, s, q]) => {
+  if (import.meta.server) return
+  if (s === 'pending' || !q) return
+  if (res?.ok && res.hits.length === 0) void reportMiss(q)
+}, { immediate: true })
 </script>
 
 <template>
@@ -172,7 +153,7 @@ watch([matches, loading, query], ([list, isLoading, q]) => {
         <span class="search-hero__stat-num">{{ loading ? '⋯' : matches.length }}</span>
         <p class="search-hero__stat-label">
           <template v-if="loading">載入索引中，關鍵字「<strong>{{ query }}</strong>」</template>
-          <template v-else-if="loadFailed">載入搜尋索引失敗，請重新整理再試一次</template>
+          <template v-else-if="loadFailed">搜尋服務暫時無法連線，請稍後再試一次</template>
           <template v-else>筆結果，關鍵字「<strong>{{ query }}</strong>」，涵蓋療程、文章、醫師與常見問題</template>
         </p>
       </div>
@@ -215,17 +196,23 @@ watch([matches, loading, query], ([list, isLoading, q]) => {
   <section v-if="!loading && !matches.length" class="section section--alt section--tight" id="no-result">
     <div class="container container--narrow">
       <div class="search-empty">
-        <h2 v-if="query">沒有找到「{{ query }}」的結果</h2>
+        <!-- ⚠️ 連不上時**不可以**說「沒有找到結果」—— 那是在替故障背書，
+             而且訪客會以為站內真的沒有這個東西而離開。 -->
+        <h2 v-if="loadFailed">搜尋暫時無法使用</h2>
+        <h2 v-else-if="query">沒有找到「{{ query }}」的結果</h2>
         <h2 v-else>輸入關鍵字開始搜尋</h2>
-        <p>可以試試以下方式：</p>
-        <ul class="search-empty__list">
+        <p v-if="loadFailed">請稍後重新整理再試一次，或改用下面的分類入口瀏覽。</p>
+        <p v-else>可以試試以下方式：</p>
+        <ul v-if="!loadFailed" class="search-empty__list">
           <li>换成較短的關鍵字，例如療程或困擾的名稱</li>
           <li>改用症狀或困擾來找，例如「淚溝」「法令紋」</li>
           <li>費用相關的問題無法由站內搜尋回答，需於面診時說明</li>
         </ul>
 
-        <p class="search-hero__summary">熱門搜尋：</p>
-        <div class="search-suggest">
+        <!-- 搜尋掛掉時不給熱門搜尋 —— 那些連結全部指回這一頁，點了還是壞的。
+             此時有用的替代路徑是下一區的分類入口。 -->
+        <p v-if="!loadFailed" class="search-hero__summary">熱門搜尋：</p>
+        <div v-if="!loadFailed" class="search-suggest">
           <a v-for="term in SEARCH_SUGGESTIONS" :key="term" class="c-tag" :href="`/search/?q=${encodeURIComponent(term)}`">{{ term }}</a>
         </div>
       </div>

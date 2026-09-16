@@ -104,6 +104,55 @@ public interface IPublicContentReadService
         IReadOnlyCollection<int> ids, CancellationToken ct = default);
 
     /// <summary>
+    /// 站內搜尋。
+    ///
+    /// <para>
+    /// 🔴 **比對在 SQL 做，攤平只對命中的那幾筆做。** 這是這支能存在的前提 ——
+    /// 靜態索引時代之所以要預先把全站攤平成一份檔案，正是因為「攤平 1228 筆」很貴；
+    /// 先用 <c>LIKE</c> 篩到 50 筆以內再攤，那個成本就消失了。
+    /// </para>
+    ///
+    /// <para>
+    /// 🔴 <b>快照裡的中文是 <c>\uXXXX</c> 逸出序列，所以關鍵字要比對兩種形式。</b>
+    /// <c>ContentHandler</c> 用 <c>JsonSerializerDefaults.Web</c> 序列化快照，
+    /// 它的預設編碼器會把所有非 ASCII 轉成逸出序列 —— 直接拿「痘疤」去 <c>LIKE</c>
+    /// <b>一次都不會命中</b>。
+    /// ⚠️ 2026-09-16 實測過這個錯誤版本：中文查詢的筆數**恰好等於標題命中數**
+    /// （標題是獨立欄位、沒有逸出），內文比對完全失效 —— 而 ASCII 查詢一切正常，
+    /// 所以光看「Picosure 搜得到」會以為功能是好的。
+    /// ⚠️ <b>不要改序列化設定來「修」這件事</b>：那只影響之後寫入的快照，
+    /// 既有的 1000 多筆仍是逸出的，結果會變成「舊內容搜不到、新內容搜得到」。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ <b>直接對快照 JSON 全文 <c>LIKE</c>，不另外建索引表。</b>
+    /// 理論上會誤中 JSON 的鍵名，但鍵名全是 ASCII 而使用者搜的是中文詞。
+    /// ⚠️ 英文查詢（如 <c>Picosure</c>）確實可能誤中鍵名，代價是多幾筆雜訊，可接受。
+    /// </para>
+    ///
+    /// <para>
+    /// 🔴 <b>不設筆數上限，這是刻意的。</b> 站內搜尋不做分頁（mockup 的 19-search 沒有分頁器），
+    /// 而畫面上有「型別篩選 tab ＋ 各類筆數」—— 任何上限都會讓那些數字變成謊話。
+    /// 排序是「標題命中優先、然後依型別」，所以截斷不是均勻掉幾筆，而是<b>整類整類地砍掉</b>：
+    /// 2026-09-16 實測，上限 100 時「黃勇學」只涵蓋到舊索引 77 筆裡的 29 筆；
+    /// 就算放寬到 300，「皮秒」竟然比「皮秒雷射」還少（268 &lt; 277）——
+    /// 子字串查詢回得比超字串少，這種結果沒有任何人能理解，而它只是截斷的副作用。
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>真正的上限是語料本身</b>：可索引內容共約 1228 筆，所以最壞情況是全中。
+    /// 2026-09-16 本機實測最壞情況（搜 "a"）1228 筆、回應 309 KB、約 0.2–1.2 秒；
+    /// 相較之下舊做法是<b>每次進搜尋頁就下載 564 KB</b> 的全站索引檔。
+    /// 換句話說「不設上限」連傳輸量都仍然比舊做法省。
+    /// </para>
+    /// <para>
+    /// ⚠️ 代價是這條查詢對 <c>Snapshot</c>（NVARCHAR(MAX)）做兩個 <c>LIKE</c> 的全表掃描，
+    /// 索引幫不上忙。內容量若成長到數千筆，升級路徑是 SQL Server 全文檢索
+    /// （<c>CONTAINS</c>），不是把上限加回來。
+    /// </para>
+    /// </summary>
+    Task<IReadOnlyList<SearchHitRow>> SearchAsync(string keyword, CancellationToken ct = default);
+
+    /// <summary>
     /// 首頁那筆 Page **已核准版本**的快照 JSON（版位編排在裡面）。
     ///
     /// <para>
@@ -129,6 +178,10 @@ public interface IPublicContentReadService
 
 /// <summary>熱門標籤一列。<c>ArticleCount</c> 是實際引用篇數。</summary>
 public sealed record PopularTagRow(string Slug, string Title, int ArticleCount);
+
+/// <summary>搜尋命中的一列。<c>Snapshot</c> 給呼叫端攤平出摘要用。</summary>
+public sealed record SearchHitRow(
+    byte ContentType, string? Slug, string? UrlPath, string Title, string Snapshot, bool TitleHit);
 
 /// <summary>選單一列。<c>Url</c> 為 NULL 時表示指向內容，網址由該內容的 UrlPath 決定。</summary>
 public sealed record PublicMenuRow(
@@ -292,6 +345,45 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
 
         var items = await connection.QueryAsync<PopularTagRow>(new CommandDefinition(
             sql, new { Limit = limit, Now = Clock.UtcNow }, cancellationToken: ct));
+        return items.AsList();
+    }
+
+    public async Task<IReadOnlyList<SearchHitRow>> SearchAsync(
+        string keyword, CancellationToken ct = default)
+    {
+        using var connection = factory.Create();
+
+        // ⚠️ `LIKE` 的萬用字元要逸出，否則使用者搜 `%` 會撈回全站。
+        static string EscapeLike(string v) =>
+            v.Replace("[", "[[]").Replace("%", "[%]").Replace("_", "[_]");
+
+        var pattern = $"%{EscapeLike(keyword)}%";
+
+        // 快照裡的非 ASCII 是 `\uXXXX`（見上方說明）。只轉非 ASCII，
+        // 這樣「Picosure 皮秒」這種中英混合的查詢也對得起來。
+        var unicodeForm = string.Concat(keyword.Select(c =>
+            c < 128 ? c.ToString() : $"\\u{(int)c:x4}"));
+        var unicodePattern = $"%{EscapeLike(unicodeForm)}%";
+
+        // ⚠️ 標題命中的排前面 —— 搜「皮秒雷射」時那個療程頁該在第一個，
+        //    而不是某篇剛好提到它的文章。這條與靜態索引時代的排序規則相同。
+        var sql = $"""
+            SELECT
+                   ci.ContentType, ci.Slug, ci.UrlPath, ci.Title, cv.Snapshot,
+                   CAST(CASE WHEN ci.Title LIKE @Pattern THEN 1 ELSE 0 END AS bit) AS TitleHit
+            {FromPublished}
+            WHERE {Visibility.PublicFilter}
+              AND (ci.Title LIKE @Pattern
+                   OR cv.Snapshot LIKE @Pattern
+                   OR cv.Snapshot LIKE @UnicodePattern)
+            ORDER BY CASE WHEN ci.Title LIKE @Pattern THEN 0 ELSE 1 END,
+                     ci.ContentType, ci.SortOrder, ci.Id
+            """;
+
+        var items = await connection.QueryAsync<SearchHitRow>(new CommandDefinition(
+            sql,
+            new { Pattern = pattern, UnicodePattern = unicodePattern, Now = Clock.UtcNow },
+            cancellationToken: ct));
         return items.AsList();
     }
 

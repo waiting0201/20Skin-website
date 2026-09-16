@@ -4,15 +4,14 @@
   "type": "module",
   "scripts": {
     "sync:assets": "node scripts/sync-mockup.mjs",
-    "dev": "npm run sync:assets && npm run build:asset-version && npm run build:search-index && nuxt dev",
-    "build": "npm run sync:assets && npm run build:asset-version && npm run build:search-index && nuxt build && node scripts/postbuild.mjs",
+    "dev": "npm run sync:assets && npm run build:asset-version && nuxt dev",
+    "build": "npm run sync:assets && npm run build:asset-version && nuxt build && node scripts/postbuild.mjs",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "verify:css": "node scripts/verify-css.mjs",
     "verify": "npm run verify:css && npm run verify:links",
     "verify:links": "node scripts/verify-links.mjs",
     "export:content": "cd ../.. && dotnet run --project tools/content-export -- apps/web/content",
-    "build:search-index": "node scripts/build-search-index.mjs",
     "build:asset-version": "node scripts/build-asset-version.mjs"
   },
   "devDependencies": {

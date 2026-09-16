@@ -197,3 +197,34 @@ export const siteMenu = () =>
 /** 舊網址解析。命中回 `{ toPath, statusCode }`，未命中或失敗回 `null`。 */
 export const resolveRedirect = (path: string) =>
   apiGet<{ toPath: string, statusCode: number }>('/redirects/resolve', { path })
+
+/** 搜尋命中的一筆。欄位名沿用舊靜態索引的縮寫，前端樣板不用跟著改。 */
+export interface SearchHit {
+  /** 型別標籤（療程／文章／常見問題…） */
+  t: string
+  /** 網址 */
+  u: string
+  /** 標題 */
+  ti: string
+  /** 摘要 */
+  ex: string
+}
+
+/**
+ * 站內搜尋。
+ *
+ * 🔴 **回傳保留「查無結果」與「連不上」的區別，不要簡化成一個陣列。**
+ *    兩者在這一頁會觸發完全不同的行為：查無結果要把這句查詢回寫題庫
+ *    （`POST /questions/miss`，那是內容團隊的工作清單），連不上則**絕對不能回寫** ——
+ *    否則 API 掛掉的那段時間，每一次搜尋都會變成一筆假的「使用者問了我們答不出來的問題」，
+ *    而題庫的去重會讓這些假資料留下來。
+ *
+ * ⚠️ 空字串不打 API。
+ */
+export async function searchSite(keyword: string): Promise<{ ok: boolean, hits: SearchHit[] }> {
+  const q = keyword.trim()
+  if (!q) return { ok: true, hits: [] }
+
+  const outcome = await fetchEnvelope<SearchHit[]>('/search', { q })
+  return { ok: outcome.ok, hits: outcome.data ?? [] }
+}

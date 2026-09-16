@@ -104,6 +104,7 @@ builder.Services.AddScoped<FormHandler>();
 builder.Services.AddScoped<SettingHandler>();
 builder.Services.AddScoped<PublicContentHandler>();
 builder.Services.AddScoped<SeoHandler>();
+builder.Services.AddScoped<SearchHandler>();
 builder.Services.AddScoped<DashboardHandler>();
 builder.Services.AddScoped<ContentHandler>();
 builder.Services.AddScoped<ReviewHandler>();
