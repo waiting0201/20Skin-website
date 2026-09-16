@@ -39,6 +39,10 @@ public sealed class PublicContentHandler(
     private const int DefaultPageSize = 12;
     private const int MaxPageSize = 100;
 
+    /// <summary>一次最多取幾筆。⚠️ 夾住上限，否則 <c>?ids=</c> 就是一個公開的
+    /// 「把整個資料庫拉出來」開關。</summary>
+    private const int MaxBatchIds = 100;
+
     /// <summary>
     /// 列表回應要剝掉內文的單元。
     ///
@@ -124,6 +128,37 @@ public sealed class PublicContentHandler(
 
         CacheControl.Public(httpContextAccessor.HttpContext?.Response);
         return new OkObjectResult(ApiResponse.Ok(shaped[0]));
+    }
+
+    /// <summary>
+    /// <c>GET /content/batch?ids=1,2,3</c>：依 id 批次取（含內文）。
+    ///
+    /// <para>
+    /// 🔴 給「關聯目標需要的欄位不只標題」的情況用：療程卡片要顯示關聯文章的封面與
+    /// 日期，而 <c>relations[]</c> 只帶 slug／title／urlPath。文章 1100 筆，
+    /// 不可能為了 11 筆關聯把整批載回來。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ 找不到的 id **靜默略過**，不回 404 —— 一批裡混到一個已下架的內容是正常的，
+    /// 呼叫端本來就要處理「關聯指向草稿」的情況（前台會渲染成純文字而不是連結）。
+    /// </para>
+    /// </summary>
+    public async Task<IActionResult> BatchAsync(HttpRequest req)
+    {
+        var raw = req.Query["ids"].ToString();
+        var ids = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(v => int.TryParse(v, out var id) ? id : 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .Take(MaxBatchIds)
+            .ToArray();
+
+        var rows = await content.GetByIdsAsync(ids);
+        var shaped = await ShapeAsync(rows, stripHeavy: false);
+
+        CacheControl.Public(httpContextAccessor.HttpContext?.Response);
+        return new OkObjectResult(ApiResponse.Ok(shaped));
     }
 
     /// <summary>

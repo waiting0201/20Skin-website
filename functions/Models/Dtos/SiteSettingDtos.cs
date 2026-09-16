@@ -7,6 +7,14 @@ namespace Skin20.Api.Models.Dtos;
 /// </summary>
 public sealed class PublicSiteSettingsDto
 {
+    // 🔴 **只放前台真的要的鍵，一個都不要多。** 這支是公開端點，加進來的東西
+    //    就是對全世界公開。2026-09-15 補這兩個是因為前台改成執行期 SSR 之後，
+    //    站名與描述不再由建置期匯出取得（那時是伺服器端讀資料庫，全部 16 個鍵
+    //    都拿得到，其中包含 contact.recipientEmail 這種不能外露的）。
+    //    ⚠️ 不要為了省事改成「回傳整張 SiteSettings」。
+    public string SiteName { get; set; } = string.Empty;
+    public string SiteDescription { get; set; } = string.Empty;
+
     public bool AiFaqEnabled { get; set; }
     public string AiFaqPanelTitle { get; set; } = string.Empty;
     public string AiFaqWelcomeText { get; set; } = string.Empty;

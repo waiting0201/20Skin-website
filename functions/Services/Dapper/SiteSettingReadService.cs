@@ -31,6 +31,8 @@ public sealed class SiteSettingReadService(ISqlConnectionFactory factory) : ISit
     /// <summary>docs/10 §3.1：AI FAQ 啟用開關、面板文案、轉真人出口網址。</summary>
     private static readonly string[] PublicKeys =
     [
+        "site.name",
+        "site.description",
         "aifaq.enabled",
         "aifaq.panelTitle",
         "aifaq.welcomeText",
@@ -50,6 +52,8 @@ public sealed class SiteSettingReadService(ISqlConnectionFactory factory) : ISit
 
         return new PublicSiteSettingsDto
         {
+            SiteName = map.GetValueOrDefault("site.name", string.Empty),
+            SiteDescription = map.GetValueOrDefault("site.description", string.Empty),
             AiFaqEnabled = map.TryGetValue("aifaq.enabled", out var enabled) && bool.TryParse(enabled, out var b) && b,
             AiFaqPanelTitle = map.GetValueOrDefault("aifaq.panelTitle", string.Empty),
             AiFaqWelcomeText = map.GetValueOrDefault("aifaq.welcomeText", string.Empty),

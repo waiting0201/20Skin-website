@@ -69,6 +69,23 @@ public interface IPublicContentReadService
         IReadOnlyCollection<int> ids, CancellationToken ct = default);
 
     /// <summary>
+    /// 依 id 批次取，**含內文**。
+    ///
+    /// <para>
+    /// 🔴 存在的理由是「關聯目標的顯示欄位不只標題」：療程卡片要顯示關聯文章的
+    /// 封面圖與日期，而那些欄位不在 <c>relations[]</c> 裡（那裡只有 slug／title／urlPath）。
+    /// 文章有 1100 筆，不可能為了 11 筆關聯把整批載回來。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ 上限由呼叫端夾住（<c>MaxBatchIds</c>）—— 少了它，<c>?ids=</c> 就是一個
+    /// 任何人都打得到的「把整個資料庫拉出來」開關。
+    /// </para>
+    /// </summary>
+    Task<IReadOnlyList<PublicContentRow>> GetByIdsAsync(
+        IReadOnlyCollection<int> ids, CancellationToken ct = default);
+
+    /// <summary>
     /// sitemap 要收的網址。條件與 docs/08 §H 末段一致：
     /// <c>可見性 ＋ IncludeInSitemap = 1 ＋ UrlPath IS NOT NULL</c>。
     /// <para>⚠️ FAQ 沒有獨立網址（<c>UrlPath</c> 為 NULL），標籤頁 <c>IncludeInSitemap = 0</c>。</para>
@@ -158,6 +175,25 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
 
         return await connection.QuerySingleOrDefaultAsync<PublicContentRow>(new CommandDefinition(
             sql, new { UrlPath = urlPath, Now = Clock.UtcNow }, cancellationToken: ct));
+    }
+
+    public async Task<IReadOnlyList<PublicContentRow>> GetByIdsAsync(
+        IReadOnlyCollection<int> ids, CancellationToken ct = default)
+    {
+        if (ids.Count == 0) return [];
+
+        using var connection = factory.Create();
+
+        var sql = $"""
+            SELECT {Columns}
+            {FromPublished}
+            WHERE {Visibility.PublicFilter} AND ci.Id IN @Ids
+            ORDER BY ci.SortOrder, ci.Id
+            """;
+
+        var items = await connection.QueryAsync<PublicContentRow>(new CommandDefinition(
+            sql, new { Ids = ids, Now = Clock.UtcNow }, cancellationToken: ct));
+        return items.AsList();
     }
 
     public async Task<IReadOnlyList<SitemapUrlRow>> GetSitemapEntriesAsync(CancellationToken ct = default)

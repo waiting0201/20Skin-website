@@ -52,6 +52,7 @@ public sealed partial class AppRouter
             // 前台內容（SSR）。⚠️ `content` 這個字段刻意不與九個單元代號重疊，
             //    否則 `/{unit}` 與 `/content` 在同一層會互相吃掉。
             ("GET", ["content"]) => true,
+            ("GET", ["content", "batch"]) => true,
             ("GET", ["redirects", "resolve"]) => true,
             ("GET", ["sitemap"]) => true,
             ("GET", [var unit]) when UnitCodes.IsValid(unit) => true,
@@ -75,6 +76,7 @@ public sealed partial class AppRouter
             ("GET", ["site-settings", "public"]) => Wrap(settings.GetPublicAsync()),
 
             ("GET", ["content"]) => Wrap(publicContent.GetByPathAsync(req)),
+            ("GET", ["content", "batch"]) => Wrap(publicContent.BatchAsync(req)),
             ("GET", ["redirects", "resolve"]) => Wrap(redirect.ResolveAsync(req)),
             ("GET", ["sitemap"]) => Wrap(publicContent.SitemapAsync(req)),
             ("GET", [var unit]) when UnitCodes.IsValid(unit) => Wrap(publicContent.ListAsync(req, unit)),
