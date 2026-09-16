@@ -248,19 +248,18 @@ async function removeRecord() {
   }
 }
 
-// ── 版本歷程 ──────────────────────────────────────────────────────────
-const versions = ref<{ versionNo: number; title: string; note: string | null; createdAt: string }[]>([])
-async function loadVersions() {
-  versions.value = await adminApi.content.versions(props.unit, props.id)
-}
-watch(record, () => loadVersions())
-
-async function restore(versionNo: number) {
-  if (!window.confirm(`還原到版本 ${versionNo}？會變成新的草稿，不會直接上線。`)) return
-  record.value = await adminApi.content.restoreVersion(props.unit, props.id, versionNo, user!.id)
-  resetForms()
-  actionNotice.value = `已還原版本 ${versionNo}（草稿）。`
-}
+// ── 版本歷程：**畫面已移除**（Tim 決定 2026-09-16，理由是後台太複雜）──────
+//
+// 🔴 **拿掉的只有這個畫面，快照機制必須留著。**
+//    `ContentVersions` 不是可選的附加功能，它就是發布機制本身 ——
+//    前台每一個查詢都是 `INNER JOIN ContentVersions ON Id = ci.PublishedVersionId`，
+//    可見性條件的第一行也是 `PublishedVersionId IS NOT NULL`（docs/08 §B-2）。
+//    刪掉那張表等於整個前台沒有內容可以輸出。
+//
+// ⚠️ API 端點（`GET /admin/{unit}/{id}/versions`、`.../restore`）**刻意保留**：
+//    它們沒有害處，而且是「改壞了要救回來」時唯一的自助手段。
+//    畫面拿掉之後，還原只能由有 API 權限的人執行 —— 這是這個決定的代價，
+//    docs/02 §4 與 STATUS 都已記下。
 </script>
 
 <template>
@@ -588,17 +587,6 @@ async function restore(versionNo: number) {
           <button type="button" class="btn btn--ghost btn--block" @click="saveSchedule">儲存排程</button>
         </div>
 
-        <div class="adm-card">
-          <p class="adm-card__title">版本歷程</p>
-          <div v-for="v in versions" :key="v.versionNo" class="adm-list-item">
-            <div>
-              <div class="adm-list-item__title">版本 {{ v.versionNo }}{{ v.note ? `・${v.note}` : '' }}</div>
-              <div class="adm-list-item__meta">{{ new Date(v.createdAt).toLocaleString('zh-TW') }}</div>
-            </div>
-            <button v-if="canEditBody" type="button" class="btn btn--line btn--sm" @click="restore(v.versionNo)">還原</button>
-          </div>
-          <p v-if="!versions.length" class="adm-muted">尚無版本紀錄。</p>
-        </div>
       </aside>
     </div>
   </div>
