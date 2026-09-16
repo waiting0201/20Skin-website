@@ -182,21 +182,40 @@ const doctorHung: RelatedDoctor = {
 //    前台原本那句「內容建置中」因此不再需要 —— 正式站不該有一個只寫著建置中的頁面。
 
 import {
-  CONTENT, REL, TERM, img, parseBlocks, relationsOf, termsOf, type ContentRecord,
+  REL, TERM, UNIT, img, loadUnit, parseBlocks, relationsOf, termsOf, type ContentRecord,
 } from './_content'
 import { eyebrowFor } from './_presentation'
 
-const categoryOf = (record: ContentRecord): ContentRecord | undefined =>
-  CONTENT.terms.find((t) => t.id === record.fields.categoryTermId)
+/**
+ * 一次算繪要用到的其他單元。
+ *
+ * 🔴 **2026-09-15：由建置期內聯改成執行期取值。** 在那之前這些是
+ *    `CONTENT.terms`／`CONTENT.doctors`… 這種模組層級常數，整批資料在建置時
+ *    就烤進產物。現在改成算繪當下取 —— 院方按下發布，下一個請求就看得到。
+ *
+ * ⚠️ **`articles` 只有「被療程關聯到的那幾篇」，不是全部 1100 篇。**
+ *    療程卡片要顯示關聯文章的封面與日期，而 `relations[]` 只帶 slug／title／urlPath，
+ *    所以得另外取那幾筆（`recordsByIds`）。整批載回來是 2.3 MB，
+ *    而實際用到的只有十幾篇。
+ */
+interface TreatmentContext {
+  terms: ContentRecord[]
+  doctors: ContentRecord[]
+  faqs: ContentRecord[]
+  articles: ContentRecord[]
+}
+
+const categoryOf = (ctx: TreatmentContext, record: ContentRecord): ContentRecord | undefined =>
+  ctx.terms.find((t) => t.id === record.fields.categoryTermId)
 
 const toImage = (value: unknown, fallbackAlt = ''): ImageRef => {
   const i = img(value)
   return { src: i?.src ?? '', alt: i?.alt || fallbackAlt, width: i?.width ?? 0, height: i?.height ?? 0 }
 }
 
-function toTreatment(record: ContentRecord): Treatment {
+function toTreatment(ctx: TreatmentContext, record: ContentRecord): Treatment {
   const f = record.fields
-  const category = categoryOf(record)
+  const category = categoryOf(ctx, record)
   const indications = parseBlocks<{ heading: string | null; items: TreatmentIndication[] } | null>(f.indications, null)
   const mechanism = parseBlocks<{ heading: string | null; paragraphs: string[]; image: unknown } | null>(f.mechanism, null)
   const precautions = parseBlocks<{ items: string[]; note: string | null } | null>(f.contraindications, null)
@@ -234,7 +253,7 @@ function toTreatment(record: ContentRecord): Treatment {
     doctors: relationsOf(record, REL.treatmentToDoctor)
       .filter((r) => r.toIsPublished)
       .map((r) => {
-        const doctor = CONTENT.doctors.find((d) => d.slug === r.toSlug)
+        const doctor = ctx.doctors.find((d) => d.slug === r.toSlug)
         return {
           slug: r.toSlug as string,
           name: doctor?.title ?? (r.toTitle as string),
@@ -245,19 +264,19 @@ function toTreatment(record: ContentRecord): Treatment {
     detailTags: concernTags.length ? concernTags : undefined,
     cases: [],
     faqLastUpdated: relationsOf(record, REL.treatmentToFaq)
-      .map((r) => (CONTENT.faqs.find((x) => x.slug === r.toSlug)?.fields.lastReviewedOn as string) ?? '')
+      .map((r) => (ctx.faqs.find((x) => x.slug === r.toSlug)?.fields.lastReviewedOn as string) ?? '')
       .filter(Boolean)
       .sort()
       .at(-1)?.slice(0, 7) ?? undefined,
     faqs: relationsOf(record, REL.treatmentToFaq).map((r) => {
-      const faq = CONTENT.faqs.find((x) => x.slug === r.toSlug)
+      const faq = ctx.faqs.find((x) => x.slug === r.toSlug)
       return { q: faq?.title ?? (r.toTitle as string), a: (faq?.fields.webAnswer as string) ?? '' }
     }),
     articles: relationsOf(record, REL.treatmentToArticle)
       .filter((r) => r.toIsPublished)
       .map((r) => {
-        const a = CONTENT.articles.find((x) => x.slug === r.toSlug)
-        const cat = a ? categoryOf(a) : undefined
+        const a = ctx.articles.find((x) => x.slug === r.toSlug)
+        const cat = a ? categoryOf(ctx, a) : undefined
         return {
           title: a?.title ?? (r.toTitle as string),
           href: r.toUrlPath ?? '#',
@@ -270,39 +289,65 @@ function toTreatment(record: ContentRecord): Treatment {
   }
 }
 
-export const treatments: Treatment[] = CONTENT.treatments
-  .slice()
-  .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
-  .map(toTreatment)
+/**
+ * 28 項療程。
+ *
+ * ⚠️ 同一次算繪裡呼叫幾次都只會取一次資料 —— `loadUnit` 以請求為範圍去重
+ *    （見 `_content.ts`）。所以各頁不必自己把結果傳來傳去。
+ */
+export async function getTreatments(): Promise<Treatment[]> {
+  const [records, terms, doctors, faqs] = await Promise.all([
+    loadUnit(UNIT.treatment),
+    loadUnit(UNIT.term),
+    loadUnit(UNIT.doctor),
+    loadUnit(UNIT.faq),
+  ])
 
-export const treatmentCategories: TreatmentCategory[] = termsOf(TERM.treatmentCategory).map((term) => {
-  const items = treatments.filter((t) => t.categorySlug === term.slug)
-  return {
-    slug: term.slug as string,
-    name: term.title,
-    // 英文小標由設計稿決定，不進資料庫（見 _presentation.ts）。
-    eyebrow: eyebrowFor(term.slug as string),
-    lede: term.summary ?? '',
-    image: toImage(term.fields.cover, term.title),
-    // 數量由查詢算出，不是另存一份會過期的數字。
-    count: items.length,
-    sampleTags: items.slice(0, 4).map((t) => t.title),
-    concernTags: [...new Set(items.flatMap((t) => t.cardTags ?? []))],
-    doctors: [...new Map(items.flatMap((t) => t.doctors ?? []).map((d) => [d.slug, d])).values()],
-    articles: items.flatMap((t) => t.articles ?? []).slice(0, 3),
-  }
-})
+  // 只取真的被關聯到的那幾篇文章（見 TreatmentContext 的說明）。
+  const articleIds = [...new Set(
+    records.flatMap((r) => relationsOf(r, REL.treatmentToArticle).map((x) => x.toContentItemId)),
+  )]
+  const articles = await recordsByIds(articleIds)
 
-export function getCategory(slug: string): TreatmentCategory | undefined {
-  return treatmentCategories.find((c) => c.slug === slug)
+  const ctx: TreatmentContext = { terms, doctors, faqs, articles }
+  return records
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+    .map((r) => toTreatment(ctx, r))
 }
 
-export function getTreatmentsByCategory(categorySlug: string): Treatment[] {
-  return treatments.filter((t) => t.categorySlug === categorySlug)
+export async function getTreatmentCategories(): Promise<TreatmentCategory[]> {
+  const [terms, treatments] = await Promise.all([loadUnit(UNIT.term), getTreatments()])
+
+  return termsOf(terms, TERM.treatmentCategory).map((term) => {
+    const items = treatments.filter((t) => t.categorySlug === term.slug)
+    return {
+      slug: term.slug as string,
+      name: term.title,
+      // 英文小標由設計稿決定，不進資料庫（見 _presentation.ts）。
+      eyebrow: eyebrowFor(term.slug as string),
+      lede: term.summary ?? '',
+      image: toImage(term.fields.cover, term.title),
+      // 數量由查詢算出，不是另存一份會過期的數字。
+      count: items.length,
+      sampleTags: items.slice(0, 4).map((t) => t.title),
+      concernTags: [...new Set(items.flatMap((t) => t.cardTags ?? []))],
+      doctors: [...new Map(items.flatMap((t) => t.doctors ?? []).map((d) => [d.slug, d])).values()],
+      articles: items.flatMap((t) => t.articles ?? []).slice(0, 3),
+    }
+  })
 }
 
-export function getTreatment(categorySlug: string, slug: string): Treatment | undefined {
-  return treatments.find((t) => t.categorySlug === categorySlug && t.slug === slug)
+export async function getCategory(slug: string): Promise<TreatmentCategory | undefined> {
+  return (await getTreatmentCategories()).find((c) => c.slug === slug)
+}
+
+export async function getTreatmentsByCategory(categorySlug: string): Promise<Treatment[]> {
+  return (await getTreatments()).filter((t) => t.categorySlug === categorySlug)
+}
+
+export async function getTreatment(categorySlug: string, slug: string): Promise<Treatment | undefined> {
+  return (await getTreatments()).find((t) => t.categorySlug === categorySlug && t.slug === slug)
 }
 
 /** 8 個困擾 slug 已定案（docs/01-sitemap.md §1）。用於把療程／分類頁上的

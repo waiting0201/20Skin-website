@@ -89,6 +89,19 @@ export const articlePage = (page = 1, pageSize = 12) =>
 export const contentByPath = (path: string) =>
   apiGet<ContentRecord>('/content', { path })
 
+/**
+ * 依 id 批次取（含內文）。
+ *
+ * ⚠️ 給「關聯目標需要的欄位不只標題」的情況用 —— 療程卡片要顯示關聯文章的封面與
+ *    日期，而 `relations[]` 只帶 slug／title／urlPath。文章 1100 筆，不可能為了
+ *    11 筆關聯把整批載回來。
+ * ⚠️ 找不到的 id 會被靜默略過（已下架的關聯目標是正常情況）。
+ */
+export const recordsByIds = (ids: number[]) =>
+  ids.length === 0
+    ? Promise.resolve<ContentRecord[]>([])
+    : apiGet<ContentRecord[]>('/content/batch', { ids: ids.join(',') }).then((r) => r ?? [])
+
 /** 舊網址解析。命中回 `{ toPath, statusCode }`，未命中或失敗回 `null`。 */
 export const resolveRedirect = (path: string) =>
   apiGet<{ toPath: string, statusCode: number }>('/redirects/resolve', { path })

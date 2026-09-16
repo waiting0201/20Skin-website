@@ -3,7 +3,9 @@
 //
 // 搬法見 app/pages/404.vue 開頭的註解與 frontend/README.md。
 // 資料抽到 ~/data/treatments.ts，形狀對齊 docs/08-database.md §C-1／§C-9。
-import { treatmentCategories, treatments } from '~/data/treatments'
+import { getTreatmentCategories, getTreatments } from '~/data/treatments'
+
+const [treatmentCategories, treatments] = await Promise.all([getTreatmentCategories(), getTreatments()])
 
 usePageHead({
   title: '專業服務',

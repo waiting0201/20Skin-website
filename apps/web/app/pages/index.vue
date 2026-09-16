@@ -17,7 +17,7 @@ import {
 } from '~/data/home'
 import { DOCTORS } from '~/data/doctors'
 import { SITE_SETTINGS } from '~/data/site-settings'
-import { treatments } from '~/data/treatments'
+import { getTreatments } from '~/data/treatments'
 import { ORIGIN } from '~/composables/usePageHead'
 
 // 這三個數字**推導、不要手寫**。2026-09-15 修：原本寫死「27項療程」，
@@ -28,6 +28,7 @@ import { ORIGIN } from '~/composables/usePageHead'
 // ⚠️ 安喬（許媖琄）是藝術總監、不是醫師，所以醫師數要用 isPhysician 濾過。
 // 「14 位醫師」是 CLAUDE.md 關鍵數字明確列為錯誤的敘述（13 位醫師＋1 位藝術總監），
 // mockup 原文就寫錯了，結構化資料不要跟著錯。
+const treatments = await getTreatments()
 const physicianCount = DOCTORS.filter((d) => d.isPhysician).length
 const nonPhysicianCount = DOCTORS.length - physicianCount
 

@@ -17,8 +17,10 @@ const route = useRoute()
 const categorySlug = route.params.category as string
 const slug = route.params.slug as string
 
-const category = getCategory(categorySlug)
-const treatment = getTreatment(categorySlug, slug)
+const [category, treatment] = await Promise.all([
+  getCategory(categorySlug),
+  getTreatment(categorySlug, slug),
+])
 
 if (!category || !treatment) {
   throw createError({ statusCode: 404, statusMessage: '找不到這個療程' })

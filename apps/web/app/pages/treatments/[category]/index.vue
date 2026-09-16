@@ -9,11 +9,15 @@
 // （四張療程卡片、可改善困擾、醫師團隊、相關文章）。其餘三個分類 mockup
 // 沒有對應頁面可抄，這裡不編內容 —— 資料沒有的區塊（concernTags／doctors／
 // articles）就整節不渲染，理由與細節頁一致：不要自己編療程內容。
-import { treatmentCategories, treatments, getCategory, concernHref } from '~/data/treatments'
+import { getTreatmentCategories, getTreatments, getCategory, concernHref } from '~/data/treatments'
 
 const route = useRoute()
 const categorySlug = route.params.category as string
-const category = getCategory(categorySlug)
+const [treatmentCategories, treatments, category] = await Promise.all([
+  getTreatmentCategories(),
+  getTreatments(),
+  getCategory(categorySlug),
+])
 
 if (!category) {
   throw createError({ statusCode: 404, statusMessage: '找不到這個療程分類' })
