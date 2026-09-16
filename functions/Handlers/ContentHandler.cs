@@ -383,7 +383,8 @@ public sealed class ContentHandler(
             await tx.CommitAsync(ct);
         });
 
-        await DeleteUnreferencedBlobsAsync(blobsBefore, CollectBlobPaths(entity), ct);
+        await DeleteUnreferencedBlobsAsync(
+            blobsBefore, await StillReferencedBlobsAsync(entity, ct), ct);
 
         return await GetAsync(unit, id);
     }
@@ -431,7 +432,8 @@ public sealed class ContentHandler(
             await tx.CommitAsync(ct);
         });
 
-        await DeleteUnreferencedBlobsAsync(blobsBefore, CollectBlobPaths(entity), ct);
+        await DeleteUnreferencedBlobsAsync(
+            blobsBefore, await StillReferencedBlobsAsync(entity, ct), ct);
 
 
         return await GetAsync(unit, id);
@@ -639,6 +641,12 @@ public sealed class ContentHandler(
         {
             case "publish":
             {
+                // ⚠️ **在換掉 PublishedVersionId 之前**先記下「上一版快照還在用哪些圖」——
+                //    發布完成後那一版就不再被前台服務了，它獨有的圖片才可以清掉。
+                //    少了這一步，換圖後的舊檔會變成永遠沒有人記得的孤兒檔
+                //    （2026-09-16 實測過：清檔只比對工作副本，而舊圖在存草稿那一刻就離開工作副本了）。
+                var publishedBefore = await StillReferencedBlobsAsync(entity, ct);
+
                 var strategy = db.Database.CreateExecutionStrategy();
                 await strategy.ExecuteAsync(async () =>
                 {
@@ -656,6 +664,10 @@ public sealed class ContentHandler(
                     await db.SaveChangesAsync(ct);
                     await tx.CommitAsync(ct);
                 });
+
+                // 上一版獨有、而新的一版與工作副本都不再需要的圖片，到這裡才真的沒人指得到。
+                await DeleteUnreferencedBlobsAsync(
+                    publishedBefore, await StillReferencedBlobsAsync(entity, ct), ct);
                 break;
             }
             case "unpublish":
@@ -878,7 +890,8 @@ public sealed class ContentHandler(
 
         // ⚠️ 還原之後，被換下來的那些圖片一樣沒有欄位指得到了，照樣刪。
         //    反過來說，快照裡指向的檔案若早就被換掉，還原不會把它變回來（docs/11 §9）。
-        await DeleteUnreferencedBlobsAsync(blobsBefore, CollectBlobPaths(entity), ct);
+        await DeleteUnreferencedBlobsAsync(
+            blobsBefore, await StillReferencedBlobsAsync(entity, ct), ct);
 
         return await GetAsync(unit, id);
     }
@@ -2090,6 +2103,48 @@ public sealed class ContentHandler(
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// 這一筆內容<b>現在仍然需要</b>的所有 blob —— 工作副本的欄位 <b>∪ 已發布版本快照裡的</b>。
+    ///
+    /// <para>
+    /// 🔴 <b>「已發布快照」那一半不可省。</b> 前台服務的是<b>已核准的版本快照</b>，不是工作副本
+    /// （CLAUDE.md 決策 14）。只比對工作副本的話，編輯在後台<b>存一份草稿</b>把圖換掉，
+    /// 上一張圖就當場被刪 —— 而前台還在渲染指向它的那一版，**線上立刻破圖**，
+    /// 且那筆內容根本還沒送審。
+    /// </para>
+    /// <para>
+    /// ⚠️ 2026-09-16 實測確認過這個洞：發布 → 存草稿換圖 → 前台那張圖回 <b>404</b>。
+    /// 這與文件早就寫明的取捨（「版本還原救不回已刪除的圖片」）<b>不是同一件事</b> ——
+    /// 那個講的是回到舊版本，這個是<b>現在線上的頁面壞掉</b>。
+    /// </para>
+    /// <para>
+    /// ⚠️ 代價：換圖之後舊檔會一直留著，<b>直到那筆內容重新發布</b>（發布時才由
+    /// <c>PublishAsync</c> 清掉上一版獨有的圖）。中間那段時間它是孤兒檔。
+    /// 寧可多留幾個檔案，也不要讓線上破圖。
+    /// ⚠️ <b>不要改成「下一次存檔時清」</b> —— 舊圖在存草稿那一刻就已經離開工作副本，
+    /// 之後的存檔根本不會再看到它（2026-09-16 實測確認）。
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>刪除整筆內容時不要用這一支</b> —— 那時候連已發布快照都要跟著消失，
+    /// 呼叫端直接傳空集合（見 DeleteAsync）。
+    /// </para>
+    /// </summary>
+    private async Task<List<string>> StillReferencedBlobsAsync(ContentItem entity, CancellationToken ct)
+    {
+        var paths = CollectBlobPaths(entity);
+        if (entity.PublishedVersionId is not { } versionId) return paths;
+
+        var snapshot = await db.ContentVersions
+            .Where(v => v.Id == versionId)
+            .Select(v => v.Snapshot)
+            .FirstOrDefaultAsync(ct);
+
+        // ⚠️ 用泛用的 JSON 掃描，不要依型別再走一次 —— 快照是「當時那一版的完整欄位」，
+        //    掃 `blobPath` 這個鍵本來就涵蓋所有內嵌圖片欄位與 BodyBlocks。
+        CollectBlobPathsFromJson(snapshot, paths);
+        return paths;
     }
 
     /// <summary>

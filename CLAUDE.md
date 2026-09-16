@@ -40,6 +40,10 @@ tools/content-export/  🔴 **前台已完全不使用它**（2026-09-16）。�
                        **不要因為看到它還在，就以為建置流程需要先跑它**
                        ⚠️ 與 API 共用 Visibility.cs 與 ExportFormats.cs
                        （<Compile Include>，不是抄一份）
+tools/blob-reconcile/  孤兒檔對帳：Blob 容器 vs 資料庫引用（見該目錄 README）
+                       🔴 **只能對正式資料庫跑** —— 儲存體只有一個、所有環境共用，
+                          對本機庫跑會把正式的圖誤判成孤兒（實測 75%）。
+                          預設只報告；孤兒超過 20% 時拒絕刪除
 tools/sync-public.sh   master → public 分支（去除 reference/ output/），推 GitHub 前執行
 .githooks/pre-push     安全網：擋下含非公開路徑或過大檔案的 ref 推向 Remote_GitHub
 docs/                  工程端文件（真實來源）

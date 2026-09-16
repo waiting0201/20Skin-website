@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    孤兒檔對帳（docs/08 §E、docs/11 §9）：把 Blob 容器裡的檔案與資料庫的引用對一次，
+    列出「沒有任何欄位指得到」的檔案。
+
+    ⚠️ 刻意是獨立的小專案，與 content-export 同樣的理由：它只讀資料庫，
+       不該把 Functions 專案的相依拉進來。
+
+    🔴 **預設只報告，不刪檔。** 要刪必須明確加 delete 旗標。
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Skin20.BlobReconcile</RootNamespace>
+    <AssemblyName>blob-reconcile</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.24.0" />
+    <PackageReference Include="Azure.Identity" Version="1.13.2" />
+  </ItemGroup>
+
+</Project>
