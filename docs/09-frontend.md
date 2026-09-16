@@ -79,18 +79,54 @@ apps/
 
 ---
 
-## 3. 建置期資料流：先匯出成 JSON，再讓 Nuxt 讀檔
+## 3. 執行期資料流：每個請求向 API 取
 
-**這是與一般 CMS 網站最大的差異，也是最容易做錯的地方。**
+🔴 **2026-09-16 起改成執行期取值**（CLAUDE.md 決策 6、14）。
+舊標題是「建置期資料流：先匯出成 JSON，再讓 Nuxt 讀檔」，那套已作廢。
 
 ```
-deploy-site.yml
-  ① scripts/export-content  ── Dapper／唯讀連線 ──▶ apps/web/content/*.json
-  ② scripts/build-sitemap / build-llms / build-swa-config（吃同一份 JSON）
-  ③ nuxt generate            ── 只讀 content/*.json ──▶ .output/public（1845 頁）
-  ④ 產物大小檢查（180 MB 警告 / 230 MB 擋下）
-  ⑤ 上傳 .output/public ＋ api/ → smoke test
+瀏覽器請求 /treatments/laser/picosure-pro/
+  → SWA → navigationFallback → Nuxt 的 SSR function
+  → app/data/*.ts 向 api.20skin.tw 取這一頁要的單元
+  → 算繪 HTML → 回應
 ```
+
+**院方按下發布，下一個請求就看得到。** 中間沒有建置、沒有部署、沒有快取。
+
+### 三條必須守住的規則
+
+🔴 **① 同一個請求內只取一次。**
+一頁常有三四個模組都要 `term`（療程要分類、文章要標籤、FAQ 要分類）。
+去重掛在 `useNuxtApp()` 上（`loadUnit()`）——
+⚠️ **掛在模組層級會變成跨請求共用**，那等於又回到「內容要等重啟才更新」。
+
+🔴 **② 「拿不到」與「查不到」要分開。**
+
+| 情況 | 回應 |
+|---|---|
+| 端點說「沒有這一筆」 | **404**（那一頁真的不存在） |
+| 連不上／逾時／5xx，而它是**頁面的主體內容** | **503** |
+| 連不上，而它是**裝飾性資料**（選單、熱門標籤、全站設定） | 降級，照常算繪 |
+
+⚠️ 兩者都回 `null` 的話，API 掛掉時內頁會變成 **404** —— 那是對搜尋引擎說
+「這一頁永久不存在」。2026-09-15 實測過：把 API 停掉，`/clinics/siji/` 當場變 404。
+⚠️ **回 200 配空畫面更糟**：Google 可能把空殼收進索引。
+
+🔴 **③ `experimental.asyncContext` 必須開著。**
+`useNuxtApp()` 在 `await` 之後會失去 context。少了這個選項，跨 `await` 的取值會丟
+`[nuxt] instance unavailable` —— 不是建置期錯誤，是算繪當下的 500。
+⚠️ **症狀有欺騙性**：沒有跨 await 呼叫的頁面照常 200，看起來像「某幾頁的資料有問題」。
+2026-09-15 實測 16 頁裡 9 頁掛掉。
+
+### `data/*.ts` 仍是形狀轉接層
+
+欄位怎麼排、叫什麼名字仍是前台的契約，只是資料來源換了。
+那 2397 行的對映幾乎沒有改 —— 端點刻意回傳與匯出相同的 `ContentRecord` 形狀
+（逐筆比對驗證過）。
+
+⚠️ **唯一需要重新設計而不只是改寫法的是 `articles.ts`**：
+原本 `export const ARTICLES = CONTENT.articles`（1111 筆在模組層級載入）。
+執行期不能這樣做 —— 列表走分頁端點、內頁走 by-path、篩選與排序與聚合交給 API。
 
 > 🔴 **文章內文不在 `articles.json` 裡，在 `content/article-bodies/{slug}.json`。**
 > `app/data/_content.ts` 是 `import articlesJson from '~~/content/articles.json'` ——
@@ -151,14 +187,20 @@ AND (UnpublishAt IS NULL OR UnpublishAt >  @now)
 
 ---
 
-## 4. 純靜態站的三個執行期例外
+## 4. 執行期端點
 
-前台原則是「執行期不打 API」（[07](07-deployment.md) §1 —— AI 爬蟲不執行 JavaScript，SPA-only 的內容對它們等於不存在）。只有三處例外，而且**都不影響初始 HTML 的內容**：
+🔴 **2026-09-16 起「執行期不打 API」這個原則整個反過來了** —— 前台每一頁都打。
+舊標題是「純靜態站的三個執行期例外」。
+
+⚠️ **不變的是「初始 HTML 必須完整」**：AI 爬蟲不執行 JavaScript，SPA-only 的內容對它們
+等於不存在。SSR 反而讓這件事更穩 —— 內容在伺服器端就算繪進 HTML，不依賴 hydration。
+
+除了每頁都要的內容讀取（§3）之外，另外三支是**使用者動作**觸發的：
 
 | 例外 | 端點 | 說明 |
 |---|---|---|
 | `/contact/` 表單送出 | `POST /contact` | 只寄通知信、**不留存收件紀錄**（[02](02-backend-cms.md) §2，個資責任）。送出結果在 client 端呈現 |
-| `/search/` 未命中回寫 | `POST /questions/miss` | 站內搜尋本身是**建置期產生的索引檔**在 client 端比對，不打 API；只有「查無結果」時才回寫一筆到 `QuestionInbox`（[08](08-database.md) §F） |
+| `/search/` 未命中回寫 | `POST /questions/miss` | 站內搜尋**仍然**是建置期產生的索引檔在 client 端比對（見下）；只有「查無結果」時才回寫一筆到 `QuestionInbox`（[08](08-database.md) §F） |
 | AI FAQ 啟用開關 | `GET /site-settings/public` | [04-ai-faq.md](04-ai-faq.md) §4 要求「啟用只需後台一個開關，不需重新部署」。這是 [08](08-database.md) §L 的待確認項，見 §13 |
 
 三者都是公開寫入／讀取端點，**需要防濫用機制**（rate limit ＋ 機器人驗證），見 [10-api.md](10-api.md) §2。
@@ -168,6 +210,11 @@ AND (UnpublishAt IS NULL OR UnpublishAt >  @now)
 `/search/` 是 21 個模板之一，但沒有伺服器端搜尋服務。做法：建置期由 `content/*.json` 產生
 `public/search-index.json`（`scripts/build-search-index.mjs`），前端在使用者真的搜尋時
 才 `fetch` 它，於 client 端比對。
+
+🔴 **這是全站最後一個還吃建置期產物的地方**（2026-09-16）。其餘內容與 SEO 產物都已改成
+執行期取得，只有它還需要 `export:content` 在建置時跑一次。
+⚠️ 連帶的後果：**新發布的內容不會馬上進得了站內搜尋** —— 那是目前唯一還有「發布到生效
+有延遲」的功能。姊妹專案 VicRound 的做法是 `/v1/search` 端點，改過來就能一致。
 
 - 🔴 **索引與頁面同源。** 讀的是 `content/*.json` —— 頁面渲染用的就是這一份，
   所以不會出現「搜尋得到、點進去 404」。改成另外查一次資料庫就會有那個風險
@@ -327,17 +374,28 @@ apps/admin/src/router.ts               # /、/login、/:unit、/:unit/:id（base
 
 ---
 
-## 10. 發布到上線之間有延遲，這件事要做進 UI
+## 10. 發布即時生效
 
-**SWA 沒有 ISR。** 編輯按下發布之後，要重跑一次全站 build 才會出現在網站上，量級預期數分鐘到十餘分鐘（需實測，[07](07-deployment.md) §5）。
+🔴 **2026-09-16 起這一節的前提沒了。** 舊標題是「發布到上線之間有延遲，這件事要做進 UI」，
+前提是「SWA 沒有 ISR，發布後要重跑全站 build」。改成執行期 SSR 之後**沒有建置這一步**。
 
-三件必須做到的事：
+連帶移除的（`ssr-migration` 分支）：
 
-1. **後台顯示「發布中／已上線」狀態**，不要按完發布就顯示成功
-2. **排程時間的文案寫「最早生效時間」**，不要寫「將於 14:00 發布」（[08](08-database.md) §B-1）
-3. **連續發布要聚合**，發 10 篇不該觸發 10 次 build。API 端有 3–5 分鐘聚合窗口（[11](11-backend-design.md) §10），後台 UI 要據此說明
+| 原本的要求 | 現在 |
+|---|---|
+| 後台顯示「發布中／已上線」 | 拿掉 —— 沒有「進行中」這個狀態 |
+| 連續發布要聚合（3–5 分鐘窗口） | 拿掉 —— 沒有 build 要聚合 |
+| 「重新發布網站」按鈕 ＋ GitHub PAT | 拿掉 —— 沒有東西要重建 |
 
-另外：**後台前端仍要對 API 的 5xx 與逾時做重試**。API 已不再跟著內容重建一起重新部署，剩下的是冷啟動與一般暫態錯誤。
+✅ **排程發布連帶變成即時的。** 它原本要靠一支 Timer 每 15 分鐘輪詢、發現有內容跨過
+時間窗就觸發 build（再等約 4 分鐘）。SSR 下 `Visibility.PublicFilter` 用的是**查詢當下的
+`@Now`** —— 時間一到，下一個請求自然就看得到。那支 Timer 因此刪除。
+
+⚠️ **唯一還有延遲的是站內搜尋索引**（§4）—— 它仍是建置期產物。
+
+⚠️ **排程時間的文案仍寫「最早生效時間」** —— 那條與建置無關（[08](08-database.md) §B-1）。
+
+另外：**後台前端仍要對 API 的 5xx 與逾時做重試**（冷啟動與一般暫態錯誤）。
 
 ⚠️ **錯誤回應也要帶 CORS 標頭**（API 端的事，但前端是受害者）—— 少了標頭，4xx/5xx 在瀏覽器只會變成一個沒有任何資訊的 network error。
 

@@ -8,40 +8,57 @@
 
 > **API 拆成兩塊，這是全篇最容易搞錯的地方。**
 > 前後台共用的應用程式 API 放在**獨立的 Azure Functions App**（2026-08-10 定案），由瀏覽器跨網域直接呼叫。
-> 但 `/api/fallback` 這一支**必須留在 SWA 的 Managed Functions 裡** —— `navigationFallback` 只能 rewrite 到站內路徑，指不到外部網址，約 770 條 301 全靠它。見 §2。
+> ⚠️ **這段的舊結論已作廢**：原本說「`/api/fallback` 必須留在 SWA 的 Managed Functions 裡」。
+> 2026-09-16 起 SWA 的那個位置跑的是 **Nuxt 的 SSR function**，1000 條 301 改由前台的
+> catch-all 路由查 API。見 §2。
 
 ---
 
 ## 1. 架構
 
+🔴 **2026-09-16 起前台是執行期 SSR**（CLAUDE.md 決策 6），架構圖已重畫。
+舊圖的「預渲染 1845 頁」與「`/api/fallback`」都不存在了。
+
 ```
   瀏覽器／爬蟲
      │
-     ├──▶ 20skin.tw / www.20skin.tw
-     │    ┌──────────────────────────────────────┐
-     │    │  Azure Static Web Apps（Standard）    │
-     │    │  · 預渲染 HTML 1845 頁（nuxt generate）  │
-     │    │  · /admin/* 後台 SPA（apps/admin）    │
-     │    │  · /api/fallback ← 約 770 條 301（§2） │
-     │    │      唯一的 Managed Function          │
-     │    └──────────────────┬───────────────────┘
-     │                       │ 唯讀連線字串
-     │                       ▼
-     │    ┌──────────────────────────────────────┐
-     └──▶ │  api.20skin.tw                       │
-  （XHR）  │  獨立 Azure Functions（Flex Consumption）│
-          │  · 前後台共用的應用程式 API           │
-          │  · CMS／認證／AI FAQ／上傳 SAS        │
-          │  · Timer trigger ← 排程發布（§4）      │
-          └────┬────────────────────────┬────────┘
-               │ Managed Identity       │ Managed Identity
-               ▼                        ▼
-        ┌──────────────┐      ┌──────────────────────┐
-        │ Blob Storage │      │ Azure SQL（院方自建）  │
-        └──────────────┘      └──────────────────────┘
+     ▼  20skin.tw / www.20skin.tw
+  ┌────────────────────────────────────────────────┐
+  │  Azure Static Web Apps（Standard）              │
+  │  · 靜態資產：/assets、/admin（後台 SPA）、圖片   │
+  │  · 其餘一切 → navigationFallback → SSR function │
+  │                                                │
+  │  Managed Function ＝ Nuxt 的 SSR server         │
+  │    （node:22，.output/server）                   │
+  │  · 每個請求即時算繪                             │
+  │  · 1000 條 301：catch-all 路由查 API（§2）       │
+  │  · SEO 產物：robots／sitemap／llms（§4）         │
+  │  🔴 它**不碰 SQL**，只打下面那個 API            │
+  └────────────────────┬───────────────────────────┘
+                       │ HTTPS（每個頁面請求都會發生）
+                       ▼
+  ┌────────────────────────────────────────────────┐
+  │  api.20skin.tw                                 │
+  │  獨立 Azure Functions（Flex Consumption）        │
+  │  · 前台內容讀取（公開端點）                     │
+  │  · 後台 CMS／認證／AI FAQ／上傳 SAS             │
+  │  · Timer：VersionPrune／ThrottleSweep           │
+  └────┬────────────────────────┬──────────────────┘
+       │ Managed Identity       │ Managed Identity
+       ▼                        ▼
+  ┌──────────────┐      ┌──────────────────────┐
+  │ Blob Storage │      │ Azure SQL（院方自建）  │
+  └──────────────┘      └──────────────────────┘
 
   20skinblog.com ──▶ 只抓內容與圖片，轉址不在範圍（§2）
 ```
+
+⚠️ **最重要的改變：API 從「後台的後端」變成「全站的後端」。**
+它掛掉不再只是後台不能用 —— 前台每一頁都要它。前台以 **5xx** 表達這種狀況，
+不會退化成 404 或空頁面（理由見 [09](09-frontend.md) §3）。
+
+⚠️ **SSR function 與舊的 `/api/fallback` 互斥**：SWA 只有一個 `api_location`。
+這正是原本「不用 SSR」的理由，而現在 `api/` 已整支刪除。
 
 沒有 CDN／WAF 中間層。SWA 本身有全球節點與 100 GB／月流量，這個規模夠用。
 
@@ -55,9 +72,13 @@
 **建置有順序相依：先 admin 後 web**（`pnpm --filter admin build && pnpm --filter web build`）。
 > 舊敘述「同一份程式碼用 Nuxt 的 route rules 切成兩種渲染模式、`/admin/**` 設 `ssr: false`」已作廢。改的理由是與 NTI 專案的目錄結構一致，兩案共用同一套心智模型。
 
-⚠️ **不使用 Nuxt 的 SSR 模式。** SWA 的框架設定表把 Nuxt 3 SSR 的 `api_location` 指向 `.output/server` —— 那個位置要留給 `/api/fallback` 這支 Managed Function，兩者互斥。`nuxt generate` 產出的 `.output/server` **不要上傳**。
+🔴 **2026-09-16 起改用 Nuxt 的 SSR 模式**（CLAUDE.md 決策 6）。
+舊敘述「不使用 SSR，因為 `api_location` 要留給 `/api/fallback`」已作廢 —— 那支 function 已刪除。
+`api_location` 現在指向 `.output/server`（Nuxt 的 SSR server，`node:22`）。
 
-> **Next.js Hybrid 已評估並排除，不要重新提案。** Azure 官方文件在 Next.js hybrid 的不支援清單中明列 **navigation fallback is unsupported**，而本站約 770 條 301 完全依賴 `navigationFallback` 轉給 `/api/fallback`（§2）；該模式同時不支援串接 Azure Functions，且至今仍為 preview。見末段來源。
+> **Next.js 仍不採用，但理由換了。** 原本的理由是「Next.js hybrid 不支援 navigation fallback，而 301 全靠它」——
+> 現在 301 改由應用程式自己處理，那個理由不再成立。**現在的理由是成本**：換框架要把 21 個模板從 Vue
+> 重寫成 React，而 Nuxt 本來就有 SSR 模式。姊妹專案 VicRound 用 Next.js 是因為它是全新專案。
 
 **一個原則：公開頁面全部是建置期產生的實體 HTML 檔，執行期不打 API、不打資料庫。** [03-seo-geo.md](03-seo-geo.md) 的 GEO 策略前提是 AI 爬蟲取得到內容，而 AI 爬蟲基本上不執行 JavaScript —— SPA-only 的內容對它們等於不存在。後台 `/admin/*` 則相反，純 SPA、不預渲染、不需被索引。
 
@@ -80,7 +101,7 @@
 
 ---
 
-## 2. 🔴 約 770 條 301 由 `/api/fallback` 處理
+## 2. 🔴 1000 條 301 由前台的 catch-all 路由查 API
 
 `staticwebapp.config.json` 放不下這批規則，三個原因都是 SWA 的硬限制：
 
@@ -88,37 +109,59 @@
 |---|---|
 | 設定檔上限 **20 KB** | 一條規則約 90–110 bytes，只放得下約 180–200 條 |
 | `route` **不比對 query string** | `share.php?class=醫美新知` 與 `?class=皮膚新知` 在 SWA 眼中是同一個路徑 |
-| **無法依網域分流** | `20skinblog.com` 是另一個網域，且 Free 的自訂網域上限 2 個已被主站用滿 |
+| **無法依網域分流** | `20skinblog.com` 是另一個網域 |
 
-### 主站：navigationFallback 導到 Function
+### 現在的做法（2026-09-16 起）
 
 ```
-瀏覽器請求 /product01-d07.php
-  → SWA 找不到對應的實體檔案
-  → navigationFallback 轉給 /api/fallback
-  → Function 讀 x-ms-original-url，查 SQL 的 301 對照表
-  → 命中：回 301 ＋ Location；未命中：回 404 頁
+瀏覽器請求 /share_info.php?no=842
+  → SWA 找不到實體檔案 → navigationFallback → Nuxt 的 SSR function
+  → Nuxt 路由表比對不到 → 掉到 catch-all（pages/[...slug].vue）
+  → 打 API 的 GET /redirects/resolve?path=…
+  → 命中：navigateTo(…, { redirectCode: 301, external: true })
+  → 未命中：throw 404 → error.vue 算繪模板 20
 ```
 
-`x-ms-original-url` 帶的是**完整原始網址（含 query string）**，所以 `share.php?class=醫美新知` 這類轉址在這裡做得到 —— 這正是 SWA 社群針對 20 KB 上限的標準解法。
+🔴 **順序不可調換：先比對實體路由，比不到才查轉址，都沒有才 404。**
+反過來（每個請求都先查轉址）會讓全站每一次瀏覽都多一次 API 往返，
+而命中率是千分之幾 —— 那是拿 99.9% 的請求去補貼 0.1%。
+catch-all 在 Nuxt 路由表是最後一名，這個順序天然成立。
 
-三個配套：
+⚠️ **帶的是完整路徑含 query string**（`route.fullPath`）。舊站的文章網址是
+`/share_info.php?no=842`，少了 query 就只剩 `/share_info.php` —— **780 條文章轉址
+全部打不中**。
 
-- **`/admin/*` 要有自己的 route rewrite** 指向後台 SPA 的 `index.html`，否則後台的深層連結也會掉進 fallback。
-- **最高流量的十幾條**（首頁、四個分類頁）仍寫進 `staticwebapp.config.json` 走最快路徑，不必經過 Function。由建置腳本從 SQL 產生，CI 檢查是否超過 20 KB。
-- **301 回應要帶 `Cache-Control`**，讓瀏覽器與 SWA 節點快取，減少重複打到 Function。
+⚠️ **`navigateTo` 要 `external: true`**。目標雖是站內路徑，但這裡的任務是送出 HTTP
+轉址讓爬蟲重新請求；少了它 Google 看到的是 200 而不是 301，舊網址的權重不會轉移。
 
-**代價**：Managed Functions 是 Consumption 方案、沒有預熱，每個未命中的請求會吃一次冷啟動（數秒）。遷移期爬蟲會密集打舊網址，這段期間的 301 回應會偏慢。Google 容忍這個延遲，且流量會隨時間衰減，但要有心理準備。
+⚠️ **路徑正規化留在 API 端**（`RedirectHandler.NormalizePath`）。那一份同時是後台新增與
+CSV 匯入用的 —— 讀寫共用同一段是這條規則能成立的前提。搬進前端等於再造一份，
+而分岔的症狀是「後台看得到規則，但線上不轉址」，只有上線後才會發現（[08](08-database.md) §H）。
 
-🔴 **`routes` 的順序決定後台開不開得起來。** SWA 是「先比對 `routes`、後找檔案」，所以 `/admin/*` 那條 SPA rewrite 會把 `/admin/static/index-*.js` 也改寫成 `index.html` —— 瀏覽器拿到 `text/html` 當 module 解析，後台是一片白畫面，而且**前台完全正常**，不會有任何錯誤訊息提醒你。`/admin/static/*` 必須排在它前面。2026-09-11 在正式環境實際踩到（`/admin/` 與它的 JS 回的是同一份 740 bytes）。
+### 舊做法：`/api/fallback`（2026-09-16 刪除）
 
-⚠️ 設定檔是純 JSON，且 SWA 會驗 schema —— **不要加 `_comment` 這類自訂欄位**，說明寫在這裡或 `tools/deploy-swa.sh` 的檔頭。
+在 SSR 之前，這件事由 SWA 的 Managed Function `api/Skin20.Fallback` 做：
+`navigationFallback` 把找不到檔案的請求轉給它，它讀 `x-ms-original-url` 查 SQL。
 
-> **這支 Function 不能搬到 `api.20skin.tw`。** `navigationFallback` 只支援 rewrite 到站內路徑，指不到外部網址；SWA 也沒有「轉發到外部 API」的機制（那需要 Standard 的 linked backend，見 §1）。所以 SWA 的 `api/` 資料夾會**只留這一支** function，其餘全部在獨立 Function App。
->
-> 連帶結果：SWA 端仍需要一組 **SQL 唯讀連線字串**來查 301 對照表，這是 SWA 上唯一剩下的明文密鑰（§6）。
->
-> **一個值得在第一週技術驗證時一併評估的簡化**：301 對照表其實可以在**建置期**烤成 `api/data/redirects.json` 隨 Managed Function 一起部署，讓這支 function 完全不碰資料庫 —— 省掉冷啟動時的 DB 連線、也省掉那組連線字串。代價是新增轉址規則要重跑一次 build 才生效。因為[孤兒頁面尚未盤點完整](06-page-inventory.md)、上線初期預期會陸續補規則，這個代價要先評估過再決定，本文件暫維持查 SQL 的作法。
+它被刪掉的原因**不是它不好，是它與 Nuxt 的 SSR function 互斥** —— SWA 只有一個
+`api_location`，兩者都要佔。
+
+刪掉之後的兩個連帶變化：
+
+- ✅ **路徑正規化從兩份變一份**。原本 `api/Fallback.cs` 與 `RedirectHandler.NormalizePath`
+  各有一份，檔頭寫著「必須逐字一致」。
+- ✅ **SWA 上不再需要 SQL 唯讀連線字串** —— 那是全架構最後一個明文密鑰（§6）。
+  Nuxt 的 SSR function 完全不碰 SQL，它只打 API。
+
+### 仍然保留的：設定檔裡的 7 條快速路徑
+
+最高流量的七條（首頁、`doctor.php`、`contact.php`、四個 `product*.php`）仍寫在
+`staticwebapp.config.json`，不進 function。
+
+⚠️ **它們與資料庫的 `Redirects` 表刻意重複。** 不是疏漏 —— 那七條走設定檔不必冷啟動。
+🔴 **但這讓 smoke test 有一個陷阱**：拿 `/index2.php` 驗 301 會**永遠通過**，
+即使整條「SSR → API → SQL」的查表鏈路壞掉。CI 因此改用 `/doctor.php`
+（沒有快速路徑）—— 見 §5。
 
 ### 「不做 fallback」已評估並否決（2026-08-10）
 
@@ -218,7 +261,7 @@
 
 架構裡有兩處 Functions，能力天差地遠。**把工作放錯地方是這個架構最容易犯的錯**：
 
-| | SWA Managed Function<br>（只有 `/api/fallback`） | 獨立 Function App<br>（`api.20skin.tw`，Flex Consumption） |
+| | SWA Managed Function<br>（現在跑 Nuxt 的 SSR server） | 獨立 Function App<br>（`api.20skin.tw`，Flex Consumption） |
 |---|---|---|
 | HTTP 逾時 | **45 秒**（SWA `/api` 路由限制） | **230 秒**（Azure Load Balancer 閒置上限，不分方案） |
 | 非 HTTP 逾時 | 不適用 | 預設 **30 分**，最大不設限 |
@@ -230,7 +273,12 @@
 
 三個因此改變的規劃：
 
-1. **排程發布改用 Timer trigger。** 原本因為 Managed Functions 沒有 Timer trigger，得用 GitHub Actions cron 繞（且有排隊延遲、時間不精確）。獨立 Function App 有 Timer trigger，**原本的 `scheduled.yml` 範本已移除**，改為 [`scheduled-publish.js`](templates/scheduled-publish.js)。到點後由該 function 呼叫 GitHub API 的 `repository_dispatch` 觸發重建（§5）。後台文案仍要寫「最早生效時間」，但延遲來源從「GitHub 排程排隊」變成「重建耗時」。
+1. ~~**排程發布改用 Timer trigger。**~~ 🔴 **2026-09-16：連 Timer 都不需要了。**
+   演進過程：GitHub Actions cron（有排隊延遲）→ 獨立 Function App 的 Timer（每 15 分鐘輪詢、
+   有異動就觸發重建）→ **什麼都不用**。
+   SSR 下 `Visibility.PublicFilter` 用的是**查詢當下的 `@Now`** —— 排程時間一到，
+   下一個請求自然就看得到，沒有輪詢、沒有建置。
+   ⚠️ 後台文案仍寫「最早生效時間」，但那是因為時區與使用者預期，不再是因為建置耗時。
 2. **連 SQL 與 Blob 改用 Managed Identity**，不再需要明文密鑰。見 §6。
 3. **內容重建不再連帶重新部署 API。** 原本兩者是同一個部署單位，現在完全分離 —— 後台前端仍應對 API 的 5xx 與逾時做重試，但重試的理由從「API 剛好在重新部署」變成一般的暫態錯誤。
 
@@ -313,9 +361,10 @@ functions/         獨立 Azure Functions App —— 應用程式 API（.NET 10�
 >
 > ⚠️ **2026-09-11 起方案已是 Standard**（原因見 §3），所以「升級 Standard ＋ 改用 bring-your-own-functions」這條路現在**是開著的** —— 把 SWA 的 `/api/*` 串到我們自己的 Function App，`api/` 就不必停在 net9.0。
 >
-> **但不要急著改。** BYOF 之下 `navigationFallback` 能不能照常 rewrite 到 `/api/fallback` **尚未驗證**，而約 770 條 301 全靠它。這是可評估項，不是待辦 —— 先把 §8 的第一週技術驗證做完再說。
+> **但不要急著改。** BYOF 之下 `navigationFallback` 能不能照常 rewrite 到 SSR function **尚未驗證**，
+> 而全站每一個頁面請求都靠它。這是可評估項，不是待辦。
 >
-> 影響範圍很小：`api/` 只有 fallback 一支、約 80 行、沒有領域邏輯，[範本](templates/Fallback.cs)只用 Dapper。應用程式 API 100% 是 .NET 10。
+> ⚠️ **這段已無意義（2026-09-16）**：`api/` 整支刪除，SWA 的 managed function 位置現在跑 Nuxt（`node:22`），.NET 版本限制與這個專案無關了。
 
 範本在 [templates/](templates/)。**認證需要兩組**：SWA 用 `AZURE_STATIC_WEB_APPS_API_TOKEN`，Function App 建議用 **OIDC 服務主體**（`azure/login@v2`），不要用發布設定檔。
 
@@ -381,13 +430,15 @@ functions/         獨立 Azure Functions App —— 應用程式 API（.NET 10�
 |---|---|
 | **為 Function App 的 Managed Identity 建 SQL 使用者**（執行期身分） | 應用程式 API 走 **Microsoft Entra 驗證**，不用帳號密碼：`CREATE USER [<function-app-name>] FROM EXTERNAL PROVIDER`，授予 `db_datareader` ＋ `db_datawriter` ＋ 必要的 stored procedure 執行權。**不要給 DDL 權限** —— 執行期不做遷移 |
 | **為 GitHub Actions 服務主體建 SQL 使用者**（遷移身分） | 這個才需要 DDL 權限（建議 `db_ddladmin` ＋ `db_datareader`／`db_datawriter`，仍不建議 `db_owner`）。**與上一列是兩個不同的身分，不可共用** |
-| **一組 SQL 唯讀連線字串**（給 SWA） | 僅供 `/api/fallback` 查 301 對照表。⚠️ **SWA 的 managed functions 能否用 Managed Identity 連 SQL 尚未查證**（改 Standard 之後可能有解），在確認之前仍假設**這組只能明文存在 SWA application settings** —— 請給唯讀專用帳號並規劃密碼輪替。是整個架構剩下的唯一明文密鑰，`redirects.json` 方案若採用可連這個一起消滅（§2）。**列入 §8 待驗證** |
+| ~~**一組 SQL 唯讀連線字串**（給 SWA）~~ | ✅ **2026-09-16 起不需要了。** 它原本是給 `/api/fallback` 查 301 用的，而那支 function 已刪除。Nuxt 的 SSR function **完全不碰 SQL**，它只打 API —— 於是全架構再也沒有明文的 SQL 連線字串（§2、§6 末段） |
 | **SQL 防火牆放行** | ①「允許 Azure 服務存取」—— Flex Consumption 的出口 IP 不固定；若院方要求收斂，可改用 **VNet 整合 ＋ 服務端點**（Flex Consumption 支援，Managed Functions 不支援）。② GitHub Actions runner —— build 期間要讀 DB 做預渲染、部署時要跑遷移。runner IP 浮動，**需授權 CI 以 `az sql server firewall-rule` 動態開關**（範本已含，結束即刪） |
 | **一套非正式資料庫**（建議） | 沒有 staging 也沒有 PR 預覽環境（§5），上線前的後台流程驗證是直接對尚未切 DNS 的正式環境做。若那時已載入正式內容，寫入測試會落進正式資料 —— 有一套可丟棄的資料庫會乾淨很多。上線後若要做破壞性測試，也只能靠它 |
 
 > 連線池提醒：Function App 每個執行個體各持一份連線池。連線物件放模組層級，不要每次呼叫 new 一個。
 
-> **明文密鑰從兩個減為一個。** 原本 SQL 連線字串與 Blob 帳戶金鑰都得明文放在 SWA 設定裡；API 搬到獨立 Function App 之後，兩者都改用 **Managed Identity**（Blob 走 user delegation SAS，見 §3），只剩 `/api/fallback` 用的那組唯讀連線字串。
+> **明文密鑰從兩個減為一個，再減為零。** 原本 SQL 連線字串與 Blob 帳戶金鑰都得明文放在 SWA 設定裡；
+> API 搬到獨立 Function App 之後兩者都改用 **Managed Identity**（Blob 走 user delegation SAS，見 §3），
+> 只剩 `/api/fallback` 用的那組唯讀連線字串；**2026-09-16 那支 function 刪除，最後一個也消失了**。
 
 ---
 
@@ -403,7 +454,9 @@ functions/         獨立 Azure Functions App —— 應用程式 API（.NET 10�
 8. 舊 PHP 主機保留至少 12 個月（[01-sitemap.md](01-sitemap.md) §4）。
 9. 連續 8 週監控 Search Console 索引狀態與 404 報告。
 
-> **301 在切 DNS 之前就驗得到。** 轉址邏輯在 `/api/fallback`，屬於應用程式的一部分 —— 直接對 SWA 的預設網址（`*.azurestaticapps.net`）打 `/product01-d07.php` 就會走完整條路徑。這是拿掉中間層之後的一個好處：不需要臨時子網域預演，也不需要預覽環境。
+> **301 在切 DNS 之前就驗得到。** 轉址邏輯是應用程式的一部分 —— 直接對 SWA 的預設網址
+> （`*.azurestaticapps.net`）打 `/doctor.php` 就會走完整條路徑。
+> ⚠️ **不要用 `/index2.php` 驗** —— 它在設定檔裡有快速路徑，就算整條查表鏈路壞掉也會回 301（§2）。
 
 > **Mod_Security 的 406 問題隨舊主機一起消失**，且 SWA 不會依 User-Agent 阻擋。但步驟 7 的 AI 爬蟲驗證仍要做一次，確認 `robots.txt` 的放行區塊正確 —— 不要重演 [00-site-audit.md](00-site-audit.md) §2 的狀況。
 
@@ -415,7 +468,7 @@ functions/         獨立 Azure Functions App —— 應用程式 API（.NET 10�
 
 | 項目 | 為何重要 |
 |---|---|
-| **`/api/fallback` 的 301 行為** | 整批 301 都靠它。要確認 `x-ms-original-url` 帶得到 query string、回應的 301 ＋ `Location` 原樣送出、`/admin/*` 的 SPA 深層連結不會被誤導進 fallback。**開工第一週就要做的技術驗證** |
+| **301 行為** | ✅ 2026-09-16 本機端到端驗過（`/share_info.php?no=842` → `/blog/share-842/`、大小寫正規化、未命中 404）。仍待在 Azure 上驗一次 |
 | **跨來源鏈路**（新增） | 前台在 `20skin.tw`、API 在 `api.20skin.tw`。要驗 preflight、認證 token 的攜帶方式、錯誤回應是否也帶得到 CORS 標頭（**漏掉這點會讓 4xx/5xx 在瀏覽器變成看不出原因的 network error**）。CORS 由院方設定，但驗收要一起做 |
 | **Managed Identity 連 SQL 與 Blob**（新增） | 沒有密鑰是好事，但也代表本機開發與 CI 的驗證路徑不同，要先確認開發流程走得通 |
 | **build 產物大小 vs 500 MB** | 超過就必須改變資產策略。Nuxt 的 `_payload.json`（每路由一份，950 份）未計入原估算，要單獨量 |
@@ -441,7 +494,7 @@ functions/         獨立 Azure Functions App —— 應用程式 API（.NET 10�
 
 | 文件 | 影響 |
 |---|---|
-| [01-sitemap.md](01-sitemap.md) §4 | 301 對照表內容不變，落地位置從主機 `.htaccess` 變成「SQL ＋ `/api/fallback`」 |
+| [01-sitemap.md](01-sitemap.md) §4 | 301 對照表內容不變，落地位置從主機 `.htaccess` 變成「SQL ＋ 前台 catch-all 查 API」 |
 | [02-backend-cms.md](02-backend-cms.md) | 排程發布改用 **Timer trigger**（§4，已非 GitHub Actions cron）；**後台 IP 白名單與雙因素都不做**，登入防護只剩次數限制一項（§2）；角色授權在 Function 內驗證；800 篇匯入仍用本機腳本；語料匯出在建置期；**不做媒體庫**，上傳只在內容欄位裡發生且為瀏覽器直傳 Blob（§3、§4） |
 | [05-roadmap.md](05-roadmap.md) | Phase 1 新增部署與 CI/CD 工項（**兩條 workflow**）；**上線前驗收改在尚未切 DNS 的正式環境**（不設 staging、不設 PR 預覽）；新增 build 時間與產物大小實測 |
 

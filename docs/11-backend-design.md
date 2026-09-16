@@ -317,7 +317,7 @@ public const string PublicFilter = """
 1. **核准即 Status = 3，不管 `PublishAt` 有沒有到。** 「已排程」是 `Status = 3 AND PublishAt > now` **推導**出來的顯示狀態，不是資料庫裡的第五個值。
    > **為什麼不讓 Timer 去翻狀態**：翻狀態與觸發重建是兩個非原子步驟。若重建先跑，那筆內容明明到點了卻不在產物裡，要等下一輪。判定式放在查詢裡就沒有這個時序問題 —— Timer 只負責「到點了，去觸發一次重建」。
    >
-   > ⚠️ [templates/ScheduledPublish.cs](templates/ScheduledPublish.cs) 目前寫的是 Timer 翻狀態、且出現了 schema 沒有的 `Scheduled`／`Archived` 值。**該範本需依本節同步**，見 §16。
+   > ⚠️ ~~templates/ScheduledPublish.cs 需依本節同步~~ —— 🔴 **2026-09-16：該範本與它對應的 Timer 都已刪除**（§11）。排程發布在 SSR 下是即時的，不需要任何 Timer。
 2. **已發布的內容被編輯時，前台看到的仍是 `PublishedVersionId` 指的那一版。** 編輯產生新的草稿版本，核准後才改寫 `PublishedVersionId`。沒有這條，編輯到一半的療程頁會在下一次重建時上線。
    > ⚠️ 這條成立的前提是**兩件事**，缺一不可：
    > ① 建置期匯出讀的是 `PublishedVersionId` 的快照，**不是 `ContentItems` 的即時欄位**（[09](09-frontend.md) §3）；
@@ -392,26 +392,26 @@ SAS 以 **Managed Identity 取 user delegation key** 簽發，系統內不存放
 
 ---
 
-## 10. 觸發重建
+## 10. ~~觸發重建~~ —— 整節作廢（2026-09-16）
 
-**SWA 沒有 ISR，內容變更一定要重跑 build**（[07](07-deployment.md) §5）。作法是呼叫 GitHub API 的 `repository_dispatch`。
+🔴 **這一整套機制已刪除。** 它的前提是「SWA 沒有 ISR，內容變更一定要重跑 build」——
+前台改成執行期 SSR 之後**沒有建置這一步**（CLAUDE.md 決策 6）。
 
-```
-後台發布／核准／排程到點
-  → RebuildService.RequestAsync()
-  → 聚合窗口內（3–5 分鐘）只保留一次待觸發
-  → POST /repos/{repo}/dispatches  { event_type: "content-published" }
-```
+刪掉的東西：`RebuildService`、`RebuildHandler`、`IRebuildService`、
+`GET`／`POST /admin/rebuild`、四個呼叫點、聚合窗口與它的 Blob 狀態檔、
+設定鍵 `GITHUB_REPO`／`GITHUB_DISPATCH_TOKEN`／`Rebuild__AggregateWindowMinutes`。
 
-五條規則：
+✅ **連帶：這個 App 不再需要任何外部憑證。** 原本 `GITHUB_DISPATCH_TOKEN` 是唯一一個
+（SQL 與 Blob 都走 Managed Identity）。
 
-1. **要聚合。** 連續發布 10 篇不該觸發 10 次 build（[07](07-deployment.md) §5）。窗口狀態存 DB 或 Blob，**不要用 `MemoryCache`**（多執行個體）
-2. **不要因為重建失敗而 throw。** 內容狀態已經改好了，重建失敗應獨立告警，不要讓整個流程重跑一次狀態轉換
-3. **沒有異動就不要觸發。** Timer 每 15 分鐘跑一次，沒有到期內容時直接 return，否則等於每 15 分鐘跑一次全站 build
-4. **後台要看得到「發布中／已上線」**（[09](09-frontend.md) §10），端點是 `GET /admin/rebuild`（[10](10-api.md) §3.4）。⚠️ 它回的是「請求送出去了沒有」，**不是建置進度** —— `repository_dispatch` 是射後不理，API 不知道 GitHub Actions 跑到哪裡。後台那個狀態字是樂觀顯示，不是部署成功的證據
-5. **改工作副本不要觸發。** 首頁版位的 `PUT /admin/home-section` 改的是工作副本（§8），前台沒有任何變化 —— 觸發重建只是白跑一次建置，而且會讓人以為「存檔＝上線」。真正觸發的是核准那一步
+⚠️ **原本那五條規則裡，有一條的精神仍然成立、只是換了地方**：
 
-`GITHUB_DISPATCH_TOKEN` 是這個 App 唯一需要保管的外部憑證（SQL 與 Blob 都走 Managed Identity）。權限收斂到單一 repo 的 dispatch。
+> 「**改工作副本不要觸發。** 首頁版位的 `PUT /admin/home-section` 改的是工作副本（§8），
+> 前台沒有任何變化。」
+
+現在它表現為：前台讀的是**已核准版本的快照**，工作副本本來就不會外流 ——
+`GET /home` 讀的是首頁那筆 Page 的 `PublishedVersionId` 快照，不是 `HomeSections` 即時表。
+這條規則從「不要觸發重建」變成「讀對地方」，但要防的事情是同一件。
 
 ---
 
@@ -419,9 +419,11 @@ SAS 以 **Managed Identity 取 user delegation key** 簽發，系統內不存放
 
 Azure SQL 沒有 Agent Job，排程一律走 Functions Timer（獨立 Function App 支援，Managed Functions 不支援）。cron 由 app setting 注入。
 
+⚠️ **2026-09-16 起只剩兩支**（原本三支）。
+
 | Function | 工作 |
 |---|---|
-| `ScheduledPublish` | 掃到期的 `PublishAt`／`UnpublishAt`，**有異動就觸發重建**（不改狀態，見 §7） |
+| ~~`ScheduledPublish`~~ | 🔴 **2026-09-16 刪除。** 它的工作是「掃到期的 `PublishAt`／`UnpublishAt`，有異動就觸發重建」—— 而現在沒有重建。<br>✅ **排程發布因此變成即時的**：`Visibility.PublicFilter` 用的是**查詢當下的 `@Now`**，時間一到，下一個請求自然就看得到。<br>舊路徑是「最多等 15 分鐘輪詢 ＋ 約 4 分鐘建置」。 |
 | `VersionPrune` | 每筆內容保留最近 30 版，其餘刪除（§8） |
 | `ThrottleSweep` | 清掉 `LoginThrottles` 的過期計數列 |
 
@@ -484,7 +486,11 @@ Azure SQL 沒有 Agent Job，排程一律走 Functions Timer（獨立 Function A
 
 ## 14. `api/fallback` 的施工限制（另一套規則）
 
-這支 function **不適用本文件其餘各節**。它的完整規格在 [templates/Fallback.cs](templates/Fallback.cs)，要點：
+🔴 **2026-09-16：這一節整段作廢。** `api/` 與 `templates/Fallback.cs` 都已刪除 ——
+SWA 的 managed function 位置現在跑 Nuxt 的 SSR server，301 改由前台的 catch-all 路由
+查 `GET /redirects/resolve`（[07](07-deployment.md) §2）。以下保留作對照：
+
+這支 function **不適用本文件其餘各節**，要點：
 
 - **目標框架最高 net9.0**，且要與 `staticwebapp.config.json` 的 `apiRuntime` 一致。這是平台限制、已查證，**不要改成 net10.0**（會部署失敗）
 - **只用 Dapper，不要載入 EF Core** —— 每個未命中的請求都吃一次冷啟動，載入 EF Core 直接拖慢遷移期的 301 回應
@@ -523,7 +529,7 @@ Azure SQL 沒有 Agent Job，排程一律走 Functions Timer（獨立 Function A
 
 | 項目 | 說明 |
 |---|---|
-| **[templates/ScheduledPublish.cs](templates/ScheduledPublish.cs) 與 §7 不一致** | 範本寫 Timer 翻狀態，且用了 schema 沒有的 `Scheduled`／`Archived`。依 §7 應改為「只掃到期、只觸發重建」，狀態值改用 [08](08-database.md) §B-1 的四態 |
+| ~~templates/ScheduledPublish.cs 與 §7 不一致~~ | ✅ **2026-09-16 消失**：範本與 Timer 都已刪除（§11） |
 | **機器人驗證供應商** | [10](10-api.md) §5，開工前定案 |
 | **`RefreshTokens` vs 短效 JWT ＋ `SecurityStamp`** | [08](08-database.md) §L 二選一，不要兩套都做 |
 | **圖片衍生尺寸由誰產** | [07](07-deployment.md) §3 待決。若由 Function 端 sharp 轉檔，§9 的直傳流程要多一步「轉檔完成才寫 `Variants`」 |

@@ -4,7 +4,7 @@
 
 **API 分兩處，這是看範本前要先建立的心智模型：**
 
-- `api/` —— SWA 的 Managed Function，**只有 `fallback` 這一支**。存在的唯一理由是 `navigationFallback` 指不到外部網址。
+- ~~`api/` —— SWA 的 Managed Function~~ 🔴 **2026-09-16 整支刪除**，那個位置現在跑 Nuxt 的 SSR function（CLAUDE.md 決策 7）。
 - `functions/` —— 獨立的 Azure Functions App（`api.20skin.tw`），前後台共用的應用程式 API 全在這裡。
 
 | 檔案 | 放到 | 說明 |
@@ -12,9 +12,9 @@
 | [deploy-site.yml](deploy-site.yml) | `.github/workflows/` | build 前台（`nuxt generate` 預渲染）＋ `api/`，同一次部署；部署後 smoke test |
 | [deploy-api.yml](deploy-api.yml) | `.github/workflows/` | 部署 `functions/` 到獨立 Function App。OIDC 認證；部署後 smoke test |
 | [staticwebapp.config.json](staticwebapp.config.json) | `frontend/public/` | SWA 路由設定（`apiRuntime` 要與 `api/` 的 `TargetFramework` 一致） |
-| [Fallback.cs](Fallback.cs) | `api/` | 承接約 770 條 301 —— 查對照表回 301，未命中回 404。**Dapper only，刻意不載入 EF Core** |
+| ~~Fallback.cs~~ | — | 🔴 **2026-09-16 刪除。** 301 改由前台的 catch-all 路由查 `GET /redirects/resolve`（docs/07 §2） |
 | [Program.cs](Program.cs) | `functions/` | DI 設定：Managed Identity 連 SQL／Blob、EF Core 與 Dapper 共用連線設定 |
-| [ScheduledPublish.cs](ScheduledPublish.cs) | `functions/Functions/` | 排程發布／定時下架的 **Timer trigger**，到期後觸發全站重建 |
+| ~~ScheduledPublish.cs~~ | — | 🔴 **2026-09-16 刪除。** 沒有建置期就沒有東西要觸發；排程發布因此變成即時的（docs/11 §11） |
 
 **Secrets／變數**：SWA 用 `AZURE_STATIC_WEB_APPS_API_TOKEN`；Function App 用 OIDC 三件組（`AZURE_CLIENT_ID`／`AZURE_TENANT_ID`／`AZURE_SUBSCRIPTION_ID`）。**API 的執行期沒有任何密鑰**（Managed Identity）；SWA 端的 `api/` 仍需一組 SQL 唯讀連線字串。
 
@@ -38,7 +38,9 @@
 
 ## 301 是怎麼運作的
 
+⚠️ **以下這段描述的是 2026-09-16 之前的做法，保留作對照：**
 `navigationFallback` 把所有找不到實體檔案的請求轉給 `/api/fallback`，Function 從 `x-ms-original-url`（**含 query string**）查 SQL 對照表，命中回 301、未命中回 404。
+現在轉給的是 Nuxt 的 SSR function，由它的 catch-all 路由打 API 查表。
 
 這麼做是因為 `staticwebapp.config.json` 有 **20 KB 上限**（約 200 條）且 `route` **不比對 query string** —— `share.php?class=醫美新知` 與 `?class=皮膚新知` 在 SWA 眼中是同一個路徑。範本裡直接寫進 config 的那幾條是最高流量的規則，走最快路徑不經過 Function。
 

@@ -80,18 +80,62 @@
 
 ### 3.1 公開（匿名，前台用）
 
-前台是建置期預渲染的靜態站，**執行期只打這四支**（[09-frontend.md](09-frontend.md) §4）：
+🔴 **2026-09-16 起前台是執行期 SSR，這一區從四支變成一整套**（CLAUDE.md 決策 6）。
+舊敘述「沒有前台內容端點，資料在建置期烤進 HTML」**已作廢**。
+
+#### 動作類（使用者觸發）
 
 | 端點 | 說明 |
 |---|---|
 | `GET /health` | 冒煙測試用。兩條 workflow 的部署後檢查都打它 |
 | `POST /contact` | `/contact/` 表單。**只寄通知信，不落庫**（[02](02-backend-cms.md) §2）。回應不帶任何內部 Id |
 | `POST /questions/miss` | 站內搜尋查無結果時回寫一筆到 `QuestionInbox`（[08](08-database.md) §F）。去重由伺服器端做 |
-| `GET /site-settings/public` | 只回前台需要的鍵：**AI FAQ 啟用開關**、面板文案、轉真人出口網址。**收件信箱、追蹤碼等內部設定一律不外露** |
 
-⚠️ **`POST /contact` 與 `POST /questions/miss` 是對公網開放的寫入端點**，必須有 rate limit ＋ 機器人驗證（§5）。`/contact` 另須記錄隱私同意時間 —— 但**只在寄出的通知信裡帶，不入庫**。
+⚠️ **這兩支是對公網開放的寫入端點**，必須有 rate limit ＋ 機器人驗證（§5）。
+`/contact` 另須記錄隱私同意時間 —— 但**只在寄出的通知信裡帶，不入庫**。
 
-> 沒有前台內容端點。療程、文章、醫師這些資料**不經由 API 提供給前台** —— 它們在建置期由匯出腳本直接查 SQL 烤進 HTML（[09](09-frontend.md) §3）。這是純靜態架構的直接結果，不是遺漏。
+#### 內容讀取（前台每一頁都會打）
+
+| 端點 | 說明 |
+|---|---|
+| `GET /{unit}` | 九個單元的列表。⚠️ **`article` 會自動分頁**（每頁 12、上限 100）—— 1100 筆一次送出沒有任何呼叫端需要。支援 `?sort=latest`、`?categoryTermId=`、`?tagTermId=`、`?authorDoctorId=` |
+| `GET /content?path=…` | 依網址取單筆，**含內文**。網址全站唯一（[08](08-database.md) §B-1），所以這是內頁最直接的查法 |
+| `GET /content/batch?ids=…` | 依 id 批次取（上限 100）。給「關聯目標需要的欄位不只標題」用 —— 療程卡片要關聯文章的封面與日期，而 `relations[]` 只帶 slug／title／urlPath |
+| `GET /article/popular-tags?limit=` | 側欄熱門標籤，**依實際引用篇數在 SQL 層聚合** |
+| `GET /home` | 首頁七個版位。🔴 讀的是**首頁那筆 Page 已核准版本的快照**，不是 `HomeSections` 即時表（[08](08-database.md) §G-2） |
+| `GET /menu` | 導覽選單與頁尾。`linkKind=1` 的網址由 `ContentItems.UrlPath` 決定，不另存一份 |
+| `GET /redirects/resolve?path=…` | 舊網址解析。**單筆 seek**，命中回 `{ toPath, statusCode }`，未命中 404 |
+| `GET /sitemap` | sitemap 的資料（XML 由前台組，見下） |
+| `GET /site-settings/public` | 只回前台需要的鍵：站名、描述、**AI FAQ 啟用開關**、面板文案、轉真人出口。🔴 **收件信箱、追蹤碼等內部設定一律不外露** —— 這一區加東西等於對全世界公開 |
+
+⚠️ **回傳的是版本快照本身，不另外定義一組公開 DTO。** 那是刻意的：
+`tools/content-export` 產出的形狀就是前台 `app/data/_content.ts` 的契約（`ContentRecord`）。
+再定義一份等於把同一個形狀維護兩次，而兩邊分岔時不會有任何錯誤訊息。
+⚠️ 這**不是**在外洩內部格式 —— 那份快照在靜態時代就已經整包內聯進產物、隨每一頁送到瀏覽器。
+
+⚠️ **每一筆都帶 `indexable`**：「內容夠不夠實在，值得被索引嗎」。
+🔴 前台的 `noindex` 與 sitemap 的收錄範圍**讀同一個值**（`Common/Indexability.cs`）——
+兩邊各判一次的下場已經發生過：2026-09-15 發現 sitemap 收了 29 個 `noindex` 網址。
+
+#### SEO 產物
+
+| 端點 | 對外路徑 |
+|---|---|
+| `GET /seo/robots.txt` | `/robots.txt` |
+| `GET /seo/sitemap.xml` | `/sitemap.xml` |
+| `GET /seo/sitemap/{key}` | `/sitemap-{key}.xml`（五個分檔） |
+| `GET /seo/llms.txt` | `/llms.txt` |
+| `GET /seo/llms-full.txt` | `/llms-full.txt` |
+| `GET /seo/faq.json` | `/faq.json` |
+
+⚠️ **由 Nuxt 的 server route 同源代理出去**，不是讓爬蟲直接打 api 網域 ——
+sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會整份忽略。
+⚠️ **格式走 `Common/ExportFormats.cs`**，與建置期匯出工具共用同一份原始碼
+（`<Compile Include>`）。在前端重寫一次 XML 產生器就是第二份。
+⚠️ **`origin` 由呼叫端帶**（Nuxt 從請求推導）—— 正式站、測試站與 SWA 預覽環境是三個主機名。
+🔴 這是 2026-09-16 的直接教訓：把主機名寫死成 `https://20skin.tw` 讓正式站的 sitemap 變成空的。
+⚠️ **`robots.txt` 的設定被清空時回 404，不要送出空檔案** —— 空的 robots.txt 與「沒有這個檔案」
+對爬蟲的意義不同。
 
 ### 3.2 認證
 
