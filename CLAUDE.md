@@ -420,7 +420,10 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
 - Mod_Security 規則設定檔
 - **Azure SQL：兩組資料庫使用者**（Function App 的 Managed Identity ＝ DML；GitHub Actions 服務主體 ＝ DDL，供遷移用）、建置期唯讀連線字串、**防火牆放行（含授權 CI 動態開關 runner IP）**。
   ⚠️ 原本還要「一組給 `/api/fallback` 的唯讀連線字串」—— **2026-09-16 起不需要了**，那支 function 已刪除。見 [docs/07-deployment.md](docs/07-deployment.md) §6
-- **`api.20skin.tw` 的 CORS 設定**（院方自行設定，2026-08-10 確認）與 Storage 帳戶的 CORS —— 兩套各自獨立
+- **`api.20skin.tw` 的 CORS 設定**（院方自行設定，2026-08-10 確認）。
+  ✅ **Storage 帳戶的 CORS 已於 2026-09-16 設定完成**（`st20skinweb`，放行三個來源的 `PUT`／`OPTIONS`）——
+  兩套各自獨立，不要以為設了一邊另一邊就會通。
+  🔴 **換網域時要記得同步加**：少了它後台圖片上傳會整個壞掉，而症狀是一個沒有任何資訊的 network error。
 
 清單見 [docs/research/site-audit-raw.md](docs/research/site-audit-raw.md) 末段。
 

@@ -850,8 +850,18 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
       而 `GET /site-settings/public` 2026-09-15 讀得回真資料 → 連線只可能走受控識別。**Blob 那半（user delegation key 簽 SAS）還沒驗**
 - [x] ~~build 產物大小~~ — ✅ **59.1 MB / 3885 個檔案**（2026-09-15 重建後實計，含每路由一份的 `_payload.json`）。上限是 SWA **Standard 的 500 MB**，不是 250 MB。⚠️ `du -sh` 會報 71 MB，那是磁碟區塊不是檔案大小
 - [x] ~~全站 `nuxt generate` 時間~~ —— **已不適用**：2026-09-16 改成執行期 SSR，沒有全站預渲染這一步
-- [ ] Blob 直傳鏈路（Storage CORS、SAS 效期、`Cache-Control`）
-- [ ] **換圖與移除真的把舊檔從 Blob 刪掉**（docs/11 §9.2）——本機只驗到「刪不掉也不會翻掉存檔」，真的刪成功還沒驗過
+- [x] **Blob 直傳鏈路** —— ✅ **2026-09-16 對真的 `st20skinweb` 實跑驗證**（三步全通）：
+      ① `POST /admin/upload/sas` 以 Managed Identity 簽出 user delegation SAS，檔案落在 `incoming/`
+      ② 瀏覽器 `PUT` 直達 Blob（201），不經過 API
+      ③ `POST /admin/upload/commit` 讀回檔頭驗真實型別、量尺寸，通過才搬到 `2026/09/{32hex}.png`
+      並回傳內容欄位要存的值；`incoming/` 的暫存檔隨即清掉。公開網址不帶憑證可讀（200 image/png）。
+      安全路徑也驗過：**副檔名寫 .png、內容是 shell 腳本 → commit 擋下 `UPLOAD_TYPE` 且把 blob 刪掉**；
+      `.svg`／`.pdf` 在第一步就被擋，連上傳機會都不給。
+      `Cache-Control: public, max-age=31536000, immutable` ✅（檔名是隨機唯一值、不重用，所以 immutable 是安全的）。
+      <br>🔴 **但這條鏈路直到今天都還不可能在瀏覽器裡成功** —— 見下一項。
+- [x] **換圖與移除真的把舊檔從 Blob 刪掉** —— ✅ 2026-09-16 對真的儲存體實跑：
+      建一筆內容配圖 A → 改成圖 B → **圖 A 確實從 Blob 消失、圖 B 還在**；
+      **刪除整筆內容 → 圖 B 也跟著消失**。（在用完即丟的 `Skin20_WriteTest` 上做，不碰本機開發庫。）
 - [ ] **孤兒檔對帳工具**（回報成功但沒按存檔的檔案；要掃十個內嵌圖片欄位 ＋ `BodyBlocks`，docs/08 §E）
 - [ ] 冷啟動對 301 與後台操作的實際延遲
 - [x] ~~`api/` 實際可用的 .NET 版本~~ — ✅ **`dotnet-isolated:9.0` 實測可用**（同第一條，2026-09-11 起一直在服務 301）
@@ -967,6 +977,35 @@ SSR 改版部署到正式環境後才現形的，**全部是本機量不出來�
 ⚠️ 第三件的形狀值得單獨記：**同一個問題換一個位置又出現一次**。
 舊站是 Mod_Security 擋 AI 爬蟲（docs/03 §1 列為優先級最高），新站換成 Cloudflare 擋。
 檢查清單要問的不是「我們的程式有沒有擋」，而是「**從公網打進來的整條路徑上有沒有人擋**」。
+
+### 🔴 Blob 上傳：程式全通，但**瀏覽器一次都不可能成功過**（2026-09-16 發現並修好）
+
+三步鏈路本身沒有問題，對真的 `st20skinweb` 實跑全過。但那是用 Python 打的，
+而 **CORS 只有瀏覽器會執行** —— 儲存體帳戶上**一條 CORS 規則都沒有**：
+
+```
+OPTIONS https://st20skinweb.blob.core.windows.net/media/...
+Origin: https://20skin.4webdemo.com
+→ 403 CORS not enabled or no matching rule found for this request.
+```
+
+⚠️ **這一類錯誤的症狀是「一個沒有任何資訊的 network error」** —— 瀏覽器不會說是 CORS
+擋的，後台只會看到上傳失敗。與 docs/10 §2 早就寫過的 API CORS 是同一個陷阱，
+只是換到儲存體這一端，而且**沒有任何自動化測試抓得到**（腳本不執行 CORS）。
+
+已設定，只放行三個來源、只開 `PUT`／`OPTIONS`、只允許必要的三個標頭：
+
+| 來源 | 用途 |
+|---|---|
+| `https://20skin.tw` | 正式網域（先放，DNS 切過來就不用再補） |
+| `https://20skin.4webdemo.com` | 測試網域 |
+| `https://jolly-hill-015d56f1e.5.azurestaticapps.net` | SWA 預設主機名 |
+
+驗證：三個來源預檢皆 200 並回 `Access-Control-Allow-Origin`，
+`https://evil.example.com` 仍是 403。
+
+⚠️ **日後換網域一定要同步加這裡** —— 少了它，後台的圖片上傳會整個壞掉，
+而畫面上看不出原因。
 
 ### 剩下的
 
