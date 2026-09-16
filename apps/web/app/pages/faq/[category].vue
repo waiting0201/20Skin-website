@@ -8,7 +8,9 @@
 // 所以這裡沒有獨立於全站導言之外的「分類介紹文案」可以照抄——導言沿用主頁
 // 的同一句話，只代換分類名稱與正確的題數，見下方 description 與 lede。
 // 正式介紹文案需要內容團隊另外撰寫。
-import { FAQ_CATEGORIES, faqItemsByCategory, faqPageJsonLd } from '~/data/faq'
+import { getFaqCategories, faqItemsByCategory, faqPageJsonLd } from '~/data/faq'
+
+const FAQ_CATEGORIES = await getFaqCategories()
 
 const route = useRoute()
 const slug = route.params.category as string
@@ -18,11 +20,12 @@ if (!category) {
   throw createError({ statusCode: 404, statusMessage: '找不到這個 FAQ 分類' })
 }
 
-definePageMeta({
-  validate: (route) => FAQ_CATEGORIES.some((c) => c.slug === route.params.category),
-})
+// ⚠️ 原本這裡有 `definePageMeta({ validate })`，2026-09-15 拿掉。
+//    definePageMeta 是**編譯期巨集**，只做靜態分析 —— 它不可能引用執行期才從 API
+//    取回來的分類清單。改成執行期 SSR 之後那份清單不再是模組常數，
+//    驗證因此移到上面的 `createError(404)`，行為相同（無效 slug 一律 404）。
 
-const items = faqItemsByCategory(category.slug)
+const items = await faqItemsByCategory(category.slug)
 
 usePageHead({
   title: `${category.label}｜常見問題`,

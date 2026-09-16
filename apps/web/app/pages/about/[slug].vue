@@ -7,7 +7,9 @@
 // （見 ~/data/pages.ts 的註解），
 // 所以這一頁的部分區塊（目錄／常見疑問／相關療程）用 v-if 依資料是否存在顯示，
 // 不是所有故事頁都會長得一樣豐富。
-import { STORY_PAGES } from '~/data/pages'
+import { getStoryPages } from '~/data/pages'
+
+const STORY_PAGES = await getStoryPages()
 
 const route = useRoute()
 const slug = route.params.slug as string
@@ -17,9 +19,8 @@ if (!story) {
   throw createError({ statusCode: 404, statusMessage: '找不到這篇品牌故事' })
 }
 
-definePageMeta({
-  validate: (route) => typeof route.params.slug === 'string' && route.params.slug in STORY_PAGES,
-})
+// ⚠️ 原本這裡有 `definePageMeta({ validate })` —— 理由同 faq/[category].vue：
+//    編譯期巨集引用不到執行期取回的 STORY_PAGES。驗證改在下方以 404 表達。
 
 usePageHead({
   title: story.title,

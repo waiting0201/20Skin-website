@@ -25,6 +25,17 @@ export default defineNuxtConfig({
   // 而且不會報錯 —— 只會安靜地渲染出 Nuxt 的預設歡迎頁。
   future: { compatibilityVersion: 4 },
 
+  experimental: {
+    // 🔴 **非開不可。** 資料層改成執行期取值之後，`loadUnit()` 用 `useNuxtApp()`
+    //    存放「單一請求內的去重快取」，而它常常是在 `await` 之後才被呼叫
+    //    （例如 `Promise.all([loadUnit(...), getTreatments()])` 裡面那一層）。
+    //    少了 asyncContext，那些呼叫會丟 **`[nuxt] instance unavailable`**，
+    //    而且不是建置期錯誤 —— 是算繪當下的 500，2026-09-15 實測 16 頁裡有 9 頁掛掉。
+    //    ⚠️ 症狀有欺騙性：沒有跨 await 呼叫的頁面（/faq/、/about/）照常 200，
+    //    看起來像「某幾頁的資料有問題」，其實是 context 傳遞問題。
+    asyncContext: true,
+  },
+
   // 樣式一律來自 public/assets（mockup 的逐 byte 複製，見 scripts/sync-mockup.mjs）。
   // ⚠️ 不要把 CSS 搬進 app/assets 交給 Vite 打包 —— 那會改寫 url() 與檔名，
   //    「照抄 mockup」就驗不了了。base.css 全站共用，各頁 CSS 由該頁自己 useHead 掛上。

@@ -13,14 +13,17 @@
 // 法務文件不能用前端自己編的條文頂著——寫錯比留白風險更高，尤其醫療免責聲明
 // 涉及醫療廣告與責任歸屬，這兩份的條文需要院方法務提供。這裡先給頁面骨架與
 // 明確的「待補」提示，不假裝已經有內容。
-import { LEGAL_DOCS, findLegalDocByPath } from '~/data/pages'
+import { getLegalDocs } from '~/data/pages'
+
+const LEGAL_DOCS = await getLegalDocs()
 
 definePageMeta({
   alias: ['/privacy/', '/terms/', '/medical-disclaimer/'],
 })
 
 const route = useRoute()
-const doc = computed(() => findLegalDocByPath(route.path) ?? LEGAL_DOCS[0]!)
+// ⚠️ LEGAL_DOCS 已在上方取好，這裡用同步 find —— computed 裡不能 await。
+const doc = computed(() => LEGAL_DOCS.find((d) => d.path === route.path) ?? LEGAL_DOCS[0]!)
 
 usePageHead({
   title: doc.value.title,

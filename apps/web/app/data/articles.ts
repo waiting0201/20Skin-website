@@ -36,7 +36,7 @@ export interface ArticleCategory {
 /** 四個分類 slug 為定案值（docs/01-sitemap.md §1、CLAUDE.md）。 */
 // ── 資料來源：content/articles.json ＋ terms.json（docs/09 §3）───────────
 
-import { CONTENT, REL, TERM, img, relationsOf, termsOf, type ContentRecord } from './_content'
+import { REL, TERM, UNIT, img, loadUnit, parseBlocks, relationsOf, termsOf, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
 
 const toImage = (value: unknown, fallbackAlt = ''): ArticleImage => {
@@ -44,16 +44,19 @@ const toImage = (value: unknown, fallbackAlt = ''): ArticleImage => {
   return { src: i?.src ?? '', alt: i?.alt || fallbackAlt, width: i?.width ?? 0, height: i?.height ?? 0 }
 }
 
-export const ARTICLE_CATEGORIES: ArticleCategory[] = termsOf(TERM.articleCategory).map((t) => ({
-  slug: t.slug as ArticleCategorySlug,
-  label: t.title,
-  // 英文小標由設計稿決定（見 _presentation.ts）。
-  eyebrow: eyebrowFor(t.slug as string),
-  description: t.summary ?? '',
-}))
+export async function getArticleCategories(): Promise<ArticleCategory[]> {
+  const terms = await loadUnit(UNIT.term)
+  return termsOf(terms, TERM.articleCategory).map((t) => ({
+    slug: t.slug as ArticleCategorySlug,
+    label: t.title,
+    // 英文小標由設計稿決定（見 _presentation.ts）。
+    eyebrow: eyebrowFor(t.slug as string),
+    description: t.summary ?? '',
+  }))
+}
 
-export function getArticleCategory(slug: string): ArticleCategory | undefined {
-  return ARTICLE_CATEGORIES.find((c) => c.slug === slug)
+export async function getArticleCategory(slug: string): Promise<ArticleCategory | undefined> {
+  return (await getArticleCategories()).find((c) => c.slug === slug)
 }
 
 export interface ArticleAuthor {
@@ -92,8 +95,9 @@ export interface ArticleTagRef {
  *    查不到就會退回 slug，而標籤 slug 多半是百分號編碼的中文（`%e7%9a%ae…`），
  *    那會直接印在 `/blog/tag/{slug}/` 的標題上。
  */
-export function getTagLabel(slug: string): string {
-  return termsOf(TERM.articleTag).find((t) => t.slug === slug)?.title ?? slug
+export async function getTagLabel(slug: string): Promise<string> {
+  const terms = await loadUnit(UNIT.term)
+  return termsOf(terms, TERM.articleTag).find((t) => t.slug === slug)?.title ?? slug
 }
 
 export interface ArticleImage {
@@ -157,18 +161,28 @@ export interface Article {
 /** 署名：醫師帶「醫師」，非醫師（藝術總監）不帶。 */
 const doctorByline = (d: ContentRecord): string => (d.fields.isPhysician ? `${d.title} 醫師` : d.title)
 
-const termTitle = (id: unknown): string => CONTENT.terms.find((t) => t.id === id)?.title ?? ''
-const termSlug = (id: unknown): string => CONTENT.terms.find((t) => t.id === id)?.slug ?? ''
+/** 一次算繪要用到的其他單元。理由同 treatments.ts 的 TreatmentContext。 */
+interface ArticleContext {
+  terms: ContentRecord[]
+  doctors: ContentRecord[]
+  treatments: ContentRecord[]
+  concerns: ContentRecord[]
+}
 
-function toArticle(record: ContentRecord): Article {
+const termTitle = (ctx: ArticleContext, id: unknown): string =>
+  ctx.terms.find((t) => t.id === id)?.title ?? ''
+const termSlug = (ctx: ArticleContext, id: unknown): string =>
+  ctx.terms.find((t) => t.id === id)?.slug ?? ''
+
+function toArticle(ctx: ArticleContext, record: ContentRecord): Article {
   const f = record.fields
-  const authorDoctor = CONTENT.doctors.find((d) => d.id === f.authorDoctorId)
-  const reviewerDoctor = CONTENT.doctors.find((d) => d.id === f.reviewerDoctorId)
+  const authorDoctor = ctx.doctors.find((d) => d.id === f.authorDoctorId)
+  const reviewerDoctor = ctx.doctors.find((d) => d.id === f.reviewerDoctorId)
 
   return {
     slug: record.slug as string,
     title: record.title,
-    categorySlug: termSlug(f.categoryTermId) as ArticleCategorySlug,
+    categorySlug: termSlug(ctx, f.categoryTermId) as ArticleCategorySlug,
     tags: relationsOf(record, REL.articleToTag).map((r) => ({
       slug: r.toSlug as string,
       label: r.toTitle as string,
@@ -202,26 +216,44 @@ function toArticle(record: ContentRecord): Article {
     // ⚠️ **內文不在這裡** —— 見 getArticleBody()。這一欄留著只是為了讓
     //    「有沒有內文」可以在不載入內文的情況下判斷（清單頁用不到內文）。
     hasBody: f.bodyBlocks !== null && f.bodyBlocks !== undefined,
-    relatedTreatments: CONTENT.treatments
+    relatedTreatments: ctx.treatments
       .filter((t) => t.relations.some((r) => r.relationType === REL.treatmentToArticle && r.toSlug === record.slug))
       .map((t) => ({
         slug: t.slug as string,
-        categorySlug: termSlug(t.fields.categoryTermId),
-        categoryLabel: termTitle(t.fields.categoryTermId),
+        categorySlug: termSlug(ctx, t.fields.categoryTermId),
+        categoryLabel: termTitle(ctx, t.fields.categoryTermId),
         name: t.title,
         image: toImage(t.fields.cover, t.title),
       })),
-    relatedConcerns: CONTENT.concerns
+    relatedConcerns: ctx.concerns
       .filter((c) => c.relations.some((r) => r.relationType === REL.concernToArticle && r.toSlug === record.slug))
       .map((c) => ({ slug: c.slug as string, label: c.title })),
     authorBio: authorDoctor?.summary ?? undefined,
   }
 }
 
-export const ARTICLES: Article[] = CONTENT.articles
-  .slice()
-  .sort((a, b) => String(b.fields.displayDate ?? '').localeCompare(String(a.fields.displayDate ?? '')))
-  .map(toArticle)
+/**
+ * 算繪一批文章紀錄需要的其他單元。
+ *
+ * 🔴 **2026-09-15：不再有 `ARTICLES` 這個「全部 1100 篇」的常數。**
+ *    那在建置期成立（資料早就烤進產物），執行期等於每次算繪都傳 2.3 MB。
+ *    改成：列表走分頁端點、內頁走 by-path、篩選（分類／標籤／作者）交給 API。
+ */
+async function articleContext(): Promise<ArticleContext> {
+  const [terms, doctors, treatments, concerns] = await Promise.all([
+    loadUnit(UNIT.term),
+    loadUnit(UNIT.doctor),
+    loadUnit(UNIT.treatment),
+    loadUnit(UNIT.concern),
+  ])
+  return { terms, doctors, treatments, concerns }
+}
+
+/** 把 API 回來的紀錄組成前台的 Article 形狀。 */
+export async function shapeArticles(records: ContentRecord[]): Promise<Article[]> {
+  const ctx = await articleContext()
+  return records.map((r) => toArticle(ctx, r))
+}
 
 /**
  * 列表每頁幾篇。
@@ -269,21 +301,12 @@ const POPULAR_TAG_LIMIT = 12
  * ⚠️ **這不影響標籤頁的預渲染。** `/blog/tag/{slug}/` 是靠 `crawlLinks` 從連結爬出來的，
  *    而文章內頁會列出自己的每一個標籤（blog/[slug].vue），所以沒進側欄的標籤照樣有頁面。
  */
-export const POPULAR_TAGS: ArticleTagRef[] = (() => {
-  const count = new Map<string, { label: string; n: number }>()
-  for (const a of ARTICLES) {
-    for (const t of a.tags) {
-      const cur = count.get(t.slug)
-      if (cur) cur.n++
-      else count.set(t.slug, { label: t.label, n: 1 })
-    }
-  }
-  // 篇數相同時用標籤名排序，讓建置產物是決定性的（同樣的資料要產出同樣的 HTML）。
-  return [...count.entries()]
-    .sort((a, b) => b[1].n - a[1].n || a[1].label.localeCompare(b[1].label, 'zh-Hant'))
-    .slice(0, POPULAR_TAG_LIMIT)
-    .map(([slug, v]) => ({ slug, label: v.label }))
-})()
+export async function getPopularTags(): Promise<ArticleTagRef[]> {
+  const rows = await apiGet<{ slug: string, title: string, articleCount: number }[]>(
+    '/article/popular-tags', { limit: POPULAR_TAG_LIMIT },
+  )
+  return (rows ?? []).map((r) => ({ slug: r.slug, label: r.title }))
+}
 
 export const POPULAR_TREATMENTS_FOR_BLOG: RelatedTreatmentRef[] = [
   {
@@ -309,64 +332,86 @@ export const POPULAR_TREATMENTS_FOR_BLOG: RelatedTreatmentRef[] = [
   },
 ]
 
-function byDisplayDateDesc(a: Article, b: Article) {
-  return b.displayDate.localeCompare(a.displayDate)
-}
-
-export function getArticleBySlug(slug: string): Article | undefined {
-  return ARTICLES.find((a) => a.slug === slug)
+/**
+ * 依 slug 取一篇（含內文）。
+ * ⚠️ 走 `GET /content?path=/blog/{slug}/` —— 網址是全站唯一的（docs/08 §B-1），
+ *    所以這是最直接的查法，不必先知道它屬於哪個分類。
+ */
+export async function getArticleBySlug(slug: string): Promise<Article | undefined> {
+  const record = await contentByPath(`/blog/${slug}/`)
+  if (!record) return undefined
+  const [shaped] = await shapeArticles([record])
+  return shaped
 }
 
 /**
- * 文章內文，**一篇一個 chunk，用到才載**。
+ * 文章內文。
  *
- * 🔴 **不要改回從 `content/articles.json` 直接讀。**
- *    `_content.ts` 是靜態 import，Vite 會把整份 JSON 內聯進一個**每一頁都要下載**的
- *    共用 chunk。種子資料只有 11 篇、內文全是 null 時看不出問題；
- *    搬進舊站的 1100 篇之後光內文就 4.5 MB —— 首頁訪客要先下載全站文章的全文
- *    才看得到畫面，而建置完全不會有任何警告。
- *    所以 `tools/content-export` 把內文拆成 `content/article-bodies/{slug}.json`，
- *    這裡用 `import.meta.glob` 動態載入 —— Vite 會為每一篇產生獨立的 chunk。
+ * 🔴 **2026-09-15：由「建置期拆檔 ＋ import.meta.glob 動態載入」改成執行期取值。**
+ *    舊做法的理由仍然值得記住：內文合計 8.4 MB，整包內聯會讓首頁訪客先下載全站
+ *    文章的全文才看得到畫面；所以 `tools/content-export` 把它拆成
+ *    `content/article-bodies/{slug}.json`，再用 glob 一篇一個 chunk。
+ *    ⚠️ 那套做法還踩過一個坑：少了 `import.meta.server` 判斷，Vite 會把 1083 個
+ *    chunk 全部列進 `<link rel=prefetch>`，瀏覽器閒置時默默把 8.4 MB 下載完，
+ *    拆檔等於白做，而且沒有任何錯誤或警告（2026-09-14 實測）。
  *
- * 🔴 **只在伺服器端載入（`import.meta.server`）。**
- *    少了這個判斷，Vite 會為 1083 篇各產生一個 chunk 並**全部列進 `<link rel=prefetch>`** ——
- *    實測首頁一頁就有 1086 個 prefetch，瀏覽器會在閒置時把 8.4 MB 的內文默默下載完，
- *    拆檔等於完全白做，而且沒有任何錯誤或警告（2026-09-14 實測）。
- *    用戶端不需要這些 chunk：預渲染時 `useAsyncData` 會把內文寫進該頁的 HTML 與
- *    `_payload.json`，hydration 讀 payload，站內換頁則讀目標路由的 `_payload.json`。
- *
- * ⚠️ 因此這支函式**必須包在 `useAsyncData` 裡呼叫**。直接在 setup 裡 await 的話，
- *    內文不會進 payload，用戶端就真的拿不到了（回傳空陣列，內文靜靜消失）。
+ *    改成執行期之後這整個問題消失：內文只在「有人真的開那一篇」時才從 API 取，
+ *    而且本來就跟著 by-path 的回應一起回來 —— 不必再拆檔、不必 glob、不會有 prefetch。
  */
-const BODY_MODULES = import.meta.server
-  ? import.meta.glob<{ default: ArticleBodyBlock[] }>('~~/content/article-bodies/*.json')
-  : {}
-
 export async function getArticleBody(slug: string): Promise<ArticleBodyBlock[]> {
-  // glob 的鍵是完整路徑，比對結尾即可。⚠️ 用 `includes(slug)` 會讓
-  // `emface` 命中 `emface-vs-thermage` —— 一定要比對到副檔名為止。
-  const entry = Object.entries(BODY_MODULES).find(([path]) => path.endsWith(`/${slug}.json`))
-  if (!entry) return []
-  return (await entry[1]()).default
+  const record = await contentByPath(`/blog/${slug}/`)
+  return parseBlocks<ArticleBodyBlock[]>(record?.fields.bodyBlocks, [])
 }
 
-export function listAllArticles(): Article[] {
-  return [...ARTICLES].sort(byDisplayDateDesc)
+
+/**
+ * 列表：某一頁的文章。
+ *
+ * 🔴 **分頁、排序與篩選全部交給 API。** 原本是把 1100 篇讀進記憶體再 slice ——
+ *    建置期那樣沒問題，執行期每開一次列表就要傳 2.3 MB。
+ *
+ * ⚠️ 空清單時 `totalPages` 回 1 而不是 0 —— 「第 1 頁，共 0 頁」是壞掉的文案，
+ *    而且會讓 `page > totalPages` 的 404 判斷把唯一一頁空狀態也擋掉。
+ */
+async function listPage(
+  page: number,
+  opts: { categorySlug?: string, tagSlug?: string } = {},
+): Promise<PagedArticles> {
+  const terms = await loadUnit(UNIT.term)
+  const categoryTermId = opts.categorySlug
+    ? termsOf(terms, TERM.articleCategory).find((t) => t.slug === opts.categorySlug)?.id
+    : undefined
+  const tagTermId = opts.tagSlug
+    ? termsOf(terms, TERM.articleTag).find((t) => t.slug === opts.tagSlug)?.id
+    : undefined
+
+  const result = await articlePage(page, ARTICLES_PER_PAGE, {
+    latest: true,
+    categoryTermId,
+    tagTermId,
+  })
+
+  return {
+    items: await shapeArticles(result.items),
+    page: result.page,
+    totalPages: Math.max(1, Math.ceil(result.totalCount / ARTICLES_PER_PAGE)),
+    total: result.totalCount,
+  }
 }
 
-export function listArticlesByCategory(categorySlug: ArticleCategorySlug): Article[] {
-  return ARTICLES.filter((a) => a.categorySlug === categorySlug).sort(byDisplayDateDesc)
-}
+export const listAllArticles = (page = 1) => listPage(page)
 
-export function listArticlesByTag(tagSlug: string): Article[] {
-  return ARTICLES.filter((a) => a.tags.some((t) => t.slug === tagSlug)).sort(byDisplayDateDesc)
-}
+export const listArticlesByCategory = (categorySlug: ArticleCategorySlug, page = 1) =>
+  listPage(page, { categorySlug })
+
+export const listArticlesByTag = (tagSlug: string, page = 1) =>
+  listPage(page, { tagSlug })
 
 /** 同分類、排除自己，取最新 N 篇（頁尾「相關文章」用，見檔頭說明）。 */
-export function getRelatedArticles(article: Article, limit = 3): Article[] {
-  return ARTICLES.filter((a) => a.categorySlug === article.categorySlug && a.slug !== article.slug)
-    .sort(byDisplayDateDesc)
-    .slice(0, limit)
+export async function getRelatedArticles(article: Article, limit = 3): Promise<Article[]> {
+  // 多取一篇，因為自己可能在結果裡。
+  const { items } = await listPage(1, { categorySlug: article.categorySlug })
+  return items.filter((a) => a.slug !== article.slug).slice(0, limit)
 }
 
 /** 'YYYY-MM-DD' → 'YYYY.MM.DD'，卡片與 byline 的顯示格式（JSON-LD 一律用原始 ISO 字串）。 */

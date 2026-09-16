@@ -5,7 +5,9 @@
 // （個案差異聲明、當事人書面同意、拍攝條件，見 docs/08-database.md §C-5）。
 // 其餘 9 則案例目前只有列表卡片的摘要資訊，沒有這些必填欄位可用，
 // 所以維持 mockup 原樣的無效連結，不接到還不存在的內頁 —— 見 ~/data/cases.ts 開頭的說明。
-import { CASE_LIST, CASE_FILTER_CONCERNS, CASE_FILTER_TREATMENTS, CASE_HOW_TO_READ } from '~/data/cases'
+import { getCaseList, CASE_FILTER_CONCERNS, CASE_FILTER_TREATMENTS, CASE_HOW_TO_READ } from '~/data/cases'
+
+const CASE_LIST = await getCaseList()
 
 usePageHead({
   title: '案例分享',

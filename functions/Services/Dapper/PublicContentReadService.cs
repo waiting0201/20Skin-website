@@ -1,6 +1,7 @@
 using Dapper;
 using Skin20.Api.Common;
 using Skin20.Api.Data;
+using Skin20.Api.Models.Entities;
 
 namespace Skin20.Api.Services.Dapper;
 
@@ -50,9 +51,26 @@ public interface IPublicContentReadService
     /// 文章 1100 筆一定要走 <see cref="PageAsync"/>。</summary>
     Task<IReadOnlyList<PublicContentRow>> ListAsync(byte contentType, CancellationToken ct = default);
 
-    /// <summary>分頁版，給文章與標籤這種筆數會長大的單元。</summary>
+    /// <summary>
+    /// 分頁版，給文章與標籤這種筆數會長大的單元。
+    /// <param name="authorDoctorId">只要這位醫師署名的文章（醫師個人頁用）。
+    /// ⚠️ 一定要在 SQL 層篩 —— 撈回 1100 筆再用前端過濾，等於每次開醫師頁都傳 2.3 MB。</param>
+    /// </summary>
+    /// <param name="latestFirst">依發布日期新到舊排（文章列表與「最新文章」用）。
+    /// ⚠️ 一定要在 SQL 層排 —— 撈回 1100 筆再前端排序，等於為了三篇文章傳 2.3 MB。</param>
+    /// <param name="categoryTermId">只要這個分類的文章。</param>
+    /// <param name="tagTermId">只要帶這個標籤的文章（走 ContentRelations）。</param>
     Task<(IReadOnlyList<PublicContentRow> Items, int TotalCount)> PageAsync(
-        byte contentType, int page, int pageSize, CancellationToken ct = default);
+        byte contentType, int page, int pageSize,
+        int? authorDoctorId = null, bool latestFirst = false,
+        int? categoryTermId = null, int? tagTermId = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// 側欄「熱門標籤」：**依實際被引用的篇數**取前 N 個。
+    /// <para>⚠️ 一定要在 SQL 層算 —— 前台原本是把全部文章讀進來自己統計，
+    /// 那在建置期可以，執行期等於為了 12 個標籤傳 2.3 MB。</para>
+    /// </summary>
+    Task<IReadOnlyList<PopularTagRow>> GetPopularTagsAsync(int limit, CancellationToken ct = default);
 
     /// <summary>
     /// 依網址取單筆。前台的路由就是網址，所以這是內頁最直接的查法。
@@ -109,6 +127,9 @@ public interface IPublicContentReadService
     Task<IReadOnlyList<SitemapUrlRow>> GetSitemapEntriesAsync(CancellationToken ct = default);
 }
 
+/// <summary>熱門標籤一列。<c>ArticleCount</c> 是實際引用篇數。</summary>
+public sealed record PopularTagRow(string Slug, string Title, int ArticleCount);
+
 /// <summary>選單一列。<c>Url</c> 為 NULL 時表示指向內容，網址由該內容的 UrlPath 決定。</summary>
 public sealed record PublicMenuRow(
     int Id, string MenuKey, int? ParentId, string Label, byte LinkKind,
@@ -151,20 +172,46 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
     }
 
     public async Task<(IReadOnlyList<PublicContentRow> Items, int TotalCount)> PageAsync(
-        byte contentType, int page, int pageSize, CancellationToken ct = default)
+        byte contentType, int page, int pageSize,
+        int? authorDoctorId = null, bool latestFirst = false,
+        int? categoryTermId = null, int? tagTermId = null, CancellationToken ct = default)
     {
         using var connection = factory.Create();
+
+        // ⚠️ DisplayDate 只有文章有。⚠️ 排序子句是拼進 SQL 的，所以只能是**常數字串**，
+        //    不可以讓呼叫端傳欄位名進來 —— 那是 SQL injection 的入口。
+        var orderBy = latestFirst && contentType == (byte)ContentType.Article
+            ? "(SELECT a2.DisplayDate FROM Articles a2 WHERE a2.Id = ci.Id) DESC, ci.Id DESC"
+            : "ci.SortOrder, ci.Id";
+
+        var categoryFilter = categoryTermId is not null && contentType == (byte)ContentType.Article
+            ? " AND EXISTS (SELECT 1 FROM Articles a3 WHERE a3.Id = ci.Id AND a3.CategoryTermId = @CategoryTermId)"
+            : string.Empty;
+
+        // 標籤是關聯（RelationType 11＝文章→標籤，docs/08 §D）。
+        var tagFilter = tagTermId is not null && contentType == (byte)ContentType.Article
+            ? " AND EXISTS (SELECT 1 FROM ContentRelations cr WHERE cr.FromContentItemId = ci.Id"
+              + " AND cr.RelationType = 11 AND cr.ToContentItemId = @TagTermId)"
+            : string.Empty;
+
+        // ⚠️ 只有文章有 AuthorDoctorId。其他單元傳這個參數會 JOIN 不到表，
+        //    所以每個條件本身都帶上型別判斷，而不是信任呼叫端。
+        var authorFilter = authorDoctorId is not null && contentType == (byte)ContentType.Article
+            ? " AND EXISTS (SELECT 1 FROM Articles a WHERE a.Id = ci.Id AND a.AuthorDoctorId = @AuthorDoctorId)"
+            : string.Empty;
+
+        var extra = authorFilter + categoryFilter + tagFilter;
 
         // ⚠️ 兩個查詢放同一次往返（QueryMultiple）。分兩次呼叫的話，中間若有內容被核准，
         //    總筆數與當頁資料會對不上 —— 症狀是最後一頁時多時少，極難重現。
         var sql = $"""
             SELECT COUNT(*) {FromPublished}
-            WHERE {Visibility.PublicFilter} AND ci.ContentType = @ContentType;
+            WHERE {Visibility.PublicFilter} AND ci.ContentType = @ContentType{extra};
 
             SELECT {Columns}
             {FromPublished}
-            WHERE {Visibility.PublicFilter} AND ci.ContentType = @ContentType
-            ORDER BY ci.SortOrder, ci.Id
+            WHERE {Visibility.PublicFilter} AND ci.ContentType = @ContentType{extra}
+            ORDER BY {orderBy}
             OFFSET @Skip ROWS FETCH NEXT @Take ROWS ONLY;
             """;
 
@@ -176,6 +223,9 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
                 Now = Clock.UtcNow,
                 Skip = (page - 1) * pageSize,
                 Take = pageSize,
+                AuthorDoctorId = authorDoctorId,
+                CategoryTermId = categoryTermId,
+                TagTermId = tagTermId,
             },
             cancellationToken: ct));
 
@@ -214,6 +264,29 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
 
         var items = await connection.QueryAsync<PublicContentRow>(new CommandDefinition(
             sql, new { Ids = ids, Now = Clock.UtcNow }, cancellationToken: ct));
+        return items.AsList();
+    }
+
+    public async Task<IReadOnlyList<PopularTagRow>> GetPopularTagsAsync(
+        int limit, CancellationToken ct = default)
+    {
+        using var connection = factory.Create();
+
+        // ⚠️ 篇數相同時用標籤名排序 —— 讓結果是**決定性的**，
+        //    否則同一份資料在不同請求會給出不同的前 12 名。
+        var sql = $"""
+            SELECT TOP (@Limit) tagCi.Slug, tagCi.Title, COUNT(*) AS ArticleCount
+            FROM ContentRelations cr
+            INNER JOIN ContentItems ci ON ci.Id = cr.FromContentItemId
+            INNER JOIN ContentItems tagCi ON tagCi.Id = cr.ToContentItemId
+            INNER JOIN ContentVersions cv ON cv.Id = ci.PublishedVersionId
+            WHERE cr.RelationType = 11 AND {Visibility.PublicFilter}
+            GROUP BY tagCi.Slug, tagCi.Title
+            ORDER BY COUNT(*) DESC, tagCi.Title
+            """;
+
+        var items = await connection.QueryAsync<PopularTagRow>(new CommandDefinition(
+            sql, new { Limit = limit, Now = Clock.UtcNow }, cancellationToken: ct));
         return items.AsList();
     }
 

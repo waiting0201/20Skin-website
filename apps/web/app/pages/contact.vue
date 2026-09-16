@@ -6,7 +6,9 @@
 // 🔴 **失敗一定要顯示失敗。** 這是一個信件黑洞最容易出現的地方：使用者以為送出了、
 // 院方其實永遠收不到。所以送出結果一律照 API 回的錯誤碼顯示，不吞錯、不假裝成功，
 // 並在錯誤訊息裡給出替代路徑（致電、線上預約）。
-import { CLINIC_NAP } from '~/data/navigation'
+import { getClinicNap } from '~/data/navigation'
+
+const CLINIC_NAP = await getClinicNap()
 
 usePageHead({
   title: '聯絡我們',

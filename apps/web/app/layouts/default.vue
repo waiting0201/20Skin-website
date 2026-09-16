@@ -5,7 +5,7 @@
 // ⚠️ 前台刻意使用原生 <a>，不用 <NuxtLink>（見 app.vue 的說明）。
 // AI 面板的開關**在執行期讀**，不是建置期常數 —— 院方在後台按一下就要生效，
 // 不必等下一次建置（docs/08 §J-4 步驟 7 的註解、docs/09 §13）。
-const siteSettings = usePublicSiteSettings()
+const siteSettings = await usePublicSiteSettings()
 
 defineProps<{ section?: string }>()
 </script>

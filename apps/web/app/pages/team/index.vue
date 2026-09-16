@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // 模板 4 —— 醫療團隊列表（mockup/11-team-list.html）
-import { DOCTORS } from '~/data/doctors'
+import { getDoctors } from '~/data/doctors'
+
+const DOCTORS = await getDoctors()
 
 const physicianCount = DOCTORS.filter((d) => d.isPhysician).length
 const nonPhysicianCount = DOCTORS.length - physicianCount

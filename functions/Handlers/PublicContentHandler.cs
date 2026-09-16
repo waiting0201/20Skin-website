@@ -86,7 +86,14 @@ public sealed class PublicContentHandler(
         if (type == ContentType.Article)
         {
             var (page, pageSize) = ReadPaging(req);
-            var (items, total) = await content.PageAsync((byte)type, page, pageSize);
+            var authorDoctorId = int.TryParse(req.Query["authorDoctorId"], out var a) && a > 0 ? a : (int?)null;
+            // ⚠️ 只認得 `sort=latest` 這一個值，其餘一律退回預設排序 ——
+            //    排序子句會拼進 SQL，不可以讓呼叫端決定欄位名。
+            var latestFirst = req.Query["sort"].ToString() == "latest";
+            var categoryTermId = int.TryParse(req.Query["categoryTermId"], out var c) && c > 0 ? c : (int?)null;
+            var tagTermId = int.TryParse(req.Query["tagTermId"], out var t) && t > 0 ? t : (int?)null;
+            var (items, total) = await content.PageAsync(
+                (byte)type, page, pageSize, authorDoctorId, latestFirst, categoryTermId, tagTermId);
             var shaped = await ShapeAsync(items, stripHeavy: true);
 
             CacheControl.Public(httpContextAccessor.HttpContext?.Response);
@@ -184,6 +191,20 @@ public sealed class PublicContentHandler(
         // sitemap 比一般內容可以放久一點：它變動的頻率是「有沒有新內容發布」。
         CacheControl.Public(httpContextAccessor.HttpContext?.Response, 900);
         return new OkObjectResult(ApiResponse.Ok(entries));
+    }
+
+    /// <summary>
+    /// <c>GET /article/popular-tags?limit=12</c>：側欄「熱門標籤」。
+    /// <para>⚠️ 依實際引用篇數排，**在 SQL 層算**。前台原本是把全部文章讀進來自己統計，
+    /// 那在建置期可以，執行期等於為了 12 個標籤傳 2.3 MB。</para>
+    /// </summary>
+    public async Task<IActionResult> PopularTagsAsync(HttpRequest req)
+    {
+        var limit = int.TryParse(req.Query["limit"], out var n) && n is > 0 and <= 50 ? n : 12;
+        var tags = await content.GetPopularTagsAsync(limit);
+
+        CacheControl.Public(httpContextAccessor.HttpContext?.Response, 900);
+        return new OkObjectResult(ApiResponse.Ok(tags));
     }
 
     /// <summary>

@@ -15,15 +15,16 @@
 // 標籤不是像分類一樣的固定四選一封閉清單（docs/02 §1：標籤頁 30–60 個、
 // 會隨內容成長），所以這裡不驗證 tag 是否在既有清單裡 —— 查無符合的文章時
 // 顯示空狀態，而不是 404。
-import { getTagLabel, listArticlesByTag, formatDisplayDate, paginate } from '~/data/articles'
+import { getTagLabel, listArticlesByTag, formatDisplayDate } from '~/data/articles'
 
 // ⚠️ `page` 由兩個路由各自傳進來：`/blog/tag/{標籤}/` 與 `/blog/tag/{標籤}/page/{n}/`。
 const props = withDefaults(defineProps<{ tagSlug: string; page?: number }>(), { page: 1 })
 
 const tagSlug = props.tagSlug
-const tagLabel = getTagLabel(tagSlug)
-const articles = listArticlesByTag(tagSlug)
-const paged = paginate(articles, props.page)
+const [tagLabel, paged] = await Promise.all([
+  getTagLabel(tagSlug),
+  listArticlesByTag(tagSlug, props.page),
+])
 
 if (props.page !== paged.page) {
   throw createError({ statusCode: 404, statusMessage: 'Page Not Found' })
@@ -68,7 +69,7 @@ usePageHead({
       <span class="u-eyebrow">TAG</span>
       <h1 class="blog-hero__title">{{ tagLabel }}</h1>
       <p class="blog-hero__desc">標記「{{ tagLabel }}」的文章列表。</p>
-      <p class="blog-hero__count">共 <strong>{{ articles.length }}</strong> 篇文章</p>
+      <p class="blog-hero__count">共 <strong>{{ paged.total }}</strong> 篇文章</p>
     </div>
   </section>
 

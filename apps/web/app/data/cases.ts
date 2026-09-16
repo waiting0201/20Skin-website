@@ -87,7 +87,7 @@ export interface CaseDetail {
 //    **捏造那些欄位是法規紅線**，所以它們沒有進資料庫，也就不會出現在這裡。
 //    要恢復列表，必須由院方補齊那四個欄位 —— 這是內容問題，不是程式問題。
 
-import { CONTENT, REL, img, parseBlocks, relationsOf, type ContentRecord } from './_content'
+import { REL, UNIT, img, loadUnit, parseBlocks, relationsOf, type ContentRecord } from './_content'
 
 const toImage = (value: unknown, fallbackAlt = ''): Image => {
   const i = img(value)
@@ -107,7 +107,9 @@ const narrativeOf = (record: ContentRecord) =>
     facts: null, sections: null, timeline: null, testimonial: null, doctorQuote: null,
   })
 
-export const CASE_LIST: CaseListItem[] = CONTENT.cases
+export async function getCaseList(): Promise<CaseListItem[]> {
+  const cases = await loadUnit(UNIT.case)
+  return cases
   .slice()
   .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
   .map((record) => {
@@ -120,6 +122,7 @@ export const CASE_LIST: CaseListItem[] = CONTENT.cases
       tags: relationsOf(record, REL.treatmentToConcern).map((r) => r.toTitle as string),
     }
   })
+}
 
 export const CASE_FILTER_CONCERNS = [
   { label: '痘痘・粉刺', href: null },
@@ -140,10 +143,12 @@ export const CASE_HOW_TO_READ = [
   { title: '三、拍攝條件', text: '光線、角度與妝容會影響觀感。院內案例照以固定條件拍攝。' },
 ]
 
-export const CASE_DETAILS: CaseDetail[] = CONTENT.cases.map((record) => {
+export async function getCaseDetails(): Promise<CaseDetail[]> {
+  const [cases, treatments] = await Promise.all([loadUnit(UNIT.case), loadUnit(UNIT.treatment)])
+  return cases.map((record) => {
   const f = record.fields
   const n = narrativeOf(record)
-  const treatment = CONTENT.treatments.find((t) => t.id === f.treatmentId)
+  const treatment = treatments.find((t) => t.id === f.treatmentId)
 
   return {
     slug: record.slug as string,
@@ -170,10 +175,11 @@ export const CASE_DETAILS: CaseDetail[] = CONTENT.cases.map((record) => {
           excerpt: treatment.summary ?? '',
         }]
       : [],
-    moreCaseSlugs: CONTENT.cases.filter((c) => c.id !== record.id).map((c) => c.slug as string),
+    moreCaseSlugs: cases.filter((c) => c.id !== record.id).map((c) => c.slug as string),
   }
-})
+  })
+}
 
-export function findCaseDetail(slug: string): CaseDetail | undefined {
-  return CASE_DETAILS.find((c) => c.slug === slug)
+export async function findCaseDetail(slug: string): Promise<CaseDetail | undefined> {
+  return (await getCaseDetails()).find((c) => c.slug === slug)
 }

@@ -5,11 +5,14 @@
 // 其餘 7 個困擾只有總覽頁上的一句話簡述可用（見 ~/data/concerns.ts 開頭的說明），
 // 所以下面用 concern.detail 是否存在，切成「完整版」與「精簡版」兩種渲染路徑 ——
 // 精簡版不是偷懶，是不替後台還沒寫的醫療文案捏造內容。
-import { findConcern, CONCERN_TREATMENT_CATEGORIES } from '~/data/concerns'
+import { getConcerns, getConcernTreatmentCategories } from '~/data/concerns'
+
+const CONCERN_TREATMENT_CATEGORIES = await getConcernTreatmentCategories()
 
 const route = useRoute()
 const slug = route.params.slug as string
-const concern = findConcern(slug)
+const CONCERNS = await getConcerns()
+const concern = CONCERNS.find((c) => c.slug === slug)
 
 if (!concern) {
   throw createError({ statusCode: 404, statusMessage: '找不到這個困擾頁面', fatal: true })
@@ -88,7 +91,7 @@ usePageHead({
             :key="relSlug"
             class="c-tag c-tag--outline"
             :href="`/concerns/${relSlug}/`"
-          >{{ findConcern(relSlug)?.title }}</a>
+          >{{ CONCERNS.find((c) => c.slug === relSlug)?.title }}</a>
         </div>
       </div>
 

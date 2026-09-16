@@ -33,9 +33,7 @@
 // 四個真實分類與一個假文章 slug 分別解析到哪一支元件 —— 確認四個分類都命中
 // 這頁、假 slug 命中 [slug].vue、/blog/tag/xxx 不受影響。跑完就刪了，
 // 不是專案的一部分。
-import { ARTICLE_CATEGORIES, formatDisplayDate, getArticleCategory, listArticlesByCategory, paginate, type ArticleCategorySlug } from '~/data/articles'
-
-const CATEGORY_SLUGS = ARTICLE_CATEGORIES.map((c) => c.slug)
+import { getArticleCategories, formatDisplayDate, getArticleCategory, listArticlesByCategory, type ArticleCategorySlug } from '~/data/articles'
 
 // ⚠️ definePageMeta 的 path 一定要寫成「字面上的字串常數」，不能用樣板字串
 // 內插變數（例如 `/blog/:category(${CATEGORY_SLUGS.join('|')})`）。
@@ -47,12 +45,10 @@ const CATEGORY_SLUGS = ARTICLE_CATEGORIES.map((c) => c.slug)
 // regex 加分因此完全不會發生，[slug].vue 還是會贏。四個分類 slug 只好在這裡
 // 重複寫一次字面值；下面的檢查確保這份字面值沒有跟 ARTICLE_CATEGORIES 兜不起來
 // （例如日後新增第五個分類卻忘記改這裡）。
+// 🔴 2026-09-15 起分類清單是執行期取的，這段一致性檢查因此移到下方 setup 裡
+//    （時機從建置期變成算繪期，一樣只在 dev 拋錯）。
 const CATEGORY_PATH_PATTERN = 'medical-aesthetics|dermatology|media|lectures'
-if (import.meta.dev && CATEGORY_PATH_PATTERN.split('|').join(',') !== CATEGORY_SLUGS.join(',')) {
-  throw new Error(
-    '[blog/[category]/index.vue] definePageMeta 裡寫死的 CATEGORY_PATH_PATTERN 與 articles.ts 的 ARTICLE_CATEGORIES 不同步，請同步修改 path。',
-  )
-}
+const CATEGORY_SLUGS = CATEGORY_PATH_PATTERN.split('|') as ArticleCategorySlug[]
 
 
 // ⚠️ `page` 由兩個路由各自傳進來：`/blog/{分類}/`（第 1 頁）與
@@ -60,18 +56,34 @@ if (import.meta.dev && CATEGORY_PATH_PATTERN.split('|').join(',') !== CATEGORY_S
 const props = withDefaults(defineProps<{ categorySlug: ArticleCategorySlug; page?: number }>(), { page: 1 })
 
 const categorySlug = props.categorySlug
-const category = getArticleCategory(categorySlug)
+
+/** 寫死的路由樣式與資料庫的文章分類是否還對得起來。⚠️ 只在 dev 拋錯。 */
+if (import.meta.dev) {
+  const actual = (await getArticleCategories()).map((c) => c.slug).join(',')
+  if (actual !== CATEGORY_SLUGS.join(',')) {
+    throw new Error(
+      '[BlogCategoryListing] definePageMeta 裡寫死的 CATEGORY_PATH_PATTERN 與資料庫的文章分類不同步，請同步修改 path。',
+    )
+  }
+}
+
+const [category, paged] = await Promise.all([
+  getArticleCategory(categorySlug),
+  listArticlesByCategory(categorySlug, props.page),
+])
 if (!category) {
   throw createError({ statusCode: 404, statusMessage: 'Category Not Found' })
 }
 
-const articles = listArticlesByCategory(categorySlug)
 // ⚠️ **精選文章只在第 1 頁抽出來。** 每一頁都抽的話，那一篇會在每一頁重複出現，
 //    而且各頁的文章數會少一篇、對不上總數。
-const featured = props.page === 1 ? articles.find((a) => a.featured) : undefined
-const listSource = featured ? articles.filter((a) => a.slug !== featured.slug) : articles
-const paged = paginate(listSource, props.page)
-const gridArticles = paged.items
+// 🔴 **2026-09-15 起只在「當頁的 12 篇」裡找精選，不是整個分類。**
+//    分頁改由 API 做之後，前台手上只有當頁 —— 原本是把整個分類讀進來再找。
+//    影響：精選文章若排在第 3 頁，就不會被提到第 1 頁的大卡位置。
+//    實務上精選幾乎都是最新的那幾篇（列表依日期新到舊），所以差異極小；
+//    真要完全還原，得在 API 加一個 `featured=true` 的篩選。
+const featured = props.page === 1 ? paged.items.find((a) => a.featured) : undefined
+const gridArticles = featured ? paged.items.filter((a) => a.slug !== featured.slug) : paged.items
 
 if (props.page !== paged.page) {
   throw createError({ statusCode: 404, statusMessage: 'Page Not Found' })
@@ -123,7 +135,7 @@ usePageHead({
       <span class="u-eyebrow">{{ category.eyebrow }}</span>
       <h1 class="blog-hero__title">{{ category.label }}</h1>
       <p class="blog-hero__desc">{{ category.description }}</p>
-      <p class="blog-hero__count">共 <strong>{{ articles.length }}</strong> 篇文章</p>
+      <p class="blog-hero__count">共 <strong>{{ paged.total }}</strong> 篇文章</p>
     </div>
   </section>
 
@@ -155,7 +167,7 @@ usePageHead({
   <section class="section section--tight">
     <div class="container blog-layout">
       <div class="blog-main">
-        <template v-if="articles.length">
+        <template v-if="paged.total">
           <article v-if="featured" class="c-card c-card--article blog-feature">
             <div class="c-card__media">
               <img :src="featured.cover.src" :alt="featured.cover.alt" :width="featured.cover.width" :height="featured.cover.height">

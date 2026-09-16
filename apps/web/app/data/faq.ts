@@ -41,31 +41,37 @@ export interface FaqItem {
 
 // ── 資料來源：content/faqs.json ＋ terms.json（docs/09 §3）────────────────
 
-import { CONTENT, TERM, termsOf, type ContentRecord } from './_content'
+import { TERM, UNIT, loadUnit, termsOf, type ContentRecord } from './_content'
 
-export const FAQ_CATEGORIES: FaqCategory[] = termsOf(TERM.faqCategory).map((t) => ({
-  slug: t.slug as string,
-  label: t.title,
-}))
-
-const categorySlugOf = (record: ContentRecord): string =>
-  CONTENT.terms.find((t) => t.id === record.fields.categoryTermId)?.slug ?? ''
-
-export const FAQ_ITEMS: FaqItem[] = CONTENT.faqs
-  .slice()
-  .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
-  .map((record) => ({
-    question: record.title,
-    categorySlug: categorySlugOf(record),
-    webAnswer: (record.fields.webAnswer as string) ?? '',
-    aiAnswer: (record.fields.aiAnswer as string) ?? '',
-    lastReviewedOn: (record.fields.lastReviewedOn as string) ?? '',
-    // ⚠️ 2026-09-11 起是 Faqs.ReviewedBy 的真欄位，不再是前台寫死的字串。
-    reviewedBy: (record.fields.reviewedBy as string) ?? '',
+export async function getFaqCategories(): Promise<FaqCategory[]> {
+  const terms = await loadUnit(UNIT.term)
+  return termsOf(terms, TERM.faqCategory).map((t) => ({
+    slug: t.slug as string,
+    label: t.title,
   }))
+}
 
-export function faqItemsByCategory(slug: string): FaqItem[] {
-  return FAQ_ITEMS.filter((item) => item.categorySlug === slug)
+const categorySlugOf = (terms: ContentRecord[], record: ContentRecord): string =>
+  terms.find((t) => t.id === record.fields.categoryTermId)?.slug ?? ''
+
+export async function getFaqItems(): Promise<FaqItem[]> {
+  const [faqs, terms] = await Promise.all([loadUnit(UNIT.faq), loadUnit(UNIT.term)])
+  return faqs
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+    .map((record) => ({
+      question: record.title,
+      categorySlug: categorySlugOf(terms, record),
+      webAnswer: (record.fields.webAnswer as string) ?? '',
+      aiAnswer: (record.fields.aiAnswer as string) ?? '',
+      lastReviewedOn: (record.fields.lastReviewedOn as string) ?? '',
+      // ⚠️ 2026-09-11 起是 Faqs.ReviewedBy 的真欄位，不再是前台寫死的字串。
+      reviewedBy: (record.fields.reviewedBy as string) ?? '',
+    }))
+}
+
+export async function faqItemsByCategory(slug: string): Promise<FaqItem[]> {
+  return (await getFaqItems()).filter((item) => item.categorySlug === slug)
 }
 
 /** FAQPage JSON-LD（docs/03-seo-geo.md §2）。AiAnswer 是唯一來源。 */

@@ -86,8 +86,8 @@ export interface HomeClinic {
 //    主視覺輪播與八大專科入口沒有可引用的內容，走版位的 Settings JSON。
 // ⚠️ 版位勾到草稿時匯出端已經濾掉（content-export），這裡拿到的都是已發布的。
 
-import homeJson from '~~/content/home.json'
-import { CONTENT, INDEX, img } from './_content'
+import { UNIT, img, loadUnit } from './_content'
+import { getClinicNap } from './navigation'
 
 interface HomeSection {
   sectionKey: string
@@ -99,99 +99,130 @@ interface HomeSection {
   items: { contentItemId: number; contentType: number; slug: string | null; urlPath: string | null; title: string; sortOrder: number }[]
 }
 
-const SECTIONS = homeJson as unknown as HomeSection[]
-const section = (key: string): HomeSection | undefined => SECTIONS.find((s) => s.sectionKey === key && s.isEnabled)
-const itemsOf = (key: string) => section(key)?.items.slice().sort((a, b) => a.sortOrder - b.sortOrder) ?? []
+/**
+ * 首頁的七個版位，一次取齊。
+ *
+ * 🔴 **2026-09-15：由建置期內聯的 content/home.json 改成執行期取 `GET /home`。**
+ *    那支端點讀的是「首頁那筆 Page **已核准版本**的快照」，不是 HomeSections 即時表
+ *    —— 直接讀即時表等於「編輯者拖一拖版位、還沒送審就上線」，核准這關被繞過
+ *    （docs/08 §G-2、決策 14）。
+ *
+ * ⚠️ **七個版位合成一支函式**，不是七個各自取值：它們共用同一次 `GET /home`，
+ *    而首頁本來就要全部。拆開只會讓同一份資料被組七次。
+ *
+ * ⚠️ 版位勾到草稿時 API 端已經濾掉，這裡拿到的都是前台看得到的。
+ */
+export async function getHomeData() {
+  const [sections, treatments, terms, doctors, clinics, nap] = await Promise.all([
+    homeSections() as Promise<HomeSection[]>,
+    loadUnit(UNIT.treatment),
+    loadUnit(UNIT.term),
+    loadUnit(UNIT.doctor),
+    loadUnit(UNIT.clinic),
+    getClinicNap(),
+  ])
 
-export const HERO_SLIDES: HeroSlide[] = ((section('hero')?.settings ?? []) as { image: unknown; caption: string }[])
-  .map((s) => {
-    const i = img(s.image)
+  const section = (key: string): HomeSection | undefined =>
+    sections.find((s) => s.sectionKey === key && s.isEnabled)
+  const itemsOf = (key: string) =>
+    section(key)?.items.slice().sort((a, b) => a.sortOrder - b.sortOrder) ?? []
+
+  // 「最新文章」版位引用的那幾篇。⚠️ 只取被引用的，不是全部 1100 篇。
+  const articleItems = itemsOf('latest-articles')
+  const articles = await recordsByIds(articleItems.map((i) => i.contentItemId))
+
+  const heroSlides: HeroSlide[] =
+    ((section('hero')?.settings ?? []) as { image: unknown, caption: string }[]).map((s) => {
+      const i = img(s.image)
+      return {
+        imagePath: i?.src ?? '',
+        imageWidth: i?.width ?? 0,
+        imageHeight: i?.height ?? 0,
+        alt: i?.alt ?? '',
+        caption: s.caption,
+      }
+    })
+
+  const specialties: SpecialtyEntry[] = ((section('specialties')?.settings ?? []) as {
+    title: string, slug: string, urlPath: string, icon: unknown
+  }[]).map((s) => {
+    const i = img(s.icon)
     return {
+      title: s.title,
+      slug: s.slug,
+      urlPath: s.urlPath,
       imagePath: i?.src ?? '',
-      imageWidth: i?.width ?? 0,
-      imageHeight: i?.height ?? 0,
-      alt: i?.alt ?? '',
-      caption: s.caption,
+      iconWidth: i?.width ?? 0,
+      iconHeight: i?.height ?? 0,
     }
   })
 
-export const SPECIALTIES: SpecialtyEntry[] = ((section('specialties')?.settings ?? []) as {
-  title: string; slug: string; urlPath: string; icon: unknown
-}[]).map((s) => {
-  const i = img(s.icon)
-  return {
-    title: s.title,
-    slug: s.slug,
-    urlPath: s.urlPath,
-    imagePath: i?.src ?? '',
-    iconWidth: i?.width ?? 0,
-    iconHeight: i?.height ?? 0,
-  }
-})
+  const featuredTreatments: FeaturedTreatment[] = itemsOf('featured-treatments').map((item) => {
+    const t = treatments.find((x) => x.id === item.contentItemId)
+    const category = terms.find((c) => c.id === t?.fields.categoryTermId)
+    const cover = img(t?.fields.cover)
+    return {
+      title: item.title,
+      categoryLabel: category?.title ?? '',
+      categorySlug: (category?.slug as string) ?? '',
+      slug: (item.slug as string) ?? '',
+      urlPath: item.urlPath ?? '#',
+      imagePath: cover?.src ?? '',
+      imageWidth: cover?.width ?? 0,
+      imageHeight: cover?.height ?? 0,
+      alt: cover?.alt ?? item.title,
+    }
+  })
 
-export const FEATURED_TREATMENTS: FeaturedTreatment[] = itemsOf('featured-treatments').map((item) => {
-  const t = CONTENT.treatments.find((x) => x.id === item.contentItemId)
-  const category = CONTENT.terms.find((c) => c.id === t?.fields.categoryTermId)
-  const cover = img(t?.fields.cover)
-  return {
-    title: item.title,
-    categoryLabel: category?.title ?? '',
-    categorySlug: (category?.slug as string) ?? '',
-    slug: (item.slug as string) ?? '',
-    urlPath: item.urlPath ?? '#',
-    imagePath: cover?.src ?? '',
-    imageWidth: cover?.width ?? 0,
-    imageHeight: cover?.height ?? 0,
-    alt: cover?.alt ?? item.title,
-  }
-})
+  const latestArticles: LatestArticle[] = articleItems.map((item) => {
+    const a = articles.find((x) => x.id === item.contentItemId)
+    const category = terms.find((c) => c.id === a?.fields.categoryTermId)
+    const cover = img(a?.fields.cover)
+    return {
+      title: item.title,
+      categoryLabel: category?.title ?? '',
+      categorySlug: (category?.slug as string) ?? '',
+      urlPath: item.urlPath ?? '#',
+      summary: a?.summary ?? '',
+      imagePath: cover?.src ?? '',
+      imageWidth: cover?.width ?? 0,
+      imageHeight: cover?.height ?? 0,
+      alt: cover?.alt ?? item.title,
+      authorLabel: doctors.find((d) => d.id === a?.fields.authorDoctorId)?.title
+        ?? ((a?.fields.authorName as string) ?? ''),
+      displayDate: String(a?.fields.displayDate ?? '').slice(0, 10).replace(/-/g, '.'),
+      readingMinutes: (a?.fields.readingMinutes as number) ?? 0,
+    }
+  })
 
-export const LATEST_ARTICLES: LatestArticle[] = itemsOf('latest-articles').map((item) => {
-  const a = CONTENT.articles.find((x) => x.id === item.contentItemId)
-  const category = CONTENT.terms.find((c) => c.id === a?.fields.categoryTermId)
-  const cover = img(a?.fields.cover)
-  return {
-    title: item.title,
-    categoryLabel: category?.title ?? '',
-    categorySlug: (category?.slug as string) ?? '',
-    urlPath: item.urlPath ?? '#',
-    summary: a?.summary ?? '',
-    imagePath: cover?.src ?? '',
-    imageWidth: cover?.width ?? 0,
-    imageHeight: cover?.height ?? 0,
-    alt: cover?.alt ?? item.title,
-    authorLabel: CONTENT.doctors.find((d) => d.id === a?.fields.authorDoctorId)?.title
-      ?? ((a?.fields.authorName as string) ?? ''),
-    displayDate: String(a?.fields.displayDate ?? '').slice(0, 10).replace(/-/g, '.'),
-    readingMinutes: (a?.fields.readingMinutes as number) ?? 0,
-  }
-})
+  const featuredDoctors: HomeDoctor[] = itemsOf('doctors').map((item) => {
+    const d = doctors.find((x) => x.id === item.contentItemId)
+    const photo = img(d?.fields.photo)
+    return {
+      name: item.title,
+      jobTitle: (d?.fields.jobTitle as string) ?? '',
+      isPhysician: Boolean(d?.fields.isPhysician),
+      urlPath: item.urlPath ?? '#',
+      photoPath: photo?.src ?? '',
+      photoWidth: photo?.width ?? 0,
+      photoHeight: photo?.height ?? 0,
+    }
+  })
 
-export const FEATURED_DOCTORS: HomeDoctor[] = itemsOf('doctors').map((item) => {
-  const d = CONTENT.doctors.find((x) => x.id === item.contentItemId)
-  const photo = img(d?.fields.photo)
-  return {
-    name: item.title,
-    jobTitle: (d?.fields.jobTitle as string) ?? '',
-    isPhysician: Boolean(d?.fields.isPhysician),
-    urlPath: item.urlPath ?? '#',
-    photoPath: photo?.src ?? '',
-    photoWidth: photo?.width ?? 0,
-    photoHeight: photo?.height ?? 0,
-  }
-})
+  const homeClinics: HomeClinic[] = itemsOf('clinics').map((item) => {
+    const c = clinics.find((x) => x.id === item.contentItemId)
+    const n = nap.find((x) => x.name === item.title)
+    return {
+      name: item.title,
+      urlPath: item.urlPath ?? '#',
+      phone: (c?.fields.phone as string) ?? '',
+      address: (c?.fields.address as string) ?? '',
+      hoursRows: n?.hours ? [n.hours] : [],
+      hoursFootnote: '',
+    }
+  })
 
-export const HOME_CLINICS: HomeClinic[] = itemsOf('clinics').map((item) => {
-  const c = CONTENT.clinics.find((x) => x.id === item.contentItemId)
-  const nap = CLINIC_NAP.find((n) => n.name === item.title)
-  return {
-    name: item.title,
-    urlPath: item.urlPath ?? '#',
-    phone: (c?.fields.phone as string) ?? '',
-    address: (c?.fields.address as string) ?? '',
-    hoursRows: nap?.hours ? [nap.hours] : [],
-    hoursFootnote: '',
-  }
-})
+  return { heroSlides, specialties, featuredTreatments, latestArticles, featuredDoctors, homeClinics }
+}
 
 export const HOURS_WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'] as const

@@ -8,7 +8,7 @@
 // NAP（名稱／地址／電話）與 app/data/navigation.ts 的 CLINIC_NAP 是同一組事實，
 // 直接從那裡取值以確保逐字一致（docs/03-seo-geo.md §4③：NAP 不一致會降低 AI
 // 對品牌實體的確信度）。navigation.ts 是唯讀檔案，這裡只讀取不改寫。
-import { CLINIC_NAP } from '~/data/navigation'
+import { getClinicNap } from '~/data/navigation'
 
 export type ClinicSlug = 'siji' | 'erlin'
 export type TreatmentCategorySlug = 'laser' | 'microneedle' | 'photoelectric' | 'skincare'
@@ -127,7 +127,7 @@ export interface Clinic {
 //    它們由設計稿決定，不是院方會在後台改的內容（見 _presentation.ts 的分類原則）。
 //    真正的內容（地址、電話、門診時段、交通資訊、照片、介紹）都在資料庫。
 
-import { CONTENT, REL, img, parseBlocks, relationsOf, type ContentRecord } from './_content'
+import { REL, UNIT, img, loadUnit, parseBlocks, relationsOf, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
 // ⚠️ CLINIC_NAP 已在檔案上方 import 過（2026-09-11 搬遷時這裡多了一份重複的）。
 //    Vite 會把相同的 import 去重，所以前台建置一直是綠的，但在標準 ES module
@@ -203,13 +203,13 @@ const toPhoto = (value: unknown, caption: string, fallbackAlt: string): ClinicPh
   return { src: i?.src ?? '', width: i?.width ?? 0, height: i?.height ?? 0, alt: i?.alt || fallbackAlt, caption }
 }
 
-function toClinic(record: ContentRecord): Clinic {
+function toClinic(faqs: ContentRecord[], nap: Awaited<ReturnType<typeof getClinicNap>>, record: ContentRecord): Clinic {
   const f = record.fields
   const slug = record.slug as ClinicSlug
   const look = PRESENTATION[slug] ?? {
     eyebrow: '', hoursFootnote: '', jsonLdDescription: '', roleLabel: '', medicalSpecialty: [],
   }
-  const nap = CLINIC_NAP.find((n) => n.name === record.title)
+  const napRow = nap.find((n) => n.name === record.title)
   const hours = ((f.businessHours ?? []) as { dayOfWeek: number; startTime: string; endTime: string; sortOrder: number }[])
     .slice()
     .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.sortOrder - b.sortOrder)
@@ -228,7 +228,7 @@ function toClinic(record: ContentRecord): Clinic {
     address: (f.address as string) ?? '',
     // ⚠️ 門診時段的一句話摘要與頁尾共用同一份 NAP 主資料（docs/03 §4 ③：
     //    任何不一致都會降低 AI 對這個實體的確信度）。
-    hoursSummary: nap?.hours ?? '',
+    hoursSummary: napRow?.hours ?? '',
     pageDescription: (record.seo?.metaDescription as string) ?? record.summary ?? '',
     jsonLdDescription: look.jsonLdDescription,
     medicalSpecialty: look.medicalSpecialty,
@@ -255,7 +255,7 @@ function toClinic(record: ContentRecord): Clinic {
     hoursTable: hoursTableOf(hours),
     hoursFootnote: PRESENTATION[slug]?.hoursFootnote ?? '',
     faqs: relationsOf(record, REL.clinicToFaq).map((r) => {
-      const faq = CONTENT.faqs.find((x) => x.slug === r.toSlug)
+      const faq = faqs.find((x) => x.slug === r.toSlug)
       return {
         question: faq?.title ?? (r.toTitle as string),
         answer: (faq?.fields.webAnswer as string) ?? '',
@@ -265,13 +265,18 @@ function toClinic(record: ContentRecord): Clinic {
   }
 }
 
-export const CLINICS: Clinic[] = CONTENT.clinics
-  .slice()
-  .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
-  .map(toClinic)
+export async function getClinics(): Promise<Clinic[]> {
+  const [clinics, faqs, nap] = await Promise.all([
+    loadUnit(UNIT.clinic), loadUnit(UNIT.faq), getClinicNap(),
+  ])
+  return clinics
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+    .map((record) => toClinic(faqs, nap, record))
+}
 
-export function findClinic(slug: string): Clinic | undefined {
-  return CLINICS.find((c) => c.slug === slug)
+export async function findClinic(slug: string): Promise<Clinic | undefined> {
+  return (await getClinics()).find((c) => c.slug === slug)
 }
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const

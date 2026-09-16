@@ -4,7 +4,9 @@
 //
 // 行為（漢堡開合、行動版子選單展開）由 mockup 的 assets/app.js 以事件委派處理，
 // 不在這裡重寫（CLAUDE.md 決策 11：動效系統是客戶指定保留的部分）。
-import { MAIN_NAV, EXTERNAL } from '~/data/navigation'
+import { getMainNav, EXTERNAL } from '~/data/navigation'
+
+const MAIN_NAV = await getMainNav()
 
 /** 目前所在的區段，用來標 is-active。傳頂層路徑即可，例如 '/concerns/'。 */
 const props = defineProps<{ section?: string }>()

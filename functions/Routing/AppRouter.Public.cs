@@ -53,6 +53,7 @@ public sealed partial class AppRouter
             //    否則 `/{unit}` 與 `/content` 在同一層會互相吃掉。
             ("GET", ["content"]) => true,
             ("GET", ["content", "batch"]) => true,
+            ("GET", ["article", "popular-tags"]) => true,
             ("GET", ["redirects", "resolve"]) => true,
             ("GET", ["sitemap"]) => true,
             ("GET", ["home"]) => true,
@@ -79,6 +80,7 @@ public sealed partial class AppRouter
 
             ("GET", ["content"]) => Wrap(publicContent.GetByPathAsync(req)),
             ("GET", ["content", "batch"]) => Wrap(publicContent.BatchAsync(req)),
+            ("GET", ["article", "popular-tags"]) => Wrap(publicContent.PopularTagsAsync(req)),
             ("GET", ["redirects", "resolve"]) => Wrap(redirect.ResolveAsync(req)),
             ("GET", ["sitemap"]) => Wrap(publicContent.SitemapAsync(req)),
             ("GET", ["home"]) => Wrap(publicContent.HomeAsync(req)),

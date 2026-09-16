@@ -108,7 +108,7 @@ export interface Concern {
 //    （ContentRelations.Note 是逐筆的推薦理由，不是整段引言）。
 
 import {
-  CONTENT, REL, TERM, img, parseBlocks, relationsOf, termsOf, type ContentRecord,
+  REL, TERM, UNIT, img, loadUnit, parseBlocks, relationsOf, termsOf, type ContentRecord,
 } from './_content'
 import { CONCERN_EYEBROW } from './_presentation'
 
@@ -123,7 +123,17 @@ interface RecommendationIntro {
   doctorsIntro: string | null
 }
 
-function toConcern(record: ContentRecord): Concern {
+/** 一次算繪要用到的其他單元。理由同 treatments.ts 的 TreatmentContext。 */
+interface ConcernContext {
+  treatments: ContentRecord[]
+  terms: ContentRecord[]
+  doctors: ContentRecord[]
+  faqs: ContentRecord[]
+  /** ⚠️ 只有「被困擾關聯到的那幾篇」，不是全部 1100 篇。 */
+  articles: ContentRecord[]
+}
+
+function toConcern(ctx: ConcernContext, record: ContentRecord): Concern {
   const f = record.fields
   const symptoms = parseBlocks<{ heading: string | null; paragraphs: string[]; media: unknown } | null>(f.symptoms, null)
   const causes = parseBlocks<{ heading: string | null; intro: string | null; facts: ConcernFact[] } | null>(f.causes, null)
@@ -134,8 +144,8 @@ function toConcern(record: ContentRecord): Concern {
   })
 
   const treatments = relationsOf(record, REL.concernToTreatment).map((r) => {
-    const t = CONTENT.treatments.find((x) => x.slug === r.toSlug)
-    const category = t ? CONTENT.terms.find((c) => c.id === t.fields.categoryTermId) : undefined
+    const t = ctx.treatments.find((x) => x.slug === r.toSlug)
+    const category = t ? ctx.terms.find((c) => c.id === t.fields.categoryTermId) : undefined
     return {
       key: r.toSlug as string,
       name: t?.title ?? (r.toTitle as string),
@@ -148,7 +158,7 @@ function toConcern(record: ContentRecord): Concern {
   })
 
   // 諮詢醫師：醫師 → 困擾是單向存在醫師那一端（型別 13），反向掃回來。
-  const doctors = CONTENT.doctors
+  const doctors = ctx.doctors
     .filter((d) => d.relations.some((r) => r.relationType === REL.doctorToConcern && r.toSlug === record.slug))
     .map((d) => ({
       name: d.title,
@@ -177,16 +187,16 @@ function toConcern(record: ContentRecord): Concern {
         doctors,
         // 「最後更新」取這一頁引用到的 FAQ 裡最新的一筆審閱日，不另存一份會過期的字串。
         faqUpdated: relationsOf(record, REL.concernToFaq)
-          .map((r) => (CONTENT.faqs.find((x) => x.slug === r.toSlug)?.fields.lastReviewedOn as string) ?? '')
+          .map((r) => (ctx.faqs.find((x) => x.slug === r.toSlug)?.fields.lastReviewedOn as string) ?? '')
           .filter(Boolean)
           .sort()
           .at(-1)?.slice(0, 7) ?? '',
         faqs: relationsOf(record, REL.concernToFaq).map((r) => {
-          const faq = CONTENT.faqs.find((x) => x.slug === r.toSlug)
+          const faq = ctx.faqs.find((x) => x.slug === r.toSlug)
           return { q: faq?.title ?? (r.toTitle as string), a: (faq?.fields.webAnswer as string) ?? '' }
         }),
         articles: relationsOf(record, REL.concernToArticle).map((r) => {
-          const a = CONTENT.articles.find((x) => x.slug === r.toSlug)
+          const a = ctx.articles.find((x) => x.slug === r.toSlug)
           return {
             title: a?.title ?? (r.toTitle as string),
             href: r.toUrlPath ?? '#',
@@ -213,41 +223,70 @@ function toConcern(record: ContentRecord): Concern {
   }
 }
 
-export const CONCERNS: Concern[] = CONTENT.concerns
-  .slice()
-  .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
-  .map(toConcern)
+export async function getConcerns(): Promise<Concern[]> {
+  const [concerns, treatments, terms, doctors, faqs] = await Promise.all([
+    loadUnit(UNIT.concern),
+    loadUnit(UNIT.treatment),
+    loadUnit(UNIT.term),
+    loadUnit(UNIT.doctor),
+    loadUnit(UNIT.faq),
+  ])
+
+  // 只取真的被困擾關聯到的那幾篇文章。
+  const articleIds = [...new Set(
+    concerns.flatMap((c) => relationsOf(c, REL.concernToArticle).map((r) => r.toContentItemId)),
+  )]
+  const articles = await recordsByIds(articleIds)
+
+  const ctx: ConcernContext = { treatments, terms, doctors, faqs, articles }
+  return concerns
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+    .map((record) => toConcern(ctx, record))
+}
 
 /** 困擾總覽頁的「四大療程分類」導覽卡。由分類與其療程推導，不另存一份。 */
-export const CONCERN_TREATMENT_CATEGORIES = termsOf(TERM.treatmentCategory).map((term) => {
-  const first = CONTENT.treatments.find((t) => t.fields.categoryTermId === term.id)
-  return {
-    label: term.title,
-    href: term.urlPath ?? '#',
-    excerpt: term.summary ?? '',
-    image: toImage(first?.fields.cover ?? term.fields.cover, term.title),
-  }
-})
+export async function getConcernTreatmentCategories() {
+  const [terms, treatments] = await Promise.all([loadUnit(UNIT.term), loadUnit(UNIT.treatment)])
+  return termsOf(terms, TERM.treatmentCategory).map((term) => {
+    const first = treatments.find((t) => t.fields.categoryTermId === term.id)
+    return {
+      label: term.title,
+      href: term.urlPath ?? '#',
+      excerpt: term.summary ?? '',
+      image: toImage(first?.fields.cover ?? term.fields.cover, term.title),
+    }
+  })
+}
 
-/** 困擾總覽頁的推薦文章。取最新的三篇，不另存一份會過期的清單。 */
-export const CONCERN_OVERVIEW_ARTICLES: ConcernArticleRef[] = CONTENT.articles
-  .slice()
-  .sort((a, b) => String(b.fields.displayDate ?? '').localeCompare(String(a.fields.displayDate ?? '')))
-  .slice(0, 3)
-  .map((a) => {
-    const category = CONTENT.terms.find((t) => t.id === a.fields.categoryTermId)
+/**
+ * 困擾總覽頁的推薦文章：最新三篇。
+ *
+ * ⚠️ **排序交給 API**（`sort=latest`）。原本是把全部文章讀進來自己排再切三篇 ——
+ *    那在建置期沒問題，執行期等於為了三篇文章傳 2.3 MB。
+ */
+export async function getConcernOverviewArticles(): Promise<ConcernArticleRef[]> {
+  const [{ items }, terms, doctors] = await Promise.all([
+    articlePage(1, 3, { latest: true }),
+    loadUnit(UNIT.term),
+    loadUnit(UNIT.doctor),
+  ])
+
+  return items.map((a) => {
+    const category = terms.find((t) => t.id === a.fields.categoryTermId)
     return {
       title: a.title,
       href: a.urlPath ?? '#',
       tag: category?.title ?? '',
       image: toImage(a.fields.cover, a.title),
       meta: [
-        CONTENT.doctors.find((d) => d.id === a.fields.authorDoctorId)?.title ?? '',
+        doctors.find((d) => d.id === a.fields.authorDoctorId)?.title ?? '',
         String(a.fields.displayDate ?? '').slice(0, 10).replace(/-/g, '.'),
       ].filter(Boolean),
     }
   })
+}
 
-export function findConcern(slug: string): Concern | undefined {
-  return CONCERNS.find((c) => c.slug === slug)
+export async function findConcern(slug: string): Promise<Concern | undefined> {
+  return (await getConcerns()).find((c) => c.slug === slug)
 }

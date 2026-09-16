@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // 模板 16 —— 診所據點列表（mockup/17-clinic-list.html）
-import { CLINICS } from '~/data/clinics'
+import { getClinics } from '~/data/clinics'
+
+const CLINICS = await getClinics()
 
 usePageHead({
   title: '診所據點',

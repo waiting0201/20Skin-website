@@ -92,7 +92,7 @@ export interface Doctor {
 // ⚠️ 反向關聯（這位醫師出現在哪些療程）要從療程那一端掃回來 ——
 //    雙向關聯一律單向存（docs/08 §D），不是資料缺漏。
 
-import { CONTENT, INDEX, REL, TERM, img, inboundRelations, parseBlocks, relationsOf, termBy, type ContentRecord } from './_content'
+import { REL, TERM, UNIT, bySlug, img, inboundRelations, loadUnit, parseBlocks, relationsOf, termBy, type ContentRecord } from './_content'
 
 interface BioDocument {
   heroRole: string | null
@@ -100,7 +100,16 @@ interface BioDocument {
   paragraphs: string[]
 }
 
-function toDoctor(record: ContentRecord): Doctor {
+/** 一次算繪要用到的其他單元。理由同 treatments.ts 的 TreatmentContext。 */
+interface DoctorContext {
+  treatments: ContentRecord[]
+  terms: ContentRecord[]
+  clinics: ContentRecord[]
+  /** 醫師 id → 他署名的文章。由 API 以 authorDoctorId 篩出來，不是前端過濾。 */
+  articlesByAuthor: Map<number, ContentRecord[]>
+}
+
+function toDoctor(ctx: DoctorContext, record: ContentRecord): Doctor {
   const f = record.fields
   const bio = parseBlocks<BioDocument>(f.bio, { heroRole: null, yearsInPractice: null, paragraphs: [] })
   const tags = (f.tags ?? []) as { type: number; tag: string; sortOrder: number }[]
@@ -147,10 +156,10 @@ function toDoctor(record: ContentRecord): Doctor {
       slug: r.toSlug as string,
       label: r.toTitle as string,
     })),
-    treatments: inboundRelations(CONTENT.treatments, REL.treatmentToDoctor, record.slug as string)
+    treatments: inboundRelations(ctx.treatments, REL.treatmentToDoctor, record.slug as string)
       .map((t) => {
         const categoryId = t.fields.categoryTermId as number
-        const category = CONTENT.terms.find((x) => x.id === categoryId)
+        const category = ctx.terms.find((x) => x.id === categoryId)
         const cover = img(t.fields.cover)
         return {
           categoryLabel: category?.title ?? '',
@@ -161,11 +170,12 @@ function toDoctor(record: ContentRecord): Doctor {
         }
       }),
     // 個人頁的文章列表＝這位醫師署名的文章（docs/08 §C-4 AuthorDoctorId）。
-    articles: CONTENT.articles
-      .filter((a) => a.fields.authorDoctorId === record.id)
+    // 個人頁的文章＝這位醫師署名的那幾篇。⚠️ 由 API 以 authorDoctorId 篩出來，
+    //    不是撈回 1100 篇再前端過濾。
+    articles: (ctx.articlesByAuthor.get(record.id) ?? [])
       .map((a) => {
         const cover = img(a.fields.cover)
-        const category = CONTENT.terms.find((x) => x.id === a.fields.categoryTermId)
+        const category = ctx.terms.find((x) => x.id === a.fields.categoryTermId)
         return {
           category: category?.title ?? '',
           title: a.title,
@@ -178,7 +188,7 @@ function toDoctor(record: ContentRecord): Doctor {
       }),
     media: parseBlocks<DoctorMediaRef[]>(f.publications, []),
     // 駐診據點寫在據點那一端（型別 8），備註放在關聯的 Note。
-    clinics: CONTENT.clinics.flatMap((c) =>
+    clinics: ctx.clinics.flatMap((c) =>
       relationsOf(c, REL.clinicToDoctor)
         .filter((r) => r.toSlug === record.slug)
         .map((r) => ({
@@ -189,16 +199,36 @@ function toDoctor(record: ContentRecord): Doctor {
   }
 }
 
-export const DOCTORS: Doctor[] = CONTENT.doctors
-  .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
-  .map(toDoctor)
+export async function getDoctors(): Promise<Doctor[]> {
+  const [doctors, treatments, terms, clinics] = await Promise.all([
+    loadUnit(UNIT.doctor),
+    loadUnit(UNIT.treatment),
+    loadUnit(UNIT.term),
+    loadUnit(UNIT.clinic),
+  ])
 
-export function findDoctor(slug: string): Doctor | undefined {
-  return DOCTORS.find((d) => d.slug === slug)
+  // 每位醫師署名的文章各自向 API 要。⚠️ 14 位醫師＝14 次查詢，但每次只回那幾篇；
+  //    相對於「撈 1100 篇回來自己分組」，傳輸量差三個數量級。
+  const byAuthor = await Promise.all(
+    doctors.map(async (d) => [d.id, (await articlePage(1, 100, { authorDoctorId: d.id })).items] as const),
+  )
+  const ctx: DoctorContext = {
+    treatments, terms, clinics,
+    articlesByAuthor: new Map(byAuthor),
+  }
+
+  return doctors
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+    .map((record) => toDoctor(ctx, record))
 }
 
-export function doctorsByClinic(clinicSlug: ClinicSlug, physiciansOnly = false): Doctor[] {
-  return DOCTORS.filter(
+export async function findDoctor(slug: string): Promise<Doctor | undefined> {
+  return (await getDoctors()).find((d) => d.slug === slug)
+}
+
+export async function doctorsByClinic(clinicSlug: ClinicSlug, physiciansOnly = false): Promise<Doctor[]> {
+  return (await getDoctors()).filter(
     (d) => d.clinics.some((c) => c.clinicSlug === clinicSlug) && (!physiciansOnly || d.isPhysician),
   )
 }

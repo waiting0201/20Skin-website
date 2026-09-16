@@ -16,11 +16,14 @@
 //    系統頁不可刪除、不可改 slug（docs/08 §C-8），所以這裡一律「查既有頁面」，
 //    查不到就給空值，不自己補一個假的。
 
-import { INDEX, img, parseBlocks } from './_content'
+import { UNIT, bySlug, img, loadUnit, parseBlocks, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
 
-const blocksOf = <T,>(slug: string, fallback: T): T =>
-  parseBlocks<T>(INDEX.page.get(slug)?.fields.bodyBlocks, fallback)
+/** slug → 那一筆頁面。⚠️ 每個請求只取一次（`loadUnit` 以請求為範圍去重）。 */
+const pageIndex = async () => bySlug(await loadUnit(UNIT.page))
+
+const blocksOf = <T,>(index: Map<string, ContentRecord>, slug: string, fallback: T): T =>
+  parseBlocks<T>(index.get(slug)?.fields.bodyBlocks, fallback)
 
 interface AboutDocument {
   pillars: typeof ABOUT_PILLARS
@@ -29,12 +32,16 @@ interface AboutDocument {
   clinics: typeof ABOUT_CLINICS
 }
 
-const about = blocksOf<Partial<AboutDocument>>('about', {})
-
-export const ABOUT_PILLARS = (about.pillars ?? []) as { no: string; title: string; body: string; image: { src: string; alt: string; w?: number; h?: number } }[]
-export const ABOUT_TIMELINE = (about.timeline ?? []) as { year: string; title: string; body: string }[]
-export const ABOUT_TEAM_PREVIEW = (about.teamPreview ?? []) as { name: string; role: string; image: { src: string; alt: string } }[]
-export const ABOUT_CLINICS = (about.clinics ?? []) as { name: string; body: string; address: string; href?: string }[]
+/** 品牌理念頁的四個區塊。一次取齊，呼叫端解構即可。 */
+export async function getAboutPage() {
+  const about = blocksOf<Partial<AboutDocument>>(await pageIndex(), 'about', {})
+  return {
+    pillars: (about.pillars ?? []) as { no: string, title: string, body: string, image: { src: string, alt: string, w?: number, h?: number } }[],
+    timeline: (about.timeline ?? []) as { year: string, title: string, body: string }[],
+    teamPreview: (about.teamPreview ?? []) as { name: string, role: string, image: { src: string, alt: string } }[],
+    clinics: (about.clinics ?? []) as { name: string, body: string, address: string, href?: string }[],
+  }
+}
 
 export interface StoryFaq {
   q: string
@@ -66,9 +73,11 @@ export interface StoryPage {
 
 const STORY_SLUGS = ['new-chinese-aesthetics', 'makeup-style']
 
-export const STORY_PAGES: Record<string, StoryPage> = Object.fromEntries(
+export async function getStoryPages(): Promise<Record<string, StoryPage>> {
+  const index = await pageIndex()
+  return Object.fromEntries(
   STORY_SLUGS.map((slug) => {
-    const record = INDEX.page.get(slug)
+    const record = index.get(slug)
     const doc = blocksOf<{
       meta?: string[]
       heroImage?: unknown
@@ -77,7 +86,7 @@ export const STORY_PAGES: Record<string, StoryPage> = Object.fromEntries(
       faqs?: StoryFaq[]
       treatments?: StoryTreatmentCard[]
       sister?: { slug: string; label: string } | null
-    }>(slug, {})
+    }>(index, slug, {})
     const hero = img(doc.heroImage)
 
     return [slug, {
@@ -95,7 +104,8 @@ export const STORY_PAGES: Record<string, StoryPage> = Object.fromEntries(
       sisterLabel: doc.sister?.label ?? null,
     } satisfies StoryPage]
   }),
-)
+  )
+}
 
 export interface LegalSection {
   id: string
@@ -116,21 +126,24 @@ export interface LegalDoc {
 
 const LEGAL_SLUGS: LegalDoc['slug'][] = ['privacy', 'terms', 'medical-disclaimer']
 
-export const LEGAL_DOCS: LegalDoc[] = LEGAL_SLUGS.map((slug) => {
-  const record = INDEX.page.get(slug)
-  const doc = blocksOf<{ updatedOn?: string | null; sections?: LegalSection[] }>(slug, {})
-  return {
-    slug,
-    path: record?.urlPath ?? `/${slug}/`,
-    navLabel: record?.title ?? '',
-    title: record?.title ?? '',
-    updatedOn: doc.updatedOn ?? '',
-    sections: doc.sections ?? [],
-  }
-})
+export async function getLegalDocs(): Promise<LegalDoc[]> {
+  const index = await pageIndex()
+  return LEGAL_SLUGS.map((slug) => {
+    const record = index.get(slug)
+    const doc = blocksOf<{ updatedOn?: string | null, sections?: LegalSection[] }>(index, slug, {})
+    return {
+      slug,
+      path: record?.urlPath ?? `/${slug}/`,
+      navLabel: record?.title ?? '',
+      title: record?.title ?? '',
+      updatedOn: doc.updatedOn ?? '',
+      sections: doc.sections ?? [],
+    }
+  })
+}
 
-export function findLegalDocByPath(path: string): LegalDoc | undefined {
-  return LEGAL_DOCS.find((doc) => doc.path === path)
+export async function findLegalDocByPath(path: string): Promise<LegalDoc | undefined> {
+  return (await getLegalDocs()).find((doc) => doc.path === path)
 }
 
 // ─────────────────────────────────────────────────────────────────────────

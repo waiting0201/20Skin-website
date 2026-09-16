@@ -1,6 +1,10 @@
 <script setup lang="ts">
 // 模板 9 —— 困擾總覽（mockup/13-concern-overview.html）
-import { CONCERNS, CONCERN_TREATMENT_CATEGORIES, CONCERN_OVERVIEW_ARTICLES } from '~/data/concerns'
+import { getConcerns, getConcernTreatmentCategories, getConcernOverviewArticles } from '~/data/concerns'
+
+const [CONCERNS, CONCERN_TREATMENT_CATEGORIES, CONCERN_OVERVIEW_ARTICLES] = await Promise.all([
+  getConcerns(), getConcernTreatmentCategories(), getConcernOverviewArticles(),
+])
 
 usePageHead({
   title: '肌膚困擾',

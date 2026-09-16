@@ -9,14 +9,18 @@
 // mockup 只示範了「醫美新知」這一個分類的清單，所以四個分類裡只有醫美新知有
 // 文章；這一頁把全部（目前也就是醫美新知那 11 篇）攤開顯示。分類 Tab 全部可
 // 點，其餘三個分類點進去會看到「尚無文章」的空狀態，不是漏做。
-import { ARTICLE_CATEGORIES, formatDisplayDate, listAllArticles, paginate } from '~/data/articles'
+import { getArticleCategories, formatDisplayDate, listAllArticles } from '~/data/articles'
 
 // ⚠️ `page` 由兩個路由各自傳進來：`/blog/`（第 1 頁）與 `/blog/page/{n}/`。
 //    做成元件而不是把版面抄兩份 —— 兩個路由的 hero、麵包屑、側欄完全一樣。
 const props = withDefaults(defineProps<{ page?: number }>(), { page: 1 })
 
-const all = listAllArticles()
-const paged = paginate(all, props.page)
+// ⚠️ 分頁改由 API 做（`listAllArticles(page)`），不再是「把全部讀進來再 slice」——
+//    1100 篇每開一次列表就傳 2.3 MB。`paginate()` 因此不再需要。
+const [paged, ARTICLE_CATEGORIES] = await Promise.all([
+  listAllArticles(props.page),
+  getArticleCategories(),
+])
 
 // ⚠️ 超出範圍的頁碼要 404，不是顯示空清單。`/blog/page/999/` 若回 200 空頁面，
 //    爬蟲會把無限多個不存在的頁當成有效內容收進索引。

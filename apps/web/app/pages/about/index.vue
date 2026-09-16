@@ -1,6 +1,9 @@
 <script setup lang="ts">
 // 模板 2 —— 品牌理念（mockup/09-about.html）
-import { ABOUT_PILLARS, ABOUT_TIMELINE, ABOUT_TEAM_PREVIEW, ABOUT_CLINICS } from '~/data/pages'
+import { getAboutPage } from '~/data/pages'
+
+const { pillars: ABOUT_PILLARS, timeline: ABOUT_TIMELINE,
+  teamPreview: ABOUT_TEAM_PREVIEW, clinics: ABOUT_CLINICS } = await getAboutPage()
 
 usePageHead({
   title: '品牌理念',

@@ -8,19 +8,21 @@
 // 據點頁是地區 SEO 的主要落地頁（docs/03-seo-geo.md §3 地區軸），NAP 必須
 // 與頁尾（app/data/navigation.ts 的 CLINIC_NAP）逐字一致 —— clinics.ts 已經
 // 直接讀 CLINIC_NAP 組出 phone/address，不會各自維護一份而失準。
-import { CLINICS, clinicOpeningHours, findClinic } from '~/data/clinics'
+import { getClinics, clinicOpeningHours } from '~/data/clinics'
+
+const CLINICS = await getClinics()
 import { doctorsByClinic } from '~/data/doctors'
 
 const route = useRoute()
 const slug = route.params.slug as string
-const clinic = findClinic(slug)
+const clinic = CLINICS.find((c) => c.slug === slug)
 
 if (!clinic) {
   throw createError({ statusCode: 404, statusMessage: '找不到這個院區' })
 }
 
 const otherClinic = CLINICS.find((c) => c.slug !== clinic.slug)
-const residentDoctors = doctorsByClinic(clinic.slug, true)
+const residentDoctors = await doctorsByClinic(clinic.slug, true)
 
 const jsonLd: Record<string, unknown> = {
   '@context': 'https://schema.org',

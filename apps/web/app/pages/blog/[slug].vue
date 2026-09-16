@@ -15,14 +15,14 @@ import {
 
 const route = useRoute()
 const slug = route.params.slug as string
-const article = getArticleBySlug(slug)
+const article = await getArticleBySlug(slug)
 
 if (!article) {
   throw createError({ statusCode: 404, statusMessage: 'Article Not Found' })
 }
 
 const category = getArticleCategory(article.categorySlug)!
-const relatedArticles = getRelatedArticles(article, 3)
+const relatedArticles = await getRelatedArticles(article, 3)
 
 // ⚠️ **內文是動態載入的**（一篇一個 chunk，見 data/articles.ts 的 getArticleBody）。
 //    用 useAsyncData 取，預渲染時會被寫進這一頁的 HTML 與 _payload.json，

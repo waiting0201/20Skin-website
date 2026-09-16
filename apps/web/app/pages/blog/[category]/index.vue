@@ -17,20 +17,33 @@
 // 整段被丟進執行期才合併的 route.meta，**不會**寫進用來建路由表的 route.path ——
 // 上面說的 +10 分因此完全不會發生，[slug].vue 還是會贏。四個分類 slug 只好在這裡
 // 重複寫一次字面值；下面的檢查確保它沒有跟 ARTICLE_CATEGORIES 兜不起來。
-import { ARTICLE_CATEGORIES, type ArticleCategorySlug } from '~/data/articles'
+import { getArticleCategories, type ArticleCategorySlug } from '~/data/articles'
 
-const CATEGORY_SLUGS = ARTICLE_CATEGORIES.map((c) => c.slug)
+// 🔴 四個分類 slug 在這裡是**寫死的字面值**，而且必須是 —— `definePageMeta` 是
+//    編譯期巨集，它的 `path` 與 `validate` 引用不到執行期才從 API 取回來的分類清單
+//    （2026-09-15 改成執行期 SSR 之前，那份清單是模組常數，所以原本引用得到）。
+// ⚠️ 原本那段「寫死值 vs 分類清單是否同步」的檢查因此移到 setup 裡
+//    （下方 assertCategorySlugsInSync），時機從建置期變成算繪期，
+//    但仍然只在 dev 下拋錯 —— 正式環境不該因為這種一致性問題整頁掛掉。
 const CATEGORY_PATH_PATTERN = 'medical-aesthetics|dermatology|media|lectures'
-if (import.meta.dev && CATEGORY_PATH_PATTERN.split('|').join(',') !== CATEGORY_SLUGS.join(',')) {
-  throw new Error(
-    '[blog/[category]/index.vue] definePageMeta 裡寫死的 CATEGORY_PATH_PATTERN 與 articles.ts 的 ARTICLE_CATEGORIES 不同步，請同步修改 path。',
-  )
-}
+const CATEGORY_SLUGS = CATEGORY_PATH_PATTERN.split('|') as ArticleCategorySlug[]
 
 definePageMeta({
   path: '/blog/:category(medical-aesthetics|dermatology|media|lectures)',
   validate: (route) => CATEGORY_SLUGS.includes(route.params.category as ArticleCategorySlug),
 })
+
+/** 寫死的路由樣式與資料庫的文章分類是否還對得起來。⚠️ 只在 dev 拋錯。 */
+async function assertCategorySlugsInSync() {
+  if (!import.meta.dev) return
+  const actual = (await getArticleCategories()).map((c) => c.slug).join(',')
+  if (actual !== CATEGORY_SLUGS.join(',')) {
+    throw new Error(
+      '[blog/[category]/index.vue] definePageMeta 裡寫死的 CATEGORY_PATH_PATTERN 與資料庫的文章分類不同步，請同步修改 path。',
+    )
+  }
+}
+await assertCategorySlugsInSync()
 
 const route = useRoute()
 </script>

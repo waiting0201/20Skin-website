@@ -1,7 +1,11 @@
 <script setup lang="ts">
 // Footer —— 標記照抄自 mockup，連結改由 FOOTER_COLUMNS / CLINIC_NAP / LEGAL_LINKS 產生。
 // 正式站這些值來自後台的「導覽選單與頁尾」與全站設定（docs/02-backend-cms.md §3）。
-import { FOOTER_COLUMNS, CLINIC_NAP, LEGAL_LINKS, SOCIAL_LINKS } from '~/data/navigation'
+import { getFooterColumns, getClinicNap, getLegalLinks, SOCIAL_LINKS } from '~/data/navigation'
+
+const [FOOTER_COLUMNS, CLINIC_NAP, LEGAL_LINKS] = await Promise.all([
+  getFooterColumns(), getClinicNap(), getLegalLinks(),
+])
 </script>
 
 <template>

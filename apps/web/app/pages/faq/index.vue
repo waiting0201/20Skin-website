@@ -13,7 +13,15 @@
 // nitro 的 crawlLinks 探索到、產生靜態 HTML——nav 選單（navigation.ts）目前
 // 沒有列出五個 FAQ 分類的子選單，分類頁在動線上會變成孤兒頁。這裡沒有加任何
 // class（避免影響版面），純文字連結。
-import { FAQ_CATEGORIES, faqItemsByCategory, faqPageJsonLd, FAQ_ITEMS } from '~/data/faq'
+import { getFaqCategories, faqPageJsonLd, getFaqItems } from '~/data/faq'
+
+const [FAQ_CATEGORIES, FAQ_ITEMS] = await Promise.all([getFaqCategories(), getFaqItems()])
+
+// ⚠️ 原本樣板直接呼叫 `faqItemsByCategory(cat.slug)`，那支現在是 async ——
+//    template 不能 await，所以在這裡先分組好。順帶少掉每個分類重算一次的成本。
+const itemsByCategory = new Map(
+  FAQ_CATEGORIES.map((c) => [c.slug, FAQ_ITEMS.filter((i) => i.categorySlug === c.slug)]),
+)
 
 usePageHead({
   title: '常見問題',
@@ -94,11 +102,11 @@ usePageHead({
         >
           <div class="faq-group__head">
             <h2>{{ cat.label }}</h2>
-            <span class="faq-group__count">{{ faqItemsByCategory(cat.slug).length }} 則</span>
+            <span class="faq-group__count">{{ (itemsByCategory.get(cat.slug) ?? []).length }} 則</span>
             <a :href="`/faq/${cat.slug}/`">查看「{{ cat.label }}」單獨頁面 →</a>
           </div>
           <div class="c-faq">
-            <details v-for="item in faqItemsByCategory(cat.slug)" :key="item.question" class="c-faq__item">
+            <details v-for="item in itemsByCategory.get(cat.slug) ?? []" :key="item.question" class="c-faq__item">
               <summary class="c-faq__q">{{ item.question }}</summary>
               <div class="c-faq__a">
                 <p>{{ item.webAnswer }}</p>

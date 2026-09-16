@@ -3,7 +3,9 @@
 //
 // ⚠️ 三個列表頁（全部文章、分類、標籤）原本各自抄一份完全相同的側欄。
 //    加分頁之後每一種列表都會多一個 `/page/{n}/` 的路由，再抄下去就是六份。
-import { POPULAR_TAGS, POPULAR_TREATMENTS_FOR_BLOG } from '~/data/articles'
+import { getPopularTags, POPULAR_TREATMENTS_FOR_BLOG } from '~/data/articles'
+
+const POPULAR_TAGS = await getPopularTags()
 </script>
 
 <template>

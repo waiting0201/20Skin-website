@@ -24,9 +24,8 @@ export const EXTERNAL = {
 // ⚠️ 選單是後台可編的內容（「導覽選單與頁尾」畫面，限超級管理員），不是寫死的版面。
 //    改一個選項不需要工程介入 —— 這正是它進資料庫的理由。
 
-import menuJson from '~~/content/menu.json'
-import { CONTENT } from './_content'
-import { LEGAL_DOCS } from './pages'
+import { UNIT, loadUnit } from './_content'
+import { getLegalDocs } from './pages'
 
 interface MenuNode {
   label: string
@@ -38,8 +37,6 @@ interface MenuNode {
   children: MenuNode[]
 }
 
-const MENU = menuJson as unknown as { main: MenuNode[]; footer: MenuNode[] }
-
 const toNavItem = (node: MenuNode): NavItem => ({
   label: node.label,
   href: node.url ?? '#',
@@ -47,14 +44,20 @@ const toNavItem = (node: MenuNode): NavItem => ({
   ...(node.children.length ? { children: node.children.map(toNavItem) } : {}),
 })
 
-export const MAIN_NAV: NavItem[] = MENU.main.map(toNavItem)
+export async function getMainNav(): Promise<NavItem[]> {
+  const menu = await siteMenu()
+  return (menu.main as MenuNode[]).map(toNavItem)
+}
 
 // 頁尾在資料庫是一棵樹（欄標題是一層節點），前台是分欄的 —— 這裡攤回欄的形狀。
 // ⚠️ 欄標題在版面上是純文字，所以只取 title，不用它的 url。
-export const FOOTER_COLUMNS: { title: string; items: NavItem[] }[] = MENU.footer.map((col) => ({
-  title: col.label,
-  items: col.children.map(toNavItem),
-}))
+export async function getFooterColumns(): Promise<{ title: string, items: NavItem[] }[]> {
+  const menu = await siteMenu()
+  return (menu.footer as MenuNode[]).map((col) => ({
+    title: col.label,
+    items: col.children.map(toNavItem),
+  }))
+}
 
 // ── NAP（名稱／地址／電話／門診時段）────────────────────────────────────
 //
@@ -111,7 +114,9 @@ function hoursSummary(hours: BusinessHourRow[]): string {
   return out.join('／')
 }
 
-export const CLINIC_NAP = CONTENT.clinics
+export async function getClinicNap() {
+  const clinics = await loadUnit(UNIT.clinic)
+  return clinics
   .slice()
   .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
   .map((c) => ({
@@ -121,11 +126,14 @@ export const CLINIC_NAP = CONTENT.clinics
     address: (c.fields.address as string) ?? '',
     hours: hoursSummary((c.fields.businessHours ?? []) as BusinessHourRow[]),
   }))
+}
 
-export const LEGAL_LINKS: NavItem[] = LEGAL_DOCS.map((doc) => ({
-  label: doc.navLabel,
-  href: doc.path,
-}))
+export async function getLegalLinks(): Promise<NavItem[]> {
+  return (await getLegalDocs()).map((doc) => ({
+    label: doc.navLabel,
+    href: doc.path,
+  }))
+}
 
 export const SOCIAL_LINKS = [
   { label: '四季診所 Facebook', href: 'https://www.facebook.com/20skin4g88/' },

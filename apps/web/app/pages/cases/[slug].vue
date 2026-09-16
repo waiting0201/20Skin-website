@@ -9,11 +9,13 @@
 //     所以這兩項不在前台頁面顯示，資料形狀仍保留在 ~/data/cases.ts 供後台對照。
 //
 // 案例頁的 JSON-LD 只用 breadcrumbJsonLd()，不輸出會被當成療效保證的結構化資料。
-import { findCaseDetail, CASE_DETAILS } from '~/data/cases'
+import { findCaseDetail, getCaseDetails } from '~/data/cases'
+
+const CASE_DETAILS = await getCaseDetails()
 
 const route = useRoute()
 const slug = route.params.slug as string
-const item = findCaseDetail(slug)
+const item = await findCaseDetail(slug)
 
 if (!item) {
   throw createError({ statusCode: 404, statusMessage: '找不到這個案例頁面', fatal: true })
