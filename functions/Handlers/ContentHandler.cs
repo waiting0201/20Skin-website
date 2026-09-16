@@ -1224,6 +1224,18 @@ public sealed class ContentHandler(
     /// ⚠️ 自由頁一律頂層路徑 <c>/{slug}/</c>——Page 模型沒有 ParentId，既有的巢狀路徑
     /// （如 <c>/about/new-chinese-aesthetics/</c>）只來自種子資料，此設計已在回報中說明。
     /// </summary>
+    /// <summary>
+    /// 取一個網址的父層前綴（含尾斜線）。
+    /// <c>/about/makeup-style/</c> → <c>/about/</c>；<c>/privacy/</c> → <c>/</c>；空值 → <c>/</c>。
+    /// </summary>
+    private static string ParentPrefixOf(string? urlPath)
+    {
+        if (string.IsNullOrWhiteSpace(urlPath)) return "/";
+        var trimmed = urlPath.Trim().TrimEnd('/');
+        var cut = trimmed.LastIndexOf('/');
+        return cut <= 0 ? "/" : trimmed[..(cut + 1)];
+    }
+
     private async Task<string?> ComputeUrlPathAsync(string unit, ContentItem entity, CancellationToken ct)
     {
         switch (unit)
@@ -1244,7 +1256,23 @@ public sealed class ContentHandler(
             case UnitCodes.Page:
             {
                 var page = (Page)entity;
-                return page.PageKind == PageKind.System ? entity.UrlPath : $"/{entity.Slug}/";
+                if (page.PageKind == PageKind.System) return entity.UrlPath;
+
+                // 🔴 **保留既有 UrlPath 的父層，只重算最後一段**（Tim 定案 2026-09-16，選項 a）。
+                //    原本無條件回 `/{Slug}/`，於是 `/about/makeup-style/` 每次存檔都被壓平成
+                //    `/makeup-style/` —— 前台那個網址根本不存在，實際後果是
+                //    **sitemap 收了 404 網址、站內搜尋給出點進去是 404 的結果**。
+                //
+                //    ⚠️ **新頁面仍然落在根層**（`UrlPath` 還是 null）—— 這是選項 (a) 的代價：
+                //    後台沒有「把頁面搬到某個父層底下」的表示法，父層由種子資料決定。
+                //    要讓它可編輯是選項 (b)，那需要為 Page 新增父層欄位，
+                //    與 docs/08 §0 決策二「不預留未定案的欄位」相衝，當時明確不走。
+                //
+                //    ⚠️ **只改程式救不了已經被壓平的資料。** 這一段是拿既有 UrlPath 當權威值，
+                //    所以資料庫裡若已經是 `/new-chinese-aesthetics/`，算出來還是它。
+                //    兩件事缺一不可：先把資料改回 `/about/...`（tools/fix-page-urlpath/），
+                //    再靠這段程式讓它不會又被壓平。
+                return $"{ParentPrefixOf(entity.UrlPath)}{entity.Slug}/";
             }
             case UnitCodes.Term:
             {
