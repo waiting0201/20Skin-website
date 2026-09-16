@@ -367,14 +367,34 @@ public sealed class PublicContentHandler(
         {
             if (JsonNode.Parse(row.Snapshot) is not JsonObject snapshot) continue;
 
+            // 🔴 **哪些欄位可以用即時值蓋掉快照，是有規則的，不要憑感覺加。**
+            //    規則：**結構性的欄位用即時值，內容性的欄位用已核准快照。**
+            //    ⚠️ 這份清單刻意與 `tools/content-export` 的 SELECT 覆寫一致
+            //    （urlPath／sortOrder／includeInSitemap／updatedAt）——
+            //    那是搬遷時用 golden-diff 驗過的行為。
             snapshot["id"] = row.Id;
             snapshot["contentType"] = row.ContentType;
+
+            // 結構性：網址必須與路由實際提供的一致，否則站內連結會指到不存在的頁。
+            // slug 一併用即時值 —— urlPath 是由它推導的，兩者分家會產出自相矛盾的資料。
             snapshot["slug"] = row.Slug;
             snapshot["urlPath"] = row.UrlPath;
-            snapshot["title"] = row.Title;
+
             snapshot["sortOrder"] = row.SortOrder;
             snapshot["includeInSitemap"] = row.IncludeInSitemap;
             snapshot["updatedAt"] = row.UpdatedAt.ToString("s");
+
+            // 🔴 **標題一定要用已核准快照的，不可以用 ContentItems.Title。**
+            //    後者是**工作副本** —— 編輯在後台改了標題、還沒送審，蓋上去就等於
+            //    「未核准的編輯直接上線」（CLAUDE.md 決策 14 明列的兩種災難之一）。
+            //    ⚠️ 2026-09-16 實際踩過並修正：我在 SSR 改版時多寫了一行
+            //    `snapshot["title"] = row.Title`，而它有一個乾淨的反證 ——
+            //    migration `RenameMakeupStylePageTitle`（09-14）只改了
+            //    `ContentItems.Title`，靜態版線上到 09-15 覆核時仍顯示舊標題（正確），
+            //    SSR 版卻在沒有任何人重新發布的情況下換成了新標題（錯誤）。
+            //    ⚠️ 只有快照真的沒有標題時才退回即時值，那是資料壞掉的保底，不是常態。
+            if (snapshot["title"] is null || string.IsNullOrEmpty(snapshot["title"]!.GetValue<string>()))
+                snapshot["title"] = row.Title;
 
             // 「內容夠不夠實在，值得被索引嗎」。⚠️ 判斷只有一份（Common/Indexability.cs）——
             //    前台的 noIndex 與 sitemap 的收錄範圍都讀這一個值，不各判一次。

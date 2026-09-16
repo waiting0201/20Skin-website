@@ -345,8 +345,24 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    ⚠️ SWA 的 CDN **沒有清除 API**，所以快取一旦加上就不是「即時」了；真要加，
    正確的位置是應用程式層的資料快取＋發布時主動失效（VicRound 的做法），
    而在 SWA 的多執行個體下那需要共用儲存（Blob），不能用記憶體。
-   ⚠️ 匯出讀的是**已核准的版本快照**，不是 `ContentItems` 的即時欄位 ——
+   ⚠️ 公開端點讀的是**已核准的版本快照**，不是 `ContentItems` 的即時欄位 ——
    兩種錯法都是災難（編輯已上線的頁面會 404／未審核的編輯直接上線）。
+
+   🔴 **哪些欄位可以用即時值蓋掉快照，有明確規則**（`PublicContentHandler.ShapeAsync`）：
+   **結構性的用即時值**（`urlPath`／`slug`／`sortOrder`／`includeInSitemap`／`updatedAt`）——
+   網址必須與路由實際提供的一致，否則站內連結會指到不存在的頁；
+   **內容性的用快照**（`title`／`summary`／`fields`）。
+   這份清單與 `tools/content-export` 的覆寫一致，那是搬遷時用 golden-diff 驗過的行為。
+   ⚠️ **2026-09-16 實際踩過**：SSR 改版時多蓋了一行 `snapshot["title"] = row.Title`，
+   於是「在後台改標題、還沒送審」就直接上線。反證很乾淨 ——
+   migration `RenameMakeupStylePageTitle`（09-14）只改了 `ContentItems.Title`，
+   靜態版線上到 09-15 覆核時仍是舊標題（正確），SSR 版卻在沒有人重新發布的情況下換掉了。
+
+   🔴 **站內搜尋比對的是 `ContentItems.SearchText`（純文字），不是快照**
+   （`Common/SearchTextBuilder.cs`）。那是**衍生資料**，只在發布時由已核准快照重算。
+   ⚠️ 直接對快照做 `LIKE` 在正式環境是 **23–24 秒**（Azure SQL Basic／5 DTU），
+   而本機 SQL Server 只要 1.2 秒 —— **效能結論不要拿本機數字下**。
+   ⚠️ 4000 字上限是「搜得到多少」換「搜多久」，放寬前先對正式環境量過。
    ⚠️ **版面留在前台**（`app/data/_presentation.ts`）：英文小標、圖示、
    JSON-LD 的固定描述這類設計稿決定的字串不進資料庫。判斷標準是「院方會想改它嗎？」
    ⚠️ **內容圖在 Blob，版面素材在建置產物**。路徑是決定性的

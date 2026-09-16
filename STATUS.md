@@ -846,7 +846,7 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
 - [ ] Managed Identity 連 SQL 與 Blob — 🟡 **SQL 那半已證明**：Function App 的設定裡**只有 `SQL_SERVER`／`SQL_DATABASE`、沒有任何連線字串**，
       而 `GET /site-settings/public` 2026-09-15 讀得回真資料 → 連線只可能走受控識別。**Blob 那半（user delegation key 簽 SAS）還沒驗**
 - [x] ~~build 產物大小~~ — ✅ **59.1 MB / 3885 個檔案**（2026-09-15 重建後實計，含每路由一份的 `_payload.json`）。上限是 SWA **Standard 的 500 MB**，不是 250 MB。⚠️ `du -sh` 會報 71 MB，那是磁碟區塊不是檔案大小
-- [ ] 全站 `nuxt generate` 時間 — 🟡 間接證據：CI 的 `web` job **全程 3m11s**（含資料庫匯出、admin SPA、1846 頁 generate、SWA 部署、四項 smoke test），沒有逼近逾時。**單獨的 generate 時間還沒單獨量**
+- [x] ~~全站 `nuxt generate` 時間~~ —— **已不適用**：2026-09-16 改成執行期 SSR，沒有全站預渲染這一步
 - [ ] Blob 直傳鏈路（Storage CORS、SAS 效期、`Cache-Control`）
 - [ ] **換圖與移除真的把舊檔從 Blob 刪掉**（docs/11 §9.2）——本機只驗到「刪不掉也不會翻掉存檔」，真的刪成功還沒驗過
 - [ ] **孤兒檔對帳工具**（回報成功但沒按存檔的檔案；要掃十個內嵌圖片欄位 ＋ `BodyBlocks`，docs/08 §E）
@@ -887,8 +887,18 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
       徽章是隱藏的，Google 的條款要求顯示那段文字與兩個連結，拿掉聲明就不可以隱藏徽章。
       🟡 **2026-09-15：`/contact/` 有**（HTML 裡找得到「受 reCAPTCHA 保護，適用 Google 的…」）。
       **`/admin/` 還沒驗** —— 它是 SPA，登入頁是 client 端算出來的，抓 HTML 看不到，要開瀏覽器
-- [ ] AI 爬蟲以實際 UA 逐一驗證回應 200
-- [ ] **`/about/makeup-style/` 在正式庫已改名為「新中式美學」**（2026-09-14 更名）—— 🔴 **2026-09-15 覆核未改**：線上該頁 `<title>` 仍是「彩妝式輕醫美｜20SKIN 美醫集團」。
+- [x] AI 爬蟲以實際 UA 逐一驗證 —— ✅ **Azure 原站正常**（2026-09-16 實測：
+      `GPTBot/1.0`、`ClaudeBot/1.0`、`Python-urllib` 對 `*.azurestaticapps.net` 全部 **200**）。
+      🔴 **但測試網域 `20skin.4webdemo.com` 前面的 Cloudflare 對 GPTBot 與 ClaudeBot 回 403**
+      （`server: cloudflare`、回應內容 `Your request was blocked.`），Googlebot 與一般瀏覽器則 200。
+      這與舊站被 Mod_Security 擋掉 AI 爬蟲是**同一個問題換一個位置**，也是 docs/03 §1
+      列為優先級最高的那一項。**上線前必須確認正式網域沒有同樣設定**
+      （Cloudflare 的「Block AI Scrapers and Crawlers」之類的開關），否則整套 GEO 策略歸零
+- [ ] **`/about/makeup-style/` 在正式庫已改名為「新中式美學」**（2026-09-14 更名）——
+      🔴 **仍未真正完成，而且 2026-09-16 一度看起來像完成了**：SSR 站確實顯示新標題，
+      但那是因為公開端點當時錯用了 `ContentItems.Title`（工作副本）去蓋掉已核准快照 ——
+      等於未核准的編輯直接上線。那一行已修回讀快照，所以這一項**又變回未完成**。
+      正確做法仍是：在後台改完標題後**重新發布該頁**。
       repo 端（種子、遷移 10、前台文案、mockup、docs、客戶 PDF）都改完了，
       但**資料庫裡的頁面標題、導覽選單標籤與內文仍是舊名**。
       要在後台改完 → **重新發布該頁**（匯出讀的是已核准的版本快照，不是 `ContentItems.Title`）
@@ -934,6 +944,24 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
 ⚠️ 第三個特別值得記：**這個專案沒有跑 `tsc`**，所以 TypeScript 的「多餘屬性檢查」擋不到它
 （`vue-tsc` 目前跑不起來，見下）。是 `verify:links` 爬出 `/blog/tag/{每一個標籤}/page/93/`
 這種網址才露出馬腳 —— 一個標籤有 93 頁分頁，數字本身就是證據。
+
+### 正式環境部署當天抓到的三件事（2026-09-16）
+
+SSR 改版部署到正式環境後才現形的，**全部是本機量不出來或測不到的類型**。
+
+| 發現 | 本機為什麼測不到 | 處置 |
+|---|---|---|
+| 🔴 **站內搜尋 23–24 秒**（前台逾時 8 秒 ⇒ 等於不能用） | 本機 SQL Server 只要 1.2 秒。正式是 **Azure SQL Basic／5 DTU** —— 直接對快照做兩個 `LIKE`，而快照把中文存成 `\uXXXX`（一個字六個字元），掃描量先膨脹六倍再乘二 | 加 `ContentItems.SearchText`（純文字、4000 字上限），單一 `LIKE`。**正式實測 23.98s → 0.65s** |
+| 🔴 **未核准的標題直接上線** | 靜態版的匯出刻意不覆蓋 `title`；我在 SSR 的公開端點多寫了一行 `snapshot["title"] = row.Title` | 改回讀已核准快照。反證見 CLAUDE.md 決策 14 |
+| 🔴 **Cloudflare 擋掉 AI 爬蟲** | Azure 原站一律 200，只有測試網域前面的 Cloudflare 擋 | 見上線前 checklist；**這不是程式問題，要在 Cloudflare 改** |
+
+⚠️ 前兩件有同一個教訓：**本機環境與正式環境的差異，不會以「比較慢」或「怪怪的」現形，
+而是以「功能整個不能用」與「審核關卡被繞過」現形。** SSR 把這類差異放大了 ——
+靜態版的建置期錯誤會在 CI 當場失敗，執行期的錯誤只會在正式流量上出現。
+
+⚠️ 第三件的形狀值得單獨記：**同一個問題換一個位置又出現一次**。
+舊站是 Mod_Security 擋 AI 爬蟲（docs/03 §1 列為優先級最高），新站換成 Cloudflare 擋。
+檢查清單要問的不是「我們的程式有沒有擋」，而是「**從公網打進來的整條路徑上有沒有人擋**」。
 
 ### 剩下的
 
