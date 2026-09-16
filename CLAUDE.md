@@ -34,9 +34,10 @@ tools/deploy-swa-ssr.sh  部署 SWA：前台 SSR function ＋ 後台 SPA（本�
 tools/deploy-api.sh    部署獨立 Function App（functions/ → func-20skin-web-api-prod）
                        ⚠️ 尚未對 Azure 實跑驗證，見檔頭
 tools/content-import/  mockup 內容 → 資料庫（dump／import／upload-images／golden-diff）
-tools/content-export/  ⚠️ **前台已不再使用它**（2026-09-16 起內容與 SEO 產物都是執行期取得）。
-                       目前只剩 apps/web/content/*.json 給站內搜尋索引用 ——
-                       那一支尚未改成 API 端點，是第 5 段留下的最後一件
+tools/content-export/  🔴 **前台已完全不使用它**（2026-09-16）。內容、SEO 產物與站內搜尋
+                       都改成執行期打 API，`apps/web/content/*.json` 沒有任何消費者了。
+                       它現在的用途只剩「離線稽核／黃金樣本比對」——
+                       **不要因為看到它還在，就以為建置流程需要先跑它**
                        ⚠️ 與 API 共用 Visibility.cs 與 ExportFormats.cs
                        （<Compile Include>，不是抄一份）
 tools/sync-public.sh   master → public 分支（去除 reference/ output/），推 GitHub 前執行
@@ -121,10 +122,11 @@ scripts/
 node tools/content-import/dump.mjs /tmp/frontend-data.json   # TS 資料模組 → JSON
 node tools/content-import/import.mjs /tmp/frontend-data.json # → 資料庫（走真正的 API，需先啟動 func）
 pnpm --filter web export:content                             # 資料庫 → apps/web/content/*.json
-                                                             # ⚠️ 2026-09-16 起前台**不吃**這批 JSON
-                                                             #   （改成執行期打 API）。它現在只餵
-                                                             #   站內搜尋索引。SEO 產物也不再由它
-                                                             #   產生，改成 API 的 /seo/*
+                                                             # 🔴 2026-09-16 起**建置完全不需要它**。
+                                                             #   前台內容、SEO 產物（改走 API 的
+                                                             #   /seo/*）與站內搜尋（改走 /search）
+                                                             #   都是執行期取得，這批 JSON 沒有
+                                                             #   任何消費者，只供離線稽核
 node tools/content-import/upload-images.mjs                   # 圖片 → Blob（含對帳）
                                                              # ⚠️ 來源是 image-sources.json，不吃 dump
                                                              #    需要 az 身分有 Storage Blob Data Contributor
