@@ -604,34 +604,6 @@ const review = {
   },
 }
 
-// ── 重建狀態 ──────────────────────────────────────────────────────────
-
-export interface RebuildState {
-  pending: boolean
-  lastRequestedAt: string | null
-  lastCompletedAt: string | null
-}
-
-const rebuild = {
-  /**
-   * ⚠️ 這是「重建請求送出去了沒有」，**不是建置進度**。`repository_dispatch` 是射後不理，
-   * API 不知道 GitHub Actions 跑到哪裡 —— 所以「已上線」是樂觀顯示，不是部署成功的證據。
-   */
-  async status(): Promise<RebuildState> {
-    const res = await request<{ pending: boolean; pendingSince: string | null; lastDispatchedAt: string | null }>('/admin/rebuild')
-    return {
-      pending: res.pending,
-      lastRequestedAt: res.pendingSince ?? res.lastDispatchedAt,
-      lastCompletedAt: res.lastDispatchedAt,
-    }
-  },
-
-  /** 手動觸發全站重建（限超管）。一般發布本來就會自動觸發（docs/11 §10）。 */
-  async trigger(): Promise<void> {
-    await request<null>('/admin/rebuild', { method: 'POST', body: {} })
-  },
-}
-
 // ── 儀表板 ────────────────────────────────────────────────────────────
 
 interface ServerDashboard {
@@ -646,7 +618,6 @@ export interface DashboardSummary {
   statusCounts: Record<UnitKey, Record<ContentStatus, number>>
   pendingReviewCount: number
   myRejected: ReviewItem[]
-  rebuild: RebuildState
   totalRecords: number
 }
 
@@ -654,9 +625,8 @@ const dashboard = {
   async summary(_userId: number): Promise<DashboardSummary> {
     // ⚠️ 兩支端點，一次往返各一。不要為了「少一次請求」把重建狀態塞進儀表板端點 ——
     //    編輯畫面也要輪詢重建狀態，它必須是獨立的一支。
-    const [server, rebuildState] = await Promise.all([
+    const [server] = await Promise.all([
       request<ServerDashboard>('/admin/dashboard'),
-      rebuild.status(),
     ])
 
     const statusCounts = {} as Record<UnitKey, Record<ContentStatus, number>>
@@ -690,7 +660,6 @@ const dashboard = {
         decisionNote: r.decisionNote,
         riskFlags: [],
       })),
-      rebuild: rebuildState,
       totalRecords,
     }
   },
@@ -706,7 +675,6 @@ export const adminApi = {
   taxonomy,
   content,
   review,
-  rebuild,
   dashboard,
   upload: uploadApi,
   redirect: redirectApi,

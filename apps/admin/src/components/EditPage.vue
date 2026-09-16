@@ -196,22 +196,10 @@ async function updateRelation(key: string, items: RelationItem[]) {
 
 // ── 工作流 ────────────────────────────────────────────────────────────
 const riskFlagsFromSubmit = ref<string[]>([])
-const rebuildPending = ref(false)
-let rebuildPoll: ReturnType<typeof setInterval> | null = null
 
-function startRebuildPoll() {
-  rebuildPending.value = true
-  if (rebuildPoll) clearInterval(rebuildPoll)
-  rebuildPoll = setInterval(async () => {
-    const status = await adminApi.rebuild.status()
-    rebuildPending.value = status.pending
-    if (!status.pending && rebuildPoll) {
-      clearInterval(rebuildPoll)
-      rebuildPoll = null
-    }
-  }, 1500)
-}
-onBeforeUnmount(() => { if (rebuildPoll) clearInterval(rebuildPoll) })
+// 🔴 **2026-09-16：「發布中，網站重建進行中」那一整套拿掉了。**
+//    前台改成執行期 SSR 之後沒有建置這一步 —— 核准的下一個請求就看得到，
+//    沒有「進行中」這個狀態可以顯示，也沒有東西可以輪詢。
 
 async function submitForReview() {
   if (bodyDirty.value && !window.confirm('送審前建議先儲存本文，是否先儲存？')) return
@@ -224,7 +212,6 @@ async function submitForReview() {
 
 async function publishNow() {
   record.value = await adminApi.content.setPublishState(props.unit, props.id, 3, user!.id)
-  startRebuildPoll()
   actionNotice.value = '已核准發布，網站重建中（發布中／已上線見下方狀態）。'
 }
 async function unpublishNow() {
@@ -572,7 +559,6 @@ async function restore(versionNo: number) {
           <div class="adm-workflow__row"><span class="adm-workflow__label">狀態</span><StatusBadge :status="record.status" :publish-at="record.publishAt" /></div>
           <div class="adm-workflow__row"><span class="adm-workflow__label">更新時間</span><span>{{ new Date(record.updatedAt).toLocaleString('zh-TW') }}</span></div>
 
-          <p v-if="rebuildPending" class="adm-workflow__banner">發布中——網站重建進行中，稍後才會出現在正式站。</p>
 
           <div class="adm-workflow__actions">
             <button v-if="canSubmit" type="button" class="btn btn--primary btn--block" @click="submitForReview">送出審核</button>

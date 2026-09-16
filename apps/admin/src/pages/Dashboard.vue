@@ -50,15 +50,6 @@ const unitKeys = Object.keys(UNIT_REGISTRY) as UnitKey[]
           <div class="adm-stat-card__label">我的退件</div>
           <div class="adm-stat-card__value">{{ summary.myRejected.length }}</div>
         </div>
-        <div class="adm-stat-card">
-          <div class="adm-stat-card__label">全站重建</div>
-          <div class="adm-stat-card__value" style="font-size: var(--fs-md)">
-            {{ summary.rebuild.pending ? '發布中' : '已上線' }}
-          </div>
-          <div class="adm-stat-card__sub">
-            {{ summary.rebuild.pending ? '重建進行中，數分鐘到十餘分鐘後上線' : `最近一次完成：${summary.rebuild.lastCompletedAt ? new Date(summary.rebuild.lastCompletedAt).toLocaleString('zh-TW') : '尚無紀錄'}` }}
-          </div>
-        </div>
       </div>
 
       <div class="adm-dashboard-grid">

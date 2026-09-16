@@ -2,7 +2,6 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Skin20.Api.Common;
 using Skin20.Api.Data;
 using Skin20.Api.Models.Dtos;
@@ -32,9 +31,7 @@ namespace Skin20.Api.Handlers;
 /// </summary>
 public sealed class ReviewHandler(
     Skin20DbContext db,
-    ISqlConnectionFactory sqlFactory,
-    IRebuildService rebuild,
-    ILogger<ReviewHandler> logger)
+    ISqlConnectionFactory sqlFactory)
 {
     private readonly ReviewReadService _read = new(sqlFactory);
 
@@ -78,7 +75,6 @@ public sealed class ReviewHandler(
 
         await db.SaveChangesAsync(ct);
 
-        await TryRebuildAsync();
 
         return new OkObjectResult(ApiResponse.Ok<object?>(null));
     }
@@ -120,17 +116,6 @@ public sealed class ReviewHandler(
     }
 
     /// <summary>⚠️ 重建失敗不得讓審核操作失敗——狀態已經改好，重建失敗要獨立告警（docs/11 §10）。</summary>
-    private async Task TryRebuildAsync()
-    {
-        try
-        {
-            await rebuild.RequestAsync();
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "觸發重建失敗，審核狀態已正常儲存，需另行檢查重建管線。");
-        }
-    }
 
     private static ReviewQueueItemDto ToDto(ReviewQueueRow r) => new(
         r.Id, r.ContentItemId, UnitFromContentType(r.ContentType), r.Title, r.UrlPath,

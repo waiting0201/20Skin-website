@@ -94,7 +94,6 @@ builder.Services.AddSingleton<IBotCheckService, BotCheckService>();
 
 // Scoped：碰 Skin20DbContext 或連線的一切
 builder.Services.AddScoped<IRateLimitService, RateLimitService>();
-builder.Services.AddScoped<IRebuildService, RebuildService>();
 
 // ── Handler（docs/10 §3）──────────────────────────────────
 // ⚠️ 全部 Scoped。把碰 DB 的東西設成 Singleton 會捕獲已釋放的 DbContext，
@@ -115,7 +114,6 @@ builder.Services.AddScoped<RedirectHandler>();
 builder.Services.AddScoped<ExportHandler>();
 builder.Services.AddScoped<QuestionHandler>();
 builder.Services.AddScoped<AccountHandler>();
-builder.Services.AddScoped<RebuildHandler>();
 
 // ── Dapper ReadService（純讀，docs/11 §2）────────────────
 // ⚠️ 全部 Scoped：它們持有 ISqlConnectionFactory，而連線本身不是執行緒安全的。

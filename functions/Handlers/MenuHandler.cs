@@ -28,7 +28,7 @@ namespace Skin20.Api.Handlers;
 /// 唯一例外是資料列擁有者判定（§5.4）。
 /// </para>
 /// </summary>
-public sealed class MenuHandler(Skin20DbContext db, ISqlConnectionFactory sqlFactory, IRebuildService rebuild)
+public sealed class MenuHandler(Skin20DbContext db, ISqlConnectionFactory sqlFactory)
 {
     private readonly MenuReadService reads = new(sqlFactory);
 
@@ -94,7 +94,6 @@ public sealed class MenuHandler(Skin20DbContext db, ISqlConnectionFactory sqlFac
         });
 
         // 選單烘進每一頁的預渲染 HTML（Nuxt 純靜態），改了就要重建（docs/11 §10）。
-        await rebuild.RequestAsync(ct);
 
         var updated = await reads.GetTreeAsync(ct);
         return new OkObjectResult(ApiResponse.Ok(updated, "已更新選單。"));

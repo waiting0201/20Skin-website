@@ -39,8 +39,7 @@ public sealed partial class AppRouter(
     RedirectHandler redirect,
     ExportHandler export,
     QuestionHandler question,
-    AccountHandler account,
-    RebuildHandler rebuild)
+    AccountHandler account)
 {
     /// <summary>
     /// <see cref="GetRequiredPermission"/> 的預設回傳值：<b>未登記於權限表的 <c>/admin/*</c> 一律拒絕。</b>

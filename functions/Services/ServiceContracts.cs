@@ -116,50 +116,6 @@ public interface IBlobStorageService
 /// </summary>
 public sealed record BlobInspectionResult(byte[] Head, long ByteSize, string Sha256Hex);
 
-/// <summary>
-/// 觸發全站重建（docs/11 §10）。
-/// <para>
-/// SWA 沒有 ISR，內容變更一定要重跑 build。作法是呼叫 GitHub 的 <c>repository_dispatch</c>。
-/// </para>
-/// <para>
-/// ⚠️ <b>要聚合</b>：連續發布 10 篇不該觸發 10 次 build。窗口狀態存 DB 或 Blob，
-/// <b>不要用 <c>MemoryCache</c></b>（多執行個體）。
-/// </para>
-/// <para>
-/// ⚠️ <b>失敗不要 throw</b>：內容狀態已經改好了，重建失敗應獨立告警，
-/// 不要讓整個流程重跑一次狀態轉換。
-/// </para>
-/// </summary>
-public interface IRebuildService
-{
-    Task RequestAsync(CancellationToken ct = default);
-
-    /// <summary>
-    /// 把積欠的重建送出去。
-    ///
-    /// <para>
-    /// <see cref="RequestAsync"/> 的聚合是<b>前緣觸發 ＋ 冷卻期</b>：第一次立刻觸發，
-    /// 冷卻期內的後續請求只記一個「還有異動沒送出」的旗標。這已經達成
-    /// 「連續發布 10 篇不觸發 10 次 build」，但留下一個尾巴 ——
-    /// <b>冷卻期內的最後一次異動，如果之後沒有人再呼叫，就一直等著。</b>
-    /// </para>
-    /// <para>
-    /// 這支由 <c>ScheduledPublishFunction</c> 每輪無條件呼叫，把那個尾巴收掉：
-    /// 有旗標且冷卻期已過才觸發，否則什麼都不做。最壞情況的延遲是一個 Timer 週期。
-    /// </para>
-    /// <para>⚠️ 與 <see cref="RequestAsync"/> 一樣，失敗不 throw。</para>
-    /// </summary>
-    Task FlushPendingAsync(CancellationToken ct = default);
-
-    /// <summary>
-    /// 目前的聚合窗口狀態，供後台顯示「發布中／已上線」。
-    /// <para>
-    /// ⚠️ 讀不到狀態時<b>不 throw</b>，回一個「沒有積欠」的預設值 —— 理由同上：
-    /// 這只是一個狀態字，不該讓呼叫端的畫面掛掉。
-    /// </para>
-    /// </summary>
-    Task<Models.Dtos.RebuildStatusDto> GetStatusAsync(CancellationToken ct = default);
-}
 
 /// <summary>
 /// 目前登入者。由 <c>AppRouter</c> 驗完 JWT 後寫進 <c>HttpContext.User</c>。

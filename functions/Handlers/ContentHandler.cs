@@ -58,7 +58,6 @@ namespace Skin20.Api.Handlers;
 public sealed class ContentHandler(
     Skin20DbContext db,
     ISqlConnectionFactory sqlFactory,
-    IRebuildService rebuild,
     IMemoryCache cache,
     IBlobStorageService blobStorage,
     IConfiguration configuration,
@@ -434,7 +433,6 @@ public sealed class ContentHandler(
 
         await DeleteUnreferencedBlobsAsync(blobsBefore, CollectBlobPaths(entity), ct);
 
-        if (entity.Status == ContentStatus.Published) await TryRebuildAsync();
 
         return await GetAsync(unit, id);
     }
@@ -671,7 +669,6 @@ public sealed class ContentHandler(
                 throw AppException.BadRequest(ErrorCodes.ValidationFormat, "action 必須是 publish 或 unpublish。");
         }
 
-        await TryRebuildAsync();
         return await GetAsync(unit, id);
     }
 
@@ -700,18 +697,15 @@ public sealed class ContentHandler(
         var userId = RequestContext.UserId(req);
         var now = Clock.UtcNow;
         var sortMap = items.ToDictionary(i => i.Id, i => i.SortOrder);
-        var touchedPublished = false;
 
         foreach (var entity in entities)
         {
             entity.SortOrder = sortMap[entity.Id];
             entity.UpdatedByUserId = userId;
             entity.UpdatedAt = now;
-            if (entity.Status == ContentStatus.Published) touchedPublished = true;
         }
 
         await db.SaveChangesAsync(ct);
-        if (touchedPublished) await TryRebuildAsync();
 
         return new OkObjectResult(ApiResponse.Ok<object?>(null));
     }
@@ -761,7 +755,6 @@ public sealed class ContentHandler(
         // 內容沒了，它的圖片就沒有任何欄位指得到——一個欄位獨佔一個 blob，可以直接刪。
         await DeleteUnreferencedBlobsAsync(blobsBefore, [], ct);
 
-        if (wasPublished) await TryRebuildAsync();
 
         return new OkObjectResult(ApiResponse.Ok<object?>(null));
     }
@@ -1067,23 +1060,6 @@ public sealed class ContentHandler(
             .ToList();
 
         return JsonSerializer.Serialize(hits, JsonOpts);
-    }
-
-    // ════════════════════════════════════════════════════════════════════
-    // 8. 觸發重建（docs/11 §10）
-    // ════════════════════════════════════════════════════════════════════
-
-    /// <summary>⚠️ 重建失敗不得讓內容操作失敗——內容狀態已經改好，重建失敗要獨立告警（docs/11 §10）。</summary>
-    private async Task TryRebuildAsync()
-    {
-        try
-        {
-            await rebuild.RequestAsync();
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "觸發重建失敗，內容狀態已正常儲存，需另行檢查重建管線。");
-        }
     }
 
     // ════════════════════════════════════════════════════════════════════

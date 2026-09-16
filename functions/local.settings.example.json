@@ -11,7 +11,6 @@
     "🔴 執行期沒有任何連線密碼或金鑰 —— SQL 與 Blob 都走 Managed Identity",
     "   （Authentication=Active Directory Default 會落到 DefaultAzureCredential：",
     "   在 Azure 上是 Function App 的 Managed Identity、本機是開發者的 az login 身分）。",
-    "   這裡唯一的密鑰是 Jwt__Secret、SMTP 憑證與 GITHUB_DISPATCH_TOKEN。",
     "",
     "   ⚠️ 全架構還有一組明文密鑰不在這裡：SWA 上給 /api/fallback 用的 SQL 唯讀",
     "   連線字串（docs/07 §6）。那組只能 SELECT Redirects 一張表。"
@@ -56,11 +55,7 @@
     "BotCheck__SecretKey": "",
     "BotCheck__MinimumScore": "0.5",
     "//rebuild": "SWA 沒有 ISR，內容變更要重跑 build（docs/11 §10）。",
-    "GITHUB_REPO": "",
-    "GITHUB_DISPATCH_TOKEN": "",
-    "Rebuild__AggregateWindowMinutes": "5",
     "//cron": "⚠️ 三支 Timer 的 cron 由設定注入，方便本機改快一點測。測完記得改回來。",
-    "PublishScheduleCron": "0 */15 * * * *",
     "VersionPruneCron": "0 30 3 * * *",
     "ThrottleSweepCron": "0 0 4 * * *"
   },

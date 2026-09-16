@@ -91,8 +91,6 @@ public sealed partial class AppRouter
 
             // ── 手動重建 ─────────────────────────────────────────────
             // ⚠️ 讀狀態與觸發是兩種權限：內容編輯要看得到「發布中」，但不該能自己觸發建置。
-            ("GET", ["admin", "rebuild"]) => null,
-            ("POST", ["admin", "rebuild"]) => PermissionCodes.SettingsEdit,
 
             // ── 高風險字詞（編輯器的即時提示來源，不是閘門，docs/02 §5）──
             ("GET", ["admin", "risk-term"]) => null,
@@ -161,8 +159,6 @@ public sealed partial class AppRouter
             ("GET", ["admin", "role"]) => Wrap(account.ListRolesAsync()),
             ("PUT", ["admin", "role", var id, "permissions"]) => Wrap(account.UpdateRolePermissionsAsync(req, id)),
 
-            ("GET", ["admin", "rebuild"]) => Wrap(rebuild.GetStatusAsync()),
-            ("POST", ["admin", "rebuild"]) => Wrap(rebuild.TriggerAsync()),
 
             ("GET", ["admin", "risk-term"]) => Wrap(content.ListRiskTermsAsync()),
 
