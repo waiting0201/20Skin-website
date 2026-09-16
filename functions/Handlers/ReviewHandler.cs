@@ -70,6 +70,15 @@ public sealed class ReviewHandler(
         // 🔴 核准即 Status=3，不管 PublishAt 有沒有到；前台可見性另由查詢條件決定（docs/11 §7 規則 1）。
         contentItem.Status = ContentStatus.Published;
         contentItem.PublishedVersionId = review.VersionId;
+
+        // ⚠️ 站內搜尋的比對用文字由**這一版的快照**重算（SearchTextBuilder）。
+        //    🔴 兩個發布點都要做 —— 漏掉任何一個，那一筆就會停在上一版的內容，
+        //    而症狀是「改好的內容前台看得到，但搜尋搜到的是舊的」，不會有錯誤訊息。
+        var approvedSnapshot = await db.ContentVersions
+            .Where(v => v.Id == review.VersionId)
+            .Select(v => v.Snapshot)
+            .FirstOrDefaultAsync(ct);
+        contentItem.SearchText = SearchTextBuilder.Build(approvedSnapshot);
         contentItem.UpdatedByUserId = userId;
         contentItem.UpdatedAt = now;
 

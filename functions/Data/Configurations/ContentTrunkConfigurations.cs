@@ -35,6 +35,10 @@ public sealed class ContentItemConfiguration : IEntityTypeConfiguration<ContentI
         b.Property(x => x.Status).HasColumnType("tinyint").HasDefaultValue(ContentStatus.Draft);
         b.Property(x => x.Title).HasMaxLength(200).IsRequired();
         b.Property(x => x.Summary).HasMaxLength(500);
+
+        // ⚠️ 長度上限是「搜得到多少」與「搜多久」的取捨，理由寫在 SearchTextBuilder。
+        //    有界很重要：它讓全表掃描的資料量有上界（1228 筆 × 4000 字 ≈ 9.8 MB）。
+        b.Property(x => x.SearchText).HasMaxLength(Common.SearchTextBuilder.MaxLength);
         b.Property(x => x.IncludeInSitemap).HasDefaultValue(true);
         b.Property(x => x.IsSystemLocked).HasDefaultValue(false);
 

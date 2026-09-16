@@ -57,7 +57,8 @@
     "//rebuild": "SWA 沒有 ISR，內容變更要重跑 build（docs/11 §10）。",
     "//cron": "⚠️ 三支 Timer 的 cron 由設定注入，方便本機改快一點測。測完記得改回來。",
     "VersionPruneCron": "0 30 3 * * *",
-    "ThrottleSweepCron": "0 0 4 * * *"
+    "ThrottleSweepCron": "0 0 4 * * *",
+    "SearchTextBackfillCron": "0 */10 * * * *"
   },
   "Host": {
     "//cors": "本機用；正式環境的 allow-list 在 Function App 的 CORS 設定，由院方維護。",

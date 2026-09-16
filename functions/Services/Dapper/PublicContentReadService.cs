@@ -359,11 +359,14 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
 
         var pattern = $"%{EscapeLike(keyword)}%";
 
-        // 快照裡的非 ASCII 是 `\uXXXX`（見上方說明）。只轉非 ASCII，
-        // 這樣「Picosure 皮秒」這種中英混合的查詢也對得起來。
-        var unicodeForm = string.Concat(keyword.Select(c =>
-            c < 128 ? c.ToString() : $"\\u{(int)c:x4}"));
-        var unicodePattern = $"%{EscapeLike(unicodeForm)}%";
+        // 🔴 **比對的是 ContentItems.SearchText，不是 ContentVersions.Snapshot。**
+        //    原本直接對快照做 LIKE，而快照是 `JsonSerializerDefaults.Web` 存的 ——
+        //    中文一律變成 `\uXXXX`（一個字六個字元），所以還得同時比對「原樣」與
+        //    「被轉義」兩種形式，每次查詢跑兩個 LIKE。
+        //    2026-09-16 正式環境實測：那樣要 **23–24 秒**，而前台逾時是 8 秒 ——
+        //    搜尋在正式環境等於完全不能用（本機 SQL Server 只要 1.2 秒，量不出來）。
+        //    SearchText 存的是純文字，所以轉義問題消失，一個 LIKE 就夠。
+        //    產生與長度取捨見 Common/SearchTextBuilder.cs。
 
         // ⚠️ 標題命中的排前面 —— 搜「皮秒雷射」時那個療程頁該在第一個，
         //    而不是某篇剛好提到它的文章。這條與靜態索引時代的排序規則相同。
@@ -373,16 +376,14 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
                    CAST(CASE WHEN ci.Title LIKE @Pattern THEN 1 ELSE 0 END AS bit) AS TitleHit
             {FromPublished}
             WHERE {Visibility.PublicFilter}
-              AND (ci.Title LIKE @Pattern
-                   OR cv.Snapshot LIKE @Pattern
-                   OR cv.Snapshot LIKE @UnicodePattern)
+              AND (ci.Title LIKE @Pattern OR ci.SearchText LIKE @Pattern)
             ORDER BY CASE WHEN ci.Title LIKE @Pattern THEN 0 ELSE 1 END,
                      ci.ContentType, ci.SortOrder, ci.Id
             """;
 
         var items = await connection.QueryAsync<SearchHitRow>(new CommandDefinition(
             sql,
-            new { Pattern = pattern, UnicodePattern = unicodePattern, Now = Clock.UtcNow },
+            new { Pattern = pattern, Now = Clock.UtcNow },
             cancellationToken: ct));
         return items.AsList();
     }

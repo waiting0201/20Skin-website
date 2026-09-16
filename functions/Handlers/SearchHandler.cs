@@ -124,48 +124,11 @@ public sealed class SearchHandler(
     {
         if (JsonNode.Parse(snapshot) is not JsonObject root) return "";
 
-        var summary = Collapse(root["summary"]?.GetValue<string>() ?? "");
+        var summary = SearchTextBuilder.Collapse(root["summary"]?.GetValue<string>() ?? "");
         if (summary.Length > 0) return Truncate(summary);
 
-        return Truncate(Collapse(Flatten(root["fields"])));
+        return Truncate(SearchTextBuilder.Collapse(SearchTextBuilder.Flatten(root["fields"])));
     }
-
-    /// <summary>
-    /// 區塊 JSON 或純文字都可能，統一攤成一串文字。
-    /// <para>⚠️ 跳過圖片欄位 —— blobPath 與網址進摘要只會讓使用者看到一串亂碼。</para>
-    /// </summary>
-    private static string Flatten(JsonNode? value, int depth = 0)
-    {
-        if (depth > 6 || value is null) return "";
-
-        switch (value)
-        {
-            case JsonValue v:
-                // 區塊欄位在快照裡是**一個 JSON 字串**（API 存的是 GetRawText()），
-                // 所以字串也可能是巢狀 JSON，要再試著解析一次。
-                var text = v.GetValueKind() == JsonValueKind.String ? v.GetValue<string>() : v.ToString();
-                if (depth < 6 && text.StartsWith('[') || text.StartsWith('{'))
-                {
-                    try { return Flatten(JsonNode.Parse(text), depth + 1); }
-                    catch (JsonException) { /* 就是一般字串 */ }
-                }
-                return text;
-
-            case JsonArray array:
-                return string.Join(' ', array.Select(x => Flatten(x, depth + 1)));
-
-            case JsonObject obj:
-                if (obj.ContainsKey("blobPath") && obj.ContainsKey("url"))
-                    return obj["alt"]?.GetValue<string>() ?? "";
-                return string.Join(' ', obj.Select(kv => Flatten(kv.Value, depth + 1)));
-
-            default:
-                return "";
-        }
-    }
-
-    private static string Collapse(string text) =>
-        Regex.Replace(Regex.Replace(text, "<[^>]*>", " "), @"\s+", " ").Trim();
 
     private static string Truncate(string text) => text.Length <= 120 ? text : text[..120];
 

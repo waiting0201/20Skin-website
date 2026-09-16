@@ -648,6 +648,9 @@ public sealed class ContentHandler(
 
                     entity.Status = ContentStatus.Published;
                     entity.PublishedVersionId = version.Id;
+                    // ⚠️ 站內搜尋的比對用文字由**這一版的快照**重算（SearchTextBuilder）。
+                    //    🔴 另一個發布點在 ReviewHandler.ApproveAsync —— 兩邊都要做。
+                    entity.SearchText = SearchTextBuilder.Build(version.Snapshot);
                     entity.UpdatedByUserId = userId;
                     entity.UpdatedAt = now;
                     await db.SaveChangesAsync(ct);

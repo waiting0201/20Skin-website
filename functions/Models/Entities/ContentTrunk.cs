@@ -61,6 +61,21 @@ public class ContentItem
     /// <summary>前台輸出的是這一版。</summary>
     public int? PublishedVersionId { get; set; }
 
+    /// <summary>
+    /// 站內搜尋的比對用純文字，由**已核准版本的快照**壓成一行
+    /// （<see cref="Common.SearchTextBuilder"/>）。
+    /// <para>
+    /// 🔴 <b>衍生資料，不是真相。</b> 只在發布時重算，直接改它沒有意義 ——
+    /// 下一次發布就被蓋掉。
+    /// </para>
+    /// <para>
+    /// ⚠️ 存在的理由是效能：原本直接對 <c>ContentVersions.Snapshot</c> 做 <c>LIKE</c>，
+    /// 正式的 Azure SQL Basic（5 DTU）要 **23–24 秒**，而前台逾時是 8 秒。
+    /// 理由與取捨全寫在 <see cref="Common.SearchTextBuilder"/>。
+    /// </para>
+    /// </summary>
+    public string? SearchText { get; set; }
+
     public int SortOrder { get; set; }
 
     /// <summary>
