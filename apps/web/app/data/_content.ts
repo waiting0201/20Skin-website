@@ -33,6 +33,14 @@ export interface ContentRecord {
   seo: Record<string, unknown> | null
   relations: RelationRecord[]
   updatedAt: string
+  /**
+   * 這一筆內容夠不夠實在，值得被搜尋引擎收錄。
+   *
+   * 🔴 **由 API 判斷，前台不要自己再判一次**（`functions/Common/Indexability.cs`）。
+   *    它同時決定「頁面輸出不輸出 noindex」與「收不收進 sitemap」——
+   *    兩邊各判一次的下場已經發生過：2026-09-15 發現 sitemap 收了 29 個 noindex 的網址。
+   */
+  indexable: boolean
 }
 
 export interface RelationRecord {

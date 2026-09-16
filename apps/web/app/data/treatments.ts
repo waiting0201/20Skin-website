@@ -108,6 +108,12 @@ export interface RelatedArticle {
 }
 
 export interface Treatment {
+  /**
+   * 內容夠不夠實在、值得被索引。由 API 判斷（`functions/Common/Indexability.cs`）。
+   * ⚠️ **不要在前台自己算一次** —— sitemap 的收錄範圍讀的是同一個判斷，
+   *    兩邊分岔的下場就是「sitemap 收了 noindex 的網址」。
+   */
+  indexable: boolean
   slug: string
   categorySlug: string
   /** ContentItems.Title */
@@ -215,6 +221,7 @@ const toImage = (value: unknown, fallbackAlt = ''): ImageRef => {
 
 function toTreatment(ctx: TreatmentContext, record: ContentRecord): Treatment {
   const f = record.fields
+  const indexable = record.indexable
   const category = categoryOf(ctx, record)
   const indications = parseBlocks<{ heading: string | null; items: TreatmentIndication[] } | null>(f.indications, null)
   const mechanism = parseBlocks<{ heading: string | null; paragraphs: string[]; image: unknown } | null>(f.mechanism, null)
@@ -225,6 +232,7 @@ function toTreatment(ctx: TreatmentContext, record: ContentRecord): Treatment {
   const concernTags = relationsOf(record, REL.treatmentToConcern).map((r) => r.toTitle as string)
 
   return {
+    indexable,
     slug: record.slug as string,
     categorySlug: category?.slug ?? '',
     title: record.title,

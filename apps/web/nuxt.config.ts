@@ -119,9 +119,13 @@ export default defineNuxtConfig({
             '/admin/*',
             // ⚠️ 副檔名清單擋掉的是「找不到的靜態檔」—— 少了它，一張不存在的
             //    圖片會回傳一整頁 HTML 而不是 404。
-            // 🔴 `xml`／`txt`／`json` 目前還在清單裡，所以 sitemap 與 llms.txt
-            //    仍然只能是靜態檔。第 3 段把它們改成執行期路由時要一起拿掉。
-            '*.{js,css,map,png,jpg,jpeg,gif,svg,ico,webp,avif,json,txt,xml,woff,woff2,ttf,pdf}',
+            // 🔴 **`xml`／`txt`／`json` 刻意不在清單裡。** sitemap、robots.txt、
+            //    llms.txt、faq.json 是 Nuxt 的 server route（`server/routes/`），
+            //    它們必須進得了 SSR function —— 列進排除清單就等於「這些路徑只能是
+            //    靜態檔」，而靜態檔正是這次改版要拿掉的東西。
+            //    ⚠️ 代價：一個不存在的 `.json` 會由 SSR 回 404（而不是 SWA 直接回），
+            //    多一次 function 呼叫。可接受 —— 那種請求本來就不該存在。
+            '*.{js,css,map,png,jpg,jpeg,gif,svg,ico,webp,avif,woff,woff2,ttf,pdf}',
           ],
         },
 

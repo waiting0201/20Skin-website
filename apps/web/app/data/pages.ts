@@ -122,6 +122,11 @@ export interface LegalDoc {
   title: string
   updatedOn: string
   sections: LegalSection[]
+  /**
+   * 內容夠不夠實在、值得被索引。由 API 判斷（`functions/Common/Indexability.cs`）。
+   * ⚠️ 法務三頁在條文補齊前只有骨架，那種薄內容頁不該吃索引預算。
+   */
+  indexable: boolean
 }
 
 const LEGAL_SLUGS: LegalDoc['slug'][] = ['privacy', 'terms', 'medical-disclaimer']
@@ -138,6 +143,7 @@ export async function getLegalDocs(): Promise<LegalDoc[]> {
       title: record?.title ?? '',
       updatedOn: doc.updatedOn ?? '',
       sections: doc.sections ?? [],
+      indexable: record?.indexable ?? true,
     }
   })
 }

@@ -376,6 +376,10 @@ public sealed class PublicContentHandler(
             snapshot["includeInSitemap"] = row.IncludeInSitemap;
             snapshot["updatedAt"] = row.UpdatedAt.ToString("s");
 
+            // 「內容夠不夠實在，值得被索引嗎」。⚠️ 判斷只有一份（Common/Indexability.cs）——
+            //    前台的 noIndex 與 sitemap 的收錄範圍都讀這一個值，不各判一次。
+            snapshot["indexable"] = Indexability.IsIndexable(row.ContentType, snapshot);
+
             if (stripHeavy
                 && StripBodyInList.Contains((ContentType)row.ContentType)
                 && snapshot["fields"] is JsonObject fields

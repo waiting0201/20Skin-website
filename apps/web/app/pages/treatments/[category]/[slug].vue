@@ -88,7 +88,10 @@ usePageHead({
   description,
   pageCss: '/assets/pages/04-treatment-detail.css',
   path: `/treatments/${category.slug}/${treatment.slug}/`,
-  noIndex: !hasFullContent,
+  // ⚠️ 由 API 判斷，前台不自己算 —— sitemap 的收錄範圍讀同一個值
+  //    （`functions/Common/Indexability.cs`）。兩邊分岔就會出現
+  //    「sitemap 收了 noindex 的網址」，Search Console 會直接報錯。
+  noIndex: !treatment.indexable,
   jsonLd: [
     breadcrumbJsonLd([
       { label: '首頁', href: '/' },

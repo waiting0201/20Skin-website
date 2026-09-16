@@ -58,6 +58,15 @@ public sealed partial class AppRouter
             ("GET", ["sitemap"]) => true,
             ("GET", ["home"]) => true,
             ("GET", ["menu"]) => true,
+
+            // SEO 產物。⚠️ 由 Nuxt 的 server route 以同源路徑代理出去
+            //    （/robots.txt、/sitemap.xml…），不是讓爬蟲直接打 api 網域。
+            ("GET", ["seo", "robots.txt"]) => true,
+            ("GET", ["seo", "sitemap.xml"]) => true,
+            ("GET", ["seo", "sitemap", _]) => true,
+            ("GET", ["seo", "llms.txt"]) => true,
+            ("GET", ["seo", "llms-full.txt"]) => true,
+            ("GET", ["seo", "faq.json"]) => true,
             ("GET", [var unit]) when UnitCodes.IsValid(unit) => true,
 
             _ => false,
@@ -85,6 +94,13 @@ public sealed partial class AppRouter
             ("GET", ["sitemap"]) => Wrap(publicContent.SitemapAsync(req)),
             ("GET", ["home"]) => Wrap(publicContent.HomeAsync(req)),
             ("GET", ["menu"]) => Wrap(publicContent.MenuAsync(req)),
+
+            ("GET", ["seo", "robots.txt"]) => Wrap(seo.RobotsAsync(req)),
+            ("GET", ["seo", "sitemap.xml"]) => Wrap(seo.SitemapIndexAsync(req)),
+            ("GET", ["seo", "sitemap", var key]) => Wrap(seo.SitemapFileAsync(req, key)),
+            ("GET", ["seo", "llms.txt"]) => Wrap(seo.LlmsAsync(req)),
+            ("GET", ["seo", "llms-full.txt"]) => Wrap(seo.LlmsFullAsync(req)),
+            ("GET", ["seo", "faq.json"]) => Wrap(seo.FaqJsonAsync(req)),
             ("GET", [var unit]) when UnitCodes.IsValid(unit) => Wrap(publicContent.ListAsync(req, unit)),
 
             _ => Task.FromResult<IActionResult?>(null),

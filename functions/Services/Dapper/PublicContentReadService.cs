@@ -135,8 +135,13 @@ public sealed record PublicMenuRow(
     int Id, string MenuKey, int? ParentId, string Label, byte LinkKind,
     int? ContentItemId, string? Url, string? RelAttr, bool OpenInNewTab, int SortOrder);
 
-/// <summary>sitemap 的一列。<c>LastModified</c> 給 <c>&lt;lastmod&gt;</c> 用。</summary>
-public sealed record SitemapUrlRow(byte ContentType, string UrlPath, DateTime LastModified);
+/// <summary>
+/// sitemap 的一列。<c>LastModified</c> 給 <c>&lt;lastmod&gt;</c> 用。
+/// <para>⚠️ <c>Snapshot</c> 帶著是為了取標題 —— <c>llms.txt</c> 需要它，而且要用
+/// **已核准那一版**的標題，不是 <c>ContentItems.Title</c>：前台顯示的就是那一版，
+/// 兩者在「改了標題但還沒核准」時會不一樣。</para>
+/// </summary>
+public sealed record SitemapUrlRow(byte ContentType, string UrlPath, DateTime LastModified, string Snapshot);
 
 /// <inheritdoc cref="IPublicContentReadService"/>
 public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IPublicContentReadService
@@ -326,8 +331,8 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
         using var connection = factory.Create();
 
         var sql = $"""
-            SELECT ci.ContentType, ci.UrlPath, ci.UpdatedAt AS LastModified
-            FROM ContentItems ci
+            SELECT ci.ContentType, ci.UrlPath, ci.UpdatedAt AS LastModified, cv.Snapshot
+            {FromPublished}
             WHERE {Visibility.PublicFilter}
               AND ci.IncludeInSitemap = 1
               AND ci.UrlPath IS NOT NULL

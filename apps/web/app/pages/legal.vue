@@ -31,8 +31,10 @@ usePageHead({
   pageCss: '/assets/pages/21-legal.css',
   path: doc.value.path,
   // 服務條款／醫療免責聲明目前只有骨架、沒有條文（見上方說明），先不索引，
-  // 避免薄內容頁進了 Google 的索引預算；補齊條文後要記得把這裡拿掉。
-  noIndex: doc.value.sections.length === 0,
+  // 避免薄內容頁進了 Google 的索引預算。
+  // ⚠️ 判斷由 API 做（`functions/Common/Indexability.cs`），sitemap 讀同一個值 ——
+  //    條文補齊之後兩邊會**同時**恢復，不必記得回來改這裡。
+  noIndex: !doc.value.indexable,
   jsonLd: breadcrumbJsonLd([
     { label: '首頁', href: '/' },
     { label: doc.value.title, href: doc.value.path },
