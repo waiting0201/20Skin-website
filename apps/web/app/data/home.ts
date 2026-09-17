@@ -130,12 +130,40 @@ export async function getHomeData() {
   const itemsOf = (key: string) =>
     section(key)?.items.slice().sort((a, b) => a.sortOrder - b.sortOrder) ?? []
 
+  /**
+   * 版位設定（hero 的輪播圖、specialties 的八大專科入口）。
+   *
+   * 🔴 **形狀不對就當成沒有，不要讓整個首頁掛掉。**
+   *    `settings` 是資料庫裡的自由 JSON 欄位，後台寫得動它。2026-09-17 正式站
+   *    真的發生過：舊版後台的「儲存草稿」把 hero 的陣列壓成
+   *    `{"0":…,"1":…,eyebrow:…}`、把 specialties 清成 null，接著有人按了發布，
+   *    於是 `(settings ?? []).map(...)` 當場丟
+   *    `((intermediate value) ?? []).map is not a function` —— **整個首頁 500**，
+   *    而其餘每一頁都好好的。
+   *
+   *    ⚠️ 一個裝飾性版位的資料壞掉，代價不該是整站門面回 5xx。這與 CLAUDE.md
+   *    決策 14「主體內容拿不到 → 503」不衝突：那條講的是**取不到**，
+   *    這裡是**取到了但形狀不對**，而且是裝飾性版位。
+   *    ⚠️ 仍然要在伺服器日誌留下痕跡 —— 靜默回空陣列會讓「首頁少一區」變成
+   *    沒有人查得到原因的謎題。
+   */
+  const settingsArrayOf = (key: string): unknown[] => {
+    const raw = section(key)?.settings
+    if (raw === null || raw === undefined) return []
+    if (Array.isArray(raw)) return raw
+    console.error(
+      `[home] 版位「${key}」的 settings 不是陣列（${typeof raw}），這一區略過不渲染。`
+      + ' 多半是後台的版位設定被寫壞了，需要還原首頁那筆 Page 的舊版本快照再重新發布。',
+    )
+    return []
+  }
+
   // 「最新文章」版位引用的那幾篇。⚠️ 只取被引用的，不是全部 1100 篇。
   const articleItems = itemsOf('latest-articles')
   const articles = await recordsByIds(articleItems.map((i) => i.contentItemId))
 
   const heroSlides: HeroSlide[] =
-    ((section('hero')?.settings ?? []) as { image: unknown, caption: string }[]).map((s) => {
+    (settingsArrayOf('hero') as { image: unknown, caption: string }[]).map((s) => {
       const i = img(s.image)
       return {
         imagePath: i?.src ?? '',
@@ -146,7 +174,7 @@ export async function getHomeData() {
       }
     })
 
-  const specialties: SpecialtyEntry[] = ((section('specialties')?.settings ?? []) as {
+  const specialties: SpecialtyEntry[] = (settingsArrayOf('specialties') as {
     title: string, slug: string, urlPath: string, icon: unknown
   }[]).map((s) => {
     const i = img(s.icon)

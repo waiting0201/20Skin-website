@@ -313,6 +313,30 @@ await step('🔴 沒被碰到的版位沒有跟著消失（八大專科、主視
   return `專科 ${s} 處、hero.settings 仍是陣列`
 })
 
+await step('🔴 版位設定形狀壞掉時，首頁要降級而不是 500', async () => {
+  // 2026-09-17 正式站真的發生過：舊版後台把 hero 的陣列壓成物件、把 specialties
+  // 清成 null，接著有人按了發布 —— `(settings ?? []).map(...)` 當場丟
+  // 「.map is not a function」，**整個首頁 500**，其餘每一頁都好好的。
+  // 一個裝飾性版位的資料壞掉，代價不該是整站門面回 5xx（apps/web/app/data/home.ts）。
+  const broken = homeBefore.map((r) => {
+    if (r.sectionKey === 'hero' && r.settings) {
+      return { ...r, settings: JSON.stringify({ ...JSON.parse(r.settings), eyebrow: 'X' }) }
+    }
+    if (r.sectionKey === 'specialties') return { ...r, settings: null }
+    return r
+  })
+  await putHome(broken)
+  // fetchPage 在非 2xx 時會丟 —— 這一行本身就是「不能 500」的斷言。
+  const html = await fetchPage('/')
+  // ⚠️ **不可以斷言「痘痘出現 0 次」**：那三個字在首頁其他地方也有（困擾連結等），
+  //    2026-09-17 第一次寫這條時就踩到。要驗的是「少了那一區」，也就是次數下降。
+  const after = specialtyCount(html)
+  if (after >= specialtyCount(home0)) {
+    throw new Error(`specialties 清空了，前台的專科字樣卻沒有變少（${specialtyCount(home0)} → ${after}）`)
+  }
+  return `首頁仍是 200（${html.length} 字元），專科字樣 ${specialtyCount(home0)} → ${after}`
+})
+
 await step('還原並重新發布，版位資料與備份相同', async () => {
   await putHome(homeBefore)
   const now = (await api('/admin/home-section')).data
