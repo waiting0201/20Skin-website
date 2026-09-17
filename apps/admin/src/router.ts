@@ -33,7 +33,6 @@ export const SYSTEM_SCREENS: {
   permission: string
   component: () => Promise<unknown>
 }[] = [
-  { path: '/review',        name: 'review',        label: '審核佇列',       permission: 'review.approve',   component: () => import('@/pages/Review.vue') },
   { path: '/questions',     name: 'questions',     label: '未命中題目清單', permission: 'content.faq.edit', component: () => import('@/pages/Questions.vue') },
   { path: '/sitemap',       name: 'sitemap',       label: 'sitemap 設定',   permission: 'settings.edit',    component: () => import('@/pages/SitemapSettings.vue') },
   { path: '/redirects',     name: 'redirects',     label: '301 轉址管理',   permission: 'redirect.manage',  component: () => import('@/pages/Redirects.vue') },
@@ -64,7 +63,7 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'dashboard', component: Dashboard },
     { path: '/login', name: 'login', component: Login, meta: { layout: false } },
-    // ⚠️ 系統類畫面必須排在 /:unit 之前 —— 否則 /review 會被當成 unit 名稱，
+    // ⚠️ 系統類畫面必須排在 /:unit 之前 —— 否則 /questions 會被當成 unit 名稱，
     // 而 requireValidUnit 找不到該單元就把人導回儀表板（症狀是「點了沒反應」）。
     ...SYSTEM_SCREENS.map((s) => ({
       path: s.path,

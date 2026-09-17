@@ -1,12 +1,24 @@
 <script setup lang="ts">
 // 帳號管理（/users）—— 規格見 docs/02 §4、docs/08 §A、docs/10 §3.4。
 //
-// 🔴 沒有雙因素（2026-09-11 院方決定）。這個畫面刻意不出現任何 2FA 相關 UI，
-// 而是把連帶後果講清楚：帳密是唯一憑證、登入次數限制是唯一防線。
-// ⚠️ 2026-09-17 更正文案：原本寫「種子密碼 Admin@123 上線前必須更換」，
-//    那是已作廢的敘述 —— Tim 於 2026-09-16 判定它不是上線阻斷項
-//    （CLAUDE.md 決策 10、STATUS.md §八）。畫面仍然標示哪些帳號沒換過密碼，
-//    但不再把它講成上線條件，也不要再改回去。
+// 🔴 沒有雙因素（2026-09-11 院方決定）。這個畫面刻意不出現任何 2FA 相關 UI。
+//
+// 🔴 **頁首那整塊「後台安全防線只剩登入次數限制」的紅色警示已移除**
+//    （Tim 指定 2026-09-17，**不要再加回來**）。兩個理由：
+//    ① 它等於每次打開帳號管理都在重提「換掉種子密碼」，而那件事 Tim 已於
+//       2026-09-16 判定**不是上線阻斷項**（CLAUDE.md 決策 10：不要再提案更換）。
+//       2026-09-17 曾試著只改措辭（把「上線前必須更換」改成「最有效的一件事」），
+//       但那仍然是同一個提案，只是語氣軟一點。
+//    ② 常駐、每次都出現、又按不掉的警示，讀者三天後就會自動略過它 ——
+//       到時候真正要緊的警示（同一個 .adm-alert--warn 樣式）也會一起被略過。
+//
+// ⚠️ **拿掉的是那塊常駐文宣，不是事實本身。** 決策 10 的連帶後果仍然成立
+//    （帳密是唯一憑證、登入次數限制是唯一防線、/admin/ 公開可猜），
+//    記在 CLAUDE.md 決策 10、docs/02 §4、docs/10 §5 —— 那才是它該待的地方。
+// 🔴 **表格的「密碼」欄也一併拿掉**（Tim 指定 2026-09-17）。它顯示的是
+//    `mustChangePassword`，而那個機制整個不做了 —— 管理者設定的密碼就是最終密碼，
+//    不再要求本人首登時改掉（見 AccountHandler.MinPasswordLength 與 AppRouter）。
+//    旗標不存在，欄位就只會是一整排「已更換」，沒有資訊量。
 //
 // ⚠️ UI 的權限判斷只管看不看得到，不是安全邊界（docs/09 §8）——真正擋得住的
 // 是 API 端對 user.* 的驗證。這裡的權限碼只決定按鈕出不出現。
@@ -271,14 +283,6 @@ function fmtDate(iso: string | null): string {
       </div>
     </div>
 
-    <p class="adm-alert adm-alert--warn">
-      🔴 <strong>後台安全防線只剩登入次數限制這一道。</strong>
-      雙因素不做（2026-09-11 院方決定）、IP 白名單不做（2026-08-13 決定），
-      而後台路徑 <code>/admin/</code> 是客戶指定、公開可猜。帳號密碼是唯一憑證——
-      下表「密碼」欄標示為種子密碼（<code>sa</code> 的 <code>Admin@123</code> 等）的帳號都還沒換過，
-      換掉它們是目前最有效的一件事。
-    </p>
-
     <div class="adm-filters">
       <input v-model="keyword" type="search" placeholder="搜尋帳號或顯示名稱">
     </div>
@@ -312,7 +316,6 @@ function fmtDate(iso: string | null): string {
             <th>通知信箱（選填）</th>
             <th>醫師綁定</th>
             <th>狀態</th>
-            <th>密碼</th>
             <th></th>
           </tr>
         </thead>
@@ -327,13 +330,6 @@ function fmtDate(iso: string | null): string {
               <span class="adm-badge" :class="a.isActive ? 'adm-badge--published' : 'adm-badge--draft'">
                 {{ a.isActive ? '啟用中' : '已停用' }}
               </span>
-            </td>
-            <td>
-              <!-- ⚠️ 這是「首登尚未改密碼」，不是「上一次改密碼是什麼時候」——
-                   Users 沒有 PasswordUpdatedAt 欄位（docs/08 §A-1）。對「標出誰還沒換過
-                   密碼」這個唯一用途來說夠用：建立帳號一律帶這個旗標，改完就清掉。 -->
-              <span v-if="a.mustChangePassword" class="adm-badge adm-badge--review" title="尚未改過密碼，仍在用建立帳號時給的那一組">密碼未更換</span>
-              <span v-else class="adm-muted">已更換</span>
             </td>
             <td class="adm-table__actions">
               <button v-if="canEdit" type="button" class="btn btn--line btn--sm" @click="openEdit(a)">編輯</button>
@@ -397,7 +393,7 @@ function fmtDate(iso: string | null): string {
             <label class="adm-field__label">初始密碼<span class="adm-field__required">＊</span></label>
             <input v-model="form.password" type="text" class="adm-input" :class="{ 'is-invalid': fieldErrors.password }" :placeholder="`至少 ${MIN_PASSWORD_LENGTH} 碼，需同時包含英文字母與數字`">
             <p v-if="fieldErrors.password" class="adm-field__error" role="alert">{{ fieldErrors.password }}</p>
-            <p class="adm-field__hint">建立後這組密碼視同「種子密碼」，畫面會提醒使用者比照 <code>Admin@123</code> 盡快更換。</p>
+            <p class="adm-field__hint"><strong>這組就是對方的密碼</strong>，建立後不會再要求他自己改一次，請直接告知本人。</p>
           </div>
         </div>
 
@@ -426,8 +422,8 @@ function fmtDate(iso: string | null): string {
         </div>
         <p v-if="resetError" class="adm-field__error">{{ resetError }}</p>
         <p class="adm-field__hint">
-          重設後這個帳號的「密碼種子狀態」會清除，下次登入視系統設定要求先變更密碼。
-          沒有雙因素，這組新密碼就是這個帳號唯一的憑證，請避免使用常見字串。
+          重設後<strong>這組就是對方的密碼</strong>，不會再要求他登入後自己改一次，請直接告知本人。
+          沒有雙因素，這組密碼就是這個帳號唯一的憑證，請避免使用常見字串。
         </p>
         <div class="adm-workflow__actions">
           <button type="submit" class="btn btn--primary" :disabled="resetSubmitting">重設</button>

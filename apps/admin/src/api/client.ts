@@ -19,7 +19,6 @@ import type {
   ListQuery,
   PagedResult,
   RelationItem,
-  ReviewItem,
   RoleCode,
   SeoMeta,
   UnitKey,
@@ -234,7 +233,6 @@ interface TokenResponse {
   roles: string[]
   permissions: string[]
   isSuperAdmin: boolean
-  mustChangePassword: boolean
 }
 
 let permissionCodes: string[] = []
@@ -258,7 +256,6 @@ function toCurrentUser(res: TokenResponse): CurrentUser {
     roles: res.roles as RoleCode[],
     isSuperAdmin: res.isSuperAdmin,
     doctorId: res.doctorId,
-    mustChangePassword: res.mustChangePassword,
   }
 }
 
@@ -266,9 +263,9 @@ const auth = {
   /**
    * 單段驗證：帳密通過就登入，沒有第二因素（docs/10 §3.2，2026-09-11 院方決定）。
    *
-   * ⚠️ 首登尚未改密碼時**登入仍然成功、token 照發** —— 不發 token 的話使用者永遠
-   * 改不了密碼。回傳的 `mustChangePassword` 為 true 時，除了改密碼與登出以外
-   * 每一支端點都會回 403，呼叫端要據此導向改密碼畫面。
+   * ⚠️ **沒有「首登強制改密碼」那一關了**（2026-09-17）——管理者設定的密碼就是
+   * 最終密碼。API 仍會回一個 `mustChangePassword` 欄位，那是還沒拆掉的惰性欄位，
+   * **不要再拿它來擋人**（AppRouter 那道 403 閘已經移除）。
    */
   async login(userName: string, password: string): Promise<CurrentUser> {
     // 機器人驗證（docs/10 §5，reCAPTCHA v3）。
@@ -519,12 +516,19 @@ const content = {
     return content.get(unit, id)
   },
 
-  async sort(unit: UnitKey, orderedIds: number[], _userId: number): Promise<void> {
+  /**
+   * 批次寫入排序值。
+   *
+   * 🔴 **`sortOrder` 由呼叫端決定，不是「陣列索引」。** 原本是
+   * `orderedIds.map((id, index) => ({ id, sortOrder: index }))` —— 那等於假設
+   * 送進來的就是**整個單元**的完整順序。清單頁 2026-09-17 改成「當頁內排序」
+   * （只重新分配這一頁原本佔住的那幾個值），索引與真正要寫的值完全是兩回事：
+   * 第 3 頁的第一筆要寫 40，不是 0。照舊用索引的話，翻到第 3 頁拖一次，
+   * 那 20 筆會整批被洗到最前面 —— 而且沒有任何錯誤訊息。
+   */
+  async sort(unit: UnitKey, rows: { id: number; sortOrder: number }[], _userId: number): Promise<void> {
     assertUnit(unit)
-    await request<null>(`/admin/${unit}/sort`, {
-      method: 'PUT',
-      body: orderedIds.map((id, index) => ({ id, sortOrder: index })),
-    })
+    await request<null>(`/admin/${unit}/sort`, { method: 'PUT', body: rows })
   },
 
   async remove(unit: UnitKey, id: number): Promise<void> {
@@ -552,87 +556,17 @@ const content = {
 
 // ── 審核佇列 ──────────────────────────────────────────────────────────
 
-interface ServerReviewItem {
-  id: number
-  contentItemId: number
-  unit: UnitKey
-  title: string
-  urlPath: string | null
-  versionId: number
-  versionNo: number
-  submittedByUserId: number
-  submittedByName: string | null
-  submittedAt: string
-  riskFlags: string[] | null
-}
-
-function toReviewItem(row: ServerReviewItem): ReviewItem {
-  return {
-    id: row.id,
-    contentItemId: row.contentItemId,
-    unit: row.unit,
-    title: row.title,
-    submittedByUserId: row.submittedByUserId,
-    submittedByName: row.submittedByName ?? `#${row.submittedByUserId}`,
-    submittedAt: row.submittedAt,
-    // 佇列查的就是 Status=1（待審），docs/10 §3.4。
-    status: 1,
-    decidedByUserId: null,
-    decidedAt: null,
-    decisionNote: null,
-    riskFlags: row.riskFlags ?? [],
-  }
-}
-
-const review = {
-  async pending(): Promise<ReviewItem[]> {
-    const paged = normalizePaged(await request<ServerPaged<ServerReviewItem>>('/admin/review', { query: { page: 1, pageSize: 100 } }))
-    return paged.items.map(toReviewItem)
-  },
-
-  /** 「我的退件」沒有獨立端點，它是儀表板聚合查詢的一部分（docs/10 §3.4）。 */
-  async myRejected(_userId: number): Promise<ReviewItem[]> {
-    const summary = await request<ServerDashboard>('/admin/dashboard')
-    return (summary.myRejectedItems ?? []).map((r, index) => ({
-      id: index,
-      contentItemId: r.contentItemId,
-      unit: r.unit,
-      title: r.title,
-      submittedByUserId: 0,
-      submittedByName: '',
-      submittedAt: r.decidedAt ?? '',
-      status: 3,
-      decidedByUserId: null,
-      decidedAt: r.decidedAt,
-      decisionNote: r.decisionNote,
-      riskFlags: [],
-    }))
-  },
-
-  async approve(reviewId: number, _userId: number): Promise<void> {
-    await request<null>(`/admin/review/${reviewId}/approve`, { method: 'POST', body: {} })
-  },
-
-  /** 退回原因必填（docs/08 §B-3 的 CHECK 約束，不只是前端規則）。 */
-  async reject(reviewId: number, decisionNote: string, _userId: number): Promise<void> {
-    await request<null>(`/admin/review/${reviewId}/reject`, { method: 'POST', body: { decisionNote } })
-  },
-}
-
 // ── 儀表板 ────────────────────────────────────────────────────────────
 
 interface ServerDashboard {
   pendingReviewCount: number
   myRejectedCount: number
   contentCountsByUnit: Record<string, { draft: number; inReview: number; published: number; unpublished: number }>
-  recentPendingReviews: ServerReviewItem[] | null
   myRejectedItems: { contentItemId: number; unit: UnitKey; title: string; urlPath: string | null; decisionNote: string | null; decidedAt: string | null }[] | null
 }
 
 export interface DashboardSummary {
   statusCounts: Record<UnitKey, Record<ContentStatus, number>>
-  pendingReviewCount: number
-  myRejected: ReviewItem[]
   totalRecords: number
 }
 
@@ -658,25 +592,7 @@ const dashboard = {
       totalRecords += mapped[1] + mapped[2] + mapped[3] + mapped[4]
     }
 
-    return {
-      statusCounts,
-      pendingReviewCount: server.pendingReviewCount,
-      myRejected: (server.myRejectedItems ?? []).map((r, index) => ({
-        id: index,
-        contentItemId: r.contentItemId,
-        unit: r.unit,
-        title: r.title,
-        submittedByUserId: 0,
-        submittedByName: '',
-        submittedAt: r.decidedAt ?? '',
-        status: 3 as const,
-        decidedByUserId: null,
-        decidedAt: r.decidedAt,
-        decisionNote: r.decisionNote,
-        riskFlags: [],
-      })),
-      totalRecords,
-    }
+    return { statusCounts, totalRecords }
   },
 }
 
@@ -689,7 +605,6 @@ export const adminApi = {
   auth,
   taxonomy,
   content,
-  review,
   dashboard,
   upload: uploadApi,
   redirect: redirectApi,

@@ -38,7 +38,7 @@ const SLUG_MAX = 160
 const USER_NAME_PATTERN = /^[a-z0-9._@-]+$/i
 
 /** `AccountHandler.MinPasswordLength`。 */
-export const MIN_PASSWORD_LENGTH = 8
+export const MIN_PASSWORD_LENGTH = 6
 
 const TITLE_MAX = 200 // ContentHandler：title 長度不可超過 200 字
 const SUMMARY_MAX = 500 // ContentHandler：summary 長度不可超過 500 字

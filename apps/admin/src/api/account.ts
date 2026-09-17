@@ -37,16 +37,6 @@ export interface AccountRecord {
   doctorName: string | null
   /** 停用不刪除——內容的 CreatedByUserId 還指著它（docs/08 §A-1）。 */
   isActive: boolean
-  /**
-   * 首登尚未改密碼。
-   *
-   * ⚠️ 畫面上把它當成「還在用建置期給的那組密碼」的判斷依據，這是**近似**而非精確：
-   * schema 沒有 `PasswordUpdatedAt`（docs/08 §A-1 的 Users 沒有這一欄），
-   * 而新建帳號一律 `MustChangePassword = true`，改完密碼就清掉 ——
-   * 對「種子密碼上線前必須更換」這個唯一用途來說夠用（docs/08 §A-5、STATUS.md §八）。
-   * 想知道「上一次改密碼是什麼時候」得先加欄位，那是另一支 migration。
-   */
-  mustChangePassword: boolean
   createdAt: string
   updatedAt: string
 }
@@ -73,7 +63,6 @@ interface ServerUser {
   displayName: string
   notifyEmail: string | null
   isActive: boolean
-  mustChangePassword: boolean
   doctorId: number | null
   doctorName: string | null
   createdAt: string
@@ -91,7 +80,6 @@ function toAccount(row: ServerUser): AccountRecord {
     doctorId: row.doctorId,
     doctorName: row.doctorName,
     isActive: row.isActive,
-    mustChangePassword: row.mustChangePassword,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
@@ -217,9 +205,12 @@ export interface PermissionGroup {
   cells: PermissionCell[]
 }
 
-/** 五個角色都固定存在（docs/08 §A-2：IsSystem=1，不可刪除），SuperAdmin 恆為全通過，不進可編輯矩陣。 */
-export const EDITABLE_ROLES: Exclude<RoleCode, 'SuperAdmin'>[] = ['Editor', 'Doctor', 'Marketing', 'Reviewer']
-export const ALL_ROLES: RoleCode[] = ['SuperAdmin', 'Editor', 'Doctor', 'Marketing', 'Reviewer']
+/**
+ * 四個角色都固定存在（docs/08 §A-2：IsSystem=1，不可刪除），SuperAdmin 恆為全通過，不進可編輯矩陣。
+ * ⚠️ 原本是五個 —— 「審核者」2026-09-17 連同審核佇列一起移除（CLAUDE.md 決策 20）。
+ */
+export const EDITABLE_ROLES: Exclude<RoleCode, 'SuperAdmin'>[] = ['Editor', 'Doctor', 'Marketing']
+export const ALL_ROLES: RoleCode[] = ['SuperAdmin', 'Editor', 'Doctor', 'Marketing']
 
 export interface RolePermissionMatrix {
   groups: PermissionGroup[]

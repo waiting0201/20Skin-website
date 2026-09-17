@@ -224,7 +224,15 @@ public sealed class ContentHandler(
         entity.Summary = summary;
         entity.Slug = slug;
         entity.Status = ContentStatus.Draft;
-        entity.SortOrder = JInt(body, "sortOrder") ?? 0;
+        // 🔴 **新增的內容排在最後，不是 0。**
+        //    2026-09-17 起所有內容的 `SortOrder` 都是正規化過的 0..n-1（migration
+        //    `NormalizeSortOrder`），清單與前台都是 `ORDER BY SortOrder, Id`。
+        //    這裡若沿用舊的預設 0，新建的每一筆都會**插到整個單元的最前面**，
+        //    而且沒有任何錯誤訊息 —— 新增一篇文章就會頂掉首頁那一區的第一名。
+        //    ⚠️ 呼叫端明確給了 `sortOrder` 時以它為準（匯入腳本會給）。
+        entity.SortOrder = JInt(body, "sortOrder")
+            ?? ((await db.ContentItems.Where(ci => ci.ContentType == contentType)
+                    .MaxAsync(ci => (int?)ci.SortOrder, ct) ?? -1) + 1);
 
         var isArticleTagTerm = entity is Term { TermType: TermType.ArticleTag };
         // ⚠️ 文章標籤預設 IncludeInSitemap=0 ＋ SeoMeta.NoIndex=1（docs/08 §C-9）：
@@ -545,70 +553,20 @@ public sealed class ContentHandler(
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // 4. 工作流
+    // 4. 發布
     // ════════════════════════════════════════════════════════════════════
-
-    public async Task<IActionResult> SubmitAsync(HttpRequest req, string unit, string id)
-    {
-        var contentId = ParseId(id);
-        var ct = req.HttpContext.RequestAborted;
-        var entity = await LoadAsync(unit, contentId, tracking: true, ct) ?? throw AppException.NotFound("內容");
-
-        RequireOwnership(req, entity);
-        RequireLegalPageGuard(req, entity);
-
-        if (entity.Status != ContentStatus.Draft)
-            throw AppException.Conflict(ErrorCodes.ConflictState, "僅能對草稿狀態的內容送審。");
-
-        var userId = RequestContext.UserId(req);
-        var now = Clock.UtcNow;
-
-        var strategy = db.Database.CreateExecutionStrategy();
-        await strategy.ExecuteAsync(async () =>
-        {
-            await using var tx = await db.Database.BeginTransactionAsync(ct);
-
-            // 🔴 **送審一定要重新快照當下的工作副本，不可以沿用最後一筆既有版本。**
-            //
-            //    ContentReviews.VersionId 指到的那一版，核准時會成為 PublishedVersionId
-            //    （docs/11 §7、§8），也就是建置期匯出真正讀的那一份。沿用舊版的話，
-            //    任何「不產生版本的編輯路徑」送審核准之後，上線的都是**改動前**的內容 ——
-            //    而且沒有任何錯誤訊息，畫面上還會顯示「已發布」。
-            //
-            //    ⚠️ 首頁版位就是這樣一條路徑：它由 HomeSectionHandler 直接寫
-            //    HomeSections／HomeSectionItems，不經過本檔案的 SaveVersionAsync
-            //    （2026-09-12 後台接上真 API 時實測抓到：拖完版位、送審、核准，
-            //    快照裡仍是拖動前的排列）。
-            //
-            //    ⚠️ 這會讓每次送審多一筆版本列，即使內容與上一版相同。這是刻意的取捨：
-            //    版本列有 VersionPrune 這支 Timer 在收（docs/11 §11），
-            //    但「核准了卻沒上線」沒有任何東西收得掉。
-            var version = await SaveVersionAsync(unit, entity, userId, "送審", ct);
-            await db.SaveChangesAsync(ct);
-
-            var fields = BuildFieldsDict(unit, entity);
-            var riskFlags = await ScanRiskTermsAsync(entity.Title, fields, ct);
-
-            db.ContentReviews.Add(new ContentReview
-            {
-                ContentItemId = contentId,
-                VersionId = version.Id,
-                SubmittedByUserId = userId,
-                SubmittedAt = now,
-                Status = ReviewStatus.Pending,
-                RiskFlags = riskFlags,
-            });
-
-            entity.Status = ContentStatus.InReview;
-            entity.UpdatedByUserId = userId;
-            entity.UpdatedAt = now;
-
-            await db.SaveChangesAsync(ct);
-            await tx.CommitAsync(ct);
-        });
-
-        return await GetAsync(unit, id);
-    }
+    //
+    // 🔴 **SubmitAsync（送審）2026-09-17 整支刪除**（Tim 指定：審核者與審核佇列
+    //    都不做了，CLAUDE.md 決策 20）。`POST /admin/{unit}/{id}/submit` 這條路由、
+    //    `content.submit` 這個權限碼、`ReviewHandler` 與審核佇列畫面都一起沒了。
+    //
+    //    ⚠️ **為什麼不能只拿掉畫面、留著端點**：留著的話，送審會把內容推進
+    //    `Status = InReview`，而那個狀態下 API 一律拒絕更新（UpdateAsync 等四處都擋），
+    //    又沒有任何端點能把它核准出來 —— 內容會卡死在一個編不了也上不了線的狀態。
+    //
+    //    ⚠️ **既有卡在 InReview 的資料仍然救得回來**：下面的 `PublishAsync` 不檢查
+    //    來源狀態，按一次「發布」就會重新快照並上線。ContentReviews 這張表也留著
+    //    （沒有人再寫入），拆表要一支 migration，而它不佔用任何執行期成本。
 
     public async Task<IActionResult> ScheduleAsync(HttpRequest req, string unit, string id)
     {
@@ -1053,9 +1011,11 @@ public sealed class ContentHandler(
     /// <c>GET /admin/risk-term</c>：啟用中的高風險字詞清單。
     ///
     /// <para>
-    /// 🔴 <b>這是編輯器的即時提示來源，不是閘門</b>（docs/02 §5）。送審時伺服器仍會自己重掃一次
-    /// （<see cref="ScanRiskTermsAsync"/>），前端掃到什麼<b>不影響</b>能不能送審 ——
-    /// 兩邊掃出來的結果不一致也不是錯誤，前端那份只是讓編輯在打字當下就看到提醒。
+    /// 🔴 <b>這是編輯器的即時提示來源，不是閘門</b>（docs/02 §5）：掃到什麼<b>不影響</b>
+    /// 能不能儲存或發布，它只是讓編輯在打字當下就看到提醒。
+    /// ⚠️ 2026-09-17 送審整層移除之後，伺服器端<b>不再重掃一次</b>（原本那一次發生在送審，
+    /// 命中結果記進 <c>ContentReviews.RiskFlags</c> 供審核者檢視）——
+    /// 現在這份清單只有前端這一個消費者。
     /// </para>
     /// <para>
     /// ⚠️ 權限是「登入即可」：能進到編輯畫面的人都需要這份提示，而它本身只是一份用語清單，
@@ -1067,21 +1027,6 @@ public sealed class ContentHandler(
         var terms = await GetRiskTermsAsync(CancellationToken.None);
         var result = terms.Select(t => t.Term).ToArray();
         return new OkObjectResult(ApiResponse.Ok(result));
-    }
-
-    /// <summary>⚠️ 警示不阻擋送審，它是提示不是閘門（docs/02 §5）——本方法只回報命中結果，呼叫端不得因此擋下送審。</summary>
-    private async Task<string> ScanRiskTermsAsync(string title, Dictionary<string, object?> fields, CancellationToken ct)
-    {
-        var terms = await GetRiskTermsAsync(ct);
-        if (terms.Count == 0) return "[]";
-
-        var haystack = string.Join('\n', new[] { title }.Concat(fields.Values.OfType<string>()));
-        var hits = terms
-            .Where(t => haystack.Contains(t.Term, StringComparison.OrdinalIgnoreCase))
-            .Select(t => new { term = t.Term, category = (byte)t.Category })
-            .ToList();
-
-        return JsonSerializer.Serialize(hits, JsonOpts);
     }
 
     // ════════════════════════════════════════════════════════════════════

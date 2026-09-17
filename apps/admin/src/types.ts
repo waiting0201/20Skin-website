@@ -51,14 +51,13 @@ export const TERM_TYPE_LABEL: Record<TermType, string> = {
 }
 
 /** docs/08-database.md §A-2：五個角色，種子資料，IsSystem=1。 */
-export type RoleCode = 'SuperAdmin' | 'Editor' | 'Doctor' | 'Marketing' | 'Reviewer'
+export type RoleCode = 'SuperAdmin' | 'Editor' | 'Doctor' | 'Marketing'
 
 export const ROLE_LABEL: Record<RoleCode, string> = {
   SuperAdmin: '超級管理員',
   Editor: '內容編輯',
   Doctor: '醫師',
   Marketing: '行銷',
-  Reviewer: '審核者',
 }
 
 /** docs/08-database.md §B-4，共用 SEO 區塊。九個模型的編輯畫面底部統一內嵌。 */
@@ -163,21 +162,6 @@ export interface ListQuery {
 /** docs/08-database.md §B-3。 */
 export type ReviewStatus = 1 | 2 | 3 // 待審／核准／退回
 
-export interface ReviewItem {
-  id: number
-  contentItemId: number
-  unit: UnitKey
-  title: string
-  submittedByUserId: number
-  submittedByName: string
-  submittedAt: string
-  status: ReviewStatus
-  decidedByUserId: number | null
-  decidedAt: string | null
-  decisionNote: string | null
-  /** 送審時掃出的高風險字詞命中結果（docs/02-backend-cms.md §5）。 */
-  riskFlags: string[]
-}
 
 export interface CurrentUser {
   id: number
@@ -187,7 +171,6 @@ export interface CurrentUser {
   isSuperAdmin: boolean
   /** 「醫師」角色綁定自己的個人頁用（docs/08 §A-1）。 */
   doctorId: number | null
-  mustChangePassword: boolean
 }
 
 /** 前台可見性顯示用（docs/11-backend-design.md §7 的推導規則，不是資料庫欄位）。 */

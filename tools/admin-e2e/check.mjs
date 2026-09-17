@@ -10,7 +10,7 @@
 // ⚠️ 要驗的是「開得起來、讀得懂、擋得住」。內容真的寫得進去、前台真的跟著變，
 //    是另一支 `publish-flow.mjs` 的事（那一支會改資料）。
 
-import { openAdmin, openEdit, navigate, assertStructured, fieldByLabel, apiLogin, findWithContent, step, section, summary, realErrors, ADMIN, API } from './_shared.mjs'
+import { openAdmin, openEdit, navigate, assertStructured, fieldByLabel, apiLogin, api, findWithContent, step, section, summary, realErrors, ADMIN, API } from './_shared.mjs'
 
 console.log(`後台 ${ADMIN}\nAPI  ${API}`)
 
@@ -144,14 +144,43 @@ await step('編輯頁回得去列表', async () => {
   const label = await back.innerText()
   await back.click()
   await page.waitForTimeout(1200)
-  if (!/\/admin\/treatment$/.test(page.url())) throw new Error(`按下去到了 ${page.url()}`)
+  // ⚠️ 返回連結 2026-09-17 起會帶 `?restore=1`（回到進入編輯頁之前的頁碼與篩選），
+  //    清單頁套用完就會把它從網址拿掉，所以兩種網址都算對。
+  if (!/\/admin\/treatment(\?restore=1)?$/.test(page.url())) throw new Error(`按下去到了 ${page.url()}`)
   return JSON.stringify(label)
+})
+
+await step('🔴 返回清單會回到進入時的頁碼與篩選', async () => {
+  // Tim 指定 2026-09-17：從第 2 頁點進某一筆，存完返回不該掉回第 1 頁。
+  await navigate(page, '/admin/article')
+  await page.waitForSelector('.adm-table tbody tr', { timeout: 25000 })
+  await page.locator('.adm-pagination button', { hasText: '下一頁' }).first().click()
+  await page.waitForTimeout(1200)
+  const pagerBefore = (await page.locator('.adm-pagination').innerText()).replace(/\s+/g, ' ')
+  const firstTitleBefore = await page.locator('.adm-table__title a').first().innerText()
+
+  await page.locator('.adm-table__title a').first().click()
+  await page.waitForSelector('.adm-page__back a', { timeout: 25000 })
+  await page.waitForTimeout(800)
+  await page.locator('.adm-page__back a').click()
+  await page.waitForSelector('.adm-table tbody tr', { timeout: 25000 })
+  await page.waitForTimeout(1000)
+
+  const pagerAfter = (await page.locator('.adm-pagination').innerText()).replace(/\s+/g, ' ')
+  const firstTitleAfter = await page.locator('.adm-table__title a').first().innerText()
+  if (firstTitleAfter !== firstTitleBefore) {
+    throw new Error(`回來之後第一筆變成「${firstTitleAfter}」，離開前是「${firstTitleBefore}」—— 掉回第 1 頁了`)
+  }
+  return pagerAfter === pagerBefore ? pagerAfter.slice(0, 28) : `${pagerBefore} → ${pagerAfter}`
 })
 
 section('清單的拖曳排序（唯讀：只看有沒有、不真的拖）')
 await step('療程：每一列都有把手，而且沒有 ↑↓ 了', async () => {
   // 🔴 真的拖一次在 publish-flow.mjs（那一支才會寫資料）。這裡只擋「把手不見了」
   //    與「↑↓ 又長回來」—— 兩者 typecheck 與 build 都看不到。
+  // ⚠️ **自己導頁，不要靠上一步剛好停在療程清單。** 原本沒有這一行，於是在中間
+  //    插入任何一個會換頁的檢查時，這一條就悄悄變成在驗別的單元（實際踩到）。
+  await navigate(page, '/admin/treatment')
   await page.waitForSelector('.adm-table tbody tr', { timeout: 20000 })
   const rows = await page.locator('.adm-table tbody tr').count()
   const handles = await page.locator('.adm-table tbody tr .adm-drag-handle').count()
@@ -160,17 +189,42 @@ await step('療程：每一列都有把手，而且沒有 ↑↓ 了', async () 
   if (arrows) throw new Error(`還有 ${arrows} 顆箭頭按鈕`)
   return `${handles} 個把手、0 顆箭頭`
 })
-await step('文章：超過上限就不給拖，而且說得出為什麼', async () => {
-  // ⚠️ 排序送出的是**整個單元**的順序，超過 API 的 100 筆上限就整支被擋
-  //    （ListPage.vue 檔頭）。不給拖是刻意的，但一定要讓人看得到原因。
+await step('文章：刻意不給拖，而且說得出為什麼', async () => {
+  // ⚠️ 2026-09-17 起「不給拖」的理由換了：不再是「超過 100 筆上限」（排序改成
+  //    當頁內重新分配，沒有上限了），而是**前台根本不看 SortOrder** ——
+  //    /blog/、分類頁、標籤頁一律 sort=latest。給把手等於給一個假功能。
   await navigate(page, '/admin/article')
   await page.waitForSelector('.adm-table tbody tr', { timeout: 25000 })
   await page.waitForTimeout(600)
   const handles = await page.locator('.adm-table .adm-drag-handle').count()
-  if (handles) throw new Error(`文章有 ${handles} 個把手 —— 拖了會把 1100 筆的順序洗掉`)
-  const hint = page.locator('.adm-field__hint', { hasText: '超過一次排序的上限' })
+  if (handles) throw new Error(`文章有 ${handles} 個把手 —— 但前台的文章列表依發布日期排，拖了看不出差別`)
+  const hint = page.locator('.adm-field__hint', { hasText: '不提供拖曳排序' })
   if (!(await hint.count())) throw new Error('沒有說明為什麼不能拖')
   return (await hint.first().innerText()).replace(/\s+/g, ' ').slice(0, 34)
+})
+
+await step('🔴 分類與標籤（406 筆）現在拖得動了', async () => {
+  // 舊行為：超過 100 筆就整個不給拖。現在是當頁內排序，與單元大小無關。
+  await navigate(page, '/admin/term')
+  await page.waitForSelector('.adm-table tbody tr', { timeout: 25000 })
+  await page.waitForTimeout(600)
+  const rows = await page.locator('.adm-table tbody tr').count()
+  const handles = await page.locator('.adm-table .adm-drag-handle').count()
+  if (rows !== handles) throw new Error(`${rows} 列只有 ${handles} 個把手`)
+  return `${handles} 個把手`
+})
+
+await step('🔴 這一頁的排序值不重複（拖曳的前提）', async () => {
+  // 值全都一樣的話「拖了等於沒拖」—— migration NormalizeSortOrder 就是為了這個。
+  for (const unit of ['term', 'case', 'treatment']) {
+    const rows = (await api(`/admin/${unit}?page=1&pageSize=20`)).data.items
+    if (rows.length < 2) continue
+    const orders = rows.map((r) => r.sortOrder)
+    if (new Set(orders).size !== orders.length) {
+      throw new Error(`${unit} 第 1 頁的 sortOrder 有重複：${orders.join(',')}`)
+    }
+  }
+  return '分類與標籤／案例／療程都沒有重複值'
 })
 
 section('分類與標籤：型別篩選')
@@ -185,20 +239,47 @@ await step('篩得出那 4 筆療程分類', async () => {
   if (!(await typeSelect.count())) throw new Error('沒有型別篩選器')
   await typeSelect.selectOption({ label: '療程分類' })
   await page.waitForTimeout(1500)
-  // ⚠️ 欄位順序是 [勾選, 名稱, 型別, 使用筆數, 狀態]，型別是第 3 欄。
-  const types = [...new Set(await page.locator('.adm-table tbody tr td:nth-child(3)').allInnerTexts())]
+  // ⚠️ **欄號要從表頭算出來，不可以寫死。** 原本寫死第 3 欄，而 2026-09-17
+  //    分類與標籤長出拖曳把手（多一個前導欄）之後，第 3 欄變成了「名稱」——
+  //    斷言開始比對分類名稱而不是型別，錯誤訊息還寫「混到：光療美顏…」。
+  const headers = await page.locator('.adm-table thead th').allInnerTexts()
+  const typeColumn = headers.findIndex((h) => h.trim() === '型別') + 1
+  if (!typeColumn) throw new Error(`表頭裡找不到「型別」欄：${headers.join('｜')}`)
+  const types = [...new Set(await page.locator(`.adm-table tbody tr td:nth-child(${typeColumn})`).allInnerTexts())]
   if (JSON.stringify(types) !== JSON.stringify(['療程分類'])) throw new Error(`混到：${types.join('、')}`)
   const names = await page.locator('.adm-table__title a').allInnerTexts()
   return `${names.length} 筆：${names.join('、')}`
 })
-await step('篩到 4 筆也不會冒出拖曳把手', async () => {
-  // 🔴 排序送的是**整個單元**的順序（406 筆），篩選後的筆數不能拿來決定給不給拖 ——
-  //    否則就是一個按了必定跳「超過上限」的把手（2026-09-17 加篩選時當場踩到）。
+await step('篩選中一樣拖得動（當頁內排序）', async () => {
+  // ⚠️ 舊行為是「篩選後不給拖」，因為排序送的是整個單元的順序（406 筆，超過上限）。
+  //    2026-09-17 改成當頁內重新分配那幾筆自己的排序值 —— 篩選中完全成立：
+  //    它們各自保有全域位置，只是彼此對調。
+  const rows = await page.locator('.adm-table tbody tr').count()
   const handles = await page.locator('.adm-table .adm-drag-handle').count()
-  if (handles) throw new Error(`冒出 ${handles} 個把手`)
-  const hint = page.locator('.adm-field__hint', { hasText: '超過一次排序的上限' })
-  if (!(await hint.count())) throw new Error('也沒有說明為什麼不能拖')
-  return '沒有把手，且說得出原因'
+  if (rows !== handles) throw new Error(`${rows} 列只有 ${handles} 個把手`)
+  return `${handles} 個把手`
+})
+
+await step('🔴 新增按鈕只有一顆，型別在對話框裡問', async () => {
+  // Tim 的評語：「一個下拉跟兩顆新增按鈕，看不懂在做啥」。那個裸下拉只決定
+  // 「按了旁邊那顆會建出哪一種分類」，與清單無關 —— 已搬進新增表單成為有標題的欄位。
+  const headerSelects = await page.locator('.adm-page__actions select').count()
+  if (headerSelects) throw new Error(`頁首還有 ${headerSelects} 個下拉`)
+  const buttons = await page.locator('.adm-page__actions button').allInnerTexts()
+  if (buttons.length !== 1) throw new Error(`頁首有 ${buttons.length} 顆按鈕：${buttons.join('、')}`)
+  await page.locator('.adm-page__actions button').click()
+  await page.waitForTimeout(600)
+  const labelled = page.locator('.adm-field__label', { hasText: '型別' })
+  if (!(await labelled.count())) throw new Error('新增對話框裡沒有「型別」這個有標題的欄位')
+  // 🔴 而且要是**下拉**不是文字框。`type: 'select'` 但沒有動態選項來源的欄位
+  //    原本在這個對話框裡沒有對應分支，會掉到最後的 <input> —— 變成「請自己打出 4」。
+  const typeField = page.locator('.adm-field').filter({ has: page.locator('.adm-field__label', { hasText: '型別' }) })
+  if (!(await typeField.locator('select').count())) throw new Error('「型別」渲染成文字框，不是下拉')
+  const options = await typeField.locator('select option').allInnerTexts()
+  if (options.length < 5) throw new Error(`「型別」下拉只有 ${options.length} 個選項：${options.join('、')}`)
+  await page.locator('button', { hasText: '取消' }).last().click()
+  await page.waitForTimeout(400)
+  return `一顆「${buttons[0].trim()}」，型別在對話框裡`
 })
 
 section('模式切換：選中的那顆要看得出來')

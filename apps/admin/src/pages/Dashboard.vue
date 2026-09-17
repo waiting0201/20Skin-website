@@ -13,11 +13,11 @@ import type { UnitKey } from '@/types'
 // （對應原本 Nuxt 的 definePageMeta({ layout: 'admin', middleware: 'admin-auth' })）。
 
 const user = currentUser()
-// 純粹為了呈現：「待審核」卡片的快捷連結只給看得到審核佇列的人看，
+// ⚠️ 「待審核」「我的退件」兩張卡片與「送審中」那一欄 2026-09-17 一併移除 ——
+// 送審整套已經不做了（CLAUDE.md 決策 20），留著只會顯示恆為 0 的數字。
 // 沒有權限的人點了會被 router 的 beforeEach 導回儀表板（體驗層守門，見 router.ts），
 // 與其讓連結出現又被彈回來，不如直接不顯示——跟側欄選單的做法一致。
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
-const canReview = computed(() => hasPermission(permCtx, 'review.approve'))
 const summary = ref<DashboardSummary | null>(null)
 const loading = ref(true)
 
@@ -50,16 +50,6 @@ const unitKeys = Object.keys(UNIT_REGISTRY) as UnitKey[]
           <div class="adm-stat-card__label">全站內容筆數</div>
           <div class="adm-stat-card__value">{{ summary.totalRecords }}</div>
         </div>
-        <div class="adm-stat-card">
-          <div class="adm-stat-card__label">待審核</div>
-          <div class="adm-stat-card__value">{{ summary.pendingReviewCount }}</div>
-          <RouterLink v-if="canReview" to="/review" class="adm-stat-card__sub">前往審核佇列 →</RouterLink>
-          <div v-else class="adm-stat-card__sub">待審核項目數量</div>
-        </div>
-        <div class="adm-stat-card">
-          <div class="adm-stat-card__label">我的退件</div>
-          <div class="adm-stat-card__value">{{ summary.myRejected.length }}</div>
-        </div>
       </div>
 
       <div class="adm-dashboard-grid">
@@ -71,7 +61,6 @@ const unitKeys = Object.keys(UNIT_REGISTRY) as UnitKey[]
                 <tr>
                   <th>單元</th>
                   <th style="text-align: right">草稿</th>
-                  <th style="text-align: right">送審中</th>
                   <th style="text-align: right">已發布</th>
                   <th style="text-align: right">已下架</th>
                 </tr>
@@ -80,7 +69,6 @@ const unitKeys = Object.keys(UNIT_REGISTRY) as UnitKey[]
                 <tr v-for="unit in unitKeys" :key="unit">
                   <td class="adm-table__title"><RouterLink :to="`/${unit}`">{{ UNIT_REGISTRY[unit].label }}</RouterLink></td>
                   <td style="text-align: right">{{ summary.statusCounts[unit][1] }}</td>
-                  <td style="text-align: right">{{ summary.statusCounts[unit][2] }}</td>
                   <td style="text-align: right">{{ summary.statusCounts[unit][3] }}</td>
                   <td style="text-align: right">{{ summary.statusCounts[unit][4] }}</td>
                 </tr>
@@ -89,24 +77,6 @@ const unitKeys = Object.keys(UNIT_REGISTRY) as UnitKey[]
           </div>
         </div>
 
-        <div class="adm-card">
-          <h2 class="adm-card__title">我的退件</h2>
-          <p v-if="!summary.myRejected.length" class="adm-muted">目前沒有被退回的送審單。</p>
-          <div v-else>
-            <div v-for="item in summary.myRejected" :key="item.id" class="adm-list-item">
-              <div>
-                <div class="adm-list-item__title">
-                  <RouterLink :to="`/${item.unit}/${item.contentItemId}`">{{ item.title }}</RouterLink>
-                </div>
-                <div class="adm-list-item__meta">{{ UNIT_REGISTRY[item.unit].label }}・退回原因：{{ item.decisionNote || '（無）' }}</div>
-              </div>
-            </div>
-          </div>
-          <hr class="adm-divider">
-          <p class="adm-field__hint">
-            ⚠️ 退回不寄信——帳號沒有必填 email，退回通知一律由這個待辦清單呈現。
-          </p>
-        </div>
       </div>
     </template>
   </div>

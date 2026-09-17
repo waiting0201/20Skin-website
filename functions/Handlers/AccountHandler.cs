@@ -42,7 +42,10 @@ public sealed class AccountHandler(Skin20DbContext db, ISqlConnectionFactory sql
     // 字元集剛好包含 @ 只是因為種子帳號 sa@system.local 長這樣，不代表要求 email 語法。
     private static readonly Regex UserNamePattern = new("^[a-z0-9._@-]+$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private const int MinPasswordLength = 8; // ⚠️ 密碼強度與輪替規則尚未正式訂定（docs/02 §4 待辦），這裡先給一個保守底線。
+    // ⚠️ 2026-09-17 由 8 改為 6（Tim 指定）。前端的 `validation.ts` MIN_PASSWORD_LENGTH
+    //    是同一個數字，**兩邊要一起改** —— 只改一邊的症狀是「畫面收得下、送出被 400 退回」，
+    //    或反過來「畫面擋下一組 API 其實接受的密碼」。
+    private const int MinPasswordLength = 6;
 
     public async Task<IActionResult> ListUsersAsync(HttpRequest req)
     {
@@ -93,9 +96,10 @@ public sealed class AccountHandler(Skin20DbContext db, ISqlConnectionFactory sql
             NotifyEmail = string.IsNullOrWhiteSpace(body.NotifyEmail) ? null : body.NotifyEmail!.Trim(),
             DoctorId = body.DoctorId,
             IsActive = true,
-            // 後台建立的帳號一律強制首登改密碼——密碼是唯一憑證，管理者代填的初始密碼不該延續使用
-            // （docs/08 §A-5 配套 3 的精神同樣適用於非種子帳號）。
-            MustChangePassword = true,
+            // 🔴 **不再強制首登改密碼**（Tim 指定 2026-09-17：「密碼設定好就好，管理者不用再另設」）。
+            //    管理者填的這一組就是最終密碼。⚠️ 欄位保留、一律 false —— 拿掉欄位要一支
+            //    migration，而它現在是惰性的（AppRouter 那道 403 閘已移除），留著沒有害處。
+            MustChangePassword = false,
             SecurityStamp = Guid.NewGuid().ToString("N"),
             CreatedAt = now,
             UpdatedAt = now,
@@ -193,14 +197,14 @@ public sealed class AccountHandler(Skin20DbContext db, ISqlConnectionFactory sql
         entity.PasswordHash = passwordHasher.HashPassword(entity, body.NewPassword!);
         // ⚠️ 改密碼要同時更換 SecurityStamp，使既發權杖失效（docs/11 §5.1）。
         entity.SecurityStamp = Guid.NewGuid().ToString("N");
-        // 這是「管理者代重設」，不是使用者自己改密碼——沒有 email 驗證流程可用，
-        // 所以強制下次登入必須換成使用者自己知道的密碼。
-        entity.MustChangePassword = true;
+        // ⚠️ 不再打開「下次登入必須改」的旗標（同上：密碼設定好就好）。
+        //    重設出來的這一組就是對方的密碼，由管理者直接告知本人。
+        entity.MustChangePassword = false;
         entity.UpdatedAt = Clock.UtcNow;
 
         await db.SaveChangesAsync(ct);
 
-        return new OkObjectResult(ApiResponse.Ok("密碼已重設，使用者下次登入需重新設定密碼。"));
+        return new OkObjectResult(ApiResponse.Ok("密碼已重設。這一組就是該帳號的密碼，請直接告知本人。"));
     }
 
     /// <summary>

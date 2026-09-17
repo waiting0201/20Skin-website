@@ -36,8 +36,6 @@ public sealed partial class AppRouter
                 => PermissionCodes.SeoEdit,
             ("PUT", ["admin", var u, _, "relations"]) when UnitCodes.IsValid(u)
                 => PermissionCodes.Edit(u),
-            ("POST", ["admin", var u, _, "submit"]) when UnitCodes.IsValid(u)
-                => PermissionCodes.ContentSubmit,
             ("PATCH", ["admin", var u, _, "publish" or "schedule"]) when UnitCodes.IsValid(u)
                 => PermissionCodes.Publish(u),
             ("GET", ["admin", var u, _, "versions", ..]) when UnitCodes.IsValid(u)
@@ -57,11 +55,6 @@ public sealed partial class AppRouter
                 => PermissionCodes.Edit(u),
             ("DELETE", ["admin", var u, _]) when UnitCodes.IsValid(u)
                 => PermissionCodes.Edit(u),
-
-            // ── 工作流（docs/10 §3.4）────────────────────────────────
-            ("GET", ["admin", "review"]) => PermissionCodes.ReviewApprove,
-            ("POST", ["admin", "review", _, "approve"]) => PermissionCodes.ReviewApprove,
-            ("POST", ["admin", "review", _, "reject"]) => PermissionCodes.ReviewReject,
 
             // ── 上傳（不是媒體庫：沒有清單、沒有刪除）──────────────────
             ("POST", ["admin", "upload", "sas" or "commit"]) => PermissionCodes.UploadFile,
@@ -114,17 +107,12 @@ public sealed partial class AppRouter
             ("PUT", ["admin", var u, var id, "seo"]) when UnitCodes.IsValid(u) => Wrap(content.UpdateSeoAsync(req, u, id)),
             ("PUT", ["admin", var u, var id, "relations"]) when UnitCodes.IsValid(u) => Wrap(content.UpdateRelationsAsync(req, u, id)),
             ("PUT", ["admin", var u, var id]) when UnitCodes.IsValid(u) => Wrap(content.UpdateAsync(req, u, id)),
-            ("POST", ["admin", var u, var id, "submit"]) when UnitCodes.IsValid(u) => Wrap(content.SubmitAsync(req, u, id)),
             ("PATCH", ["admin", var u, var id, "schedule"]) when UnitCodes.IsValid(u) => Wrap(content.ScheduleAsync(req, u, id)),
             ("PATCH", ["admin", var u, var id, "publish"]) when UnitCodes.IsValid(u) => Wrap(content.PublishAsync(req, u, id)),
             ("DELETE", ["admin", var u, var id]) when UnitCodes.IsValid(u) => Wrap(content.DeleteAsync(req, u, id)),
             ("GET", ["admin", var u, var id, "versions"]) when UnitCodes.IsValid(u) => Wrap(content.ListVersionsAsync(u, id)),
             ("GET", ["admin", var u, var id, "versions", var no]) when UnitCodes.IsValid(u) => Wrap(content.GetVersionAsync(u, id, no)),
             ("POST", ["admin", var u, var id, "versions", var no, "restore"]) when UnitCodes.IsValid(u) => Wrap(content.RestoreVersionAsync(req, u, id, no)),
-
-            ("GET", ["admin", "review"]) => Wrap(review.ListPendingAsync(req)),
-            ("POST", ["admin", "review", var id, "approve"]) => Wrap(review.ApproveAsync(req, id)),
-            ("POST", ["admin", "review", var id, "reject"]) => Wrap(review.RejectAsync(req, id)),
 
             ("POST", ["admin", "upload", "sas"]) => Wrap(upload.RequestSasAsync(req)),
             ("POST", ["admin", "upload", "commit"]) => Wrap(upload.CommitAsync(req)),

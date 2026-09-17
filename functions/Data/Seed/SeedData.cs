@@ -52,23 +52,27 @@ public static class SeedData
         SeedRiskTerms(b);
     }
 
-    // ── 1. 角色（5，IsSystem=1 不可刪）────────────────────────────────
+    // ── 1. 角色（4，IsSystem=1 不可刪）────────────────────────────────
+    //
+    // 🔴 **「審核者」2026-09-17 刪除**（Tim 指定：審核者與審核佇列都不做了，
+    //    CLAUDE.md 決策 20）。原本是 5 個。
     private const int RoleSuperAdmin = 1;
     private const int RoleEditor = 2;
     private const int RoleDoctor = 3;
     private const int RoleMarketing = 4;
-    private const int RoleReviewer = 5;
 
     private static void SeedRoles(ModelBuilder b) => b.Entity<Role>().HasData(
         new Role { Id = RoleSuperAdmin, Code = "SuperAdmin", Name = "超級管理員", IsSystem = true },
         new Role { Id = RoleEditor, Code = "Editor", Name = "內容編輯", IsSystem = true },
         new Role { Id = RoleDoctor, Code = "Doctor", Name = "醫師", IsSystem = true },
-        new Role { Id = RoleMarketing, Code = "Marketing", Name = "行銷", IsSystem = true },
-        new Role { Id = RoleReviewer, Code = "Reviewer", Name = "審核者", IsSystem = true });
+        new Role { Id = RoleMarketing, Code = "Marketing", Name = "行銷", IsSystem = true });
 
     // ── 2. 權限碼（docs/08 §A-2）──────────────────────────────────────
     //
-    // 九個內容型別 × (edit, publish) ＝ 18，加上 13 個跨單元的權限 ＝ 31。
+    // 九個內容型別 × (edit, publish) ＝ 18，加上 10 個跨單元的權限 ＝ 28。
+    // ⚠️ 原本是 31：`content.submit`／`review.approve`／`review.reject` 三個
+    //    2026-09-17 隨送審整層一起刪除（CLAUDE.md 決策 20）。
+    //    🔴 **Id 沒有往前補**，19–21 留成空號 —— 理由見下面 CrossUnitPermissions 的註解。
     // ⚠️ seo.edit 與 content.*.edit 必須是兩個獨立權限 —— 這是 SeoMeta 獨立成表的原因。
 
     private static readonly (string Unit, string Label)[] ContentUnits =
@@ -78,24 +82,34 @@ public static class SeedData
         ("clinic", "據點"), ("page", "頁面"), ("term", "分類與標籤"),
     ];
 
-    private static readonly (string Code, string Name, string Group)[] CrossUnitPermissions =
+    /// <summary>
+    /// 跨單元權限。<b>Id 明確寫出來，不是依陣列順序遞增。</b>
+    ///
+    /// <para>
+    /// 🔴 <b>19、20、21 是空號，不要重用。</b> 那是 <c>content.submit</c>／
+    /// <c>review.approve</c>／<c>review.reject</c> 2026-09-17 刪除後留下的洞。
+    /// 讓後面的 Id 往前補會**靜默改變既有資料的意義** —— <c>RolePermissions</c>
+    /// 是可以在後台畫面上改的（<c>PUT /admin/role/{id}/permissions</c>），
+    /// 手動加出來的列不在種子裡，migration 不會跟著調整它們：
+    /// 原本指著 22（<c>seo.edit</c>）的那一列，renumber 之後會變成
+    /// <c>page.legal.edit</c>，而沒有任何錯誤訊息。
+    /// </para>
+    /// </summary>
+    private static readonly (int Id, string Code, string Name, string Group)[] CrossUnitPermissions =
     [
-        ("content.submit", "送審", "內容"),
-        ("review.approve", "審核核准", "工作流"),
-        ("review.reject", "審核退回", "工作流"),
-        ("seo.edit", "編輯 SEO 欄位", "SEO"),
-        ("taxonomy.tag.create", "新增標籤", "分類與標籤"),
-        ("taxonomy.category.manage", "新增／刪除分類", "分類與標籤"),
-        ("page.legal.edit", "編輯法務頁", "頁面"),
-        ("home.arrange", "首頁版位編排", "站台編排"),
-        ("menu.edit", "導覽選單與頁尾", "站台編排"),
-        ("settings.edit", "全站設定", "站台編排"),
-        ("account.manage", "帳號與角色管理", "系統"),
-        ("redirect.manage", "301 轉址管理", "SEO"),
-        ("upload.file", "上傳圖片", "資產"),
+        (22, "seo.edit", "編輯 SEO 欄位", "SEO"),
+        (23, "taxonomy.tag.create", "新增標籤", "分類與標籤"),
+        (24, "taxonomy.category.manage", "新增／刪除分類", "分類與標籤"),
+        (25, "page.legal.edit", "編輯法務頁", "頁面"),
+        (26, "home.arrange", "首頁版位編排", "站台編排"),
+        (27, "menu.edit", "導覽選單與頁尾", "站台編排"),
+        (28, "settings.edit", "全站設定", "站台編排"),
+        (29, "account.manage", "帳號與角色管理", "系統"),
+        (30, "redirect.manage", "301 轉址管理", "SEO"),
+        (31, "upload.file", "上傳圖片", "資產"),
     ];
 
-    /// <summary>權限碼 → Id。Id 硬編：內容類 1–18、跨單元 19–31。</summary>
+    /// <summary>權限碼 → Id。內容類 1–18 依序遞增；跨單元的 Id 由上面那份清單明確指定（22–31，19–21 是空號）。</summary>
     private static Dictionary<string, int> PermissionIds()
     {
         var map = new Dictionary<string, int>();
@@ -105,7 +119,7 @@ public static class SeedData
             map[$"content.{unit}.edit"] = id++;
             map[$"content.{unit}.publish"] = id++;
         }
-        foreach (var (code, _, _) in CrossUnitPermissions) map[code] = id++;
+        foreach (var (permissionId, code, _, _) in CrossUnitPermissions) map[code] = permissionId;
         return map;
     }
 
@@ -132,9 +146,9 @@ public static class SeedData
             });
         }
 
-        foreach (var (code, name, group) in CrossUnitPermissions)
+        foreach (var (permissionId, code, name, group) in CrossUnitPermissions)
         {
-            rows.Add(new Permission { Id = ids[code], Code = code, Name = name, GroupName = group });
+            rows.Add(new Permission { Id = permissionId, Code = code, Name = name, GroupName = group });
         }
 
         b.Entity<Permission>().HasData(rows);
@@ -143,7 +157,12 @@ public static class SeedData
     /// <summary>
     /// 角色 × 權限（docs/02 §4 的權限歸屬表逐條對應）。
     /// <para>
-    /// 🔴 <b>內容編輯沒有任何 <c>*.publish</c></b> —— 發布權與編輯權分離是三段式工作流的前提。
+    /// 🔴 <b>內容編輯現在有九個單元的 <c>*.publish</c></b>（Tim 定案 2026-09-17）。
+    /// 舊敘述「內容編輯沒有任何 *.publish，發布權與編輯權分離是三段式工作流的前提」<b>已作廢</b> ——
+    /// 送審與審核者都不做了，唯一握有 publish 的角色（審核者）也刪掉了，
+    /// 不把發布權交給內容編輯的話，全院只剩超級管理員一個帳號能讓任何內容上線。
+    /// ⚠️ 這是刻意放棄「發布權與編輯權分離」。醫療廣告法遵的相關敘述請以主管機關函釋
+    /// 及院方法務意見為準（docs/02 §4）。
     /// </para>
     /// <para>
     /// ⚠️ 行銷只有 <c>seo.edit</c> 與 <c>content.faq.edit</c>，<b>沒有其他 edit</b>：
@@ -167,20 +186,19 @@ public static class SeedData
         // 超級管理員：全部
         Grant(RoleSuperAdmin, [.. ids.Keys]);
 
-        // 內容編輯：九單元 edit ＋ 送審 ＋ SEO ＋ 新增標籤 ＋ 版位編排 ＋ 上傳。沒有 publish。
+        // 內容編輯：九單元 edit ＋ 九單元 publish ＋ SEO ＋ 新增標籤 ＋ 版位編排 ＋ 上傳。
         Grant(RoleEditor, [.. ContentUnits.Select(u => $"content.{u.Unit}.edit")]);
-        Grant(RoleEditor, "content.submit", "seo.edit", "taxonomy.tag.create", "home.arrange", "upload.file");
+        Grant(RoleEditor, [.. ContentUnits.Select(u => $"content.{u.Unit}.publish")]);
+        Grant(RoleEditor, "seo.edit", "taxonomy.tag.create", "home.arrange", "upload.file");
 
-        // 醫師：只有自己的個人頁與自己署名的文章，加上指派的醫學審閱
-        Grant(RoleDoctor, "content.doctor.edit", "content.article.edit",
-            "content.submit", "review.approve", "review.reject", "upload.file");
+        // 醫師：只有自己的個人頁與自己署名的文章（受資料列層級限制，見上）
+        // ⚠️ 原本還有 content.submit／review.approve／review.reject，三個權限碼都沒了。
+        //    「醫學審閱」這個職責因此在系統裡沒有落點 —— 那本來就是一個做不出來的規格
+        //    （ContentReviews 沒有「指派給誰」的欄位，見 STATUS.md §八）。
+        Grant(RoleDoctor, "content.doctor.edit", "content.article.edit", "upload.file");
 
         // 行銷：SEO ＋ FAQ，讀得到全部但改不了本文
         Grant(RoleMarketing, "seo.edit", "content.faq.edit", "upload.file");
-
-        // 審核者：九單元 publish ＋ 審核決定
-        Grant(RoleReviewer, [.. ContentUnits.Select(u => $"content.{u.Unit}.publish")]);
-        Grant(RoleReviewer, "review.approve", "review.reject");
 
         b.Entity<RolePermission>().HasData(rows);
     }

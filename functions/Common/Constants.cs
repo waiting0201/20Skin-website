@@ -1,7 +1,9 @@
+using Skin20.Api.Models.Entities;
+
 namespace Skin20.Api.Common;
 
 /// <summary>
-/// 權限碼（docs/10-api.md §4，權威為 <c>Data/Seed/SeedData.cs</c> 的 31 列）。
+/// 權限碼（docs/10-api.md §4，權威為 <c>Data/Seed/SeedData.cs</c> 的 28 列）。
 /// <para>⚠️ <b>這些字串在程式中不得再出現字面值</b>（docs/11 §12）。</para>
 /// </summary>
 public static class PermissionCodes
@@ -10,9 +12,9 @@ public static class PermissionCodes
     public static string Edit(string unit) => $"content.{unit}.edit";
     public static string Publish(string unit) => $"content.{unit}.publish";
 
-    public const string ContentSubmit = "content.submit";
-    public const string ReviewApprove = "review.approve";
-    public const string ReviewReject = "review.reject";
+    // 🔴 `content.submit`／`review.approve`／`review.reject` 三個權限碼 2026-09-17 移除
+    //    （Tim 指定：審核者與審核佇列都不做了，CLAUDE.md 決策 20）。
+    //    ⚠️ 權限碼總數由 31 變成 **28**，docs/08 §A-2、docs/10 §4 已同步。
 
     /// <summary>⚠️ 與 <c>content.*.edit</c> 是<b>兩個獨立權限</b> —— 行銷角色的核心。</summary>
     public const string SeoEdit = "seo.edit";
@@ -66,6 +68,25 @@ public static class UnitCodes
         [Treatment, Doctor, Concern, Article, Case, Faq, Clinic, Page, Term];
 
     public static bool IsValid(string? unit) => unit is not null && All.Contains(unit);
+
+    /// <summary>
+    /// <c>ContentItems.ContentType</c> → 單元代碼。
+    /// ⚠️ 原本住在 <c>ReviewHandler</c>，2026-09-17 那個 Handler 連同審核佇列一起刪除，
+    /// 這支被儀表板用著，所以搬到這裡 —— 它本來就不屬於「審核」這件事。
+    /// </summary>
+    public static string FromContentType(byte contentType) => (ContentType)contentType switch
+    {
+        ContentType.Treatment => Treatment,
+        ContentType.Doctor => Doctor,
+        ContentType.Concern => Concern,
+        ContentType.Article => Article,
+        ContentType.Case => Case,
+        ContentType.Faq => Faq,
+        ContentType.Clinic => Clinic,
+        ContentType.Page => Page,
+        ContentType.Term => Term,
+        _ => "unknown",
+    };
 }
 
 /// <summary>JWT 的 claim 名稱與 audience。</summary>

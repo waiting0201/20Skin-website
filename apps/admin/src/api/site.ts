@@ -215,6 +215,19 @@ export interface HomeSection {
   targetUnit: UnitKey | null
   items: HomeSectionItemRef[]
   heroSettings: HomeHeroSettings | null
+  /**
+   * 🔴 **伺服器上那個 `settings` JSON 字串的原樣備份，存檔時原封不動送回去。**
+   *
+   * 這個畫面**沒有任何一個版位的 settings 是編得動的**，所以送回去的一定要是
+   * 讀回來的那一份。原本的寫法是「hero 送 heroSettings、其餘一律送 null」，
+   * 於是按一次「儲存草稿」就會：
+   *   - 把 `specialties` 的**八大專科入口（含圖示）整組清成 null**；
+   *   - 把 `hero` 的**四張輪播圖**（前台讀的是一個陣列）覆寫成
+   *     `{"0":…,"1":…, eyebrow:"WELCOME TO 20SKIN", …}` 這種物件。
+   * 兩者都不會有任何錯誤訊息，前台首頁會直接少掉那兩區
+   * （2026-09-17 實測踩到，見 apps/web/app/data/home.ts 對 settings 的讀法）。
+   */
+  rawSettings: string | null
 }
 
 /** 1 草稿（含被退回、或已發布後又被改動）／2 送審中／3 已發布。
@@ -285,13 +298,21 @@ function defaultHeroSettings(): HomeHeroSettings {
 function toHomeSection(row: ServerHomeSection): HomeSection {
   const key = row.sectionKey as HomeSectionKey
   const meta = HOME_SECTION_META[key]
+  // hero 的表單欄位（eyebrow／headline／CTA）只有在 settings 真的是那個物件形狀時才成立。
+  //
+  // 🔴 **正式資料不是那個形狀** —— `hero.settings` 是前台讀的**輪播圖陣列**
+  //    （apps/web/app/data/home.ts：`settings as { image, caption }[]`），
+  //    而 `{ ...defaultHeroSettings(), ...陣列 }` 會展開成 `{0:…,1:…,eyebrow:…}`。
+  //    所以陣列一律**不進表單**，維持 null，畫面上那組欄位會停用並說明原因。
   let heroSettings: HomeHeroSettings | null = null
-  if (key === 'hero') {
+  if (key === 'hero' && row.settings) {
     try {
-      heroSettings = row.settings ? { ...defaultHeroSettings(), ...(JSON.parse(row.settings) as HomeHeroSettings) } : defaultHeroSettings()
+      const parsed: unknown = JSON.parse(row.settings)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        heroSettings = { ...defaultHeroSettings(), ...(parsed as HomeHeroSettings) }
+      }
     } catch {
-      // settings 是自由 JSON 欄位，壞掉時退回空白設定而不是讓整個畫面開不起來。
-      heroSettings = defaultHeroSettings()
+      // settings 是自由 JSON 欄位，壞掉時不進表單，而不是讓整個畫面開不起來。
     }
   }
   return {
@@ -306,6 +327,7 @@ function toHomeSection(row: ServerHomeSection): HomeSection {
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((i) => ({ contentItemId: i.contentItemId, sortOrder: i.sortOrder })),
     heroSettings,
+    rawSettings: row.settings,
   }
 }
 
@@ -331,16 +353,6 @@ async function loadHomePage(): Promise<HomePageState> {
   const id = await findHomePageId()
   const detail = await request<{ id: number; status: number; updatedAt: string }>(`/admin/page/${id}`)
   return { id: detail.id, status: detail.status, updatedAt: detail.updatedAt }
-}
-
-/** 在共用審核佇列裡找出首頁那一筆待審紀錄（核准／退回都要它的 reviewId）。 */
-async function findHomeReviewId(homePageId: number): Promise<number> {
-  const paged = normalizePaged(
-    await request<ServerPaged<{ id: number; contentItemId: number }>>('/admin/review', { query: { page: 1, pageSize: 100 } }),
-  )
-  const hit = paged.items.find((r) => r.contentItemId === homePageId)
-  if (!hit) throw new ApiError('NOT_FOUND', '審核佇列裡找不到首頁的送審紀錄，可能已經被其他人處理掉了。')
-  return hit.id
 }
 
 async function loadHomeState(): Promise<HomeSectionsState> {
@@ -381,9 +393,11 @@ async function putSections(sections: HomeSection[]): Promise<void> {
         sectionKey: s.sectionKey,
         isEnabled: s.isEnabled,
         sortOrder: index,
-        // hero 以外的版位沒有自由文案欄位（docs/08 §G-2：schema 本身就沒有），
-        // settings 一律送 null，不要為了「統一」而塞一個空物件進去。
-        settings: s.sectionKey === 'hero' && s.heroSettings ? JSON.stringify(s.heroSettings) : null,
+        // 🔴 **原樣送回讀到的那一份**，除非 hero 真的是表單編得動的物件形狀。
+        //    舊寫法（hero 送 heroSettings、其餘送 null）會在每一次存檔時清掉
+        //    specialties 的八大專科、並把 hero 的輪播圖陣列壓成物件 —— 見
+        //    HomeSection.rawSettings 的註解。
+        settings: s.sectionKey === 'hero' && s.heroSettings ? JSON.stringify(s.heroSettings) : s.rawSettings,
         items: s.items.map((i, itemIndex) => ({ contentItemId: i.contentItemId, sortOrder: itemIndex })),
       })),
     },
@@ -397,7 +411,8 @@ const home = {
 
   /**
    * 編輯單一版位。
-   * ⚠️ 送審中不可編輯（docs/11 §7：送審中本文鎖定）—— API 也會擋，這裡先擋是為了少一趟往返。
+   * ⚠️ 狀態 2（送審中）是舊資料才會有的殘留狀態 —— 送審已經不做了，但既有資料
+   *    可能還停在那裡，而 API 對它一律拒絕更新，所以這裡先擋，少一趟往返。
    */
   async updateSection(
     key: HomeSectionKey,
@@ -427,29 +442,18 @@ const home = {
   },
 
   /**
-   * 送審。走的是**首頁那筆 Page** 的送審端點 —— 版位編排會隨版本快照一起帶走
-   * （docs/08 §G-2、docs/11 §8），所以它進的是與其他內容同一個審核佇列。
+   * 發布。走的是**首頁那筆 Page** 的發布端點 —— 版位編排會隨版本快照一起帶走
+   * （docs/08 §G-2、docs/11 §8），所以按下去的那一刻才會產生前台真正讀到的那一份。
+   *
+   * 🔴 **不可以只存草稿就當作上線。** 前台讀的是「首頁那筆 Page 已核准的版本快照」，
+   *    而 `PUT /admin/home-section` 只寫 HomeSections／HomeSectionItems 這兩張工作表。
+   *    少了這一步，畫面上排好的版位前台一個都看不到（docs/08 §G-2）。
+   * ⚠️ 2026-09-17 由「送審 → 在同一頁核准」改成直接發布（CLAUDE.md 決策 20）。
+   *    `/admin/review/*` 那三支端點已經整個移除，不要再指回去。
    */
-  async submit(_userId: number): Promise<HomeSectionsState> {
+  async publish(_userId: number): Promise<HomeSectionsState> {
     const state = await loadHomeState()
-    if (state.status === 2) throw new ApiError('CONFLICT_STATE', '已經在送審中了。')
-    await request<null>(`/admin/page/${state.homePageId}/submit`, { method: 'POST', body: {} })
-    return loadHomeState()
-  },
-
-  async approve(_userId: number): Promise<HomeSectionsState> {
-    const state = await loadHomeState()
-    const reviewId = await findHomeReviewId(state.homePageId)
-    await request<null>(`/admin/review/${reviewId}/approve`, { method: 'POST', body: {} })
-    return loadHomeState()
-  },
-
-  /** 退回原因必填（docs/08 §B-3 的 CHECK 約束，不只是前端規則）。 */
-  async reject(note: string, _userId: number): Promise<HomeSectionsState> {
-    if (!note.trim()) throw new ApiError('VALIDATION_REQUIRED', '退回原因為必填。')
-    const state = await loadHomeState()
-    const reviewId = await findHomeReviewId(state.homePageId)
-    await request<null>(`/admin/review/${reviewId}/reject`, { method: 'POST', body: { decisionNote: note } })
+    await request<null>(`/admin/page/${state.homePageId}/publish`, { method: 'PATCH', body: { action: 'publish' } })
     return loadHomeState()
   },
 }

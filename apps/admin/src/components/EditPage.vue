@@ -28,6 +28,7 @@ import HoursEditor from './HoursEditor.vue'
 import ImageField from './ImageField.vue'
 import StructuredField from './StructuredField.vue'
 import { resolveSchema } from '@/api/content-fields'
+import { listPathFor } from '@/list-state'
 
 const props = defineProps<{ unit: UnitKey; id: number }>()
 const router = useRouter()
@@ -425,7 +426,7 @@ async function removeRecord() {
   if (!window.confirm(`確定要刪除「${record.value?.title}」嗎？此動作無法復原。`)) return
   try {
     await adminApi.content.remove(props.unit, props.id)
-    router.push(`/${props.unit}`)
+    router.push(listPathFor(props.unit))
   } catch (e) {
     actionError.value = messageOf(e, '刪除失敗。')
   }
@@ -470,7 +471,7 @@ async function removeRecord() {
       </svg>
     </div>
     <p class="adm-empty__title">找不到這筆{{ def.labelSingular }}</p>
-    <p class="adm-empty__desc">可能已經被刪除，或網址列的 id 打錯了。<RouterLink :to="`/${unit}`">回到{{ def.label }}列表</RouterLink>。</p>
+    <p class="adm-empty__desc">可能已經被刪除，或網址列的 id 打錯了。<RouterLink :to="listPathFor(unit)">回到{{ def.label }}列表</RouterLink>。</p>
   </div>
 
   <!-- ⚠️ max-width 掛在最外層，不是只掛主欄：不然標題列的「發布」會被推到
@@ -479,9 +480,12 @@ async function removeRecord() {
     <!-- 回列表的逃生口。⚠️ 用固定目的地（該單元的列表）而不是 history.back()：
          直接貼網址進來的人沒有上一頁，而 back 也可能把人送回登入頁或站外。
          走 RouterLink 還有一個好處 —— 會經過 onBeforeRouteLeave 的
-         「有尚未儲存的變更」確認，不會安靜地把編輯到一半的東西丟掉。 -->
+         「有尚未儲存的變更」確認，不會安靜地把編輯到一半的東西丟掉。
+         ⚠️ 2026-09-17：目的地改由 `listPathFor()` 給，它會帶上 `?restore=1`，
+         讓清單回到**進入這一頁之前**的頁碼與篩選（Tim 指定）。
+         固定寫死 `/${unit}` 的話，從第 7 頁點進來、存完返回會掉回第 1 頁。 -->
     <p class="adm-page__back">
-      <RouterLink class="btn btn--line btn--sm" :to="`/${unit}`">← 回到{{ def.label }}列表</RouterLink>
+      <RouterLink class="btn btn--line btn--sm" :to="listPathFor(unit)">← 回到{{ def.label }}列表</RouterLink>
     </p>
     <div class="adm-page__head">
       <div>
@@ -495,9 +499,21 @@ async function removeRecord() {
       <!-- 只剩「草稿 ↔ 發布」兩個動作，所以放在標題列而不是一張卡片裡
            （Tim 指定 2026-09-17：送審那一層拿掉）。⚠️ 不跟兩顆儲存按鈕
            同色：儲存是「留在後台」，發布是「對外」，兩件事不該長得一樣。 -->
-      <div v-if="canPublish" class="adm-page__actions">
-        <button v-if="record.status !== 3" type="button" class="btn btn--primary" :disabled="workflowBusy" @click="publishNow">發布</button>
-        <button v-else type="button" class="btn btn--line" :disabled="workflowBusy" @click="unpublishNow">取消發布</button>
+      <!-- ⚠️ 儲存本文在這裡**再出現一次**（Tim 指定 2026-09-17），底下那顆保留 ——
+           長表單捲到一半想存檔時，不必先捲到底。兩顆是同一顆：都用 `form=` 綁同一個
+           表單、同一個 submit，不是兩條各自的儲存路徑。
+           ⚠️ 位置在「發布／取消發布」右邊，而且維持綠色 —— 顏色的分工不因位置改變
+           （綠＝留在後台，藍＝對外）。 -->
+      <div class="adm-page__actions">
+        <template v-if="canPublish">
+          <button v-if="record.status !== 3" type="button" class="btn btn--primary" :disabled="workflowBusy" @click="publishNow">發布</button>
+          <button v-else type="button" class="btn btn--line" :disabled="workflowBusy" @click="unpublishNow">取消發布</button>
+        </template>
+        <button v-if="canEditBody" type="submit" form="adm-body-form" class="btn btn--save" :disabled="savingBody">
+          <template v-if="savingBody">{{ uploadingImages ? `上傳圖片中（${uploadingImages}/${pendingBodyImages}）…` : '儲存中…' }}</template>
+          <template v-else-if="pendingBodyImages">上傳 {{ pendingBodyImages }} 張圖片並儲存</template>
+          <template v-else>儲存本文</template>
+        </button>
       </div>
     </div>
 

@@ -153,16 +153,27 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 | `POST /auth/login` | body 為 `userName` ＋ `password`。**登入識別不是 email**（[08](08-database.md) §A-1）。**單段驗證** —— 通過就直接發 access ＋ refresh token，沒有雙因素（2026-09-11 院方決定） |
 | `POST /auth/refresh` | refresh token 輪替（見 §5 待確認） |
 | `POST /auth/logout` | 撤銷該 refresh token |
-| `POST /auth/change-password` | 需有效 token，**不需權限碼** —— 首登強制改密碼時使用者還沒有任何權限 |
+| `POST /auth/change-password` | 需有效 token，**不需權限碼** —— 它改的是自己的密碼，與任何後台權限無關 |
 
 登入與換發成功的回應體：`accessToken`／`refreshToken`／`userId`／`userName`／`doctorId`／`displayName`／`roles[]`／`permissions[]`／`isSuperAdmin`／`mustChangePassword`。
+
+> 🔴 **2026-09-17：「首登強制改密碼」整套不做了**（Tim 指定：「密碼設定好就好，管理者不用再另設」）。
+> 管理者在帳號管理填的那一組就是最終密碼；新增與重設帳號一律把 `MustChangePassword` 寫成 `false`，
+> `AppRouter` 那道 403 `AUTH_MUST_CHANGE_PASSWORD` 的閘也移除了。
+> ⚠️ **閘要跟畫面一起拿掉。** 只拿掉登入頁那一關的話，舊資料裡旗標仍是 1 的帳號會登得進來、
+> 然後每一支端點都回 403，而畫面上沒有任何東西解釋得了為什麼。
+> ⚠️ `mustChangePassword` 這個回應欄位與資料表欄位**保留但已惰性**（拆掉要一支 migration），
+> **不要再拿它擋人**。後台的帳號清單也已經拿掉對應的「密碼」欄。
+> ⚠️ 密碼長度下限由 **8 改為 6**（`AccountHandler.MinPasswordLength` ＝ `apps/admin/src/validation.ts`
+> 的 `MIN_PASSWORD_LENGTH`，**兩邊要一起改**）。
 
 ⚠️ **`userId`／`userName`／`doctorId` 由回應體直接給，前端不解 token。** access token 是自簽 JWT，要前端自己 base64 解 payload 等於讓它依賴 token 的內部格式，換簽章方式時會無聲壞掉。
 ⚠️ **`permissions[]` 是前端唯一的權限依據。** 角色權限可以在後台改（`PUT /admin/role/{id}/permissions`），前端若自己用角色推導一份，改完的那一刻就過期了 —— 而且不會有任何徵兆。
 
 🔴 **`POST /auth/login` 的次數限制是後台唯一的硬防線**：**只以帳號計數**（2026-09-14 院方決定拿掉來源 IP 維度），鎖定事件**即時寄出告警信、不留存紀錄**（[02](02-backend-cms.md) §4、[08](08-database.md) §I）。告警信裡仍會寫出來源 IP，但那只是線索，不代表那個 IP 被鎖。
 ⚠️ **連帶缺口**：同一個 IP 輪流試多個帳號（密碼噴灑）碰不到任何一個帳號的門檻，次數限制擋不到。擋它的只剩 §5.1 的 reCAPTCHA v3 —— 而 v3 是分數制、連不上 Google 時放行。
-原規劃三道防線都不在了：IP 白名單不做（2026-08-13）、**雙因素不做（2026-09-11）**，而後台路徑 `/admin/` 是客戶指定、公開可猜。**帳密成為唯一憑證**，密碼強度與輪替規則需一併訂定。
+原規劃三道防線都不在了：IP 白名單不做（2026-08-13）、**雙因素不做（2026-09-11）**，而後台路徑 `/admin/` 是客戶指定、公開可猜。**帳密成為唯一憑證**。
+⚠️ 密碼長度下限 6 碼（2026-09-17 由 8 調降，Tim 指定），且不再強制首登更換 —— 輪替規則仍未訂定。
 
 ### 3.3 後台：九個內容模型
 
@@ -178,7 +189,6 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 | `PUT /admin/{unit}/{id}` | `content.{unit}.edit` | 更新本文 |
 | `PUT /admin/{unit}/{id}/seo` | **`seo.edit`** | **只寫 `SeoMeta`。** 行銷角色的落點 —— 可改全站 SEO 欄位，不可改醫療敘述本文（[02](02-backend-cms.md) §4） |
 | `PUT /admin/{unit}/{id}/relations` | `content.{unit}.edit` | 關聯（療程↔困擾↔文章↔FAQ↔醫師），寫 `ContentRelations` |
-| `POST /admin/{unit}/{id}/submit` | `content.submit` | 送審，建立 `ContentReviews` 一筆並附 `RiskFlags` |
 | `PATCH /admin/{unit}/{id}/schedule` | `content.{unit}.publish` | 設定 `PublishAt`／`UnpublishAt` |
 | `PATCH /admin/{unit}/{id}/publish` | `content.{unit}.publish` | 直接發布／下架（僅具發布權的角色） |
 | `PUT /admin/{unit}/sort` | `content.{unit}.edit` | 批次排序 |
@@ -211,14 +221,21 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 - **`page`**：系統頁**不可新增、不可刪除、不可改 slug**（`IsSystemLocked`）；法務三頁**限超級管理員**
 - **`doctor`／`article`**：醫師角色只能動**自己的**內容 —— 以 `ContentItems.OwnerUserId` 判定（見 [11](11-backend-design.md) §5.4，這是「授權集中在 Router」唯一的例外）
 
-### 3.4 後台：工作流、站台編排與系統
+### 3.4 後台：站台編排與系統
+
+> 🔴 **2026-09-17：送審與審核佇列的四支端點整個刪除**（Tim 指定，CLAUDE.md 決策 20）：
+> `POST /admin/{unit}/{id}/submit`、`GET /admin/review`、`POST /admin/review/{id}/approve`、
+> `POST /admin/review/{id}/reject`。`ReviewHandler`、`ReviewReadService`、後台的審核佇列畫面
+> 也一併移除。
+> ⚠️ **為什麼不能只留端點不留畫面**（與「版本歷程」那次的取捨相反）：送審會把內容推進
+> `Status = InReview`，而那個狀態下 API 一律拒絕更新 —— 沒有核准端點的話，內容會卡死在
+> 一個**編不了也上不了線**的狀態。
+> ⚠️ 既有卡在 `InReview` 的資料仍救得回來：`PATCH .../publish` 不檢查來源狀態。
+> ⚠️ `ContentReviews` 這張表**保留**（沒有人再寫入），拆表要一支 migration 而它不佔執行期成本。
 
 | 端點 | 權限碼 | 說明 |
 |---|---|---|
-| `GET /admin/review` | `review.approve` | 審核佇列，查 `ContentReviews WHERE Status=1`，依 `SubmittedAt` |
-| `POST /admin/review/{id}/approve` | `review.approve` | 核准。核准即進入發布判定（[11](11-backend-design.md) §7） |
-| `POST /admin/review/{id}/reject` | `review.reject` | 退回，**`decisionNote` 必填** |
-| `GET /admin/dashboard` | 登入即可 | 聚合查詢，**無專屬資料表**。含「我的退件」＝ `ContentReviews WHERE Status=3 AND SubmittedByUserId=@me` |
+| `GET /admin/dashboard` | 登入即可 | 聚合查詢，**無專屬資料表**。只回九個單元 × 四態的筆數矩陣（「待審核」「近期送審」「我的退件」三段隨審核佇列一起移除） |
 | `POST /admin/upload/sas` | `upload.file` | 取短效寫入 SAS（限定容器與 blob 名稱、write only、只收圖片） |
 | `POST /admin/upload/commit` | `upload.file` | 直傳完成後回報。API 讀檔頭驗真實型別，通過就回傳一組**圖片值**：`{ blobPath, url, alt, width, height, variants }` |
 | `GET|PUT /admin/home-section` | `home.arrange` | 首頁版位編排。**只能引用既有內容，不收自由文案** |
@@ -240,9 +257,18 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 
 ---
 
-## 4. 權限碼與五種角色
+## 4. 權限碼與四種角色
 
-🔴 **權限碼的權威是 [08-database.md](08-database.md) §A-2**，種子在 `functions/Data/Seed/SeedData.cs`（31 列）。
+🔴 **權限碼的權威是 [08-database.md](08-database.md) §A-2**，種子在 `functions/Data/Seed/SeedData.cs`（28 列）。
+
+> 🔴 **2026-09-17：送審那一層整個移除**（Tim 指定，CLAUDE.md 決策 20）。
+> 連帶三件事，**都不是漏寫**：
+> ① 權限碼由 31 變成 **28** —— `content.submit`／`review.approve`／`review.reject` 刪除；
+> ② 角色由 5 變成 **4** —— 「審核者」刪除；
+> ③ **「內容編輯」拿到九個 `content.{unit}.publish`**，因為握有 publish 的角色只有審核者，
+> 不移交的話全院只剩超級管理員能讓任何內容上線。
+> ⚠️ 權限碼的 **Id 沒有往前補**，19–21 留成空號（理由見 `SeedData.CrossUnitPermissions` 的註解：
+> `RolePermissions` 是後台畫面改得動的資料，renumber 會靜默改變既有列的意義）。
 
 > ⚠️ 本節初版寫成 `{unit}.{action}`（如 `treatment.edit`／`treatment.publish`），
 > 與 08 §A-2 相衝，**已於 2026-09-11 更正為下表**。
@@ -251,12 +277,11 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 > `apps/admin/src/permissions.ts` 已於 2026-09-12 同步為下表，**而且不再自己推導**——
 > 它查的是登入回應帶回來的 `permissions[]`（見 §3.2）。
 
-31 個權限碼：
+28 個權限碼：
 
 | 群組 | 權限碼 |
 |---|---|
-| 內容 | `content.{unit}.edit`、`content.{unit}.publish`（九個單元各一對，共 18）、`content.submit` |
-| 工作流 | `review.approve`、`review.reject` |
+| 內容 | `content.{unit}.edit`、`content.{unit}.publish`（九個單元各一對，共 18） |
 | SEO | `seo.edit`、`redirect.manage` |
 | 分類與標籤 | `taxonomy.tag.create`、`taxonomy.category.manage` |
 | 頁面 | `page.legal.edit` |
@@ -264,18 +289,21 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 | 系統 | `account.manage`、`upload.file` |
 
 ⚠️ **沒有獨立的 `view` 權限碼。** 讀取端點是「登入即可」—— 能編輯就看得到，
-行銷與審核者靠 `seo.edit`／`content.*.publish` 進來。**刪除用 `content.{unit}.edit`**，
-不另設 `delete`（docs/08 §A-2 的 31 列裡沒有這兩種）。
+行銷靠 `seo.edit` 進來。**刪除用 `content.{unit}.edit`**，
+不另設 `delete`（docs/08 §A-2 的 28 列裡沒有這兩種）。
 
 | 角色 | 權限 |
 |---|---|
-| **超級管理員** | 全部 31 個 |
-| **內容編輯** | 九個 `content.{unit}.edit` ＋ `content.submit` ＋ `seo.edit` ＋ `taxonomy.tag.create` ＋ `home.arrange` ＋ `upload.file`。**沒有任何 `publish`** |
-| **醫師** | `content.doctor.edit`／`content.article.edit`（**僅 `OwnerUserId` 是自己的**）＋ `content.submit` ＋ `review.approve`／`review.reject` ＋ `upload.file` |
+| **超級管理員** | 全部 28 個 |
+| **內容編輯** | 九個 `content.{unit}.edit` ＋ **九個 `content.{unit}.publish`** ＋ `seo.edit` ＋ `taxonomy.tag.create` ＋ `home.arrange` ＋ `upload.file` |
+| **醫師** | `content.doctor.edit`／`content.article.edit`（**僅 `OwnerUserId` 是自己的**）＋ `upload.file` |
 | **行銷** | `seo.edit` ＋ `content.faq.edit` ＋ `upload.file`。**沒有其他 `edit`** |
-| **審核者** | 九個 `content.{unit}.publish` ＋ `review.approve`／`review.reject` |
 
-⚠️ **發布權與編輯權必須分離。** 這是三段式工作流的前提，也是 [02](02-backend-cms.md) §5 兩層防護的第一層 —— 療程、案例、FAQ 三類內容不得跳過審核直接上線。
+🔴 **「發布權與編輯權分離」2026-09-17 起不再成立。** 舊敘述「這是三段式工作流的前提，
+療程、案例、FAQ 三類內容不得跳過審核直接上線」**已作廢** —— 內容編輯現在自己就能發布。
+這是刻意的取捨（見上方方框），不是漏改。
+⚠️ [02](02-backend-cms.md) §5 的兩層防護只剩第二層（高風險字詞提示）。
+醫療廣告法規相關敘述請以主管機關函釋及院方法務意見為準。
 
 ⚠️ **設定類不走審核，儲存即生效，而且沒有留痕**（不做操作日誌，2026-09-11 定案）。`SiteSettings`、`MenuItems`、`RolePermissions` 與帳號異動誰改了什麼，事後查不到，唯一控管是「限超級管理員」這道權限門檻（[08](08-database.md) §I）。
 

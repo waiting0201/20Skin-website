@@ -3,20 +3,25 @@
 // 分頁 20 筆、關鍵字、狀態／分類篩選、批次上下架、排序。
 //
 // 排序 2026-09-17 由上／下移動按鈕改成拖曳（Tim 指定，↑↓ 一併移除）。
-// 拖放機制見 `@/drag-sort`，端點仍是原本的 `adminApi.content.sort()`。
+// 拖放機制見 `@/drag-sort`，端點是 `adminApi.content.sort()`。
 //
-// 🔴 **送出的是整個單元的順序，不是畫面上這 20 筆。** 原本 ↑↓ 送的是當頁 id
-//    配 0..19，而那會與**沒出現在這一頁**的資料撞號：實測療程（28 筆、每頁 20）
-//    拖一次之後整個清單重排，連沒碰過的項目都跳位。
-//    根因是資料庫裡 `SortOrder` 幾乎整批是 0（醫師 14 筆、困擾 8 筆、分類 100+
-//    筆都是 0，清單靠 `ORDER BY SortOrder, Id` 的 Id 決勝），所以任何「只重編
-//    一部分」的寫法都會把沒重編到的那些洗到前面去。
-//    現在的作法：抓回整個單元的現行順序 → 把畫面上這幾筆**依新順序填回它們
-//    原本佔的位置**（篩選中也成立）→ 整串 0..n 送出。
+// 🔴 **只送當頁那幾筆，而且送的是「它們原本佔住的那幾個排序值」的重新分配。**
+//    例：這一頁的 sortOrder 是 40、41、42，把第三筆拖到最前面 → 送出
+//    `[{三,40},{一,41},{二,42}]`。沒出現在這一頁的資料完全不受影響，
+//    篩選中也成立（那幾筆各自保有自己的全域位置，只是彼此對調）。
 //
-// ⚠️ 因此排序有筆數上限 `SORT_MAX`（＝API 的 `Paging.MaxPageSize`，一次排序
-//    超過 100 筆會被擋下）。超過的單元（文章 1100、分類標籤 400+）**不給拖**，
-//    順序請到編輯畫面填「排序值」—— 那種量級本來就不是用手排的。
+// 🔴 **這個作法的前提是「排序值不重複」** —— migration `NormalizeSortOrder`
+//    已把每個型別正規化成 0..n-1，`ContentHandler.CreateAsync` 也改成新增時取
+//    `MAX+1`。值重複的話**沒有任何值可以寫**（拖了等於沒拖），所以下面偵測到
+//    重複會直接報錯，不會假裝排好了。
+//
+// ⚠️ **舊作法（送整個單元的順序）已作廢**，連同它的 100 筆上限。那個上限是
+//    API 的 `Paging.MaxPageSize`，導致分類標籤（406）與文章（1111）整個不給拖。
+//
+// ⚠️ **當頁內拖**：沒辦法把第 5 頁的項目拖到第 1 頁。要搬遠距離請改編輯頁的「排序值」。
+// ⚠️ **文章刻意不給拖**（`listSortable: false`）—— 前台 `/blog/`、分類頁、標籤頁
+//    一律是 `sort=latest`（發布日期新到舊），`SortOrder` 根本不影響它們，
+//    給了把手等於給一個「後台看得到效果、前台看不到」的假功能。
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { adminApi, ApiError } from '@/api/client'
@@ -28,6 +33,7 @@ import type { UnitField } from '@/unit-schema'
 import { UNIT_REGISTRY } from '@/units'
 import { validateSlug } from '@/validation'
 import { useDragSort } from '@/drag-sort'
+import { rememberListView, recallListView } from '@/list-state'
 import DragHandle from './DragHandle.vue'
 import StatusBadge from './StatusBadge.vue'
 
@@ -42,7 +48,9 @@ const canView = computed(() => can(permCtx, props.unit, 'view'))
 const canEdit = computed(() => can(permCtx, props.unit, 'edit'))
 const canPublish = computed(() => can(permCtx, props.unit, 'publish'))
 const canCreateGeneric = computed(() => {
-  if (props.unit === 'term') return false // term 另有兩顆專用按鈕，見下方
+  // ⚠️ term 的新增權限分兩種（標籤／分類），只要其中一種有就給按鈕 ——
+  //    對話框裡的「型別」下拉會依權限只列出建得出來的那幾種。
+  if (props.unit === 'term') return canCreateTerm(permCtx, true) || canCreateTerm(permCtx, false)
   return canEdit.value
 })
 
@@ -71,6 +79,27 @@ const termTypeOptions = computed(
 // 醫師角色只能編輯自己的內容——清單預設先幫他們濾出自己的（docs/10-api.md §3.3：
 // OwnerUserId 判定）。這是體驗上的便利，不是安全邊界；勾掉一樣看得到別人的（若有 view 權限）。
 const onlyMine = ref(Boolean(user?.roles.includes('Doctor') && !user?.isSuperAdmin && def.value.ownershipRestricted))
+
+/**
+ * 從編輯頁按「回到清單」回來時，把離開前的頁碼與篩選裝回去（Tim 指定 2026-09-17）。
+ * 只認 `?restore=1`，不是每次進清單都還原 —— 理由見 src/list-state.ts 檔頭。
+ *
+ * 🔴 **一定要在 setup 這一層、在下面任何 watcher 註冊之前做完**，不可以放進 `onMounted`。
+ *    兩個理由，兩個都實際踩到過：
+ *    ① 下面那支「把狀態記起來」的 watcher 是 `immediate: true`，它在 setup 當下就會
+ *       先用**這個新實例的預設值**（第 1 頁、沒有篩選）覆蓋掉記憶 ——
+ *       等 onMounted 再去讀，讀到的永遠是剛被自己蓋掉的第 1 頁。
+ *    ② 篩選那支 watcher 會在值改變時把 `page` 重設成 1。在它註冊之前賦值就不會觸發。
+ */
+const pendingRestore = route.query.restore === '1' ? recallListView(props.unit) : null
+if (pendingRestore) {
+  query.page = pendingRestore.page
+  query.keyword = pendingRestore.keyword
+  query.status = pendingRestore.status
+  query.categoryId = pendingRestore.categoryId
+  query.termType = pendingRestore.termType
+  onlyMine.value = pendingRestore.onlyMine
+}
 
 function messageOf(e: unknown, fallback: string): string {
   if (e instanceof ApiError) return e.details.length ? `${e.message}（${e.details.join('、')}）` : e.message
@@ -122,18 +151,23 @@ async function load() {
 }
 
 /**
- * 進入這個畫面要做的三件事。
- * ⚠️ **三件事彼此不相依，所以一起發、不要排隊。** 原本是三個 `await` 串起來，
- *    等於把三趟往返的延遲相加 —— 在 Azure SQL Basic（5 DTU）上，
+ * 進入這個畫面要做的兩件事。
+ * ⚠️ **兩件事彼此不相依，所以一起發、不要排隊。** 原本是串起來的 `await`，
+ *    等於把往返的延遲相加 —— 在 Azure SQL Basic（5 DTU）上，
  *    光是分類選項那一趟就是整個畫面「開很慢」的主因（見 client.ts termOptions）。
- * ⚠️ 三支都自己包了 try/catch，所以 Promise.all 不會因為其中一支失敗而
- *    把另外兩支的結果丟掉。
+ * ⚠️ 兩支都自己包了 try/catch，所以 Promise.all 不會因為其中一支失敗而
+ *    把另一支的結果丟掉。
+ * ⚠️ 原本還有第三支 `loadUnitTotal()`（單元總筆數，只為了判斷「排得動嗎」）——
+ *    當頁內排序不需要那個數字了，一併拿掉，每次進清單少一趟往返。
  */
 async function loadAll() {
-  await Promise.all([loadCategoryOptions(), loadUnitTotal(), load()])
+  await Promise.all([loadCategoryOptions(), load()])
 }
 
 onMounted(async () => {
+  // 旗標用完就從網址拿掉（狀態已經在 setup 時裝回去了），
+  // 不然重新整理（會登出）或把這個網址貼給別人都很怪。
+  if (route.query.restore === '1') router.replace(`/${props.unit}`)
   await loadAll()
   // 有人手打 /admin/{unit}/new 時，UnitEdit.vue 會把他導到這裡並帶上 ?new=1
   // （那條路原本是直接建一筆空白草稿，對五個單元一律 400，見 UnitEdit.vue）。
@@ -153,6 +187,22 @@ watch(() => props.unit, async () => {
 })
 watch([() => query.keyword, () => query.status, () => query.categoryId, () => query.termType, onlyMine], () => { query.page = 1; load() })
 watch(() => query.page, load)
+
+// 每次狀態變動就記一份，供編輯頁的「回到清單」還原。
+watch(
+  [() => props.unit, () => query.page, () => query.keyword, () => query.status, () => query.categoryId, () => query.termType, onlyMine],
+  () => {
+    rememberListView(props.unit, {
+      page: query.page,
+      keyword: query.keyword,
+      status: query.status,
+      categoryId: query.categoryId,
+      termType: query.termType,
+      onlyMine: onlyMine.value,
+    })
+  },
+  { immediate: true },
+)
 
 const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / query.pageSize)))
 
@@ -187,49 +237,34 @@ async function batchPublish(status: 3 | 4) {
   }
 }
 
-/** 一次排序的筆數上限，對齊 API 的 `Paging.MaxPageSize`（超過整支被擋）。 */
-const SORT_MAX = 100
+/**
+ * 這個清單拖得動嗎。
+ * ⚠️ **不再看總筆數** —— 當頁內排序與單元大小無關（見檔頭）。
+ *    單元可以用 `listSortable: false` 明確退出（文章就是）。
+ */
+const sortable = computed(() => canEdit.value && def.value.listSortable !== false && items.value.length > 1)
 
 /**
- * 這個單元的**總筆數**，不帶任何篩選。
+ * 當頁內重新排序。
  *
- * 🔴 **排序能不能用要看它，不能看 `totalCount`** —— 後者是篩選之後的數字。
- *    2026-09-17 加上 term 的型別篩選時當場踩到：篩「療程分類」剩 4 筆，
- *    把手就冒出來了，但 reorder 送的是**整個單元**的順序（406 筆），
- *    一拖必定跳「超過上限 100 筆」。等於給了一個按了保證失敗的把手。
- *    ⚠️ 這個洞在加篩選之前就存在：文章用分類或狀態篩到 100 筆以內是同一件事。
- * ⚠️ 單元的總數只在新增／刪除時才變，而那兩件事都會離開這個畫面，
- *    所以掛載與換單元時各抓一次就夠，不需要跟著每次篩選重抓。
+ * 作法：把這一頁**現有的那幾個 sortOrder 值**由小到大排好當成「格子」，
+ * 再依新的先後順序把 id 填回格子裡。沒出現在這一頁的資料一個都不會動。
  */
-const unitTotalCount = ref(0)
-
-async function loadUnitTotal() {
-  try {
-    unitTotalCount.value = (await adminApi.content.list(props.unit, { page: 1, pageSize: 1 })).totalCount
-  }
-  catch {
-    // 拿不到就當作不能排序 —— 寧可少一個把手，也不要給一個按了會失敗的。
-    unitTotalCount.value = 0
-  }
-}
-
-/** 這個單元排得動嗎 —— 全部筆數要能一次送完，理由見檔頭。 */
-const sortable = computed(() => canEdit.value && unitTotalCount.value > 1 && unitTotalCount.value <= SORT_MAX)
-
 async function reorder(orderedPageIds: number[]) {
   errorMessage.value = ''
   try {
-    // 整個單元的現行順序（不帶任何篩選條件——要的是全域位置）。
-    const all = await adminApi.content.list(props.unit, { page: 1, pageSize: SORT_MAX })
-    if (all.totalCount > SORT_MAX) throw new Error(`這個單元有 ${all.totalCount} 筆，超過一次排序的上限 ${SORT_MAX} 筆。`)
-
-    // 畫面上這幾筆佔住的位置不變，只是換成新的先後。其餘項目原封不動。
-    const moving = new Set(orderedPageIds)
-    let cursor = 0
-    const merged = all.items.map((i) => i.id).map((id) => (moving.has(id) ? orderedPageIds[cursor++] ?? id : id))
-    if (cursor !== orderedPageIds.length) throw new Error('清單在排序期間變動過，請重新載入後再試一次。')
-
-    await adminApi.content.sort(props.unit, merged, user!.id)
+    const slots = items.value.map((i) => i.sortOrder).sort((a, b) => a - b)
+    if (orderedPageIds.length !== slots.length) {
+      throw new Error('清單在排序期間變動過，請重新載入後再試一次。')
+    }
+    // 🔴 值重複就沒有格子可以分配 —— 寧可報錯，也不要寫下一組「看起來排好了、
+    //    重新載入又跳回去」的值（那是最難查的一種）。
+    if (new Set(slots).size !== slots.length) {
+      throw new Error(
+        `這一頁有排序值重複的資料，排不出先後。請重新載入；若持續發生，代表這個單元的排序值需要重新正規化（migration NormalizeSortOrder）。`,
+      )
+    }
+    await adminApi.content.sort(props.unit, orderedPageIds.map((id, index) => ({ id, sortOrder: slots[index]! })), user!.id)
   } catch (e) {
     errorMessage.value = messageOf(e, '排序儲存失敗。')
   }
@@ -269,8 +304,31 @@ const createOptions = reactive<Record<string, { value: string; label: string }[]
 /** term 的兩顆專用按鈕各自帶一個 termType，開啟對話框時記下來。 */
 const createOverride = ref<Record<string, unknown>>({})
 
-/** 這個單元在「新增」那一刻就得填的欄位。空陣列＝只要標題與 slug。 */
-const createFields = computed<UnitField[]>(() => def.value.fields.filter((f) => f.requiredOnCreate && !f.readOnly))
+/**
+ * 這個單元在「新增」那一刻就得填的欄位。空陣列＝只要標題與 slug。
+ *
+ * ⚠️ `readOnly` 但 `settableOnCreate` 的欄位**要收進來**（分類與標籤的「型別」就是這種：
+ * 建立後不可改，但建立時必填）。原本被 `!f.readOnly` 濾掉，於是那個選擇被迫做成
+ * 頁首一個**沒有標籤的裸下拉 ＋ 兩顆新增按鈕** —— Tim 的評語是「看不懂在做啥」，
+ * 而它確實看不懂：那個下拉只決定「按了旁邊那顆按鈕會建出哪一種分類」，
+ * 與清單上的任何東西都無關。型別是「要建的那個東西」的屬性，就該在新增表單裡問。
+ */
+const createFields = computed<UnitField[]>(
+  () => def.value.fields.filter((f) => (f.requiredOnCreate || f.settableOnCreate) && (!f.readOnly || f.settableOnCreate)),
+)
+
+/**
+ * 新增對話框裡某個欄位可以選的選項。
+ * ⚠️ 分類與標籤的「型別」要依權限收窄：新增**標籤**（termType 4）是內容編輯就有的
+ * `taxonomy.tag.create`，新增**分類**（1–3）動到 URL 結構與 301 對照表，限超級管理員
+ * （docs/10 §3.3 的逐單元例外）。少了這道收窄，非超管選了「療程分類」會被 API 回 403，
+ * 而畫面上完全看不出為什麼。
+ */
+function staticOptionsFor(field: UnitField): { value: string; label: string }[] {
+  const all = field.options ?? []
+  if (props.unit !== 'term' || field.key !== 'termType') return all
+  return all.filter((o) => (o.value === '4' ? canCreateTerm(permCtx, true) : canCreateTerm(permCtx, false)))
+}
 
 function defaultFieldsFor(): Record<string, unknown> {
   const fields: Record<string, unknown> = {}
@@ -379,7 +437,6 @@ async function createDraft(overrideFields: Record<string, unknown> = {}, title =
   }
 }
 
-const newTagTermType = ref('1')
 </script>
 
 <template>
@@ -389,21 +446,11 @@ const newTagTermType = ref('1')
         <h1 class="adm-page__title">{{ def.label }}</h1>
         <p class="adm-page__desc">共 {{ totalCount }} 筆</p>
       </div>
+      <!-- ⚠️ 一顆按鈕就好。分類與標籤原本在這裡放了一個**沒有標籤的下拉 ＋ 兩顆按鈕**，
+           那個下拉只決定「按了旁邊那顆會建出哪一種分類」，與清單無關 ——
+           型別已經搬進新增對話框，變成一個有標題的欄位。 -->
       <div class="adm-page__actions">
-        <template v-if="unit === 'term'">
-          <select v-model="newTagTermType" class="adm-select" style="width:auto" v-if="user?.isSuperAdmin">
-            <option value="1">療程分類</option>
-            <option value="2">文章分類</option>
-            <option value="3">FAQ 分類</option>
-          </select>
-          <button v-if="canCreateTerm(permCtx, false)" type="button" class="btn btn--ghost" :disabled="creating" @click="openCreate({ termType: newTagTermType })">
-            ＋ 新增分類（限超級管理員）
-          </button>
-          <button v-if="canCreateTerm(permCtx, true)" type="button" class="btn btn--primary" :disabled="creating" @click="openCreate({ termType: '4' })">
-            ＋ 新增標籤
-          </button>
-        </template>
-        <button v-else-if="canCreateGeneric" type="button" class="btn btn--primary" :disabled="creating" @click="openCreate()">
+        <button v-if="canCreateGeneric" type="button" class="btn btn--primary" :disabled="creating" @click="openCreate()">
           ＋ 新增{{ def.labelSingular }}
         </button>
       </div>
@@ -447,6 +494,21 @@ const newTagTermType = ref('1')
             >
               <option value="">請選擇…</option>
               <option v-for="opt in createOptions[field.key] ?? []" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+
+            <!-- 🔴 **選項寫死在單元宣告裡**的 select（分類與標籤的「型別」就是這種）。
+                 ⚠️ 這個分支原本不存在 —— 沒有它，`type: 'select'` 但沒有動態選項來源的欄位
+                 會一路掉到最後的 `<input>`，變成一個**要使用者自己打出 `4` 的文字框**。
+                 （2026-09-17 把型別從頁首搬進這個對話框時當場踩到。） -->
+            <select
+              v-else-if="field.type === 'select'"
+              class="adm-select"
+              :class="{ 'is-invalid': createErrors[field.key] }"
+              :value="createFieldText(field.key)"
+              @change="createForm.fields[field.key] = ($event.target as HTMLSelectElement).value"
+            >
+              <option value="">請選擇…</option>
+              <option v-for="opt in staticOptionsFor(field)" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
 
             <label v-else-if="field.type === 'boolean'" class="adm-checkbox">
@@ -590,9 +652,13 @@ const newTagTermType = ref('1')
             </tr>
           </tbody>
         </table>
-        <p v-if="canEdit && unitTotalCount > SORT_MAX" class="adm-field__hint" style="margin-top: var(--sp-2)">
-          {{ def.label }}共 {{ unitTotalCount }} 筆，超過一次排序的上限（{{ SORT_MAX }} 筆），因此這個清單不提供拖曳排序。
-          需要固定順序請到該筆的編輯畫面填「排序值」。
+        <!-- ⚠️ 兩種「不能拖」的原因要分開講，不然使用者不知道是壞了還是本來就這樣。 -->
+        <p v-if="canEdit && def.listSortable === false" class="adm-field__hint" style="margin-top: var(--sp-2)">
+          {{ def.label }}不提供拖曳排序：前台的文章列表（<code>/blog/</code>、分類頁、標籤頁）一律依<strong>發布日期</strong>新到舊排，
+          手動排的順序在前台看不出任何差別。需要調整某一筆的位置請改它的「顯示日期」。
+        </p>
+        <p v-else-if="sortable" class="adm-field__hint" style="margin-top: var(--sp-2)">
+          拖曳把手可調整順序，<strong>範圍限這一頁之內</strong>。要跨頁搬移請到該筆的編輯畫面改「排序值」。
         </p>
       </div>
 

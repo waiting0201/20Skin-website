@@ -32,24 +32,18 @@ const password = ref('')
 const errorMessage = ref('')
 const submitting = ref(false)
 
-// 首登強制改密碼（docs/10 §3.2）。
-//
-// 🔴 **登入是成功的、token 也發了** —— 不發 token 的話使用者永遠改不了密碼，
-//    種子帳號等於鎖死。但在改掉之前，除了改密碼與登出以外每一支端點都會回
-//    403 AUTH_MUST_CHANGE_PASSWORD，所以這裡必須把人擋在這一步，不能放進後台。
-const mustChangePassword = ref(false)
-const newPassword = ref('')
-const newPasswordConfirm = ref('')
+// 🔴 **「首登強制改密碼」整套拿掉了**（Tim 指定 2026-09-17：「密碼設定好就好，
+//    管理者不用再另設」）。管理者在帳號管理填的那一組就是最終密碼，登入成功
+//    就直接進後台，沒有中間那一關。
+//    ⚠️ 連帶：API 端的 `AppRouter` 也拿掉了 403 AUTH_MUST_CHANGE_PASSWORD 這道閘 ——
+//    **兩邊要一起改**。只拿掉畫面的話，舊資料裡 `MustChangePassword = 1` 的帳號
+//    會登得進來、然後每一支端點都回 403，而畫面上完全沒有東西能解釋為什麼。
 
 async function submitCredentials() {
   errorMessage.value = ''
   submitting.value = true
   try {
     const user = await adminApi.auth.login(userName.value.trim(), password.value)
-    if (user.mustChangePassword) {
-      mustChangePassword.value = true
-      return
-    }
     _setSession(user)
     await router.push((route.query.redirect as string) || '/')
   } catch (e) {
@@ -59,26 +53,6 @@ async function submitCredentials() {
   }
 }
 
-async function submitNewPassword() {
-  errorMessage.value = ''
-  if (newPassword.value !== newPasswordConfirm.value) {
-    errorMessage.value = '兩次輸入的新密碼不一致。'
-    return
-  }
-  submitting.value = true
-  try {
-    await adminApi.auth.changePassword(password.value, newPassword.value)
-    // ⚠️ 改完一定要重新登入：權限與旗標都在 token 裡，舊 token 帶的還是
-    //    「尚未改密碼」，拿著它進後台每一支端點都會被擋。
-    const user = await adminApi.auth.login(userName.value.trim(), newPassword.value)
-    _setSession(user)
-    await router.push((route.query.redirect as string) || '/')
-  } catch (e) {
-    errorMessage.value = e instanceof ApiError ? e.message : '變更密碼失敗，請稍後再試。'
-  } finally {
-    submitting.value = false
-  }
-}
 </script>
 
 <template>
@@ -98,12 +72,10 @@ async function submitNewPassword() {
 
       <div class="adm-login__main">
         <div class="adm-login__card">
-          <h1 class="adm-login__title">{{ mustChangePassword ? '設定新密碼' : '登入' }}</h1>
-          <p class="adm-login__subtitle">
-            {{ mustChangePassword ? '這組帳號還在用建立時給的密碼，請先設定新密碼才能進入後台。' : '請輸入帳號與密碼以繼續。' }}
-          </p>
+          <h1 class="adm-login__title">登入</h1>
+          <p class="adm-login__subtitle">請輸入帳號與密碼以繼續。</p>
 
-          <form v-if="!mustChangePassword" class="adm-form" @submit.prevent="submitCredentials">
+          <form class="adm-form" @submit.prevent="submitCredentials">
             <p v-if="errorMessage" class="adm-alert adm-alert--danger" role="alert">{{ errorMessage }}</p>
             <div class="adm-field">
               <label class="adm-field__label" for="userName">帳號</label>
@@ -115,21 +87,6 @@ async function submitNewPassword() {
             </div>
             <button type="submit" class="btn btn--primary btn--block" :disabled="submitting">
               {{ submitting ? '登入中…' : '登入' }}
-            </button>
-          </form>
-
-          <form v-else class="adm-form" @submit.prevent="submitNewPassword">
-            <p v-if="errorMessage" class="adm-alert adm-alert--danger" role="alert">{{ errorMessage }}</p>
-            <div class="adm-field">
-              <label class="adm-field__label" for="newPassword">新密碼</label>
-              <input id="newPassword" v-model="newPassword" class="adm-input" type="password" autocomplete="new-password" required minlength="8">
-            </div>
-            <div class="adm-field">
-              <label class="adm-field__label" for="newPasswordConfirm">再輸入一次</label>
-              <input id="newPasswordConfirm" v-model="newPasswordConfirm" class="adm-input" type="password" autocomplete="new-password" required minlength="8">
-            </div>
-            <button type="submit" class="btn btn--primary btn--block" :disabled="submitting">
-              {{ submitting ? '處理中…' : '設定新密碼並登入' }}
             </button>
           </form>
 

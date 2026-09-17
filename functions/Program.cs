@@ -107,7 +107,6 @@ builder.Services.AddScoped<SeoHandler>();
 builder.Services.AddScoped<SearchHandler>();
 builder.Services.AddScoped<DashboardHandler>();
 builder.Services.AddScoped<ContentHandler>();
-builder.Services.AddScoped<ReviewHandler>();
 builder.Services.AddScoped<UploadHandler>();
 builder.Services.AddScoped<HomeSectionHandler>();
 builder.Services.AddScoped<MenuHandler>();

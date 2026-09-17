@@ -9,7 +9,7 @@ using Skin20.Api.Services.Dapper;
 namespace Skin20.Api.Handlers;
 
 /// <summary>
-/// docs/10 §3.4：純聚合查詢，**無專屬資料表**（docs/08 §K）。含「我的退件」。
+/// docs/10 §3.4：純聚合查詢，**無專屬資料表**（docs/08 §K）。
 ///
 /// <para>
 /// ⚠️ 分層鐵律（docs/11 §2）：Handler 內<b>禁止直接寫 SQL</b> —— 讀走 Dapper ReadService、
@@ -20,38 +20,21 @@ namespace Skin20.Api.Handlers;
 /// 本端點登入即可（Router 對 <c>GET /admin/dashboard</c> 不要求任何權限碼），純聚合查詢，
 /// 不做任何寫入。
 /// </para>
+/// <para>
+/// 🔴 <b>2026-09-17：只剩「各單元狀態筆數」一段。</b>待審核數、近期送審、我的退件
+/// 三段隨審核佇列一起移除（CLAUDE.md 決策 20）。
+/// </para>
 /// </summary>
 public sealed class DashboardHandler(ISqlConnectionFactory sqlFactory)
 {
-    /// <summary>儀表板卡片與清單各取的筆數上限，避免聚合查詢跟著資料量一起變重。</summary>
-    private const int RecentLimit = 10;
-
     private readonly DashboardReadService _dashboard = new(sqlFactory);
-    private readonly ReviewReadService _review = new(sqlFactory);
 
     public async Task<IActionResult> GetAsync(HttpRequest req)
     {
         var ct = req.HttpContext.RequestAborted;
-        var userId = RequestContext.UserId(req);
 
         var countRows = await _dashboard.CountsByUnitAsync(ct);
-        var pendingReviewCount = await _dashboard.PendingReviewCountAsync(ct);
-        var recentPending = await _review.RecentPendingAsync(RecentLimit, ct);
-        var myRejected = await _dashboard.MyRejectedAsync(userId, RecentLimit, ct);
-
-        var contentCounts = BuildUnitCounts(countRows);
-
-        var dto = new DashboardDto(
-            pendingReviewCount,
-            myRejected.Count,
-            contentCounts,
-            recentPending.Select(r => new ReviewQueueItemDto(
-                r.Id, r.ContentItemId, ReviewHandler.UnitFromContentType(r.ContentType), r.Title, r.UrlPath,
-                r.VersionId, r.VersionNo, r.SubmittedByUserId, r.SubmittedByName, r.SubmittedAt,
-                ReviewHandler.ParseRiskFlags(r.RiskFlags))).ToList(),
-            myRejected.Select(r => new MyRejectedItemDto(
-                r.ContentItemId, ReviewHandler.UnitFromContentType(r.ContentType), r.Title, r.UrlPath,
-                r.DecisionNote, r.DecidedAt)).ToList());
+        var dto = new DashboardDto(BuildUnitCounts(countRows));
 
         return new OkObjectResult(ApiResponse.Ok(dto));
     }
@@ -63,13 +46,13 @@ public sealed class DashboardHandler(ISqlConnectionFactory sqlFactory)
 
         foreach (var row in rows)
         {
-            var unit = ReviewHandler.UnitFromContentType(row.ContentType);
+            var unit = UnitCodes.FromContentType(row.ContentType);
             if (!buckets.TryGetValue(unit, out var counts)) continue;
 
             var index = row.Status switch
             {
                 1 => 0, // Draft
-                2 => 1, // InReview
+                2 => 1, // InReview（舊資料才會有）
                 3 => 2, // Published
                 4 => 3, // Unpublished
                 _ => -1,

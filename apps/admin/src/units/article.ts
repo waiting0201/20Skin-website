@@ -7,6 +7,10 @@ export const articleUnit: UnitDefinition = {
   label: '文章',
   labelSingular: '文章',
   producesUrl: true, // /blog/{slug}/
+  // 🔴 文章不給拖曳排序：前台 `/blog/`、分類頁、標籤頁一律 `sort=latest`
+  //    （`PublicContentReadService.PageAsync` 的 orderBy），`SortOrder` 只影響
+  //    「某位醫師的文章」那一區與後台清單。給把手等於給一個前台看不到效果的假功能。
+  listSortable: false,
   categoryTermType: 2,
   ownershipRestricted: true, // 醫師角色只能編輯自己署名的文章（AuthorDoctorId → OwnerUserId）
   listColumns: [

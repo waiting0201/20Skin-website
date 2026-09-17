@@ -7,20 +7,13 @@
 // 內容模型編輯畫面的「關聯」欄位同一顆元件），選項一律來自 adminApi.taxonomy
 // .unitOptions()，UI 上沒有任何自由文字輸入欄位可以填內容本文。
 //
-// ✅ 2026-09-16 覆核：**下面這段「已知缺口」已經不成立，保留是為了說明它曾經存在。**
-//    版位編排的送審現在走的就是共用的審核佇列 —— 送審是
-//    `POST /admin/page/{homeId}/submit`、核准是 `POST /admin/review/{id}/approve`
-//    （見 src/api/site.ts），與九個內容模型同一張 ContentReviews 表。
-//    舊敘述來自接上真 API 之前那版的 mock store（`src/api/mock-store.ts` 已不存在）。
+// 🔴 **2026-09-17：送審那一層整個拿掉了**（Tim 指定，CLAUDE.md 決策 20）。
+//    這一頁的動作只剩「儲存草稿」與「發布」，與九個內容模型一致。
+//    發布走 `PATCH /admin/page/{homeId}/publish`（action=publish）——
+//    版位編排隨版本快照一起帶走（docs/08 §G-2、docs/11 §8）。
+//    ⚠️ `POST /admin/{unit}/{id}/submit` 與 `/admin/review/*` 三支端點**已從 API 移除**，
+//    不要再指回去；舊敘述「版位送審走共用的審核佇列」已作廢。
 //
-// ⚠️（歷史）已知缺口：版位編排走送審流程（home.submit／
-// home.publish），但這是本畫面自己的一套簡化狀態機，**沒有併入
-// client.ts 共用的 ContentReviews 佇列**，所以審核者不會在「審核佇列」
-// 畫面看到這筆送審——要在本頁下方的工作流卡片直接審。原因：docs/08 §G-2
-// 把版位的送審／版本歷程掛在 SystemKey='home' 那筆 ContentItem 上，但這
-// 支畫面被要求透過 src/api/mock-store.ts 開自己的 store、不動 client.ts
-// 的 Db，兩者無法同時滿足，兩害相權取其輕，選擇不動 client.ts。接上真正
-// 的 API 之後這個落差就不存在——後端本來就是同一張 ContentReviews 表。
 import { computed, onMounted, reactive, ref } from 'vue'
 import { adminApi, ApiError } from '@/api/client'
 import type {
@@ -43,23 +36,22 @@ const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
 
 const canEditBase = computed(() => hasPermission(permCtx, 'home.arrange'))
-const canSubmit = computed(() => hasPermission(permCtx, 'content.submit'))
 const canPublish = computed(() => hasPermission(permCtx, 'content.page.publish'))
 
 const loading = ref(true)
 const saving = ref(false)
 const actionError = ref('')
 const actionNotice = ref('')
-// 純粹為了呈現：actionNotice 這顆 ref 在四個不同動作（存草稿／送審／核准／退回）
-// 共用同一段文字訊息，但語意其實不一樣——跟著訊息意圖挑對應的 .adm-alert modifier，
+// 純粹為了呈現：actionNotice 這顆 ref 在存草稿與發布兩個動作共用同一段文字訊息，
+// 但語意其實不一樣——跟著訊息意圖挑對應的 .adm-alert modifier，
 // 而不是全部套同一種顏色（DESIGN.md §3.6 對 EditPage.vue 的同類要求，這裡比照）。
 const actionNoticeVariant = ref<'success' | 'info' | 'warn'>('info')
-const decisionNote = ref('')
 
 const state = ref<HomeSectionsState | null>(null)
 const sections = reactive<HomeSection[]>([])
 
-// 送審中鎖定本文（呼應九個內容模型「送審中本文鎖定」的同一個原則，docs/11 §7）。
+// 狀態 2 鎖定本文。⚠️ 送審已經不做了，所以不會有新資料進到這個狀態 —— 但既有資料
+// 可能還停在那裡，而 API 對狀態 2 一律拒絕更新，鎖定要留著（同 EditPage.vue 的 canEditBody）。
 const isLocked = computed(() => state.value?.status === 2)
 const canEdit = computed(() => canEditBase.value && !isLocked.value)
 
@@ -153,7 +145,7 @@ onMounted(load)
 
 // 拖曳排序（2026-09-17 取代上／下移動按鈕）。
 // ⚠️ 這裡只改本地的 sortOrder，**不打 API** —— 版位編排是「改完一次存草稿、
-//    再送審」，跟清單頁那種「動一下就即時寫回」不一樣。存檔仍走 saveDraft()。
+//    再發布」，跟清單頁那種「動一下就即時寫回」不一樣。存檔仍走 saveDraft()。
 function reorderSections(orderedKeys: HomeSectionKey[]) {
   orderedKeys.forEach((key, index) => {
     const section = sections.find((s) => s.sectionKey === key)
@@ -168,7 +160,7 @@ function removeHeroImage(hero: HomeHeroSettings, index: number) {
   hero.images = hero.images.filter((_, i) => i !== index)
 }
 
-/** @returns 有沒有真的存起來。送審那條路要靠它決定要不要繼續。 */
+/** @returns 有沒有真的存起來。發布那條路要靠它決定要不要繼續。 */
 async function saveDraft(): Promise<boolean> {
   saving.value = true
   actionError.value = ''
@@ -178,7 +170,7 @@ async function saveDraft(): Promise<boolean> {
       user!.id,
     )
     applyState(next)
-    actionNotice.value = '草稿已儲存。尚未送審，前台不會有任何變化。'
+    actionNotice.value = '草稿已儲存。還沒發布，前台不會有任何變化。'
     actionNoticeVariant.value = 'success'
     return true
   } catch (e) {
@@ -204,53 +196,48 @@ async function runWorkflow(fallback: string, fn: () => Promise<void>) {
   }
 }
 
-async function submit() {
-  // 🔴 原本是 `await saveDraft()` 之後**不管結果**直接送審 —— 草稿存失敗時
-  //    （saveDraft 自己把錯誤吞進 actionError），送出去的是伺服器上的舊版本，
-  //    而畫面上同時顯示「儲存失敗」與「已送出審核」兩句矛盾的訊息。
+/**
+ * 發布。
+ * 🔴 **一定要先存草稿再發布。** 發布讀的是資料庫裡的工作副本（HomeSections），
+ *    不是畫面上的狀態；不先存就發布，上線的是**改動前**的排列，而畫面上什麼
+ *    錯誤都不會有。存不起來就不要發布 —— saveDraft 已經把原因寫進 actionError。
+ * ⚠️ 2026-09-17：原本是「送審 → 在同一頁核准／退回」三顆按鈕，送審整層拿掉了
+ *    （CLAUDE.md 決策 20），改成與九個內容模型一致的「存草稿 → 發布」。
+ */
+async function publish() {
   if (!await saveDraft()) return
-  await runWorkflow('送審失敗。', async () => {
-    const next = await adminApi.site.home.submit(user!.id)
+  await runWorkflow('發布失敗。', async () => {
+    const next = await adminApi.site.home.publish(user!.id)
     applyState(next)
-    actionNotice.value = '已送出審核，請等待審核者核准。'
-    actionNoticeVariant.value = 'info'
-  })
-}
-
-async function approve() {
-  await runWorkflow('核准失敗。', async () => {
-    const next = await adminApi.site.home.approve(user!.id)
-    applyState(next)
-    actionNotice.value = '已核准，首頁版位已更新為這個版本。'
+    actionNotice.value = '已發布，前台首頁已經是這個版本了。'
     actionNoticeVariant.value = 'success'
   })
 }
 
-async function reject() {
-  if (!decisionNote.value.trim()) {
-    actionError.value = '退回原因為必填。'
-    return
-  }
-  await runWorkflow('退回失敗。', async () => {
-    const next = await adminApi.site.home.reject(decisionNote.value, user!.id)
-    applyState(next)
-    decisionNote.value = ''
-    actionNotice.value = '已退回。'
-    actionNoticeVariant.value = 'warn'
-  })
-}
-
-const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布' })[state.value?.status ?? 3])
+// ⚠️ 2 是舊資料才會有的殘留狀態（送審已不做），仍要看得懂它，不然畫面會是空白。
+const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）', 3: '已發布' })[state.value?.status ?? 3])
 </script>
 
 <template>
-  <section class="adm-page">
+  <!-- ⚠️ 版面對齊九個內容模型的編輯畫面（Tim 指定 2026-09-17）：
+       單欄 `.adm-editor` ＋ 960px 上限、動作在標題列、綠色儲存靠右且在卡片外。
+       原本是 `.adm-editor-layout` 兩欄 ＋ 右側 sticky 側欄，與其他表單頁長得不一樣。 -->
+  <section class="adm-page adm-editor">
     <header class="adm-page__head">
       <div>
         <h1 class="adm-page__title">首頁版位編排</h1>
         <p class="adm-page__desc">
-          七個版位，只能挑選已存在的內容——避免首頁又變回一份跟內頁對不上的自由文案。
+          <span>七個版位，只能挑選已存在的內容——避免首頁又變回一份跟內頁對不上的自由文案。</span>
         </p>
+        <p v-if="state" class="adm-page__desc">
+          <strong>{{ statusLabel }}</strong>
+          <span v-if="state.publishedAt"> ・ 最近發布 {{ new Date(state.publishedAt).toLocaleString('zh-TW') }}</span>
+        </p>
+      </div>
+      <!-- 與編輯畫面同一套：發布（藍，對外）在左，儲存草稿（綠，留在後台）在右。 -->
+      <div v-if="state" class="adm-page__actions">
+        <button v-if="canPublish" type="button" class="btn btn--primary" :disabled="saving || workflowBusy" @click="publish">發布</button>
+        <button v-if="canEdit" type="button" class="btn btn--save" :disabled="saving" @click="saveDraft">{{ saving ? '儲存中…' : '儲存草稿' }}</button>
       </div>
     </header>
 
@@ -269,8 +256,7 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布
       <p v-if="actionNotice" class="adm-alert" :class="`adm-alert--${actionNoticeVariant}`" role="status">{{ actionNotice }}</p>
       <p v-if="actionError" class="adm-alert adm-alert--danger" role="alert">{{ actionError }}</p>
 
-      <div class="adm-editor-layout">
-        <div>
+      <div class="adm-editor-main">
           <div
             v-for="section in sortedSections"
             :key="section.sectionKey"
@@ -311,8 +297,18 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布
               </div>
             </div>
 
-            <!-- hero：唯一例外，沒有內容選擇器，是自由文字＋外部導流連結 -->
-            <div v-if="section.sectionKey === 'hero' && section.heroSettings">
+            <!-- hero：唯一例外，沒有內容選擇器。
+                 🔴 **正式資料進不了這組欄位，所以正式環境看到的是下面那段說明。**
+                 前台讀的 `hero.settings` 是一個**輪播圖陣列**
+                 （apps/web/app/data/home.ts），不是這裡假設的
+                 `{ headline, ctaLabel, images… }` 物件 —— 兩種形狀對不上，
+                 硬灌進表單再存回去等於把四張輪播圖換成一個物件。
+                 詳見 src/api/site.ts 的 `HomeSection.rawSettings`。 -->
+            <div v-if="section.sectionKey === 'hero' && !section.heroSettings" class="adm-alert adm-alert--warn">
+              主視覺的輪播圖<strong>目前不在這個畫面編輯</strong>（資料形狀與這裡的表單對不上，
+              硬編會把圖弄丟）。這一區只能停用或調整順序；要換圖請洽工程。
+            </div>
+            <div v-else-if="section.sectionKey === 'hero' && section.heroSettings">
               <div class="adm-field-grid">
                 <div class="adm-field adm-field--span2">
                   <label class="adm-field__label">主標題</label>
@@ -369,47 +365,18 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布
             </div>
           </div>
 
-          <div v-if="canEdit" class="adm-inline-actions">
-            <button type="button" class="btn btn--primary" :disabled="saving" @click="saveDraft">{{ saving ? '儲存中…' : '儲存草稿' }}</button>
-            <span class="adm-muted">儲存草稿不會影響前台，要等審核核准才會上線。</span>
+          <div v-if="canEdit" class="adm-form-actions">
+            <span class="adm-muted">儲存草稿不會影響前台</span>
+            <button type="button" class="btn btn--save" :disabled="saving" @click="saveDraft">{{ saving ? '儲存中…' : '儲存草稿' }}</button>
           </div>
-        </div>
 
-        <aside class="adm-workflow">
-          <div class="adm-card">
-            <p class="adm-card__title">工作流</p>
-            <div class="adm-workflow__row"><span class="adm-workflow__label">狀態</span><strong>{{ statusLabel }}</strong></div>
-            <div v-if="state.submittedAt" class="adm-workflow__row">
-              <span class="adm-workflow__label">送審時間</span><span>{{ new Date(state.submittedAt).toLocaleString('zh-TW') }}</span>
-            </div>
-            <div v-if="state.publishedAt" class="adm-workflow__row">
-              <span class="adm-workflow__label">最近核准</span><span>{{ new Date(state.publishedAt).toLocaleString('zh-TW') }}</span>
-            </div>
-            <p v-if="state.decisionNote" class="adm-risk-hit">退回原因：{{ state.decisionNote }}</p>
-
-            <div class="adm-workflow__actions">
-              <button v-if="canSubmit && state.status === 1" type="button" class="btn btn--primary btn--block" :disabled="saving || workflowBusy" @click="submit">送出審核</button>
-              <!-- ⚠️ 沒有「撤回」：docs/11 §7 的工作流是送審 → 核准／退回，沒有送審者自己收回這一步。
-                   送錯了要請審核者退回（退回會附原因，也留得下紀錄）。 -->
-              <p v-if="state.status === 2" class="adm-muted">已送審，等待審核者處理。送錯了請聯絡審核者退回。</p>
-            </div>
-
-            <template v-if="canPublish && state.status === 2">
-              <hr class="adm-divider">
-              <button type="button" class="btn btn--primary btn--block" :disabled="workflowBusy" @click="approve">核准，發布這個版本</button>
-              <div class="adm-field" style="margin-top: var(--sp-3)">
-                <label class="adm-field__label">退回原因</label>
-                <textarea v-model="decisionNote" class="adm-textarea" placeholder="說明需要調整的地方" />
-              </div>
-              <button type="button" class="btn btn--line btn--block" :disabled="workflowBusy" @click="reject">退回</button>
-            </template>
-
-            <p class="adm-workflow__note" style="margin-top: var(--sp-4)">
-              ⚠️ 這裡的送審是版位編排專用的簡化流程，尚未併入「審核佇列」總覽畫面
-              （已知缺口，見本檔開頭註解）——審核者請直接在這裡核准或退回。
-            </p>
-          </div>
-        </aside>
+          <p class="adm-alert adm-alert--warn">
+            🔴 <strong>只按「儲存草稿」前台不會變。</strong>前台讀的是已發布的版本快照，
+            排好之後一定要再按一次「發布」。（按「發布」會自動先存一次草稿。）
+          </p>
+          <p v-if="!canPublish" class="adm-muted">
+            目前沒有發布首頁的權限，排好之後請找有權限的人按「發布」。
+          </p>
       </div>
     </template>
   </section>

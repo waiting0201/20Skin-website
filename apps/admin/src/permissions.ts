@@ -24,18 +24,18 @@ export type PermissionCode = string
 /**
  * 內容單元上的動作 → 權限碼。
  *
- * ⚠️ **沒有 `view`、沒有 `delete`。** 讀取是「登入即可」（能編輯就看得到，行銷與
- * 審核者靠 `seo.edit`／`content.*.publish` 進來）；刪除用 `content.{unit}.edit`。
- * docs/08 §A-2 的 31 列裡本來就沒有這兩種 —— 不要因為畫面上有「刪除」按鈕就發明一個。
+ * ⚠️ **沒有 `view`、沒有 `delete`。** 讀取是「登入即可」（能編輯就看得到，行銷靠
+ * `seo.edit` 進來）；刪除用 `content.{unit}.edit`。
+ * docs/08 §A-2 的 28 列裡本來就沒有這兩種 —— 不要因為畫面上有「刪除」按鈕就發明一個。
+ *
+ * ⚠️ **也沒有 `submit`。** 送審那一層 2026-09-17 整個移除了（CLAUDE.md 決策 19、20），
+ * `content.submit`／`review.approve`／`review.reject` 三個權限碼已從種子刪除。
  */
-export type PermissionAction = 'view' | 'edit' | 'seo' | 'submit' | 'publish' | 'delete'
+export type PermissionAction = 'view' | 'edit' | 'seo' | 'publish' | 'delete'
 
 export const PERMISSION_CODES = {
   contentEdit: (unit: UnitKey) => `content.${unit}.edit`,
   contentPublish: (unit: UnitKey) => `content.${unit}.publish`,
-  contentSubmit: 'content.submit',
-  reviewApprove: 'review.approve',
-  reviewReject: 'review.reject',
   seoEdit: 'seo.edit',
   redirectManage: 'redirect.manage',
   tagCreate: 'taxonomy.tag.create',
@@ -77,8 +77,6 @@ export function can(ctx: PermissionContext | null | undefined, unit: UnitKey, ac
       return hasPermission(ctx, PERMISSION_CODES.contentEdit(unit))
     case 'publish':
       return hasPermission(ctx, PERMISSION_CODES.contentPublish(unit))
-    case 'submit':
-      return hasPermission(ctx, PERMISSION_CODES.contentSubmit)
     case 'seo':
       return hasPermission(ctx, PERMISSION_CODES.seoEdit)
     default:

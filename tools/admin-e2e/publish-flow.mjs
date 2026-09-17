@@ -171,6 +171,157 @@ await step('拖回原位，整串順序與動手之前相同', async () => {
   return '已還原'
 })
 
+// ── C-2. 分類與標籤：在「第 3 頁」拖一次 ────────────────────────────
+//
+// 🔴 **這一段擋的是「當頁內排序」最容易做錯的那一種**：把當頁的 id 配上
+//    0..19 送出去。那樣做的話，在第 3 頁拖一次，那 20 筆會整批被洗到**最前面**，
+//    而畫面上只會看到「這一頁的順序變了」，看起來完全正常。
+//    正確作法是重新分配**它們原本佔住的那幾個排序值**（ListPage.vue 檔頭）。
+// ⚠️ 分類與標籤有 406 筆，舊版因為超過 100 筆上限根本不給拖。
+
+section('C-2. 分類與標籤：第 3 頁拖曳（會寫 SortOrder）')
+
+const termPage3 = async () => (await api('/admin/term?page=3&pageSize=20')).data.items
+const termIdsAt = async (page) => (await api(`/admin/term?page=${page}&pageSize=20`)).data.items.map((r) => r.id)
+
+const termBefore3 = await termPage3()
+const termBefore1 = await termIdsAt(1)
+const termOrdersBefore = termBefore3.map((r) => r.sortOrder)
+
+await step('第 3 頁的排序值不是 0..19（正規化過了）', async () => {
+  if (termOrdersBefore[0] === 0) throw new Error(`第 3 頁的第一筆 sortOrder 是 0 —— 沒有正規化，拖曳會把它洗到最前面`)
+  if (new Set(termOrdersBefore).size !== termOrdersBefore.length) throw new Error('第 3 頁有重複的排序值')
+  return `${termOrdersBefore[0]}…${termOrdersBefore[termOrdersBefore.length - 1]}`
+})
+
+await step('在第 3 頁把第 1 列拖到第 3 列下面', async () => {
+  await navigate(page, '/admin/term')
+  await page.waitForSelector('.adm-table tbody tr .adm-drag-handle', { timeout: 25000 })
+  for (let i = 0; i < 2; i++) {
+    await page.locator('.adm-pagination button', { hasText: '下一頁' }).first().click()
+    await page.waitForTimeout(1000)
+  }
+  const row = (i) => page.locator('.adm-table tbody tr').nth(i)
+  await dragRow(page, row(0).locator('.adm-drag-handle'), row(2), { below: true })
+  await page.waitForTimeout(1200)
+
+  const [a, b, c, ...rest] = termBefore3.map((r) => r.id)
+  const want = [b, c, a, ...rest]
+  const now = await termIdsAt(3)
+  if (JSON.stringify(now) !== JSON.stringify(want)) {
+    throw new Error(`第 3 頁順序不對\n      現在 ${now.slice(0, 4).join(',')}\n      預期 ${want.slice(0, 4).join(',')}`)
+  }
+  return `${termBefore3.slice(0, 3).map((r) => r.id).join(',')} → ${now.slice(0, 3).join(',')}`
+})
+
+await step('🔴 第 1 頁一個都沒動（沒有被洗到最前面）', async () => {
+  const now1 = await termIdsAt(1)
+  if (JSON.stringify(now1) !== JSON.stringify(termBefore1)) {
+    throw new Error(`第 1 頁被動到了\n      現在 ${now1.slice(0, 4).join(',')}\n      原本 ${termBefore1.slice(0, 4).join(',')}`)
+  }
+  const orders = (await termPage3()).map((r) => r.sortOrder)
+  if (JSON.stringify(orders) !== JSON.stringify(termOrdersBefore)) {
+    throw new Error(`第 3 頁佔住的排序值變了：${termOrdersBefore.join(',')} → ${orders.join(',')}`)
+  }
+  return '第 1 頁不動，第 3 頁仍佔住原本那幾個排序值'
+})
+
+await step('拖回原位', async () => {
+  const row = (i) => page.locator('.adm-table tbody tr').nth(i)
+  await dragRow(page, row(2).locator('.adm-drag-handle'), row(0), { below: false })
+  await page.waitForTimeout(1200)
+  const now = await termIdsAt(3)
+  if (JSON.stringify(now) !== JSON.stringify(termBefore3.map((r) => r.id))) {
+    throw new Error(`沒還原\n      現在 ${now.slice(0, 4).join(',')}\n      原本 ${termBefore3.map((r) => r.id).slice(0, 4).join(',')}`)
+  }
+  return '已還原'
+})
+
+// ── D. 首頁版位：停用一區 → 發布 → 前台真的少那一區 ──────────────────
+//
+// 🔴 **這一段抓的是一個真實發生過的資料流失**（2026-09-17）：
+//    `putSections` 原本「hero 送 heroSettings、其餘一律送 null」，於是按一次
+//    「儲存草稿」就把 `specialties` 的**八大專科入口（含圖示）清成 null**、
+//    把 `hero` 的**四張輪播圖陣列**壓成 `{"0":…,"1":…}` 物件。
+//    兩者都沒有任何錯誤訊息，症狀是前台首頁少掉那兩區。
+//    ⚠️ 所以下面除了驗「停用真的生效」，也一定要驗「沒被碰到的那兩區還在」。
+//
+// ⚠️ 判斷「版位生效了沒」**不能看 <h2> 標題** —— 那是前台的版面字串
+//    （`app/data/_presentation.ts`），停用之後標題照樣渲染，只是底下沒有東西。
+//    要看只有資料才會產生的東西，例如醫師卡片的連結。
+
+section('D. 首頁版位：停用一區 → 發布 → 前台')
+
+const homeBefore = (await api('/admin/home-section')).data
+writeFileSync(join(backupDir, 'home-sections.json'), JSON.stringify(homeBefore, null, 2))
+const homeStrip = (rows) => JSON.stringify(rows.map((r) => ({
+  k: r.sectionKey, t: r.title, e: r.isEnabled, s: r.settings, i: r.items.map((y) => y.contentItemId),
+})))
+
+const doctorItem = homeBefore.find((r) => r.sectionKey === 'doctors')?.items?.[0]
+const doctorMarker = doctorItem
+  ? (await api(`/admin/doctor/${doctorItem.contentItemId}`)).data.urlPath
+  : null
+const specialtyCount = (html) => (html.match(/痘痘/g) || []).length
+const heroImgCount = (html) => (html.match(/class="[^"]*hero/g) || []).length
+
+let home0 = ''
+await step('基準線：首頁有醫師卡片、八大專科、主視覺', async () => {
+  if (!doctorMarker) throw new Error('「醫師團隊」版位沒有任何項目，驗不了')
+  home0 = await fetchPage('/')
+  if (!home0.includes(doctorMarker)) throw new Error(`首頁上找不到 ${doctorMarker}`)
+  if (specialtyCount(home0) === 0) throw new Error('首頁上找不到八大專科入口')
+  return `醫師連結 ${doctorMarker}、專科 ${specialtyCount(home0)} 處、主視覺 ${heroImgCount(home0)} 處`
+})
+
+const putHome = async (rows) => {
+  const body = {
+    sections: rows.map((r) => ({
+      sectionKey: r.sectionKey,
+      isEnabled: r.isEnabled,
+      sortOrder: r.sortOrder,
+      settings: r.settings,
+      items: r.items.map((i) => ({ contentItemId: i.contentItemId, sortOrder: i.sortOrder })),
+    })),
+  }
+  const put = await api('/admin/home-section', { method: 'PUT', body: JSON.stringify(body) })
+  if (!put.success) throw new Error(`版位寫入失敗：${put.code} ${put.message}`)
+  const pub = await api(`/admin/page/${homePageId}/publish`, { method: 'PATCH', body: JSON.stringify({ action: 'publish' }) })
+  if (!pub.success) throw new Error(`首頁發布失敗：${pub.code} ${pub.message}`)
+}
+
+const homePageId = (await api('/admin/page?page=1&pageSize=100')).data.items
+  .find((p) => (p.fields || {}).systemKey === 'home')?.id
+if (!homePageId) throw new Error('找不到 systemKey=home 的那筆 Page')
+
+await step('停用「醫師團隊」並發布 → 前台少掉醫師卡片', async () => {
+  await putHome(homeBefore.map((r) => (r.sectionKey === 'doctors' ? { ...r, isEnabled: false } : r)))
+  const html = await fetchPage('/')
+  if (html.includes(doctorMarker)) throw new Error('停用了，前台還看得到醫師卡片')
+  return '停用生效'
+})
+
+await step('🔴 沒被碰到的版位沒有跟著消失（八大專科、主視覺）', async () => {
+  const html = await fetchPage('/')
+  const s = specialtyCount(html)
+  if (s !== specialtyCount(home0)) throw new Error(`八大專科入口被存檔弄丟了：${specialtyCount(home0)} → ${s}`)
+  const now = (await api('/admin/home-section')).data
+  const heroSettings = now.find((r) => r.sectionKey === 'hero')?.settings
+  if (heroSettings && !heroSettings.trimStart().startsWith('[')) {
+    throw new Error('hero.settings 從陣列被壓成物件了（前台讀的是陣列）')
+  }
+  return `專科 ${s} 處、hero.settings 仍是陣列`
+})
+
+await step('還原並重新發布，版位資料與備份相同', async () => {
+  await putHome(homeBefore)
+  const now = (await api('/admin/home-section')).data
+  if (homeStrip(now) !== homeStrip(homeBefore)) throw new Error('版位資料與備份不同，請比對 home-sections.json')
+  const html = await fetchPage('/')
+  if (!html.includes(doctorMarker)) throw new Error('還原了，前台卻還是看不到醫師卡片')
+  return '已還原'
+})
+
 // ── 還原 ──────────────────────────────────────────────────────────────
 
 await browser.close()

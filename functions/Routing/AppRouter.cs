@@ -33,7 +33,6 @@ public sealed partial class AppRouter(
     // ── 後台（docs/10 §3.3、§3.4）──────────────────────────────────
     DashboardHandler dashboard,
     ContentHandler content,
-    ReviewHandler review,
     UploadHandler upload,
     HomeSectionHandler homeSection,
     MenuHandler menu,
@@ -73,18 +72,14 @@ public sealed partial class AppRouter(
             var principal = jwt.ValidateRequest(req)
                 ?? throw AppException.Unauthorized("缺少或無效的後台憑證。");
 
-            // 🔴 首登尚未改密碼：除了改密碼與登出以外，其餘一律擋下。
-            //
-            // 登入**照發 token**（否則使用者拿不到 token，也就永遠呼叫不了改密碼端點），
-            // 所以擋在這裡而不是擋在登入。docs/10 §3.2。
-            if (principal.FindFirst(TokenClaims.MustChangePassword)?.Value == "true"
-                && segments is not (["auth", "change-password"] or ["auth", "logout"]))
-            {
-                throw new AppException(
-                    ErrorCodes.AuthMustChangePassword, "首次登入請先變更密碼。", 403);
-            }
+            // 🔴 **「首登尚未改密碼就擋下」這道閘 2026-09-17 移除**（Tim 指定：密碼
+            //    設定好就好，管理者不用再另設）。AccountHandler 建立與重設帳號時一律
+            //    把 MustChangePassword 設成 false，前台登入頁也沒有那一關了。
+            //    ⚠️ **閘要跟畫面一起拿掉。** 只拿掉登入頁的話，舊資料裡旗標還是 1 的帳號
+            //    會登得進來、然後每一支端點都回 403，畫面上沒有任何東西解釋得了為什麼。
+            //    ⚠️ 欄位與 token claim 保留（惰性），拿掉它們要一支 migration。
 
-            // /auth/change-password 不需權限碼 —— 首登強制改密碼時使用者還沒有任何權限。
+            // /auth/change-password 不需權限碼 —— 它改的是自己的密碼，與任何後台權限無關。
             if (segments is ["admin", ..])
                 RequirePermission(principal, GetRequiredPermission(method, segments));
 

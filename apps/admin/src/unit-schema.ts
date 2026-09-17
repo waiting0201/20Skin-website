@@ -152,6 +152,13 @@ export interface UnitDefinition {
   label: string
   labelSingular: string
   /** 這個單元是否有分類篩選（清單頁的狀態／分類篩選）。 */
+  /**
+   * 清單頁給不給拖曳排序。預設給（`undefined` ＝ true）。
+   * ⚠️ 只在「排出來的順序前台看不到」時才設 false —— 文章就是那種：
+   * `/blog/`、分類頁、標籤頁一律 `sort=latest`（發布日期新到舊），`SortOrder` 不影響它們。
+   */
+  listSortable?: boolean
+
   categoryTermType?: TermType
   /** 醫師角色僅可編輯 OwnerUserId = 自己的內容（doctor／article，docs/10 §3.3）。 */
   ownershipRestricted?: boolean

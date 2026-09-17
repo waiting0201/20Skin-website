@@ -53,7 +53,7 @@
    11. 表單                 .adm-form／.adm-field／.adm-input 等
    12. 訊息元件             .adm-alert／.adm-empty／.adm-loading（新）
    13. 特殊表單元件          repeater／tags／hours／relation／upload／risk-hit
-   14. 編輯畫面版面          .adm-editor-main（單欄）／.adm-editor-layout（兩欄）
+   14. 編輯畫面版面          .adm-editor／.adm-editor-main（單欄）
                             ＋ .adm-form-actions／.btn--save／.btn--danger／.adm-danger-zone
    15. 登入頁               .adm-login（左右分欄，獨立版面）
    16. 小工具               .adm-muted／.adm-divider／.adm-inline-actions
@@ -689,13 +689,13 @@
    14. 編輯畫面
    -------------------------------------------------------------------------
    兩種版面：
-   ① `.adm-editor-main`  單欄，內容編輯頁（EditPage.vue）用。
-      ⚠️ 2026-09-17 由兩欄改成單欄 —— 右側工作流側欄整個拿掉（Tim 指定：
-         「只需要草稿跟發佈就好」），剩下的兩個動作搬到標題列與頁尾。
-      ⚠️ 寬度刻意壓在 960px，不是「單欄了就攤滿」：那正好是原本主欄的量測寬度
-         （1280 內容上限 − 300 側欄 − 間距），一行的字數不變，既有的兩欄
-         `.adm-field-grid` 也維持原本的欄寬。
-   ② `.adm-editor-layout` 兩欄，首頁版位（HomeSections.vue）仍在用。
+   單欄：`.adm-editor`（寬度上限）＋ `.adm-editor-main`（段落之間的節奏）。
+   內容編輯頁（EditPage.vue）與首頁版位編排（HomeSections.vue）共用同一套。
+   ⚠️ 2026-09-17 由兩欄改成單欄 —— 右側工作流側欄整個拿掉（Tim 指定：
+      「只需要草稿跟發佈就好」「首頁版位這一頁都要改，對齊其他表單頁」）。
+   ⚠️ 寬度刻意壓在 960px，不是「單欄了就攤滿」：那正好是原本主欄的量測寬度
+      （1280 內容上限 − 300 側欄 − 間距），一行的字數不變，既有的兩欄
+      `.adm-field-grid` 也維持原本的欄寬。
    ========================================================================= */
 /* 🔴 寬度上限掛在最外層（含標題列與訊息框），不是只掛內容欄 ——
    只掛內容欄的話，標題列右側的「發布」會被推到 1280px 的右緣，
@@ -707,12 +707,11 @@
 .adm-editor-main > .adm-card + .adm-card { margin-top: var(--sp-5); }
 .adm-editor-main > .adm-form-actions { margin-top: var(--sp-4); }
 
-.adm-editor-layout { display: grid; grid-template-columns: 1fr 300px; gap: var(--sp-5); align-items: start; }
-@media (max-width: 1000px) { .adm-editor-layout { grid-template-columns: 1fr; } }
-
-.adm-workflow { position: sticky; top: calc(var(--adm-topbar-h) + var(--sp-4)); display: flex; flex-direction: column; gap: var(--sp-4); }
-.adm-workflow__row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-sm); }
-.adm-workflow__label { color: var(--ink-50); }
+/* 🔴 `.adm-editor-layout`（兩欄 grid）與 `.adm-workflow`（右側 sticky 側欄）
+   2026-09-17 刪除 —— 最後兩個使用者（內容編輯畫面、首頁版位編排）都改成單欄了。
+   ⚠️ `__actions` 與 `__note` 兩個**留著**：帳號管理、全站設定、未命中題目清單
+   仍在用，它們只是「一疊滿版按鈕」與「小字備註」，與工作流無關。
+   名字沒改是刻意的 —— 改名要動四個檔案，而它們本來就不是工作流專屬的樣式。 */
 .adm-workflow__actions { display: flex; flex-direction: column; gap: var(--sp-2); }
 .adm-workflow__note { font-size: var(--fs-xs); color: var(--ink-50); line-height: 1.7; }
 

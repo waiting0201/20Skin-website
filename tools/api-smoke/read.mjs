@@ -59,7 +59,9 @@ check('login 成功', r.json?.success === true, JSON.stringify(r.json)?.slice(0,
 check('回傳 userId', typeof r.json?.data?.userId === 'number', `got ${r.json?.data?.userId}`)
 check('回傳 userName', r.json?.data?.userName === USER, `got ${r.json?.data?.userName}`)
 check('回傳 doctorId 欄位', 'doctorId' in (r.json?.data ?? {}))
-check('回傳 permissions', Array.isArray(r.json?.data?.permissions) && r.json.data.permissions.length === 31,
+// ⚠️ 28 不是 31：`content.submit`／`review.approve`／`review.reject` 2026-09-17
+//    隨送審整層一起刪除（CLAUDE.md 決策 20）。改了種子就要改這個數字。
+check('回傳 permissions', Array.isArray(r.json?.data?.permissions) && r.json.data.permissions.length === 28,
       `got ${r.json?.data?.permissions?.length}`)
 
 // ── 本次新增的端點 ─────────────────────────────────────────────────────

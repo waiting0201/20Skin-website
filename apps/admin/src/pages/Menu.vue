@@ -48,7 +48,35 @@ const mainItems = ref<MenuItem[]>([])
 const footerItems = ref<MenuItem[]>([])
 const settings = ref<SiteSettingsData | null>(null)
 
+/**
+ * 「站內內容」下拉的候選項目，**依單元延後載入**。
+ *
+ * 🔴 **原本是在 `load()` 裡把九個單元整份抓回來**，而那是這個畫面「開很慢」的全部原因：
+ *    文章 1111 筆（每頁 100 ＝ 12 趟往返）、分類與標籤 406 筆（5 趟，而且每一列還要
+ *    算四個相關子查詢的「使用筆數」），加上其餘七個單元 —— 光是打開選單頁就是
+ *    二十幾趟清單查詢，而正式環境是 Azure SQL Basic／5 DTU。
+ *    實際上選單通常只有十幾個項目、大多是「站內路徑」或「外部網址」，
+ *    真正需要候選清單的單元往往只有一兩個。
+ *
+ * ⚠️ 兩個進入點都要載：① 掛載時**只載既有選單項目真的用到的那幾個單元**；
+ *    ② 使用者在下拉裡改選單元時，當場載那一個。少了 ②，改選「療程」會得到一個空清單。
+ * ⚠️ 同一個單元同時被觸發多次時共用同一個 promise（`inFlight`），
+ *    否則十個選單項目都指向文章就會同時發十輪相同的查詢。
+ */
 const contentOptions = reactive<Record<string, { value: string; label: string }[]>>({})
+const inFlight = new Map<string, Promise<void>>()
+
+function ensureContentOptions(unit: string | null | undefined): void {
+  if (!unit || contentOptions[unit] || inFlight.has(unit)) return
+  const task = adminApi.taxonomy.unitOptions(unit as UnitKey)
+    .then((opts) => { contentOptions[unit] = opts })
+    .catch((e) => {
+      contentOptions[unit] = []
+      console.error(`載入「${unit}」的候選內容失敗`, e)
+    })
+    .finally(() => { inFlight.delete(unit) })
+  inFlight.set(unit, task)
+}
 
 function topOf(items: MenuItem[]) {
   return [...items].filter((i) => i.depth === 1).sort((a, b) => a.sortOrder - b.sortOrder)
@@ -108,9 +136,15 @@ async function load() {
   loading.value = true
   loadError.value = ''
   try {
-    await Promise.all(UNIT_KEYS.map(async (u) => { contentOptions[u] = await adminApi.taxonomy.unitOptions(u) }))
-    await Promise.all([loadMenu('main'), loadMenu('footer')])
-    settings.value = await adminApi.site.settings.get()
+    // ⚠️ 選單與全站設定一起發，不要排隊。候選內容改成看完選單才知道要載哪幾個單元。
+    const [, , siteSettings] = await Promise.all([
+      loadMenu('main'),
+      loadMenu('footer'),
+      adminApi.site.settings.get(),
+    ])
+    settings.value = siteSettings
+    // 既有項目指到哪幾個單元，就只載那幾個。
+    for (const item of [...mainItems.value, ...footerItems.value]) ensureContentOptions(item.contentUnit)
   } catch (e) {
     loadError.value = messageOf(e, '載入選單失敗。')
   } finally {
@@ -332,7 +366,7 @@ function removeSocialLink(index: number) {
               <template v-if="rowBuffers[top.id].linkKind === 1">
                 <div class="adm-field">
                   <label class="adm-field__label">單元</label>
-                  <select class="adm-select" v-model="rowBuffers[top.id].contentUnit" :disabled="!canEdit" @change="rowBuffers[top.id].contentItemId = ''">
+                  <select class="adm-select" v-model="rowBuffers[top.id].contentUnit" :disabled="!canEdit" @change="rowBuffers[top.id].contentItemId = ''; ensureContentOptions(rowBuffers[top.id].contentUnit)">
                     <option value="">請選擇…</option>
                     <option v-for="u in UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
                   </select>
@@ -388,7 +422,7 @@ function removeSocialLink(index: number) {
               <template v-if="rowBuffers[child.id].linkKind === 1">
                 <div class="adm-field">
                   <label class="adm-field__label">單元</label>
-                  <select class="adm-select" v-model="rowBuffers[child.id].contentUnit" :disabled="!canEdit" @change="rowBuffers[child.id].contentItemId = ''">
+                  <select class="adm-select" v-model="rowBuffers[child.id].contentUnit" :disabled="!canEdit" @change="rowBuffers[child.id].contentItemId = ''; ensureContentOptions(rowBuffers[child.id].contentUnit)">
                     <option value="">請選擇…</option>
                     <option v-for="u in UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
                   </select>
@@ -433,7 +467,7 @@ function removeSocialLink(index: number) {
               <template v-if="childDrafts[top.id].linkKind === 1">
                 <div class="adm-field">
                   <label class="adm-field__label">單元</label>
-                  <select class="adm-select" v-model="childDrafts[top.id].contentUnit" @change="childDrafts[top.id].contentItemId = ''">
+                  <select class="adm-select" v-model="childDrafts[top.id].contentUnit" @change="childDrafts[top.id].contentItemId = ''; ensureContentOptions(childDrafts[top.id].contentUnit)">
                     <option value="">選擇單元…</option>
                     <option v-for="u in UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
                   </select>
@@ -473,7 +507,7 @@ function removeSocialLink(index: number) {
             <template v-if="topDrafts[menuKey as MenuKey].linkKind === 1">
               <div class="adm-field">
                 <label class="adm-field__label">單元</label>
-                <select class="adm-select" v-model="topDrafts[menuKey as MenuKey].contentUnit" :disabled="!canEdit" @change="topDrafts[menuKey as MenuKey].contentItemId = ''">
+                <select class="adm-select" v-model="topDrafts[menuKey as MenuKey].contentUnit" :disabled="!canEdit" @change="topDrafts[menuKey as MenuKey].contentItemId = ''; ensureContentOptions(topDrafts[menuKey as MenuKey].contentUnit)">
                   <option value="">選擇單元…</option>
                   <option v-for="u in UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
                 </select>

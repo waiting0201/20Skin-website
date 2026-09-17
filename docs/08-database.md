@@ -97,7 +97,8 @@
 
 ### A-2 `Roles`／`UserRoles`／`Permissions`／`RolePermissions`
 
-- `Roles`（`Id`, `Code`, `Name`, `IsSystem`）—— 五個角色為種子資料且 `IsSystem=1`，**不可刪除**：`SuperAdmin`／`Editor`／`Doctor`／`Marketing`／`Reviewer`
+- `Roles`（`Id`, `Code`, `Name`, `IsSystem`）—— **四個**角色為種子資料且 `IsSystem=1`，**不可刪除**：`SuperAdmin`／`Editor`／`Doctor`／`Marketing`
+  🔴 **`Reviewer`（審核者）2026-09-17 刪除**（Tim 指定，CLAUDE.md 決策 20）。舊敘述「五個角色」已作廢。
 - `UserRoles`（`UserId`, `RoleId`）—— 複合 PK
 - `Permissions`（`Id`, `Code`, `Name`, `GroupName`）—— 細粒度權限碼
 - `RolePermissions`（`RoleId`, `PermissionId`）—— 複合 PK
@@ -106,9 +107,14 @@
 
 必須存在的權限碼（[02](02-backend-cms.md) §4 的權限歸屬表逐條對應）：
 
+🔴 **2026-09-17：由 31 列變成 28 列** —— `content.submit`／`review.approve`／`review.reject`
+隨送審整層一起刪除（CLAUDE.md 決策 20）。
+⚠️ **Id 沒有往前補，19–21 留成空號。** `RolePermissions` 是後台畫面改得動的資料
+（`PUT /admin/role/{id}/permissions`），手動加出來的列不在種子裡、migration 不會跟著調整它們——
+讓後面的 Id 遞補會把「原本指著 22（`seo.edit`）」的那一列**靜默變成** `page.legal.edit`。
+
 ```
-content.{type}.edit      content.{type}.publish     content.submit
-review.approve           review.reject
+content.{type}.edit      content.{type}.publish
 seo.edit                 ← 行銷角色的核心：可寫 SeoMeta，不可寫本文
 taxonomy.tag.create      taxonomy.category.manage   ← 後者限超級管理員（動 URL 結構）
 page.legal.edit          ← 法務三頁，限超級管理員
@@ -151,14 +157,19 @@ DisplayName         系統管理員
 Password            Admin@123          （寫進 migration 的是預先算好的固定 hash）
 Roles               SuperAdmin
 IsActive            1
-MustChangePassword  1
+MustChangePassword  1          （惰性欄位，見下方配套 2）
 ```
 
 三個必須知道的配套：
 
 1. **hash 要預先算好、寫死在 migration 裡。** 不要在 migration 執行時即席計算 —— migration 必須可重現，同一份 migration 在不同環境跑出不同 hash 會很難查。
-2. **`Admin@123` 是建置期預設密碼，上線前必須更換。** 後台路徑 `/admin/` 是客戶指定、且沒有 IP 白名單（[02](02-backend-cms.md) §4），登入端點直接暴露在公網掃描下，這組密碼不能留到正式環境。
-3. 🔴 **沒有雙因素，所以這組密碼就是唯一憑證**（2026-09-11 院方決定不做雙因素）。原本三道防線（雙因素、IP 白名單、次數限制）現在只剩次數限制一道，而後台路徑 `/admin/` 是客戶指定、公開可猜。**上線前更換這組密碼不是建議事項，是必要條件**；密碼強度與輪替規則需一併訂定（[02](02-backend-cms.md) §4）。
+2. 🔴 **「首登強制改密碼」2026-09-17 整套不做了**（Tim 指定：「密碼設定好就好，管理者不用再另設」）。
+   `AccountHandler` 建立與重設帳號一律把 `MustChangePassword` 寫成 `false`，`AppRouter` 那道
+   403 `AUTH_MUST_CHANGE_PASSWORD` 的閘也移除；**欄位保留但已惰性**（拆掉要一支 migration）。
+   後台帳號清單的「密碼」欄一併移除。密碼長度下限由 8 改為 **6**。
+3. 🔴 **沒有雙因素，所以這組密碼就是唯一憑證**（2026-09-11 院方決定不做雙因素）。原本三道防線（雙因素、IP 白名單、次數限制）現在只剩次數限制一道，而後台路徑 `/admin/` 是客戶指定、公開可猜。
+   ⚠️ **`Admin@123` 不視為上線阻斷項**（Tim 判定 2026-09-16，**不要再提案更換**）——
+   舊敘述「上線前更換這組密碼不是建議事項，是必要條件」已作廢。剩下的防線是 reCAPTCHA v3 與登入次數限制。
 
 ---
 
@@ -232,7 +243,10 @@ UNIQUE (`ContentItemId`, `VersionNo`)
 INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 
 - `DecisionNote` 在 `Status=3`（退回）時**必填**，對應「退回需填原因」
-- `RiskFlags` 存送審時掃出的高風險字詞命中結果（JSON），供審核者重點檢視（[02](02-backend-cms.md) §5 兩層防護的第二層）
+- `RiskFlags` 存送審時掃出的高風險字詞命中結果（JSON）。
+  🔴 **2026-09-17 起沒有人再寫入這張表** —— 送審端點已刪除（CLAUDE.md 決策 20）。
+  表與欄位保留（既有資料還在，拆表要一支 migration），高風險字詞只剩編輯器的即時提示
+  （`GET /admin/risk-term`），伺服器端不再重掃。
 
 ⚠️ **「退回需通知」怎麼實作**：帳號沒有必填 email，所以退回通知**不寄信**，改由後台儀表板的待辦清單呈現 —— 查 `ContentReviews WHERE Status=3 AND SubmittedByUserId=@me` 即可，**不需要額外的通知表**。日後若要 email 通知，再用選填的 `Users.NotifyEmail`。
 
