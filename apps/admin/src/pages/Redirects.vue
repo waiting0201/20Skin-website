@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // 301 轉址管理（/redirects）—— 規格見 docs/01 §4、docs/06 §6、docs/07 §2、docs/08 §H。
 //
-// 約 770 條，不可一頁全載——分頁 ＋ 關鍵字搜尋（docs/06 §6）。CSV 匯入匯出是
-// 必要功能，不是加分項：770 條不可能手工維護（docs/07 §2）。
+// **1000 條**（實數，2026-09-14 匯入，CLAUDE.md 關鍵數字表），不可一頁全載——
+// 分頁 ＋ 關鍵字搜尋（docs/06 §6）。CSV 匯入匯出是必要功能，不是加分項。
+// ⚠️ 舊敘述「約 770 條」是估算的下限，已作廢。
 //
 // 權限：redirect.view／redirect.edit／redirect.export，見 src/permissions.ts。
 // 目前只有超級管理員角色拿得到這三個權限碼。
@@ -13,6 +14,7 @@ import { hasPermission } from '@/permissions'
 import { UNIT_KEYS } from '@/types'
 import { REDIRECT_SOURCE_LABEL, REDIRECT_STATUS_CODES } from '@/api/redirect'
 import type { RedirectImportPreview, RedirectImportRow, RedirectRecord, RedirectSource, RedirectStatusCode } from '@/api/redirect'
+import { validateRedirectPath } from '@/validation'
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
@@ -39,25 +41,47 @@ const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / query
 const stats = ref<{ totalCount: number; activeCount: number; verifiedCount: number } | null>(null)
 const promoted = ref<RedirectRecord[]>([])
 
+function messageOf(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.details.length ? `${e.message}（${e.details.join('、')}）` : e.message
+  if (e instanceof Error) return e.message
+  return fallback
+}
+
+/** 清單／側欄／匯入匯出失敗的訊息。⚠️ 這幾支原本一個 catch 都沒有。 */
+const pageError = ref('')
+
 async function load() {
   loading.value = true
-  const result = await adminApi.redirect.list({
-    page: query.page,
-    pageSize: query.pageSize,
-    keyword: query.keyword || undefined,
-    isActive: query.isActive === '' ? undefined : query.isActive === 'true',
-    source: query.source === '' ? undefined : query.source,
-    sortBy: query.sortBy,
-    sortDir: query.sortDir,
-  })
-  items.value = result.items
-  totalCount.value = result.totalCount
-  loading.value = false
+  pageError.value = ''
+  try {
+    const result = await adminApi.redirect.list({
+      page: query.page,
+      pageSize: query.pageSize,
+      keyword: query.keyword || undefined,
+      isActive: query.isActive === '' ? undefined : query.isActive === 'true',
+      source: query.source === '' ? undefined : query.source,
+      sortBy: query.sortBy,
+      sortDir: query.sortDir,
+    })
+    items.value = result.items
+    totalCount.value = result.totalCount
+  } catch (e) {
+    items.value = []
+    totalCount.value = 0
+    pageError.value = messageOf(e, '載入轉址規則失敗。')
+  } finally {
+    loading.value = false
+  }
 }
 
 async function loadSidebar() {
-  stats.value = await adminApi.redirect.stats()
-  promoted.value = await adminApi.redirect.promotedToConfig()
+  try {
+    stats.value = await adminApi.redirect.stats()
+    promoted.value = await adminApi.redirect.promotedToConfig()
+  } catch (e) {
+    // 統計與「已寫進設定檔的規則」是輔助資訊，取不到就不顯示那兩塊，不擋主清單。
+    console.error('載入轉址統計失敗', e)
+  }
 }
 
 onMounted(async () => {
@@ -85,12 +109,14 @@ const formOpen = ref(false)
 const editingId = ref<number | null>(null)
 const form = reactive({ fromPath: '', toPath: '', statusCode: 301 as RedirectStatusCode, source: 2 as RedirectSource, isActive: true, isVerified: false })
 const formError = ref('')
+const formErrors = ref<Record<string, string>>({})
 const saving = ref(false)
 
 function openCreate() {
   editingId.value = null
   Object.assign(form, { fromPath: '', toPath: '', statusCode: 301, source: 2, isActive: true, isVerified: false })
   formError.value = ''
+  formErrors.value = {}
   formOpen.value = true
 }
 
@@ -105,6 +131,7 @@ function openEdit(record: RedirectRecord) {
     isVerified: record.isVerified,
   })
   formError.value = ''
+  formErrors.value = {}
   formOpen.value = true
 }
 
@@ -112,9 +139,29 @@ function closeForm() {
   formOpen.value = false
 }
 
+/**
+ * 🔴 萬用字元與「來源＝目標」是這張表最會出事的兩件事，而 API 都不擋：
+ *    - 萬用字元把一批舊網址全倒進分類頁，Google 判定為軟性 404（畫面上方那段
+ *      說明文字本來就寫著禁止，但沒有人執行）；
+ *    - 來源等於目標＝無限轉址迴圈，瀏覽器直接給 ERR_TOO_MANY_REDIRECTS。
+ */
+function validateForm(): boolean {
+  const errors: Record<string, string> = {}
+  const from = validateRedirectPath(form.fromPath, '來源路徑')
+  if (from) errors.fromPath = from
+  const to = validateRedirectPath(form.toPath, '目標路徑')
+  if (to) errors.toPath = to
+  if (!errors.fromPath && !errors.toPath && form.fromPath.trim() === form.toPath.trim()) {
+    errors.toPath = '來源與目標不能是同一個路徑——那會變成無限轉址迴圈。'
+  }
+  formErrors.value = errors
+  return Object.keys(errors).length === 0
+}
+
 async function submitForm() {
-  saving.value = true
   formError.value = ''
+  if (!validateForm()) return
+  saving.value = true
   try {
     if (editingId.value === null) {
       await adminApi.redirect.create({ ...form })
@@ -124,7 +171,7 @@ async function submitForm() {
     formOpen.value = false
     await Promise.all([load(), loadSidebar()])
   } catch (e) {
-    formError.value = e instanceof ApiError ? e.message : '儲存失敗。'
+    formError.value = messageOf(e, '儲存失敗。')
   } finally {
     saving.value = false
   }
@@ -132,14 +179,26 @@ async function submitForm() {
 
 async function removeRow(record: RedirectRecord) {
   if (!window.confirm(`確定要刪除「${record.fromPath}」的轉址規則？這個動作無法復原。`)) return
-  await adminApi.redirect.remove(record.id)
+  pageError.value = ''
+  try {
+    await adminApi.redirect.remove(record.id)
+  } catch (e) {
+    pageError.value = messageOf(e, '刪除失敗。')
+  }
   await Promise.all([load(), loadSidebar()])
 }
 
 // ── CSV 匯出 ──────────────────────────────────────────────────────────
 
 async function exportCsv() {
-  const csv = await adminApi.redirect.csv.exportAll()
+  pageError.value = ''
+  let csv: string
+  try {
+    csv = await adminApi.redirect.csv.exportAll()
+  } catch (e) {
+    pageError.value = messageOf(e, '匯出失敗。')
+    return
+  }
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -175,8 +234,14 @@ async function onFileSelected(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
   importResultMsg.value = ''
-  const text = await file.text()
-  importRows.value = adminApi.redirect.import.parseCsv(text)
+  pageError.value = ''
+  try {
+    const text = await file.text()
+    importRows.value = adminApi.redirect.import.parseCsv(text)
+  } catch (err) {
+    pageError.value = messageOf(err, '讀不到這個 CSV 檔。')
+    return
+  }
   await runPreview()
 }
 
@@ -186,9 +251,13 @@ async function runPreview() {
     return
   }
   importChecking.value = true
+  pageError.value = ''
   try {
     const knownPaths = await collectKnownPaths()
     importPreview.value = await adminApi.redirect.import.preview(importRows.value, knownPaths)
+  } catch (e) {
+    importPreview.value = null
+    pageError.value = `${messageOf(e, '衝突檢查失敗。')}——沒有檢查結果就不要匯入。`
   } finally {
     importChecking.value = false
   }
@@ -197,12 +266,18 @@ async function runPreview() {
 async function commitImport() {
   if (!importRows.value.length) return
   importCommitting.value = true
+  pageError.value = ''
   try {
     const result = await adminApi.redirect.import.commit(importRows.value, { overwriteExisting: importOverwrite.value })
     importResultMsg.value = `匯入完成：新增 ${result.created} 筆、更新 ${result.updated} 筆、略過 ${result.skipped} 筆。`
     importRows.value = []
     importPreview.value = null
     if (fileInput.value) fileInput.value.value = ''
+    await Promise.all([load(), loadSidebar()])
+  } catch (e) {
+    // ⚠️ 匯入是逐筆寫入，失敗時**前面幾筆已經進去了**——不要說「匯入失敗」就算了，
+    //    要叫人回頭看清單確認實際狀態。
+    pageError.value = `${messageOf(e, '匯入失敗。')}——匯入是逐筆寫入的，請回到下方清單確認已經進去幾筆再重試。`
     await Promise.all([load(), loadSidebar()])
   } finally {
     importCommitting.value = false
@@ -235,16 +310,21 @@ const previewRowsToShow = computed(() => importPreview.value?.rows.slice(0, PREV
     </div>
 
     <p v-if="!canView" class="adm-alert adm-alert--info">沒有檢視這個畫面的權限。</p>
+    <p v-if="pageError" class="adm-alert adm-alert--danger" role="alert" style="margin-bottom: var(--sp-4)">{{ pageError }}</p>
 
     <template v-else>
       <div class="adm-card">
         <p class="r-note">
           <strong>為什麼要有這個畫面：</strong>
-          <code>staticwebapp.config.json</code> 放不下約 770 條規則（20 KB 上限約只放得下 200 條），
+          <code>staticwebapp.config.json</code> 放不下 1000 條規則（20 KB 上限約只放得下 200 條），
           且它<strong>不比對 query string</strong>——舊網址像
-          <code>share.php?class=醫美新知</code> 這類帶中文參數的頁面，只有靠
-          <code>/api/fallback</code> 讀 <code>x-ms-original-url</code> 查這張表才做得到。
-          <strong>最高流量的十幾條</strong>已直接寫進設定檔走最快路徑，不經過 Function，下面列出目前是哪幾條。
+          <code>share.php?class=醫美新知</code> 這類帶中文參數的頁面，只有靠查這張表才做得到。
+          <!-- ⚠️ 2026-09-16 起查表的是**前台的 catch-all 路由**（pages/[...slug].vue 打
+               GET /redirects/resolve），不是 /api/fallback —— 那支 SWA managed function
+               已整支刪除（CLAUDE.md 決策 7），它與 Nuxt 的 SSR function 互斥。
+               這段文字原本還在講 /api/fallback 與 x-ms-original-url。 -->
+          目前是由前台的 catch-all 路由打 <code>GET /redirects/resolve</code> 查詢。
+          <strong>最高流量的十幾條</strong>已直接寫進設定檔走最快路徑，不必查表，下面列出目前是哪幾條。
         </p>
         <p class="r-note">
           <strong>已知限制（不是這個畫面的錯）：</strong>
@@ -284,12 +364,14 @@ const previewRowsToShow = computed(() => importPreview.value?.rows.slice(0, PREV
           <div class="adm-field-grid">
             <div class="adm-field adm-field--span2">
               <label class="adm-field__label">來源路徑<span class="adm-field__required">＊</span></label>
-              <input v-model="form.fromPath" class="adm-input" placeholder="/share.php?class=醫美新知" required>
-              <p class="adm-field__hint">可以帶 query string；儲存時會自動正規化（補開頭斜線、query 依字母排序）。</p>
+              <input v-model="form.fromPath" class="adm-input" :class="{ 'is-invalid': formErrors.fromPath }" placeholder="/share.php?class=醫美新知">
+              <p v-if="formErrors.fromPath" class="adm-field__error" role="alert">{{ formErrors.fromPath }}</p>
+              <p class="adm-field__hint">可以帶 query string；儲存時會自動正規化（補開頭斜線、query 依字母排序）。不可使用萬用字元。</p>
             </div>
             <div class="adm-field adm-field--span2">
               <label class="adm-field__label">目標路徑<span class="adm-field__required">＊</span></label>
-              <input v-model="form.toPath" class="adm-input" placeholder="/blog/medical-aesthetics/" required>
+              <input v-model="form.toPath" class="adm-input" :class="{ 'is-invalid': formErrors.toPath }" placeholder="/blog/medical-aesthetics/">
+              <p v-if="formErrors.toPath" class="adm-field__error" role="alert">{{ formErrors.toPath }}</p>
             </div>
             <div class="adm-field">
               <label class="adm-field__label">狀態碼</label>

@@ -14,6 +14,7 @@ import { currentUser } from '@/auth'
 import { hasPermission } from '@/permissions'
 import type { QuestionInboxRecord, QuestionSource, QuestionStatus } from '@/api/question'
 import { QUESTION_STATUS_LABEL, SOURCE_LABEL } from '@/api/question'
+import { validateSlug } from '@/validation'
 
 const router = useRouter()
 const user = currentUser()
@@ -26,21 +27,42 @@ const faqOptions = ref<{ value: string; label: string }[]>([])
 
 const query = reactive({ status: '' as '' | QuestionStatus, source: '' as '' | QuestionSource, keyword: '' })
 
+function messageOf(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.details.length ? `${e.message}（${e.details.join('、')}）` : e.message
+  if (e instanceof Error) return e.message
+  return fallback
+}
+
+const loadError = ref('')
+
+// ⚠️ 原本沒有 try/finally：API 一出錯 spinner 就永遠轉下去（其餘畫面同樣的病）。
 async function load() {
   loading.value = true
-  items.value = await adminApi.question.list({
-    // ⚠️ <select> 的 v-model 在這裡讀出來的是字串（"1"／"2"／"3"），
-    // 要轉成數字才對得上 QuestionStatus／QuestionSource 的型別，
-    // 不然永遠比對不到（ListPage.vue 的 categoryId 也是同樣理由才轉型）。
-    status: query.status ? (Number(query.status) as QuestionStatus) : undefined,
-    source: query.source ? (Number(query.source) as QuestionSource) : undefined,
-    keyword: query.keyword || undefined,
-  })
-  loading.value = false
+  loadError.value = ''
+  try {
+    items.value = await adminApi.question.list({
+      // ⚠️ <select> 的 v-model 在這裡讀出來的是字串（"1"／"2"／"3"），
+      // 要轉成數字才對得上 QuestionStatus／QuestionSource 的型別，
+      // 不然永遠比對不到（ListPage.vue 的 categoryId 也是同樣理由才轉型）。
+      status: query.status ? (Number(query.status) as QuestionStatus) : undefined,
+      source: query.source ? (Number(query.source) as QuestionSource) : undefined,
+      keyword: query.keyword || undefined,
+    })
+  } catch (e) {
+    items.value = []
+    loadError.value = messageOf(e, '載入提問清單失敗。')
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(async () => {
-  faqOptions.value = await adminApi.taxonomy.unitOptions('faq')
+  try {
+    faqOptions.value = await adminApi.taxonomy.unitOptions('faq')
+    faqCategoryOptions.value = await adminApi.taxonomy.termOptions(3) // FAQ 分類（docs/08 §C-6）
+  } catch (e) {
+    console.error('載入 FAQ 選項失敗', e)
+  }
   await load()
 })
 
@@ -60,8 +82,44 @@ function faqTitle(id: number | null): string {
 // 傳回 questionApi.markCreated()。
 const creatingId = ref<number | null>(null)
 const actionError = ref('')
+const faqCategoryOptions = ref<{ value: string; label: string }[]>([])
 
-async function createFaqDraft(item: QuestionInboxRecord) {
+// 🔴 **原本這顆按鈕必定失敗。** 它送的是
+//    `fields: { categoryTermSeedKey: '', webAnswer: '', … }`，而 API 的 FAQ 新增
+//    要求 `categoryTermId`（數字）與 `webAnswer`（非空），還要一個合法的 slug——
+//    三樣都沒有，`POST /admin/faq` 一律回 400，而畫面上沒有任何欄位可以補。
+//    （`categoryTermSeedKey` 這個鍵在 API 與單元宣告裡都不存在，是純粹的遺留字串。）
+//
+//    改成先展開一張小表單，把 API 要求的三樣問齊再送。
+const draftFor = ref<QuestionInboxRecord | null>(null)
+const draftForm = reactive({ categoryTermId: '', webAnswer: '', slug: '' })
+const draftErrors = ref<Record<string, string>>({})
+
+function openDraft(item: QuestionInboxRecord) {
+  draftFor.value = item
+  draftForm.categoryTermId = ''
+  draftForm.webAnswer = ''
+  draftForm.slug = `faq-${Date.now()}`
+  draftErrors.value = {}
+  actionError.value = ''
+}
+function closeDraft() {
+  draftFor.value = null
+}
+
+async function createFaqDraft() {
+  const item = draftFor.value
+  if (!item) return
+
+  const errors: Record<string, string> = {}
+  if (!draftForm.categoryTermId) errors.categoryTermId = '請選一個 FAQ 分類——API 在建立時就要求它。'
+  if (!draftForm.webAnswer.trim()) errors.webAnswer = '網頁版答案為必填，可以先寫一句草稿之後再改。'
+  const slugProblem = validateSlug(draftForm.slug)
+  if (slugProblem) errors.slug = slugProblem
+  else if (!draftForm.slug.trim()) errors.slug = 'slug 為必填。'
+  draftErrors.value = errors
+  if (Object.keys(errors).length) return
+
   creatingId.value = item.id
   actionError.value = ''
   try {
@@ -69,14 +127,21 @@ async function createFaqDraft(item: QuestionInboxRecord) {
       'faq',
       {
         title: item.questionText,
-        fields: { categoryTermSeedKey: '', webAnswer: '', aiAnswer: '', lastReviewedOn: '' },
+        // ⚠️ FAQ 不輸出獨立網址，但 slug 仍是必填（`/faq/` 的頁內錨點，docs/08 §C-6）。
+        slug: draftForm.slug.trim(),
+        fields: {
+          categoryTermId: draftForm.categoryTermId,
+          webAnswer: draftForm.webAnswer,
+          aiAnswer: '',
+          lastReviewedOn: new Date().toISOString().slice(0, 10),
+        },
       },
       user!.id,
     )
     await adminApi.question.markCreated(item.id, created.id, user!.id)
     await router.push(`/faq/${created.id}`)
   } catch (e) {
-    actionError.value = e instanceof ApiError ? e.message : '建立失敗。'
+    actionError.value = messageOf(e, '建立失敗。')
   } finally {
     creatingId.value = null
   }
@@ -92,25 +157,34 @@ function openLink(item: QuestionInboxRecord) {
 function closeLink() {
   linkingId.value = null
 }
+/** 這四個動作原本一個 try 都沒有：失敗時畫面完全不動，使用者只會再按一次。 */
+async function run(fallback: string, fn: () => Promise<void>) {
+  actionError.value = ''
+  try {
+    await fn()
+    await load()
+  } catch (e) {
+    actionError.value = messageOf(e, fallback)
+  }
+}
+
 async function submitLink(item: QuestionInboxRecord) {
   if (!linkTarget.value) return
-  await adminApi.question.markCreated(item.id, Number(linkTarget.value), user!.id)
-  closeLink()
-  await load()
+  await run('連結失敗。', async () => {
+    await adminApi.question.markCreated(item.id, Number(linkTarget.value), user!.id)
+    closeLink()
+  })
 }
 
 async function ignore(item: QuestionInboxRecord) {
-  await adminApi.question.ignore(item.id, user!.id)
-  await load()
+  await run('忽略失敗。', () => adminApi.question.ignore(item.id, user!.id))
 }
 async function reopen(item: QuestionInboxRecord) {
-  await adminApi.question.reopen(item.id)
-  await load()
+  await run('重新開啟失敗。', () => adminApi.question.reopen(item.id))
 }
 async function remove(item: QuestionInboxRecord) {
   if (!window.confirm(`確定要刪除這筆提問「${item.questionText}」嗎？此動作無法復原。`)) return
-  await adminApi.question.remove(item.id)
-  await load()
+  await run('刪除失敗。', () => adminApi.question.remove(item.id))
 }
 </script>
 
@@ -147,6 +221,11 @@ async function remove(item: QuestionInboxRecord) {
     <div v-if="loading" class="adm-loading">
       <span class="adm-spinner" aria-hidden="true"></span>
       <span>載入中…</span>
+    </div>
+    <div v-else-if="loadError" class="adm-empty">
+      <p class="adm-empty__title">載入不到提問清單</p>
+      <p class="adm-empty__desc">{{ loadError }}</p>
+      <p class="adm-empty__desc"><button type="button" class="btn btn--line btn--sm" @click="load">重新載入</button></p>
     </div>
     <div v-else-if="!items.length" class="adm-empty">
       <div class="adm-empty__icon" aria-hidden="true">
@@ -193,7 +272,7 @@ async function remove(item: QuestionInboxRecord) {
               </td>
               <td class="adm-table__actions">
                 <template v-if="canEdit && item.status === 1">
-                  <button type="button" class="btn btn--line btn--sm" :disabled="creatingId === item.id" @click="createFaqDraft(item)">
+                  <button type="button" class="btn btn--line btn--sm" :disabled="creatingId === item.id" @click="openDraft(item)">
                     建立為 FAQ 草稿
                   </button>
                   <button type="button" class="btn btn--line btn--sm" @click="openLink(item)">連結既有 FAQ</button>
@@ -206,6 +285,42 @@ async function remove(item: QuestionInboxRecord) {
                   <button type="button" class="btn btn--line btn--sm" @click="reopen(item)">重新開啟</button>
                   <button type="button" class="btn btn--line btn--sm" @click="remove(item)">刪除</button>
                 </template>
+              </td>
+            </tr>
+            <!-- 建立為 FAQ 草稿：先把 API 在「建立」那一刻就要求的三樣問齊
+                 （分類、網頁版答案、slug），否則 POST /admin/faq 必定 400。 -->
+            <tr v-if="draftFor?.id === item.id">
+              <td colspan="7">
+                <form class="adm-form" style="padding: var(--sp-3) 0" @submit.prevent="createFaqDraft">
+                  <div class="adm-field-grid">
+                    <div class="adm-field">
+                      <label class="adm-field__label">FAQ 分類<span class="adm-field__required">＊</span></label>
+                      <select v-model="draftForm.categoryTermId" class="adm-select" :class="{ 'is-invalid': draftErrors.categoryTermId }">
+                        <option value="">請選擇…</option>
+                        <option v-for="opt in faqCategoryOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                      </select>
+                      <p v-if="draftErrors.categoryTermId" class="adm-field__error" role="alert">{{ draftErrors.categoryTermId }}</p>
+                    </div>
+                    <div class="adm-field">
+                      <label class="adm-field__label">Slug<span class="adm-field__required">＊</span></label>
+                      <input v-model="draftForm.slug" class="adm-input" :class="{ 'is-invalid': draftErrors.slug }" type="text" maxlength="160">
+                      <p v-if="draftErrors.slug" class="adm-field__error" role="alert">{{ draftErrors.slug }}</p>
+                      <p class="adm-field__hint">FAQ 不輸出獨立網址，這是 <code>/faq/</code> 的頁內錨點，但仍是必填。</p>
+                    </div>
+                    <div class="adm-field adm-field--span2">
+                      <label class="adm-field__label">網頁版答案<span class="adm-field__required">＊</span></label>
+                      <textarea v-model="draftForm.webAnswer" class="adm-textarea" :class="{ 'is-invalid': draftErrors.webAnswer }" />
+                      <p v-if="draftErrors.webAnswer" class="adm-field__error" role="alert">{{ draftErrors.webAnswer }}</p>
+                      <p class="adm-field__hint">先寫一句草稿就好，建立後在 FAQ 編輯畫面繼續補（建議 150–400 字）。</p>
+                    </div>
+                  </div>
+                  <div class="adm-inline-actions">
+                    <button type="submit" class="btn btn--primary btn--sm" :disabled="creatingId === item.id">
+                      {{ creatingId === item.id ? '建立中…' : '建立草稿並開始編輯' }}
+                    </button>
+                    <button type="button" class="btn btn--ghost btn--sm" @click="closeDraft">取消</button>
+                  </div>
+                </form>
               </td>
             </tr>
             <tr v-if="linkingId === item.id">

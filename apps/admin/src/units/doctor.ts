@@ -22,6 +22,7 @@ export const doctorUnit: UnitDefinition = {
       label: '是否為醫師',
       type: 'boolean',
       required: true,
+      requiredOnCreate: true,
       group: '基本資料',
       hint: '⚠️ 14 位團隊成員是 13 醫師 ＋ 1 藝術總監（安喬／許媖琄，兼執行長，非醫師）。這一欄決定前台「本文由 ○○ 醫師審閱」與 Physician JSON-LD 會不會掛錯人，不是預設全開。',
     },

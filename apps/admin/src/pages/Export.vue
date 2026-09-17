@@ -1,10 +1,13 @@
 <script setup lang="ts">
 // FAQ／語料匯出（/export）—— 規格見 docs/04 §3、docs/06 §6、docs/07 §4。
 //
-// ⚠️ docs/07-deployment.md §4：「sitemap.xml／llms.txt 仍在建置期產生，產物
-// 直接進 .output/public。走 API 產生反而更差」。這個畫面**只做預覽與下載**，
-// 不會、也不該把結果發布到任何地方——正式產出時機是 CI 的 nuxt generate，
-// 不是這裡的一顆按鈕。
+// ⚠️ 這個畫面**只做預覽與下載**，不會、也不該把結果發布到任何地方 ——
+// 前台的 `/faq.json`、`/llms.txt`、`/llms-full.txt` 是
+// `apps/web/server/routes/*` 在每一個請求當下向同一支 API 取的，
+// 不需要任何人按按鈕。
+//
+// ⚠️ 舊敘述「仍在建置期產生、正式產出時機是 CI 的 nuxt generate」**已作廢**
+//    （2026-09-16 改執行期 SSR，CLAUDE.md 決策 6、14）。
 //
 // 🔴 預覽全文由 **API** 產生（`GET /admin/export/{kind}`），不是前端自己組。
 //    同一份檔案在建置期由匯出腳本產生；前端若自己組一份，就有兩個產生器、兩套規則，
@@ -87,9 +90,10 @@ function download(key: TabKey) {
       <div class="adm-card">
         <p class="ex-note">
           <strong>這個畫面只做預覽與下載。</strong>
-          正式的 <code>faq.json</code>／<code>llms.txt</code>／<code>llms-full.txt</code> 是在建置期（<code>nuxt generate</code>）
-          自動產生、隨前台一起部署——不是在這裡按一顆按鈕就會發布到網站上。
-          這裡的用途是讓你在內容還沒 merge、還沒跑一次完整建置之前，先看到「如果現在建置，語料檔會長什麼樣子」。
+          正式的 <code>faq.json</code>／<code>llms.txt</code>／<code>llms-full.txt</code> 是前台在
+          <strong>每一個請求當下</strong>向同一支 API 取的——內容核准之後就是新的，
+          不需要有人按按鈕，也不需要重新建置。
+          這裡的用途是讓你在核准之前，先看到「這些語料檔現在長什麼樣子」。
         </p>
       </div>
 

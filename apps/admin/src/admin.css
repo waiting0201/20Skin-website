@@ -505,6 +505,11 @@
 }
 .adm-input:focus, .adm-textarea:focus, .adm-select:focus { outline: none; border-color: var(--brand-600); }
 .adm-input:disabled, .adm-textarea:disabled, .adm-select:disabled, .adm-input[readonly], .adm-textarea[readonly] { background: var(--surface-alt); color: var(--ink-50); }
+
+/* 驗證沒過的欄位。⚠️ 只靠顏色不夠——紅框旁邊一定要有 .adm-field__error 的文字，
+   色盲與螢幕閱讀器都讀不到「框是紅的」這件事。 */
+.adm-input.is-invalid, .adm-textarea.is-invalid, .adm-select.is-invalid { border-color: var(--adm-danger); }
+.adm-input.is-invalid:focus, .adm-textarea.is-invalid:focus, .adm-select.is-invalid:focus { border-color: var(--adm-danger); }
 .adm-textarea { resize: vertical; min-height: 6em; font-family: var(--font-base); }
 .adm-textarea--tall { min-height: 12em; }
 

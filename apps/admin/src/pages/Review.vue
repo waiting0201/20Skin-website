@@ -19,10 +19,20 @@ const loading = ref(true)
 const busyId = ref<number | null>(null)
 const errorMessage = ref('')
 
+const loadError = ref('')
+
+// ⚠️ 原本沒有 try/finally：API 一出錯 spinner 就永遠轉下去。
 async function load() {
   loading.value = true
-  items.value = await adminApi.review.pending()
-  loading.value = false
+  loadError.value = ''
+  try {
+    items.value = await adminApi.review.pending()
+  } catch (e) {
+    items.value = []
+    loadError.value = e instanceof ApiError ? e.message : '載入審核佇列失敗。'
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(load)
@@ -101,6 +111,11 @@ function timeLabel(iso: string): string {
     <div v-if="loading" class="adm-loading">
       <span class="adm-spinner" aria-hidden="true"></span>
       <span>載入中…</span>
+    </div>
+    <div v-else-if="loadError" class="adm-empty">
+      <p class="adm-empty__title">載入不到審核佇列</p>
+      <p class="adm-empty__desc">{{ loadError }}</p>
+      <p class="adm-empty__desc"><button type="button" class="btn btn--line btn--sm" @click="load">重新載入</button></p>
     </div>
     <div v-else-if="!items.length" class="adm-empty">
       <div class="adm-empty__icon" aria-hidden="true">

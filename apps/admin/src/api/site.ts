@@ -7,6 +7,7 @@
 // NAP 與據點頁比對），一律由呼叫端的 Vue 元件取得後傳進來。
 
 import type { UploadedImage } from './upload'
+import type { ImageValue } from '../image-value'
 import type { UnitKey } from '../types'
 import { ApiError } from './errors'
 import { normalizePaged, request, type ServerPaged } from './http'
@@ -63,6 +64,16 @@ export interface SiteSettingsData {
   aiFaq: AiFaqSettings
   updatedAt: string
   updatedByUserId: number | null
+}
+
+/**
+ * 編輯中的全站設定：兩個圖片欄位可能還是「待上傳」的那一種（src/image-value.ts）。
+ * 🔴 `update()` 收的是 `SiteSettingsData`，所以送出前一定要先 `resolveImage()`——
+ *    型別分開就是為了讓漏掉那一步在編譯期就被抓到。
+ */
+export type SiteSettingsDraft = Omit<SiteSettingsData, 'logo' | 'defaultOgImage'> & {
+  logo: ImageValue | null
+  defaultOgImage: ImageValue | null
 }
 
 // 畫面欄位 → SiteSettings 的鍵（docs/08 §G-1 的種子）。

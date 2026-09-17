@@ -22,7 +22,7 @@
 // 的 Db，兩者無法同時滿足，兩害相權取其輕，選擇不動 client.ts。接上真正
 // 的 API 之後這個落差就不存在——後端本來就是同一張 ContentReviews 表。
 import { computed, onMounted, reactive, ref } from 'vue'
-import { adminApi } from '@/api/client'
+import { adminApi, ApiError } from '@/api/client'
 import type {
   HomeHeroSettings,
   HomeSection,
@@ -66,10 +66,22 @@ const sortedSections = computed(() => [...sections].sort((a, b) => a.sortOrder -
 // 內容標題快取：{ unit: { id: label } }，畫面上把 ContentItemId 換成可讀標題。
 const titleCache = reactive<Record<string, Record<number, string>>>({})
 
+function messageOf(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.details.length ? `${e.message}（${e.details.join('、')}）` : e.message
+  if (e instanceof Error) return e.message
+  return fallback
+}
+
 async function loadTitleCache(unit: UnitKey) {
   if (titleCache[unit]) return
-  const options = await adminApi.taxonomy.unitOptions(unit)
-  titleCache[unit] = Object.fromEntries(options.map((o) => [Number(o.value), o.label]))
+  try {
+    const options = await adminApi.taxonomy.unitOptions(unit)
+    titleCache[unit] = Object.fromEntries(options.map((o) => [Number(o.value), o.label]))
+  } catch (e) {
+    // 取不到只是版位裡的項目顯示成 `#12` 而不是標題，不該擋住整個畫面。
+    titleCache[unit] = {}
+    console.error(`載入 ${unit} 標題快取失敗`, e)
+  }
 }
 
 function titleFor(unit: UnitKey, id: number): string {
@@ -109,14 +121,21 @@ function applyState(next: HomeSectionsState) {
   sections.splice(0, sections.length, ...next.sections.map((s) => JSON.parse(JSON.stringify(s))))
 }
 
+const loadError = ref('')
+
+// ⚠️ 原本只有 try/finally 沒有 catch：載入失敗時 `state` 仍是 null，模板的
+//    `v-else-if="state"` 不成立，畫面是一片空白（連錯誤訊息都沒有）。
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     const current = await adminApi.site.home.get()
     const targetUnits = new Set<UnitKey>()
     for (const s of current.sections) if (s.targetUnit) targetUnits.add(s.targetUnit)
     await Promise.all([...targetUnits].map(loadTitleCache))
     applyState(current)
+  } catch (e) {
+    loadError.value = messageOf(e, '載入首頁版位失敗。')
   } finally {
     loading.value = false
   }
@@ -143,7 +162,8 @@ function removeHeroImage(hero: HomeHeroSettings, index: number) {
   hero.images = hero.images.filter((_, i) => i !== index)
 }
 
-async function saveDraft() {
+/** @returns 有沒有真的存起來。送審那條路要靠它決定要不要繼續。 */
+async function saveDraft(): Promise<boolean> {
   saving.value = true
   actionError.value = ''
   try {
@@ -154,26 +174,50 @@ async function saveDraft() {
     applyState(next)
     actionNotice.value = '草稿已儲存。尚未送審，前台不會有任何變化。'
     actionNoticeVariant.value = 'success'
+    return true
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '儲存失敗。'
+    actionError.value = messageOf(e, '儲存失敗。')
+    return false
   } finally {
     saving.value = false
   }
 }
 
+const workflowBusy = ref(false)
+
+/** 這三支原本一個 try 都沒有：失敗時畫面毫無反應，錯誤只在 console。 */
+async function runWorkflow(fallback: string, fn: () => Promise<void>) {
+  actionError.value = ''
+  workflowBusy.value = true
+  try {
+    await fn()
+  } catch (e) {
+    actionError.value = messageOf(e, fallback)
+  } finally {
+    workflowBusy.value = false
+  }
+}
+
 async function submit() {
-  await saveDraft()
-  const next = await adminApi.site.home.submit(user!.id)
-  applyState(next)
-  actionNotice.value = '已送出審核，請等待審核者核准。'
-  actionNoticeVariant.value = 'info'
+  // 🔴 原本是 `await saveDraft()` 之後**不管結果**直接送審 —— 草稿存失敗時
+  //    （saveDraft 自己把錯誤吞進 actionError），送出去的是伺服器上的舊版本，
+  //    而畫面上同時顯示「儲存失敗」與「已送出審核」兩句矛盾的訊息。
+  if (!await saveDraft()) return
+  await runWorkflow('送審失敗。', async () => {
+    const next = await adminApi.site.home.submit(user!.id)
+    applyState(next)
+    actionNotice.value = '已送出審核，請等待審核者核准。'
+    actionNoticeVariant.value = 'info'
+  })
 }
 
 async function approve() {
-  const next = await adminApi.site.home.approve(user!.id)
-  applyState(next)
-  actionNotice.value = '已核准，首頁版位已更新為這個版本。'
-  actionNoticeVariant.value = 'success'
+  await runWorkflow('核准失敗。', async () => {
+    const next = await adminApi.site.home.approve(user!.id)
+    applyState(next)
+    actionNotice.value = '已核准，首頁版位已更新為這個版本。'
+    actionNoticeVariant.value = 'success'
+  })
 }
 
 async function reject() {
@@ -181,11 +225,13 @@ async function reject() {
     actionError.value = '退回原因為必填。'
     return
   }
-  const next = await adminApi.site.home.reject(decisionNote.value, user!.id)
-  applyState(next)
-  decisionNote.value = ''
-  actionNotice.value = '已退回。'
-  actionNoticeVariant.value = 'warn'
+  await runWorkflow('退回失敗。', async () => {
+    const next = await adminApi.site.home.reject(decisionNote.value, user!.id)
+    applyState(next)
+    decisionNote.value = ''
+    actionNotice.value = '已退回。'
+    actionNoticeVariant.value = 'warn'
+  })
 }
 
 const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布' })[state.value?.status ?? 3])
@@ -205,6 +251,12 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布
     <div v-if="loading" class="adm-loading">
       <span class="adm-spinner" aria-hidden="true"></span>
       <span>載入中…</span>
+    </div>
+
+    <div v-else-if="loadError" class="adm-empty">
+      <p class="adm-empty__title">載入不到首頁版位</p>
+      <p class="adm-empty__desc">{{ loadError }}</p>
+      <p class="adm-empty__desc"><button type="button" class="btn btn--line btn--sm" @click="load">重新載入</button></p>
     </div>
 
     <template v-else-if="state">
@@ -327,7 +379,7 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布
             <p v-if="state.decisionNote" class="adm-risk-hit">退回原因：{{ state.decisionNote }}</p>
 
             <div class="adm-workflow__actions">
-              <button v-if="canSubmit && state.status === 1" type="button" class="btn btn--primary btn--block" @click="submit">送出審核</button>
+              <button v-if="canSubmit && state.status === 1" type="button" class="btn btn--primary btn--block" :disabled="saving || workflowBusy" @click="submit">送出審核</button>
               <!-- ⚠️ 沒有「撤回」：docs/11 §7 的工作流是送審 → 核准／退回，沒有送審者自己收回這一步。
                    送錯了要請審核者退回（退回會附原因，也留得下紀錄）。 -->
               <p v-if="state.status === 2" class="adm-muted">已送審，等待審核者處理。送錯了請聯絡審核者退回。</p>
@@ -335,12 +387,12 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布
 
             <template v-if="canPublish && state.status === 2">
               <hr class="adm-divider">
-              <button type="button" class="btn btn--primary btn--block" @click="approve">核准，發布這個版本</button>
+              <button type="button" class="btn btn--primary btn--block" :disabled="workflowBusy" @click="approve">核准，發布這個版本</button>
               <div class="adm-field" style="margin-top: var(--sp-3)">
                 <label class="adm-field__label">退回原因</label>
                 <textarea v-model="decisionNote" class="adm-textarea" placeholder="說明需要調整的地方" />
               </div>
-              <button type="button" class="btn btn--line btn--block" @click="reject">退回</button>
+              <button type="button" class="btn btn--line btn--block" :disabled="workflowBusy" @click="reject">退回</button>
             </template>
 
             <p class="adm-workflow__note" style="margin-top: var(--sp-4)">

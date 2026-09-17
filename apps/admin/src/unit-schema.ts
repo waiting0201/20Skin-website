@@ -34,6 +34,12 @@ export interface RepeaterSubField {
   options?: SelectOption[]
   /** relation-single 子欄位要指到哪個單元（例如看診時段的據點）。 */
   relationUnit?: UnitKey
+  /**
+   * 這一格在 API 是必填（例如案例圖片的 `phase`，docs/08 §C-5 NOT NULL）。
+   * ⚠️ 標了它，`src/validation.ts` 才會在送出前擋下來；沒標的話症狀是
+   * 「填完整張表單、按下儲存、整筆被退回」，而錯誤訊息指不到是哪一列。
+   */
+  required?: boolean
 }
 
 export interface UnitField {
@@ -70,6 +76,20 @@ export interface UnitField {
    * 結果是「新增分類」按下去回 400，而且錯誤訊息指向一個畫面上根本改不了的欄位。
    */
   settableOnCreate?: boolean
+  /**
+   * **新增那一刻** API 就要求要有值的欄位（`ContentHandler.Apply*Fields` 裡
+   * `else if (isCreate) throw ValidationRequired` 的那一批）。
+   *
+   * 🔴 這與 `required` 是兩件事，不要合併：
+   *    - `required` ＝ 這個欄位在編輯畫面上是必填（多半是內容完整性的要求，
+   *      例如文章的內文）——**更新時**才擋。
+   *    - `requiredOnCreate` ＝ 資料庫是 NOT NULL 且沒有預設值，**建立時**就得給。
+   *
+   * ⚠️ 少了這個標記的下場是實際發生過的：清單頁的「＋ 新增」直接呼叫
+   *    `content.create()` 並把所有欄位填成空字串，於是新增文章／療程／案例／
+   *    FAQ／據點**一按就 400**，而使用者連一個可以填的欄位都沒看到。
+   */
+  requiredOnCreate?: boolean
   /** 高風險字詞即時警示要掃描的欄位（docs/02-backend-cms.md §5）。 */
   riskScan?: boolean
 }

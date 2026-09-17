@@ -298,6 +298,15 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
 8. **資料庫 schema 由 EF Core migrations 管理，是本專案的產出**（2026-08-10 定案）。院方只提供資料庫執行個體與身分／網路設定。舊敘述「資料庫由院方自建，沒有 migration workflow」**已作廢**。
    三個不可退讓的原則：**絕不在執行期呼叫 `Database.Migrate()`**（走 CI 的 `efbundle`）、**遷移必須向後相容**（先遷移後部署，中間有一段新 schema 配舊程式）、**遷移身分與執行期身分是兩個不同的 SQL 使用者**（前者要 DDL，後者只要 DML）。見 [docs/07-deployment.md](docs/07-deployment.md) §5、§6
 9. **上傳檔案一律存 Azure Blob**，由**瀏覽器直傳**（後台向 API 取短效 SAS，不讓檔案流經 Function）。SAS 以 **Managed Identity** 簽發（user delegation key），不存放儲存體金鑰。
+   🔴 **上傳發生在「按下表單的儲存」那一刻，不是選檔當下**（Tim 指定，2026-09-17，**不要改回去**）。
+   選檔只在瀏覽器裡產生預覽（`apps/admin/src/image-value.ts` 的 `PendingImage` ＋ object URL）。
+   ⚠️ 理由不是效能，是**孤兒檔**：選了圖又按取消、或表單其他欄位驗證沒過，舊行為已經把檔案
+   commit 進 `media/` 正式路徑，而沒有任何內容指得到它 —— 前端也刪不掉（SAS 是 write-only，
+   要刪就得再開一支刪除端點，等於給瀏覽器一個刪 blob 的入口）。連續換三次圖就是三個孤兒檔，
+   而 `tools/blob-reconcile` 只能對正式資料庫跑。
+   ⚠️ 連帶的施工規則：**驗證 → 上傳 → 送出**，順序不可對調；且「編輯中的圖片值」
+   （`SeoDraft`／`SiteSettingsDraft`）與「送給 API 的圖片值」（`UploadedImage`）**型別分開**，
+   漏掉上傳那一步要是編譯錯誤，不是執行期送出一個 `{"pending":true}`。
    ✅ **2026-09-16 起全架構沒有明文的 SQL 連線字串了。** 原本唯一那一個是 SWA 上給 `/api/fallback` 用的唯讀字串，那支 function 已刪除；Nuxt 的 SSR function **完全不碰 SQL**，它只打 API。見 [docs/07-deployment.md](docs/07-deployment.md) §3、§6
 10. **前後台同一個 SWA、同一個網域**：`20skin.tw` 前台、**`20skin.tw/admin` 後台**（Nuxt `ssr: false` 的 SPA）。API 則在另一個網域 `api.20skin.tw`，見第 7 條。
    後台路徑 `/admin/` 為客戶指定（2026-08-10），**不要再提案改成非預設路徑** —— 早期文件曾寫 `/manage/`，那是舊版。

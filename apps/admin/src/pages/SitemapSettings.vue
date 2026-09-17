@@ -2,12 +2,14 @@
 // sitemap 設定（/sitemap）—— 規格見 docs/03 §1、docs/06 §6、docs/08 §H。
 //
 // ⚠️ docs/08-database.md §H：sitemap 的 5 個分檔**不需要資料表**，實際收錄
-// 範圍在建置期由 `ContentType ＋ IncludeInSitemap ＋ Status ＋ UrlPath IS NOT NULL`
-// 算出來。這個畫面管的是「分檔本身的開關與預設 changefreq／priority」（存在
+// 範圍由 API 在**每一次請求**當下以 `ContentType ＋ IncludeInSitemap ＋ Status
+// ＋ UrlPath IS NOT NULL`（`functions/Common/Indexability.cs`）算出來 ——
+// 2026-09-16 改執行期 SSR 之後沒有「建置期」這一步了（CLAUDE.md 決策 6、14）。
+// 這個畫面管的是「分檔本身的開關與預設 changefreq／priority」（存在
 // docs/08 §G-1 SiteSettings 底下），以及 robots.txt 的可編輯區塊——不是在
 // 這裡逐筆勾選哪些內容要收錄，那件事在各單元編輯畫面的 SEO 區塊裡做。
 import { computed, onMounted, reactive, ref } from 'vue'
-import { adminApi } from '@/api/client'
+import { adminApi, ApiError } from '@/api/client'
 import { currentUser } from '@/auth'
 import { hasPermission } from '@/permissions'
 import { UNIT_KEYS } from '@/types'
@@ -35,9 +37,19 @@ interface ContentSnapshotRow {
 const snapshot = ref<ContentSnapshotRow[]>([])
 const snapshotLoading = ref(true)
 
+function messageOf(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.details.length ? `${e.message}（${e.details.join('、')}）` : e.message
+  if (e instanceof Error) return e.message
+  return fallback
+}
+
+/** 這個畫面的六支非同步函式原本一個 catch 都沒有，統一收在這裡顯示。 */
+const pageError = ref('')
+
 async function loadSnapshot() {
   snapshotLoading.value = true
   const rows: ContentSnapshotRow[] = []
+  try {
   for (const unit of UNIT_KEYS) {
     const res = await adminApi.content.list(unit, { pageSize: 100 })
     for (const item of res.items) {
@@ -53,7 +65,12 @@ async function loadSnapshot() {
     }
   }
   snapshot.value = rows
-  snapshotLoading.value = false
+  } catch (e) {
+    snapshot.value = []
+    pageError.value = messageOf(e, '載入內容快照失敗——分檔預估筆數與矛盾清單這一輪不準。')
+  } finally {
+    snapshotLoading.value = false
+  }
 }
 
 function eligibleCountFor(sourceUnits: string[]): number {
@@ -74,17 +91,29 @@ const savingFile = ref<SitemapFileKey | null>(null)
 
 async function loadFiles() {
   filesLoading.value = true
-  files.value = await adminApi.seo.sitemap.list()
-  filesLoading.value = false
+  try {
+    files.value = await adminApi.seo.sitemap.list()
+  } catch (e) {
+    files.value = []
+    pageError.value = messageOf(e, '載入 sitemap 分檔設定失敗。')
+  } finally {
+    filesLoading.value = false
+  }
 }
 
 async function updateFile(file: SitemapFileConfig, patch: Partial<Pick<SitemapFileConfig, 'enabled' | 'defaultChangeFreq' | 'defaultPriority'>>) {
   if (!canEdit.value) return
   savingFile.value = file.key
+  pageError.value = ''
   try {
     const updated = await adminApi.seo.sitemap.update(file.key, patch)
     const idx = files.value.findIndex((f) => f.key === file.key)
     if (idx !== -1) files.value[idx] = updated
+  } catch (e) {
+    // ⚠️ 這個畫面的開關是「改一下就送出」，失敗時畫面上的勾選已經是新的、
+    //    伺服器卻是舊的。所以失敗要重新載一次，讓畫面回到真實狀態。
+    pageError.value = messageOf(e, '設定儲存失敗。')
+    await loadFiles()
   } finally {
     savingFile.value = null
   }
@@ -93,7 +122,12 @@ async function updateFile(file: SitemapFileConfig, patch: Partial<Pick<SitemapFi
 async function resetFiles() {
   if (!canEdit.value) return
   if (!window.confirm('確定要把 5 個分檔的設定還原成預設值嗎？')) return
-  files.value = await adminApi.seo.sitemap.resetDefaults()
+  pageError.value = ''
+  try {
+    files.value = await adminApi.seo.sitemap.resetDefaults()
+  } catch (e) {
+    pageError.value = messageOf(e, '還原預設值失敗。')
+  }
 }
 
 function onPriorityInput(file: SitemapFileConfig, e: Event) {
@@ -118,25 +152,37 @@ const robotsUpdatedAt = ref('')
 const robotsSaving = ref(false)
 const robotsAckWarning = ref(false)
 const robotsSavedMsg = ref('')
+/** robots.txt 讀不回來時鎖住儲存：空的 textarea 存下去就是把規則全部清掉。 */
+const robotsLoadFailed = ref(false)
 
 async function loadRobots() {
-  const r = await adminApi.seo.robots.get()
-  robotsText.value = r.text
-  robotsUpdatedAt.value = r.updatedAt
+  try {
+    const r = await adminApi.seo.robots.get()
+    robotsText.value = r.text
+    robotsUpdatedAt.value = r.updatedAt
+  } catch (e) {
+    // 🔴 失敗時**不要**留著空字串 —— 那個空的 textarea 看起來就是「robots.txt 是空的」，
+    //    按下儲存就真的把它清空了（等於對所有爬蟲全面放行，docs/03 §1）。
+    pageError.value = messageOf(e, '載入 robots.txt 失敗——請重新整理再編輯，不要在這個狀態下按儲存。')
+    robotsLoadFailed.value = true
+  }
 }
 
 const robotsWarning = computed(() => adminApi.seo.robots.check(robotsText.value))
 
 async function saveRobots() {
-  if (!canEdit.value) return
+  if (!canEdit.value || robotsLoadFailed.value) return
   if (robotsWarning.value && !robotsAckWarning.value) return
   robotsSaving.value = true
   robotsSavedMsg.value = ''
+  pageError.value = ''
   try {
     const r = await adminApi.seo.robots.update(robotsText.value)
     robotsUpdatedAt.value = r.updatedAt
     robotsSavedMsg.value = '已儲存。'
     robotsAckWarning.value = false
+  } catch (e) {
+    pageError.value = messageOf(e, 'robots.txt 儲存失敗。')
   } finally {
     robotsSaving.value = false
   }
@@ -145,10 +191,16 @@ async function saveRobots() {
 async function resetRobots() {
   if (!canEdit.value) return
   if (!window.confirm('確定要把 robots.txt 還原成預設內容嗎？目前編輯中的內容會被蓋掉。')) return
-  const r = await adminApi.seo.robots.resetDefault()
-  robotsText.value = r.text
-  robotsUpdatedAt.value = r.updatedAt
-  robotsSavedMsg.value = ''
+  pageError.value = ''
+  try {
+    const r = await adminApi.seo.robots.resetDefault()
+    robotsText.value = r.text
+    robotsUpdatedAt.value = r.updatedAt
+    robotsSavedMsg.value = ''
+    robotsLoadFailed.value = false
+  } catch (e) {
+    pageError.value = messageOf(e, '還原 robots.txt 失敗。')
+  }
 }
 
 onMounted(async () => {
@@ -170,6 +222,7 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
     </div>
 
     <p v-if="!canView" class="adm-alert adm-alert--info">沒有檢視這個畫面的權限。</p>
+    <p v-if="pageError" class="adm-alert adm-alert--danger" role="alert">{{ pageError }}</p>
 
     <template v-else>
       <div class="adm-card">
@@ -279,9 +332,17 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
         <p v-if="robotsSavedMsg" class="adm-alert adm-alert--success" style="margin-top: var(--sp-2)">{{ robotsSavedMsg }}</p>
 
         <div v-if="canEdit" class="adm-inline-actions" style="margin-top: var(--sp-3)">
-          <button type="button" class="btn btn--primary" :disabled="robotsSaving || (Boolean(robotsWarning) && !robotsAckWarning)" @click="saveRobots">
+          <!-- ⚠️ robots.txt 讀不回來時鎖住儲存：那個空白的 textarea 存下去，
+               就是把全站的爬蟲規則清成空的（docs/03 §1）。 -->
+          <button
+            type="button"
+            class="btn btn--primary"
+            :disabled="robotsSaving || robotsLoadFailed || (Boolean(robotsWarning) && !robotsAckWarning)"
+            @click="saveRobots"
+          >
             {{ robotsSaving ? '儲存中…' : '儲存' }}
           </button>
+          <span v-if="robotsLoadFailed" class="adm-muted">目前的內容沒有從伺服器讀回來，請重新整理後再編輯。</span>
           <button type="button" class="btn btn--ghost" @click="resetRobots">還原預設內容</button>
         </div>
       </div>

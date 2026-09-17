@@ -17,6 +17,7 @@ import { hasPermission } from '@/permissions'
 import type { RoleCode } from '@/types'
 import { ROLE_LABEL } from '@/types'
 import type { AccountRecord } from '@/api/account'
+import { MIN_PASSWORD_LENGTH, validatePassword, validateUserName } from '@/validation'
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
@@ -36,10 +37,26 @@ const filtered = computed(() => {
   )
 })
 
+function messageOf(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.details.length ? `${e.message}（${e.details.join('、')}）` : e.message
+  if (e instanceof Error) return e.message
+  return fallback
+}
+
+const loadError = ref('')
+
+// ⚠️ 原本沒有 try/finally：API 一出錯 spinner 就永遠轉下去。
 async function load() {
   loading.value = true
-  accounts.value = await adminApi.account.user.list()
-  loading.value = false
+  loadError.value = ''
+  try {
+    accounts.value = await adminApi.account.user.list()
+  } catch (e) {
+    accounts.value = []
+    loadError.value = messageOf(e, '載入帳號清單失敗。')
+  } finally {
+    loading.value = false
+  }
 }
 onMounted(load)
 
@@ -47,7 +64,12 @@ onMounted(load)
 // 這裡透過已經對外開放的門面查詢，跟 EditPage 的關聯選單走同一支）──────────
 const doctorOptions = ref<{ value: string; label: string }[]>([])
 onMounted(async () => {
-  doctorOptions.value = await adminApi.taxonomy.unitOptions('doctor')
+  try {
+    doctorOptions.value = await adminApi.taxonomy.unitOptions('doctor')
+  } catch (e) {
+    // 醫師綁定是選填，取不到不該擋住整個帳號管理畫面。
+    console.error('載入醫師選項失敗', e)
+  }
 })
 
 // ── 新增／編輯表單（同一份表單模型，用 mode 分流）──────────────────────
@@ -64,7 +86,45 @@ const form = reactive({
   password: '',
 })
 const formError = ref('')
+const fieldErrors = ref<Record<string, string>>({})
 const submitting = ref(false)
+
+/**
+ * 🔴 這張表單原本**一條驗證都沒有**：四個輸入框沒有 `required`、沒有 pattern、
+ *    沒有長度檢查，角色也沒檢查有沒有勾。空白送出去就是一個 400，
+ *    而畫面上的提示文字（「僅可使用英數字與 . _ - @」「至少 8 碼，需同時包含
+ *    英文字母與數字」）從來沒有人執行過。
+ *
+ * ⚠️ 規則與 `AccountHandler` 逐條對齊，見 src/validation.ts。
+ */
+function validateForm(): boolean {
+  const errors: Record<string, string> = {}
+
+  if (formMode.value === 'create') {
+    const problem = validateUserName(form.userName)
+    if (problem) errors.userName = problem
+  }
+
+  if (!form.displayName.trim()) errors.displayName = '顯示名稱為必填。'
+
+  // 通知信箱是選填、不唯一、不是登入識別（docs/08 §A-1）——填了才檢查格式。
+  if (form.notifyEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.notifyEmail.trim())) {
+    errors.notifyEmail = '通知信箱的格式看起來不對（選填，留空即可）。'
+  }
+
+  if (form.roles.length === 0) errors.roles = '至少要指定一個角色。'
+
+  // 「醫師」角色沒綁到人就判斷不了「自己的內容」（docs/10 §3.3），但那是提醒不是錯誤——
+  // API 允許不綁，畫面上的 hint 已經說明後果。
+
+  if (formMode.value === 'create') {
+    const problem = validatePassword(form.password)
+    if (problem) errors.password = problem
+  }
+
+  fieldErrors.value = errors
+  return Object.keys(errors).length === 0
+}
 
 function resetForm() {
   form.userName = ''
@@ -74,6 +134,7 @@ function resetForm() {
   form.doctorId = ''
   form.password = ''
   formError.value = ''
+  fieldErrors.value = {}
 }
 
 function openCreate() {
@@ -101,8 +162,9 @@ function closeForm() {
 }
 
 async function submitForm() {
-  submitting.value = true
   formError.value = ''
+  if (!validateForm()) return
+  submitting.value = true
   try {
     if (formMode.value === 'create') {
       await adminApi.account.user.create({
@@ -124,7 +186,7 @@ async function submitForm() {
     await load()
     closeForm()
   } catch (e) {
-    formError.value = e instanceof ApiError ? e.message : '儲存失敗。'
+    formError.value = messageOf(e, '儲存失敗。')
   } finally {
     submitting.value = false
   }
@@ -132,6 +194,7 @@ async function submitForm() {
 
 // ── 停用／啟用 ──────────────────────────────────────────────────────────
 const toggling = ref<number | null>(null)
+const toggleError = ref('')
 async function toggleActive(record: AccountRecord) {
   if (record.id === user?.id && record.isActive) {
     window.alert('無法停用自己目前登入中的帳號。')
@@ -140,9 +203,14 @@ async function toggleActive(record: AccountRecord) {
   const next = !record.isActive
   if (next === false && !window.confirm(`確定要停用「${record.displayName}」嗎？停用不會刪除這個帳號，內容的建立紀錄仍會保留。`)) return
   toggling.value = record.id
+  toggleError.value = ''
   try {
     await adminApi.account.user.setActive(record.id, next)
     await load()
+  } catch (e) {
+    // ⚠️ 原本只有 finally 沒有 catch：停用失敗時按鈕恢復、清單不變，
+    //    看起來就像「按了沒反應」，而錯誤只在 console。
+    toggleError.value = messageOf(e, next ? '啟用失敗。' : '停用失敗。')
   } finally {
     toggling.value = null
   }
@@ -164,6 +232,11 @@ function closeReset() {
   resettingId.value = null
 }
 async function submitReset() {
+  const problem = validatePassword(resetForm2.password)
+  if (problem) {
+    resetError.value = problem
+    return
+  }
   if (resetForm2.password !== resetForm2.confirm) {
     resetError.value = '兩次輸入的密碼不一致。'
     return
@@ -175,7 +248,7 @@ async function submitReset() {
     await load()
     closeReset()
   } catch (e) {
-    resetError.value = e instanceof ApiError ? e.message : '重設失敗。'
+    resetError.value = messageOf(e, '重設失敗。')
   } finally {
     resetSubmitting.value = false
   }
@@ -210,9 +283,16 @@ function fmtDate(iso: string | null): string {
       <input v-model="keyword" type="search" placeholder="搜尋帳號或顯示名稱">
     </div>
 
+    <p v-if="toggleError" class="adm-alert adm-alert--danger" role="alert">{{ toggleError }}</p>
+
     <div v-if="loading" class="adm-loading">
       <span class="adm-spinner" aria-hidden="true"></span>
       <span>載入中…</span>
+    </div>
+    <div v-else-if="loadError" class="adm-empty">
+      <p class="adm-empty__title">載入不到帳號清單</p>
+      <p class="adm-empty__desc">{{ loadError }}</p>
+      <p class="adm-empty__desc"><button type="button" class="btn btn--line btn--sm" @click="load">重新載入</button></p>
     </div>
     <div v-else-if="!filtered.length" class="adm-empty">
       <div class="adm-empty__icon" aria-hidden="true">
@@ -281,16 +361,19 @@ function fmtDate(iso: string | null): string {
         <div class="adm-field-grid">
           <div class="adm-field">
             <label class="adm-field__label">帳號名稱<span class="adm-field__required">＊</span></label>
-            <input v-model="form.userName" class="adm-input" :disabled="formMode === 'edit'" placeholder="例如 editor2">
+            <input v-model="form.userName" class="adm-input" :class="{ 'is-invalid': fieldErrors.userName }" :disabled="formMode === 'edit'" placeholder="例如 editor2" maxlength="100">
+            <p v-if="fieldErrors.userName" class="adm-field__error" role="alert">{{ fieldErrors.userName }}</p>
             <p class="adm-field__hint">登入識別，不是 email。僅可使用英數字與 . _ - @，建立後不可更改。</p>
           </div>
           <div class="adm-field">
             <label class="adm-field__label">顯示名稱<span class="adm-field__required">＊</span></label>
-            <input v-model="form.displayName" class="adm-input" placeholder="後台顯示用">
+            <input v-model="form.displayName" class="adm-input" :class="{ 'is-invalid': fieldErrors.displayName }" placeholder="後台顯示用" maxlength="100">
+            <p v-if="fieldErrors.displayName" class="adm-field__error" role="alert">{{ fieldErrors.displayName }}</p>
           </div>
           <div class="adm-field">
             <label class="adm-field__label">通知信箱</label>
-            <input v-model="form.notifyEmail" class="adm-input" placeholder="選填，僅供通知，非登入用途">
+            <input v-model="form.notifyEmail" class="adm-input" :class="{ 'is-invalid': fieldErrors.notifyEmail }" type="email" placeholder="選填，僅供通知，非登入用途">
+            <p v-if="fieldErrors.notifyEmail" class="adm-field__error" role="alert">{{ fieldErrors.notifyEmail }}</p>
             <p class="adm-field__hint">選填、不唯一、可留空——不是登入識別，也不用來寄送登入相關通知。</p>
           </div>
           <div class="adm-field" v-if="form.roles.includes('Doctor')">
@@ -308,10 +391,12 @@ function fmtDate(iso: string | null): string {
                 <input type="checkbox" :value="code" v-model="form.roles"> {{ ROLE_LABEL[code] }}
               </label>
             </div>
+            <p v-if="fieldErrors.roles" class="adm-field__error" role="alert">{{ fieldErrors.roles }}</p>
           </div>
           <div v-if="formMode === 'create'" class="adm-field adm-field--span2">
             <label class="adm-field__label">初始密碼<span class="adm-field__required">＊</span></label>
-            <input v-model="form.password" type="text" class="adm-input" placeholder="至少 8 碼，需同時包含英文字母與數字">
+            <input v-model="form.password" type="text" class="adm-input" :class="{ 'is-invalid': fieldErrors.password }" :placeholder="`至少 ${MIN_PASSWORD_LENGTH} 碼，需同時包含英文字母與數字`">
+            <p v-if="fieldErrors.password" class="adm-field__error" role="alert">{{ fieldErrors.password }}</p>
             <p class="adm-field__hint">建立後這組密碼視同「種子密碼」，畫面會提醒使用者比照 <code>Admin@123</code> 盡快更換。</p>
           </div>
         </div>
@@ -332,7 +417,7 @@ function fmtDate(iso: string | null): string {
         <div class="adm-field-grid">
           <div class="adm-field">
             <label class="adm-field__label">新密碼<span class="adm-field__required">＊</span></label>
-            <input v-model="resetForm2.password" type="text" class="adm-input" placeholder="至少 8 碼，需同時包含英文字母與數字">
+            <input v-model="resetForm2.password" type="text" class="adm-input" :placeholder="`至少 ${MIN_PASSWORD_LENGTH} 碼，需同時包含英文字母與數字`">
           </div>
           <div class="adm-field">
             <label class="adm-field__label">再輸入一次<span class="adm-field__required">＊</span></label>

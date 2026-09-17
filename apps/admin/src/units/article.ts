@@ -15,7 +15,7 @@ export const articleUnit: UnitDefinition = {
     { key: 'status', label: '狀態', render: 'status' },
   ],
   fields: [
-    { key: 'categoryTermId', label: '文章分類', type: 'relation-single', required: true, optionsFromTermType: 2, group: '基本資料' },
+    { key: 'categoryTermId', label: '文章分類', type: 'relation-single', required: true, optionsFromTermType: 2, group: '基本資料', requiredOnCreate: true },
     { key: 'authorDoctorId', label: '作者（醫師）', type: 'relation-single', optionsFromUnit: 'doctor', group: '基本資料', hint: '作者為團隊成員時選這一欄。' },
     { key: 'authorName', label: '作者署名', type: 'text', group: '基本資料', hint: '作者非團隊成員時填寫；與「作者（醫師）」擇一。' },
     { key: 'reviewerDoctorId', label: '審閱醫師', type: 'relation-single', optionsFromUnit: 'doctor', group: '基本資料' },

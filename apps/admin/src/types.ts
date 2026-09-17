@@ -5,6 +5,7 @@
 // 共用的「形狀」，單元專屬欄位另見 src/units/*.ts。
 
 import type { UploadedImage } from './api/upload'
+import type { ImageValue } from './image-value'
 
 /** 九個內容模型的單元代號。逐字對應 docs/10-api.md §3.3 的 `{unit}` 與權限碼前綴，不做單複數轉換。 */
 export type UnitKey =
@@ -73,6 +74,15 @@ export interface SeoMeta {
   /** 40–60 字直答式段落，docs/03-seo-geo.md GEO 策略落地欄位。 */
   aiSummary: string | null
 }
+
+/**
+ * 編輯中的 SEO 區塊：OG 圖可能還是「待上傳」的那一種（src/image-value.ts）。
+ *
+ * 🔴 **送給 API 的一定是 `SeoMeta`，不是這個。** 兩個型別分開，就是為了讓
+ *    「忘了先上傳圖片就送出」變成一個**編譯期**錯誤 —— 它在執行期是沉默的：
+ *    `{"pending":true}` 送出去，API 存下一個沒有 blobPath 的圖片值。
+ */
+export type SeoDraft = Omit<SeoMeta, 'ogImage'> & { ogImage: ImageValue | null }
 
 export function emptySeo(): SeoMeta {
   return {

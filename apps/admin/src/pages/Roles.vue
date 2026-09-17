@@ -12,7 +12,7 @@
 //
 // ⚠️ UI 的權限判斷只管看不看得到，不是安全邊界（docs/09 §8）。
 import { computed, onMounted, reactive, ref } from 'vue'
-import { adminApi } from '@/api/client'
+import { adminApi, ApiError } from '@/api/client'
 import { currentUser } from '@/auth'
 import { hasPermission } from '@/permissions'
 import type { RoleCode } from '@/types'
@@ -31,13 +31,30 @@ const draft = reactive<Record<RoleCode, Set<string>>>({} as Record<RoleCode, Set
 
 const keyword = ref('')
 
+function messageOf(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.details.length ? `${e.message}（${e.details.join('、')}）` : e.message
+  if (e instanceof Error) return e.message
+  return fallback
+}
+
+const loadError = ref('')
+const saveError = ref('')
+
+// ⚠️ 原本沒有 try/finally：API 一出錯 spinner 就永遠轉下去。
 async function load() {
   loading.value = true
-  const matrix = await adminApi.account.role.matrix()
-  groups.value = matrix.groups
-  saved.value = matrix.granted
-  for (const role of ALL_ROLES) draft[role] = new Set(matrix.granted[role] ?? [])
-  loading.value = false
+  loadError.value = ''
+  try {
+    const matrix = await adminApi.account.role.matrix()
+    groups.value = matrix.groups
+    saved.value = matrix.granted
+    for (const role of ALL_ROLES) draft[role] = new Set(matrix.granted[role] ?? [])
+  } catch (e) {
+    groups.value = []
+    loadError.value = messageOf(e, '載入權限矩陣失敗。')
+  } finally {
+    loading.value = false
+  }
 }
 onMounted(load)
 
@@ -69,9 +86,14 @@ function isDirty(role: RoleCode): boolean {
 const savingRole = ref<RoleCode | null>(null)
 async function save(role: Exclude<RoleCode, 'SuperAdmin'>) {
   savingRole.value = role
+  saveError.value = ''
   try {
     await adminApi.account.role.updateRolePermissions(role, [...draft[role]])
     saved.value = { ...saved.value, [role]: [...draft[role]] }
+  } catch (e) {
+    // 🔴 原本只有 finally 沒有 catch。權限存不起來卻毫無徵兆，是這個畫面最糟的失敗方式：
+    //    畫面上的勾選狀態看起來已經套用了（draft 沒被還原），但資料庫其實沒變。
+    saveError.value = `${messageOf(e, '權限儲存失敗。')}——畫面上的勾選是未儲存的草稿，不是目前生效的設定。`
   } finally {
     savingRole.value = null
   }
@@ -133,7 +155,14 @@ const marketingHasExtraEdit = computed(() =>
       <span>載入中…</span>
     </div>
 
+    <div v-else-if="loadError" class="adm-empty">
+      <p class="adm-empty__title">載入不到權限矩陣</p>
+      <p class="adm-empty__desc">{{ loadError }}</p>
+      <p class="adm-empty__desc"><button type="button" class="btn btn--line btn--sm" @click="load">重新載入</button></p>
+    </div>
+
     <template v-else>
+      <p v-if="saveError" class="adm-alert adm-alert--danger" role="alert">{{ saveError }}</p>
       <div class="roles-toolbar">
         <div v-for="role in EDITABLE_ROLES" :key="role" class="roles-toolbar__item">
           <strong>{{ ROLE_LABEL[role] }}</strong>

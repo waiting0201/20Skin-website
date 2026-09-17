@@ -9,8 +9,9 @@
 // 那一塊 UI，只顯示「最後修改時間」，並在下方用一段文字把「這不是版本歷程」
 // 講清楚，避免有人誤以為改壞了還能像九個內容模型一樣一鍵還原。
 import { computed, onMounted, reactive, ref } from 'vue'
-import { adminApi } from '@/api/client'
-import type { SiteSettingsData } from '@/api/site'
+import { adminApi, ApiError } from '@/api/client'
+import type { SiteSettingsData, SiteSettingsDraft } from '@/api/site'
+import { countPendingImages, resolveImage } from '@/image-value'
 import { currentUser } from '@/auth'
 import { hasPermission } from '@/permissions'
 import ImageField from '@/components/ImageField.vue'
@@ -25,7 +26,9 @@ const saving = ref(false)
 const actionError = ref('')
 const actionNotice = ref('')
 
-const form = reactive<SiteSettingsData>({
+// ⚠️ 型別是 SiteSettingsDraft 不是 SiteSettingsData：Logo 與預設 OG 圖在編輯中
+//    可能還沒上傳（選了檔案只是預覽，見 src/image-value.ts）。
+const form = reactive<SiteSettingsDraft>({
   siteName: '',
   logo: null,
   defaultOgImage: null,
@@ -62,8 +65,19 @@ const napChecks = computed<NapCheck[]>(() =>
   }),
 )
 
+const loadError = ref('')
+
+function messageOf(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.details.length ? `${e.message}（${e.details.join('、')}）` : e.message
+  if (e instanceof Error) return e.message
+  return fallback
+}
+
+// ⚠️ 原本只有 try/finally 沒有 catch：API 一掛掉就是 spinner 轉完之後一個
+//    「什麼都沒有」的畫面，加上一個沒有人接的 promise rejection。
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     const [settings, clinicList] = await Promise.all([
       adminApi.site.settings.get(),
@@ -71,6 +85,8 @@ async function load() {
     ])
     Object.assign(form, settings)
     clinics.value = clinicList.items
+  } catch (e) {
+    loadError.value = messageOf(e, '載入設定失敗。')
   } finally {
     loading.value = false
   }
@@ -90,26 +106,35 @@ function copyFromClinic(index: number) {
   form.nap[index].address = String(check.matched.fields.address ?? '')
 }
 
+const pendingImages = computed(() => countPendingImages(form.logo) + countPendingImages(form.defaultOgImage))
+
 async function save() {
   saving.value = true
   actionError.value = ''
+  actionNotice.value = ''
   try {
-    const next = await adminApi.site.settings.update(
-      {
-        siteName: form.siteName,
-        logo: form.logo,
-        defaultOgImage: form.defaultOgImage,
-        nap: form.nap,
-        trackingCodes: form.trackingCodes,
-        contactEmail: form.contactEmail,
-        aiFaq: form.aiFaq,
-      },
-      user!.id,
-    )
+    // 🔴 圖片在這一刻才真的上傳（選檔時只產生預覽，見 src/image-value.ts）。
+    //    先換成 UploadedImage 再組 payload —— `update()` 收的是 SiteSettingsData，
+    //    漏掉這兩行是編譯錯誤，不是執行期的靜默錯誤。
+    const logo = await resolveImage(form.logo)
+    const defaultOgImage = await resolveImage(form.defaultOgImage)
+    form.logo = logo
+    form.defaultOgImage = defaultOgImage
+
+    const patch: Partial<SiteSettingsData> = {
+      siteName: form.siteName,
+      logo,
+      defaultOgImage,
+      nap: form.nap,
+      trackingCodes: form.trackingCodes,
+      contactEmail: form.contactEmail,
+      aiFaq: form.aiFaq,
+    }
+    const next = await adminApi.site.settings.update(patch, user!.id)
     Object.assign(form, next)
     actionNotice.value = '已儲存，立即生效。'
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '儲存失敗。'
+    actionError.value = messageOf(e, '儲存失敗。')
   } finally {
     saving.value = false
   }
@@ -128,6 +153,12 @@ async function save() {
     <div v-if="loading" class="adm-loading">
       <span class="adm-spinner" aria-hidden="true"></span>
       <span>載入中…</span>
+    </div>
+
+    <div v-else-if="loadError" class="adm-empty">
+      <p class="adm-empty__title">載入不到全站設定</p>
+      <p class="adm-empty__desc">{{ loadError }}</p>
+      <p class="adm-empty__desc"><button type="button" class="btn btn--line btn--sm" @click="load">重新載入</button></p>
     </div>
 
     <template v-else>
@@ -240,7 +271,11 @@ async function save() {
         </div>
 
         <div v-if="canEdit" class="adm-inline-actions">
-          <button type="submit" class="btn btn--primary" :disabled="saving">{{ saving ? '儲存中…' : '儲存設定' }}</button>
+          <button type="submit" class="btn btn--primary" :disabled="saving">
+            <template v-if="saving">儲存中…</template>
+            <template v-else-if="pendingImages">上傳 {{ pendingImages }} 張圖片並儲存</template>
+            <template v-else>儲存設定</template>
+          </button>
           <span class="adm-muted">最後修改：{{ form.updatedAt ? new Date(form.updatedAt).toLocaleString('zh-TW') : '尚無紀錄' }}</span>
         </div>
         <p class="adm-workflow__note">

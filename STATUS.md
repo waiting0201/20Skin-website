@@ -211,6 +211,48 @@ Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/ad
 發布聚合狀態、301 的 CSV 匯入匯出
 與衝突／迴圈檢查、robots.txt 的 `Disallow: /admin` 防呆、NAP 一致性比對。
 
+### 🔴 2026-09-17：後台除錯、表單驗證、圖片改成「送出才上傳」
+
+三件事一起做，因為它們踩到的是同一批問題：**失敗與必填都沒有被講出來**。
+
+**① 圖片改成選檔只預覽、按下儲存才上傳**（Tim 指定）。
+新增 `src/image-value.ts`（`PendingImage` ＝ File ＋ object URL ＋ 本機讀到的尺寸），
+`ImageField.vue` 從此**完全不打網路**，上傳統一發生在 `saveBody()`／`saveSeo()`／
+全站設定的 `save()` 裡（`uploadPendingImages()`／`resolveImage()`）。
+⚠️ 順序是**驗證 → 上傳 → 送出**，不可以對調：反過來的話，一筆因為「忘了選分類」
+而存不成的內容，已經先把圖 commit 進 Blob 了，而那些檔案沒有任何內容指得到，
+前端也刪不掉（SAS 是 write-only）。
+⚠️ 型別上 `SeoDraft`／`SiteSettingsDraft` 與送給 API 的 `SeoMeta`／`SiteSettingsData`
+**刻意分開**，漏掉上傳那一步會是編譯錯誤，而不是送出一個 `{"pending":true}`。
+
+**② 新增內容原本對五個單元一律 400。** `ContentHandler.Apply*Fields` 有一批
+「建立時就必須有值」的欄位（文章／療程／FAQ 的分類、案例的療程與四個法規揭露欄位、
+據點的地址電話經緯度），而清單頁的「＋ 新增」是直接建一筆所有欄位都填空字串的草稿。
+現在單元宣告多了 `requiredOnCreate`，清單頁先用一張小表單問齊那幾欄再送。
+⚠️ 連帶：**FAQ 的 slug 原本被藏起來，於是 FAQ 每一次儲存都回 400** ——
+`producesUrl: false` 只表示它不輸出獨立網址，API 仍然要求 slug（`/faq/` 的頁內錨點）。
+⚠️ `/admin/{unit}/new` 這條手打網址也是同一個洞，改成導回清單頁並打開新增表單。
+
+**③ 五十幾支 async 函式沒有 catch。** 症狀分三種，都不會報錯：
+spinner 永遠轉下去（`loading = false` 寫在最後一行而不是 `finally`）、
+畫面一片空白（載入失敗時三個 `v-if` 分支都不成立）、按了沒反應（工作流按鈕）。
+現在每一支都有訊息，`src/app-errors.ts` 再接一層安全網（`app.config.errorHandler`
+＋ `unhandledrejection`）——**那是安全網，不是正規的錯誤顯示位置**，會跑到那裡
+就代表某個動作漏了 try/catch。
+
+**順手修掉的**：
+- 存 SEO 會把**還沒存的本文修改**用伺服器版本蓋掉（反之亦然）—— `resetForms()` 加 scope
+- 送審／首頁版位送審在「草稿存失敗」之後**照送不誤**，送出去的是伺服器上的舊版本
+- 角色權限存檔失敗毫無徵兆：畫面上的勾選看起來已生效，資料庫其實沒變
+- `robots.txt` 讀不回來時那個空白 textarea 按下儲存＝把全站爬蟲規則清空（已鎖住儲存）
+- SEO 的 AI 摘要畫面寫「建議 40–60 字」，但 API 擋的是 20–300 —— 低於 20 會被退回
+- 結構化資料覆寫的 JSON 語法檢查（API 不驗、前台原樣輸出，壞了不會有任何徵兆）
+- 帳號管理整張表單沒有任何驗證，畫面上那兩句「僅可使用英數字與 . _ - @」
+  「至少 8 碼，需同時包含英文字母與數字」從來沒有人執行
+- 301 表單沒擋萬用字元與「來源＝目標」（後者是無限轉址迴圈）
+- 過期文案：轉址畫面仍在講 `/api/fallback`（2026-09-16 已整支刪除）與「約 770 條」（實數 1000）；
+  匯出／sitemap 畫面仍在講「建置期由 nuxt generate 產生」（早已是執行期向 API 取）
+
 ### ✅ 已接上真 API（2026-09-12）
 
 localStorage mock 全部移除 —— `src/api/mock-store.ts` 與 `src/api/mock-seed.ts` **已刪除**。

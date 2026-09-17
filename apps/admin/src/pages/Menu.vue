@@ -23,7 +23,7 @@
 // 「全站設定」（一致性檢查也在那裡做），這裡只放一份唯讀預覽並提示去哪裡改；
 // 社群連結與版權文案才是這個畫面自己的編輯範圍。
 import { computed, onMounted, reactive, ref } from 'vue'
-import { adminApi } from '@/api/client'
+import { adminApi, ApiError } from '@/api/client'
 import type { LinkKind, MenuItem, MenuKey, NewMenuItemInput, SiteSettingsData } from '@/api/site'
 import { currentUser } from '@/auth'
 import { hasPermission } from '@/permissions'
@@ -95,12 +95,19 @@ async function loadMenu(menuKey: MenuKey) {
   for (const item of list) rowBuffers[item.id] = bufferFrom(item)
 }
 
+const loadError = ref('')
+
+// ⚠️ 原本只有 try/finally 沒有 catch：載入失敗時兩個選單都是空陣列，畫面看起來
+//    像「選單一項都沒有」——那會讓人以為資料被清空了。
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     await Promise.all(UNIT_KEYS.map(async (u) => { contentOptions[u] = await adminApi.taxonomy.unitOptions(u) }))
     await Promise.all([loadMenu('main'), loadMenu('footer')])
     settings.value = await adminApi.site.settings.get()
+  } catch (e) {
+    loadError.value = messageOf(e, '載入選單失敗。')
   } finally {
     loading.value = false
   }
@@ -113,12 +120,18 @@ function contentLabel(item: MenuItem): string {
   return opt?.label ?? `#${item.contentItemId}`
 }
 
+function messageOf(e: unknown, fallback: string): string {
+  if (e instanceof ApiError) return e.details.length ? `${e.message}（${e.details.join('、')}）` : e.message
+  if (e instanceof Error) return e.message
+  return fallback
+}
+
 async function withErrorHandling(fn: () => Promise<void>) {
   actionError.value = ''
   try {
     await fn()
   } catch (e) {
-    actionError.value = e instanceof Error ? e.message : '操作失敗。'
+    actionError.value = messageOf(e, '操作失敗。')
   }
 }
 
@@ -258,6 +271,12 @@ function removeSocialLink(index: number) {
     <div v-if="loading" class="adm-loading">
       <span class="adm-spinner" aria-hidden="true"></span>
       <span>載入中…</span>
+    </div>
+
+    <div v-else-if="loadError" class="adm-empty">
+      <p class="adm-empty__title">載入不到選單</p>
+      <p class="adm-empty__desc">{{ loadError }}</p>
+      <p class="adm-empty__desc"><button type="button" class="btn btn--line btn--sm" @click="load">重新載入</button></p>
     </div>
 
     <template v-else>

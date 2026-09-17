@@ -15,7 +15,7 @@ export const caseUnit: UnitDefinition = {
     { key: 'updatedAt', label: '更新時間', render: 'date' },
   ],
   fields: [
-    { key: 'treatmentId', label: '對應療程', type: 'relation-single', required: true, optionsFromUnit: 'treatment', group: '基本資料' },
+    { key: 'treatmentId', label: '對應療程', type: 'relation-single', required: true, optionsFromUnit: 'treatment', group: '基本資料', requiredOnCreate: true },
     { key: 'sessionsText', label: '次數與週期', type: 'text', group: '基本資料' },
     { key: 'narrative', label: '敘述', type: 'richtext', group: '基本資料', riskScan: true },
     {
@@ -23,12 +23,13 @@ export const caseUnit: UnitDefinition = {
       label: '個案差異聲明',
       type: 'textarea',
       required: true,
+      requiredOnCreate: true,
       group: '法規揭露（必填）',
       hint: '必填——沒有這一欄，案例存不起來。',
     },
-    { key: 'hasWrittenConsent', label: '當事人書面同意', type: 'boolean', required: true, group: '法規揭露（必填）' },
-    { key: 'consentReference', label: '同意書編號／存放位置', type: 'text', required: true, group: '法規揭露（必填）', hint: '只存索引，同意書本身不進系統。' },
-    { key: 'shootingConditions', label: '拍攝條件', type: 'textarea', required: true, group: '法規揭露（必填）' },
+    { key: 'hasWrittenConsent', label: '當事人書面同意', type: 'boolean', required: true, group: '法規揭露（必填）', requiredOnCreate: true },
+    { key: 'consentReference', label: '同意書編號／存放位置', type: 'text', required: true, group: '法規揭露（必填）', hint: '只存索引，同意書本身不進系統。', requiredOnCreate: true },
+    { key: 'shootingConditions', label: '拍攝條件', type: 'textarea', required: true, group: '法規揭露（必填）', requiredOnCreate: true },
     {
       key: 'images',
       label: '案例圖片',
@@ -42,6 +43,7 @@ export const caseUnit: UnitDefinition = {
           key: 'phase',
           label: '階段',
           type: 'select',
+          required: true,
           options: [
             { value: '1', label: '術前' },
             { value: '2', label: '術後' },

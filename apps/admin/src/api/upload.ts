@@ -13,6 +13,12 @@
 // ⚠️ **驗證在 ③ 不在 ①。** 直傳模式下伺服器看不到上傳過程，副檔名只是第一道粗篩；
 //    真正判定型別是 commit 時讀檔頭做的，不通過會把 blob 直接刪掉。
 //    所以前端這邊的大小／型別檢查**只是省一趟往返的體貼**，不是防線。
+//
+// 🔴 **這三步什麼時候跑：按下表單的「儲存」之後，不是選檔當下**（2026-09-17 改）。
+//    選檔只在瀏覽器裡做預覽（`src/image-value.ts` 的 PendingImage ＋ object URL），
+//    存檔時才由 `uploadPendingImages()` 把每一張待上傳的圖跑過這三步。
+//    理由：選了圖又按取消（或表單驗證沒過）的話，舊流程已經在 Blob 留下一個
+//    沒有人引用的檔案，而 SAS 是 write-only，前端刪不掉。
 
 import { ApiError } from './errors'
 import { request } from './http'
@@ -37,7 +43,7 @@ export const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 /** 與 API 的 `AllowedImageExtensions` 一致（.jpg/.jpeg/.png/.gif/.webp）。 */
 export const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/gif,image/webp'
 
-const ACCEPTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
+export const ACCEPTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp']
 
 interface SasResponse {
   blobPath: string
@@ -45,7 +51,7 @@ interface SasResponse {
   expiresAt: string
 }
 
-function extensionOf(fileName: string): string {
+export function extensionOf(fileName: string): string {
   const dot = fileName.lastIndexOf('.')
   return dot < 0 ? '' : fileName.slice(dot).toLowerCase()
 }

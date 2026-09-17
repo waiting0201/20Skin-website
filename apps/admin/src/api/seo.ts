@@ -6,12 +6,12 @@
 // 「哪些內容項目會進到哪個 sitemap 分檔」這種跨單元的即時統計，由 SitemapSettings.vue
 // 自己呼叫 adminApi.content.list() 湊資料後傳進本檔的純函式。
 //
-// 🔴 docs/08-database.md §H：sitemap 的 5 個分檔**不需要資料表**，收錄範圍在建置期由
+// 🔴 docs/08-database.md §H：sitemap 的 5 個分檔**不需要資料表**，收錄範圍在算繪當下由
 //    `ContentType ＋ IncludeInSitemap ＋ Status ＋ UrlPath IS NOT NULL` 算出來。
 //    這裡讀寫的「分檔設定」（是否納入、預設 changefreq／priority）是 `SiteSettings`
 //    底下的一個 JSON 值（鍵 `seo.sitemapFiles`），robots.txt 是另一個鍵（`seo.robotsTxt`）。
 //
-// ⚠️ **匯出預覽一律走 API，前端不自己組**。同一份 faq.json／llms.txt 在建置期由
+// ⚠️ **匯出預覽一律走 API，前端不自己組**。同一份 faq.json／llms.txt 由
 //    匯出腳本產生，後台這個畫面只是預覽（docs/07 §4）。前端若自己組一份，
 //    就會有兩個產生器、兩套規則，而且**預覽跟正式產物不一樣時沒有人會發現**。
 
@@ -28,7 +28,7 @@ export interface SitemapFileConfig {
   key: SitemapFileKey
   label: string
   fileName: string
-  /** 說明用：這個分檔大致收哪些內容型別。實際收錄範圍在建置期由內容欄位決定，這裡僅供畫面顯示。 */
+  /** 說明用：這個分檔大致收哪些內容型別。實際收錄範圍由 API 依內容欄位即時算出，這裡僅供畫面顯示。 */
   sourceUnits: UnitKey[]
   enabled: boolean
   defaultChangeFreq: ChangeFreq
@@ -108,16 +108,19 @@ export function findSeoConsistencyIssues(items: SeoConsistencyInput[]): SeoConsi
 
 // ── FAQ／語料匯出：預覽用的純文字組裝 ─────────────────────────────────
 //
-// ⚠️ docs/07-deployment.md §4：「sitemap.xml／llms.txt 仍在建置期產生，
-// 產物直接進 .output/public。走 API 產生反而更差」。這裡的函式只是把資料
-// 組成字串給畫面「預覽＋下載」，**不會、也不該把結果送到任何地方發布**——
-// 真正的產出時機是 CI 的 nuxt generate，不是這個畫面按一顆按鈕。
+// ⚠️ **這裡的函式只是把資料組成字串給畫面「預覽＋下載」**，不會把結果送到
+// 任何地方發布。前台的 `/sitemap.xml`、`/llms.txt`、`/faq.json` 是
+// `apps/web/server/routes/*` 在**每一個請求**當下向 API 的 `/seo/*` 取的
+// （`proxySeo`），不需要任何人按按鈕，也不需要重新建置。
+//
+// ⚠️ 舊敘述「仍在建置期產生，產物直接進 .output/public、真正的產出時機是 CI 的
+//    nuxt generate」**已作廢**（2026-09-16 改執行期 SSR，CLAUDE.md 決策 6、14）。
 
 // ── 匯出預覽 ──────────────────────────────────────────────────────────
 //
-// 🔴 **產生器只有一個，在後端。** faq.json／llms.txt／llms-full.txt 的正式產物由建置期的
-//    匯出腳本產生（docs/07 §4），後台這個畫面只是預覽，所以它必須問同一個產生器 ——
-//    前端自己組一份的話，預覽跟正式產物不一致時不會有任何徵兆。
+// 🔴 **產生器只有一個，在後端。** faq.json／llms.txt／llms-full.txt 的正式產物與
+//    這個預覽是同一支 API（前台只是把 `/seo/*` 的回應原樣轉出去），所以預覽必須
+//    問同一個產生器 —— 前端自己組一份的話，預覽跟正式產物不一致時不會有任何徵兆。
 //
 // ⚠️ 連帶：這裡**不再匯出** `buildFaqJson`／`buildLlmsTxt`／`buildLlmsFullTxt`
 //    與 `FaqExportItem`／`SiteFactsForExport`。Export.vue 改成直接要預覽全文。
@@ -220,7 +223,8 @@ export const seoApi = {
   export: {
     /**
      * `GET /admin/export/{kind}`：預覽全文。
-     * ⚠️ **只是預覽**，按下去不會發布任何東西 —— 正式產物在建置期產生（docs/07 §4）。
+     * ⚠️ **只是預覽**，按下去不會發布任何東西 —— 前台的正式產物是每個請求
+     * 當下向同一支 API 取的（`apps/web/server/routes/*` 的 proxySeo）。
      */
     async preview(kind: ExportKind): Promise<ExportPreview> {
       return request<ExportPreview>(`/admin/export/${encodeURIComponent(kind)}`)

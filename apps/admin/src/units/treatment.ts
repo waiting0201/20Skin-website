@@ -21,6 +21,7 @@ export const treatmentUnit: UnitDefinition = {
       label: '療程分類',
       type: 'relation-single',
       required: true,
+      requiredOnCreate: true,
       optionsFromTermType: 1,
       group: '基本資料',
       hint: '⚠️ 換分類會改變網址（/treatments/{分類}/{slug}/），系統會自動補一筆 301。',

@@ -37,7 +37,10 @@ export function _setSession(user: CurrentUser) {
 }
 
 export function logout() {
-  void adminApi.auth.logout()
+  // ⚠️ 不等它完成（使用者按了登出就該立刻離開），但**要接住錯誤** ——
+  //    `void` 一個會 reject 的 promise 等於製造一個沒有人處理的 rejection。
+  //    伺服器那邊撤不撤銷得了 token 不影響「本機忘掉身分」這件事。
+  adminApi.auth.logout().catch((e) => console.error('登出時撤銷 token 失敗（本機已登出）', e))
   state.user = null
 }
 
