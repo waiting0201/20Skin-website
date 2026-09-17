@@ -28,6 +28,9 @@ apps/
                        build 產物直接寫進 apps/web/public/admin/
                        ⚠️ 建置順序：先 admin 後 web
 tools/api-smoke/       API 煙霧測試（read 唯讀／write 會改資料，見該目錄 README）
+tools/admin-e2e/       後台端到端（用真的瀏覽器）。check 唯讀／publish-flow 會改資料
+                       ⚠️ 它抓的是 typecheck／build／round-trip **都看不到**的那一類：
+                          畫面開不開得起來、摺疊列讀不讀得懂、console 有沒有 404
 tools/deploy-swa-ssr.sh  部署 SWA：前台 SSR function ＋ 後台 SPA（本機備援，正式走 CI）
                        ⚠️ 取代了 deploy-swa.sh（靜態版，2026-09-16 刪除）——
                           部署形態換了，api_location 由 api/ 改成 .output/server
@@ -172,6 +175,10 @@ node tools/content-audit/audit-json-fields.mjs
 cd functions && func start                                     # 1. API
 cd apps/web && NUXT_PUBLIC_API_BASE_URL=http://localhost:7071/api/v1 npx nuxt dev   # 2. 站台
 VERIFY_BASE_URL=http://localhost:3000 pnpm --filter web verify:links                # 3. 爬
+
+# 後台端到端（改完後台畫面一定要跑，需要三個服務都起來，說明見 tools/admin-e2e/README.md）
+node tools/admin-e2e/check.mjs         # 🟢 唯讀：畫面、表單、摺疊列、console
+node tools/admin-e2e/publish-flow.mjs  # 🔴 會改資料：改一筆 → 發布 → 驗前台 → 還原
 
 # API 煙霧測試（改完 API 或後台資料層一定要跑，說明見 tools/api-smoke/README.md）
 node tools/api-smoke/read.mjs                  # 唯讀，可對任何環境跑

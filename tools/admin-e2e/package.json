@@ -1,0 +1,13 @@
+{
+  "name": "admin-e2e",
+  "private": true,
+  "type": "module",
+  "description": "後台的端到端檢查。刻意不放進 pnpm workspace（pnpm-workspace.yaml 只收 apps/*）——playwright 是這支工具專屬的相依，不該進前後台的相依樹。",
+  "scripts": {
+    "check": "node check.mjs",
+    "publish-flow": "node publish-flow.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}

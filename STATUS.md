@@ -299,6 +299,11 @@ spinner 永遠轉下去（`loading = false` 寫在最後一行而不是 `finally
   收整段程式碼等於任何能改設定的人都能在全站執行任意 JS。
   ⚠️ 代價：Meta Pixel 這類貼不進來，需要的話是另開一個設定鍵。
 
+**⑤ 後台的端到端檢查收進 repo**（`tools/admin-e2e/`，比照 `api-smoke` 分唯讀／會寫入兩支）。
+上面那三個問題就是它抓到的 —— 而 `typecheck`、`build`、`verify:css` 與 `content-roundtrip`
+全部放行。`publish-flow.mjs` 是唯一驗得到「表單 → 序列化 → API → 版本快照 → 前台」
+整條鏈的方法，實跑 16 項全過（含自動還原）。
+
 **④ `FieldType` 的 `richtext` 更名為 `longtext`**。那個名字名不副實：實作一直只是
 `textarea` ＋ `min-height`，全後台從來沒有富文本。段落維持純文字是 Tim 定案
 （2026-09-17），要加行內格式得同時改前台渲染並加一套 HTML 淨化，是另一件事。
