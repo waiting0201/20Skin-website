@@ -19,7 +19,11 @@ STATUS.md              ★ 進度總表：做到哪裡了（狀態的單一真�
 pnpm-workspace.yaml    packages = apps/*
 .github/workflows/     web.yml（前台 SSR function ＋ 後台 SPA）、api.yml（獨立 Function App）
                        ⚠️ 觸發分支是 main —— 那是本機 public 推上 GitHub 之後的名字
-                       （refspec public:main，比照 NTI）。⚠️ 已觸發但缺 secrets，見 STATUS.md §六
+                       （refspec public:main，比照 NTI）。✅ **兩條都跑得通、會真的部署**
+                       （2026-09-17 覆核；舊敘述「已觸發但缺 secrets」作廢）。
+                       ⚠️ 同一個 push 會**同時**觸發兩條、互不等待 —— web 的部署後 smoke test
+                       可能打在 api 的遷移／重新部署中間（2026-09-17 實際踩到：sitemap 回 503，
+                       站台其實正常）。兩邊的 curl 都要帶 --retry，見 web.yml 的註解
 apps/
   web/                 前台：Nuxt 3 **執行期 SSR**（21 個模板，每個請求即時算繪）
                        ⚠️ 2026-09-16 由「純靜態預渲染」改成 SSR，見決策 6

@@ -3,9 +3,11 @@
 # 這個 repo 的 GitHub main 分支由 tools/sync-public.sh 從 master 產生，所以一次部署是
 # 「commit → sync-public.sh → push Remote_GitHub」，不是 commit 完就上線。
 #
-# ⚠️ 應用程式 API 不在這裡（CLAUDE.md 決策 7：API 分兩處）。`api/` 只有 fallback
-#    那一支 Managed Function，它與前台是同一個部署單位、必須一起上傳；
-#    `functions/` 那個獨立 Function App 由 api.yml 部署，不隨內容重建。
+# ⚠️ 應用程式 API 不在這裡（CLAUDE.md 決策 7：API 只有 `functions/` 一處，
+#    由 api.yml 部署）。舊敘述「API 分兩處、`api/` 有 fallback」**已作廢** ——
+#    那支 SWA Managed Function 2026-09-16 整支刪除，它與 Nuxt 的 SSR function
+#    互斥（兩者都要佔 SWA 的 api_location），1000 條 301 已改由前台查表。
+#    下面 paths 仍列著 `api/**` 是無害的殘留：那個目錄已經不存在。
 #
 # ✅ 2026-09-14 首次實跑成功（3m11s，當時是靜態版）。
 #    2026-09-16 改成執行期 SSR 並實際部署成功。本機等價物是 tools/deploy-swa-ssr.sh，
@@ -192,14 +194,24 @@ jobs:
           # ⚠️ 用 /doctor.php 而不是 /index2.php —— 前者走**資料庫查表**
           #    （pages/[...slug].vue → API 的 /redirects/resolve），後者在
           #    staticwebapp.config.json 裡有快速路徑，就算整條查表鏈路壞掉它也會通過。
-          CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$BASE/doctor.php")
+          CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 --retry 3 --retry-delay 5 "$BASE/doctor.php")
           echo "GET $BASE/doctor.php → $CODE"
           [ "$CODE" = "301" ] || { echo "::error::301 查表回應 $CODE，應為 301"; exit 1; }
 
           # SEO 產物改成執行期路由（2026-09-16）——它們現在是 SSR function 的一部分，
           # 不再是靜態檔，所以要實際打一次確認 function 起得來。
+          #
+          # 🔴 **--retry 不是裝飾，是這一段唯一擋得住誤報的東西**（2026-09-17 實際踩到）：
+          #    同一個 push 會同時觸發 web 與 api 兩條工作流，而它們互不等待。那一次
+          #    api 的「Apply migrations」跑在 06:40:16–21，web 的 smoke test 正好在
+          #    06:40:18 打 /sitemap.xml —— sitemap 要掃 1163 筆 ContentItems，正式庫是
+          #    Azure SQL Basic（5 DTU），撞上遷移交易就超過 proxySeo 的 8 秒 timeout，
+          #    前台依約回 503（決策 14：拿不到 ≠ 查不到）。站台完全正常，紅的只有這一步。
+          #    ⚠️ 上面第一個迴圈本來就有 --retry，這兩段沒有 —— 差別只是當初漏了。
+          #    curl 的 --retry 會對 5xx 重試，三次 × 5 秒足以蓋過遷移（5 秒）與
+          #    Function App 重新部署（約 18 秒）這兩個窗口，而真的掛掉的 API 仍然會紅。
           for P in "/sitemap.xml" "/robots.txt" "/sitemap-blog.xml"; do
-            CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$BASE$P")
+            CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 --retry 3 --retry-delay 5 "$BASE$P")
             echo "GET $BASE$P → $CODE"
             [ "$CODE" = "200" ] || { echo "::error::$P 回應 $CODE"; exit 1; }
           done
