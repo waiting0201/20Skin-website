@@ -82,7 +82,8 @@ for (const keyword of ['old-a.php', 'old-b.php', 'write-test']) {
 }
 
 for (const [unit, slug] of [['treatment', 'write-test-treatment'], ['doctor', 'write-test-doctor'],
-                            ['concern', 'write-test-concern'], ['term', 'write-test-tag']]) {
+                            ['concern', 'write-test-concern'], ['term', 'write-test-tag'],
+                            ['article', 'write-test-article']]) {
   const list = (await call('GET', `/admin/${unit}?page=1&pageSize=100`)).json?.data?.items ?? []
   const hit = list.find((i) => i.slug === slug)
   if (hit) {
@@ -158,6 +159,60 @@ check('把讀到的整包 fields 送回去可以寫入（讀寫對稱）',
       r.json?.success === true && r.json.data.fields.subtitle === '往返測試',
       `${r.status} ${JSON.stringify(r.json)?.slice(0, 200)}`)
 check('往返之後其他欄位沒有被清掉', r.json?.data?.fields?.facts === '規格數據列測試', JSON.stringify(r.json?.data?.fields?.facts))
+
+// ── 文章內文：區塊 JSON 的往返 ─────────────────────────────────────────
+//
+// 🔴 **這一段擋的是「存一次就毀一篇文章」。**
+//    `BodyBlocks` 的回應端輸出的是字串，寫入端原本一律 `GetRawText()` ——
+//    對字串節點它會連外層引號與跳脫一起取回，於是讀出來原樣存回去就多包一層編碼。
+//    前台 `JSON.parse` 拿到字串不是陣列，`v-for` 跑字串會逐字元迭代、
+//    每個字元都比不到 `block.type`，**整篇內文靜默消失**（HTTP 仍是 200）。
+//
+// ⚠️ 上面那段療程的往返測試擋不到它：`facts` 走 `JStr`，讀寫本來就對稱。
+//    區別只在 `Article.BodyBlocks` 與 `Page.BodyBlocks` 這兩欄。
+console.log('\n【文章內文的區塊 JSON 往返】')
+const articleCat = terms.find((t) => t.fields?.termType === 2)
+check('找得到文章分類種子', Boolean(articleCat))
+
+const blocks = [
+  { type: 'lead', text: '導言測試' },
+  { type: 'heading', level: 2, id: 'why', text: '小標測試' },
+  { type: 'paragraph', text: '段落測試' },
+]
+r = await call('POST', '/admin/article', {
+  title: '寫入測試文章',
+  slug: 'write-test-article',
+  summary: '摘要測試',
+  // ⚠️ 匯入腳本送的是**陣列本身**（tools/content-import/import.mjs:497），這裡照抄那個形狀。
+  fields: { categoryTermId: articleCat.id, bodyBlocks: blocks, cover: null },
+})
+check('建立文章（bodyBlocks 送陣列）', r.json?.success === true, `${r.status} ${JSON.stringify(r.json)?.slice(0, 250)}`)
+const articleId = r.json?.data?.id
+check('回應把 bodyBlocks 給成字串', typeof r.json?.data?.fields?.bodyBlocks === 'string')
+check('存進去的是內層 JSON，沒有多包一層',
+      JSON.parse(r.json?.data?.fields?.bodyBlocks ?? 'null')?.[2]?.text === '段落測試',
+      String(r.json?.data?.fields?.bodyBlocks).slice(0, 120))
+
+// 🔴 核心：把讀到的整包 fields 原樣送回去（後台按「儲存本文」就是這個形狀）
+r = await call('GET', `/admin/article/${articleId}`)
+const articleRT = r.json.data
+r = await call('PUT', `/admin/article/${articleId}`, { title: articleRT.title, fields: articleRT.fields })
+check('原樣存回去不會多包一層編碼（後台存一次不會毀掉內文）',
+      JSON.parse(r.json?.data?.fields?.bodyBlocks ?? 'null')?.[2]?.text === '段落測試',
+      String(r.json?.data?.fields?.bodyBlocks).slice(0, 160))
+
+// 再存一次：真的雙重編碼的話，第二次會再包一層，這裡會更明顯
+r = await call('GET', `/admin/article/${articleId}`)
+r = await call('PUT', `/admin/article/${articleId}`, { fields: { bodyBlocks: r.json.data.fields.bodyBlocks } })
+check('連存兩次仍然是同一份內容',
+      JSON.parse(r.json?.data?.fields?.bodyBlocks ?? 'null')?.length === 3,
+      String(r.json?.data?.fields?.bodyBlocks).slice(0, 160))
+
+// 形狀把關：文章的最外層必須是陣列，弄成物件就是整頁內文不渲染
+r = await call('PUT', `/admin/article/${articleId}`, { fields: { bodyBlocks: { type: 'paragraph' } } })
+check('最外層不是陣列會被擋下', r.json?.code === 'VALIDATION_FORMAT', `${r.status} ${r.json?.code}`)
+r = await call('PUT', `/admin/article/${articleId}`, { fields: { bodyBlocks: '[{"type":' } })
+check('壞掉的 JSON 會被擋下', r.json?.code === 'VALIDATION_FORMAT', `${r.status} ${r.json?.code}`)
 
 // 新增分類：termType 在畫面上是唯讀，但新增時必須送得出去
 r = await call('POST', '/admin/term', { title: '寫入測試標籤', slug: 'write-test-tag', fields: { termType: 4 } })

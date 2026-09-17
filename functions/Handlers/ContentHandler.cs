@@ -1439,6 +1439,65 @@ public sealed class ContentHandler(
         }
     }
 
+    /// <summary>
+    /// 區塊內文欄位（<c>Article.BodyBlocks</c>／<c>Page.BodyBlocks</c>）的讀取。
+    ///
+    /// <para>
+    /// 🔴 <b>這一欄的讀與寫原本不對稱，而那會把內文毀掉。</b>
+    /// 回應端（<c>BuildArticleFields</c>）輸出的是 entity 上的<b>字串</b>，序列化之後就是一個
+    /// JSON 字串節點；而寫入端原本一律 <c>GetRawText()</c> —— 對字串節點它會連外層引號與
+    /// 跳脫一起取回。於是「讀出來 → 不改 → 存回去」每存一次就<b>多包一層編碼</b>。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ 症狀是靜默的：前台 <c>JSON.parse</c> 拿到的是字串不是陣列，
+    /// <c>v-for</c> 跑字串會逐字元迭代、每個字元都比不到 <c>block.type</c>，
+    /// <b>整篇內文就這樣消失</b>，HTTP 仍然是 200、仍然收在 sitemap 裡。
+    /// 受影響的路徑有兩條：後台按一次「儲存本文」，以及版本還原
+    /// （<c>RestoreVersionAsync</c> 把快照的 fields 直接餵回這裡）。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ 所以兩種形狀都要收：<b>字串</b>＝後台與版本快照送回來的；
+    /// <b>物件／陣列</b>＝匯入腳本送的（<c>tools/content-import/import.mjs</c>）。
+    /// 兩邊都要存成「內層的 JSON 文字」，不可以再包一層。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ 這裡<b>只驗到「是合法 JSON，而且根節點型別對」</b>，不做深層形狀驗證 ——
+    /// 深層的形狀真實來源是前台的型別定義（<c>apps/web/app/data/*.ts</c>），
+    /// 在這裡再寫一份只會多一份會各自漂移的規則。但根節點型別非驗不可：
+    /// 文章要陣列、頁面要物件，弄反了就是整頁內文不渲染。
+    /// </para>
+    /// </summary>
+    /// <param name="expected">根節點應該是 <c>Array</c>（文章）還是 <c>Object</c>（頁面）。</param>
+    private static string? ReadBodyBlocks(JsonElement bodyEl, JsonValueKind expected, string label)
+    {
+        if (bodyEl.ValueKind == JsonValueKind.Null) return null;
+
+        var json = bodyEl.ValueKind == JsonValueKind.String ? bodyEl.GetString() : bodyEl.GetRawText();
+        if (string.IsNullOrWhiteSpace(json)) return null;
+
+        JsonValueKind rootKind;
+        try
+        {
+            using var parsed = JsonDocument.Parse(json);
+            rootKind = parsed.RootElement.ValueKind;
+        }
+        catch (JsonException)
+        {
+            throw AppException.BadRequest(ErrorCodes.ValidationFormat, $"{label}不是有效的 JSON。");
+        }
+
+        if (rootKind != expected)
+        {
+            var want = expected == JsonValueKind.Array ? "陣列" : "物件";
+            throw AppException.BadRequest(ErrorCodes.ValidationFormat, $"{label}的最外層必須是 JSON {want}。");
+        }
+
+        return json;
+    }
+
     private static string? JStr(JsonElement e, string name)
         => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString() : null;
@@ -1730,7 +1789,7 @@ public sealed class ContentHandler(
         if (f.TryGetProperty("cover", out _)) a.Cover = JImage(f, "cover");
 
         if (f.TryGetProperty("bodyBlocks", out var bodyEl))
-            a.BodyBlocks = bodyEl.ValueKind == JsonValueKind.Null ? null : bodyEl.GetRawText();
+            a.BodyBlocks = ReadBodyBlocks(bodyEl, JsonValueKind.Array, "文章內文");
 
         if (f.TryGetProperty("readingMinutes", out _)) a.ReadingMinutes = JInt(f, "readingMinutes");
 
@@ -1931,7 +1990,7 @@ public sealed class ContentHandler(
         //    由種子資料建立，CreateAsync 已強制新頁一律 PageKind.Free、SuperAdminOnly=false（docs/02 §1）。
         if (f.TryGetProperty("lead", out _)) p.Lead = JStr(f, "lead");
         if (f.TryGetProperty("bodyBlocks", out var bodyEl))
-            p.BodyBlocks = bodyEl.ValueKind == JsonValueKind.Null ? null : bodyEl.GetRawText();
+            p.BodyBlocks = ReadBodyBlocks(bodyEl, JsonValueKind.Object, "頁面內文");
         if (f.TryGetProperty("cover", out _)) p.Cover = JImage(f, "cover");
 
         if (p.PageKind == PageKind.System)
