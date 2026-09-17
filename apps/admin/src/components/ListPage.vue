@@ -1,8 +1,22 @@
 <script setup lang="ts">
 // 通用清單畫面：九個內容模型共用（docs/09-frontend.md §8）。
-// 分頁 20 筆、關鍵字、狀態／分類篩選、批次上下架、排序（此輪先用上／下移動
-// 按鈕代替真正拖曳——之後要換成拖曳排序時，只需要換 UI，呼叫的仍是同一支
-// `adminApi.content.sort()`，不用動資料層）。
+// 分頁 20 筆、關鍵字、狀態／分類篩選、批次上下架、排序。
+//
+// 排序 2026-09-17 由上／下移動按鈕改成拖曳（Tim 指定，↑↓ 一併移除）。
+// 拖放機制見 `@/drag-sort`，端點仍是原本的 `adminApi.content.sort()`。
+//
+// 🔴 **送出的是整個單元的順序，不是畫面上這 20 筆。** 原本 ↑↓ 送的是當頁 id
+//    配 0..19，而那會與**沒出現在這一頁**的資料撞號：實測療程（28 筆、每頁 20）
+//    拖一次之後整個清單重排，連沒碰過的項目都跳位。
+//    根因是資料庫裡 `SortOrder` 幾乎整批是 0（醫師 14 筆、困擾 8 筆、分類 100+
+//    筆都是 0，清單靠 `ORDER BY SortOrder, Id` 的 Id 決勝），所以任何「只重編
+//    一部分」的寫法都會把沒重編到的那些洗到前面去。
+//    現在的作法：抓回整個單元的現行順序 → 把畫面上這幾筆**依新順序填回它們
+//    原本佔的位置**（篩選中也成立）→ 整串 0..n 送出。
+//
+// ⚠️ 因此排序有筆數上限 `SORT_MAX`（＝API 的 `Paging.MaxPageSize`，一次排序
+//    超過 100 筆會被擋下）。超過的單元（文章 1100、分類標籤 400+）**不給拖**，
+//    順序請到編輯畫面填「排序值」—— 那種量級本來就不是用手排的。
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { adminApi, ApiError } from '@/api/client'
@@ -13,6 +27,8 @@ import { STATUS_LABEL } from '@/types'
 import type { UnitField } from '@/unit-schema'
 import { UNIT_REGISTRY } from '@/units'
 import { validateSlug } from '@/validation'
+import { useDragSort } from '@/drag-sort'
+import DragHandle from './DragHandle.vue'
 import StatusBadge from './StatusBadge.vue'
 
 const props = defineProps<{ unit: UnitKey }>()
@@ -139,20 +155,39 @@ async function batchPublish(status: 3 | 4) {
   }
 }
 
-async function move(id: number, direction: -1 | 1) {
-  const index = items.value.findIndex((i) => i.id === id)
-  const target = index + direction
-  if (target < 0 || target >= items.value.length) return
-  const ids = items.value.map((i) => i.id)
-  ;[ids[index], ids[target]] = [ids[target], ids[index]]
+/** 一次排序的筆數上限，對齊 API 的 `Paging.MaxPageSize`（超過整支被擋）。 */
+const SORT_MAX = 100
+
+/** 這個單元排得動嗎 —— 全部筆數要能一次送完，理由見檔頭。 */
+const sortable = computed(() => canEdit.value && totalCount.value > 1 && totalCount.value <= SORT_MAX)
+
+async function reorder(orderedPageIds: number[]) {
   errorMessage.value = ''
   try {
-    await adminApi.content.sort(props.unit, ids, user!.id)
+    // 整個單元的現行順序（不帶任何篩選條件——要的是全域位置）。
+    const all = await adminApi.content.list(props.unit, { page: 1, pageSize: SORT_MAX })
+    if (all.totalCount > SORT_MAX) throw new Error(`這個單元有 ${all.totalCount} 筆，超過一次排序的上限 ${SORT_MAX} 筆。`)
+
+    // 畫面上這幾筆佔住的位置不變，只是換成新的先後。其餘項目原封不動。
+    const moving = new Set(orderedPageIds)
+    let cursor = 0
+    const merged = all.items.map((i) => i.id).map((id) => (moving.has(id) ? orderedPageIds[cursor++] ?? id : id))
+    if (cursor !== orderedPageIds.length) throw new Error('清單在排序期間變動過，請重新載入後再試一次。')
+
+    await adminApi.content.sort(props.unit, merged, user!.id)
   } catch (e) {
     errorMessage.value = messageOf(e, '排序儲存失敗。')
   }
+  // ⚠️ 無論成敗都重載：成功要拿回 API 寫下的 sortOrder，失敗更要把畫面拉回
+  //    資料庫的真實順序，不能讓人以為拖好了。
   await load()
 }
+
+const drag = useDragSort<number>({
+  keys: () => items.value.map((i) => i.id),
+  onReorder: (_group, orderedIds) => reorder(orderedIds),
+  enabled: () => sortable.value,
+})
 
 // ── 新增 ──────────────────────────────────────────────────────────────
 //
@@ -473,13 +508,14 @@ const newTagTermType = ref('1')
         <table class="adm-table">
           <thead>
             <tr>
+              <th v-if="sortable" class="adm-table__handle"><span class="visually-hidden">排序</span></th>
               <th class="adm-table__check"><input type="checkbox" :checked="selected.size === items.length" @change="toggleSelectAll"></th>
               <th v-for="col in def.listColumns" :key="col.key">{{ col.label }}</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(item, idx) in items" :key="item.id">
+            <tr v-for="item in items" :key="item.id" v-bind="drag.itemProps('list', item.id)" :class="drag.itemClass('list', item.id)">
+              <td v-if="sortable" class="adm-table__handle"><DragHandle v-bind="drag.handleProps(item.id)" /></td>
               <td><input type="checkbox" :checked="selected.has(item.id)" @change="toggleSelect(item.id)"></td>
               <td v-for="col in def.listColumns" :key="col.key" :class="{ 'is-wrap': col.key === 'title' }">
                 <span v-if="col.key === 'title'" class="adm-table__title">
@@ -491,13 +527,13 @@ const newTagTermType = ref('1')
                 <!-- relation-single 欄位（例如分類、對應療程）優先顯示 client.ts 算好的 __label -->
                 <span v-else>{{ item.fields[`${col.key}__label`] ?? item.fields[col.key] ?? (item as unknown as Record<string, unknown>)[col.key] ?? '—' }}</span>
               </td>
-              <td class="adm-table__actions">
-                <button type="button" class="adm-table__drag" title="上移" :disabled="idx === 0" @click="move(item.id, -1)">↑</button>
-                <button type="button" class="adm-table__drag" title="下移" :disabled="idx === items.length - 1" @click="move(item.id, 1)">↓</button>
-              </td>
             </tr>
           </tbody>
         </table>
+        <p v-if="canEdit && totalCount > SORT_MAX" class="adm-field__hint" style="margin-top: var(--sp-2)">
+          {{ def.label }}共 {{ totalCount }} 筆，超過一次排序的上限（{{ SORT_MAX }} 筆），因此這個清單不提供拖曳排序。
+          需要固定順序請到該筆的編輯畫面填「排序值」。
+        </p>
       </div>
 
       <div class="adm-pagination">

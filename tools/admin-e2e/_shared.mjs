@@ -134,6 +134,41 @@ export function fieldByLabel(page, labelText) {
 }
 
 /**
+ * 用真的滑鼠把一列拖到另一列的上半／下半（後台的原生 HTML5 拖放排序，
+ * 實作見 `apps/admin/src/drag-sort.ts`）。
+ *
+ * ⚠️ **兩列必須同時在視窗內。** 合成滑鼠不會像真人那樣「拖到視窗邊緣自動捲動」，
+ *    目標在畫面外時放開等於什麼都沒發生 —— 而且畫面上看起來一切正常。
+ *    選單頁的頂層項目區塊很高（欄位＋子項目，實測相鄰兩塊差約 1600px），
+ *    要測那一頁得先 `page.setViewportSize()` 把視窗拉高。
+ * ⚠️ **按下把手之後要等一拍。** 那一列的 `draggable` 是 mousedown 之後才由 Vue
+ *    補上的，馬上移動的話瀏覽器不會判定成拖曳（症狀：draggable 還是 false）。
+ */
+export async function dragRow(page, handle, target, { below = true } = {}) {
+  await target.scrollIntoViewIfNeeded()
+  await handle.scrollIntoViewIfNeeded()
+  await page.waitForTimeout(250)
+  const h = await handle.boundingBox()
+  const t = await target.boundingBox()
+  if (!h || !t) throw new Error('抓不到把手或目標的 boundingBox')
+  const vh = page.viewportSize().height
+  if (h.y < 0 || t.y < 0 || h.y > vh || t.y > vh) {
+    throw new Error(`兩列不在同一個畫面裡（把手 y=${Math.round(h.y)}、目標 y=${Math.round(t.y)}、視窗高 ${vh}）`)
+  }
+
+  await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2)
+  await page.mouse.down()
+  await page.waitForTimeout(200)
+  const ty = below ? t.y + t.height * 0.8 : t.y + t.height * 0.2
+  // 分段移動：一步到位的話 Chromium 不會判定成拖曳。
+  await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2 + 15, { steps: 6 })
+  await page.mouse.move(t.x + t.width / 2, ty, { steps: 14 })
+  await page.mouse.move(t.x + t.width / 2, ty, { steps: 3 })
+  await page.mouse.up()
+  await page.waitForTimeout(1200)
+}
+
+/**
  * 斷言某個欄位已經是**結構化表單**，不是裸的 JSON 文字框。
  * 回傳目前是表單模式還是原始 JSON 模式。
  */

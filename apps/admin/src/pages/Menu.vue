@@ -1,9 +1,12 @@
 <script setup lang="ts">
 // 導覽選單與頁尾（/menu）—— 規格見 docs/02 §3、docs/08 §G-3。
 //
-// 樹狀編輯，最多兩層：頂層項目 ＋ 各自底下的子項目。拖曳排序此輪比照其餘畫面
-// 的既有作法（admin.css 開頭註解：「拖曳排序現為上／下移動按鈕」），用上／下
-// 移動按鈕代替真正的拖曳，不是漏做。
+// 樹狀編輯，最多兩層：頂層項目 ＋ 各自底下的子項目。
+//
+// 排序 2026-09-17 改成真正的拖曳（Tim 指定，↑↓ 一併移除），機制見 `@/drag-sort`。
+// 🔴 **每一層是獨立的一組**：主選單頂層、頁尾頂層，以及每個頂層項目底下的子項目
+//    各自一組（group 字串就是這個意思）。跨組拖曳一律被忽略 —— 把子項目拖成頂層
+//    是「升層」按鈕的事，混在排序裡做會讓人分不清自己剛剛改了什麼。
 //
 // 每一列（既有項目）用「本地編輯緩衝 ＋ 列末儲存按鈕」，不是每個欄位一改就打
 // API：型態（LinkKind）在「站內內容」時要先選單元、才能選到項目，兩者是
@@ -26,6 +29,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { adminApi, ApiError } from '@/api/client'
 import type { LinkKind, MenuItem, MenuKey, NewMenuItemInput, SiteSettingsData } from '@/api/site'
 import { currentUser } from '@/auth'
+import DragHandle from '@/components/DragHandle.vue'
+import { useDragSort } from '@/drag-sort'
 import { hasPermission } from '@/permissions'
 import type { UnitKey } from '@/types'
 import { UNIT_KEYS } from '@/types'
@@ -159,12 +164,24 @@ async function commitRow(item: MenuItem) {
   })
 }
 
-async function moveItem(item: MenuItem, direction: -1 | 1) {
-  await withErrorHandling(async () => {
-    await adminApi.site.menu.move(item.id, direction, user!.id)
-    await loadMenu(item.menuKey)
-  })
-}
+// group 字串：`${menuKey}:top`（該選單的頂層）或 `${menuKey}:child:${parentId}`。
+// keys() 依 group 反查該層目前的順序，所以三種清單共用同一個 composable。
+const drag = useDragSort<number>({
+  keys: (group) => {
+    const [menuKey, kind, parentId] = group.split(':')
+    const items = menuKey === 'main' ? mainItems.value : footerItems.value
+    return (kind === 'top' ? topOf(items) : childrenOf(items, Number(parentId))).map((i) => i.id)
+  },
+  onReorder: async (group, orderedIds) => {
+    const menuKey = group.split(':')[0] as MenuKey
+    await withErrorHandling(async () => {
+      await adminApi.site.menu.reorder(menuKey, orderedIds, user!.id)
+      await loadMenu(menuKey)
+      actionNotice.value = '順序已儲存，立即生效。'
+    })
+  },
+  enabled: () => canEdit.value,
+})
 
 async function promoteItem(item: MenuItem) {
   await withErrorHandling(async () => {
@@ -290,7 +307,12 @@ function removeSocialLink(index: number) {
         <p class="adm-card__title">{{ menuKey === 'main' ? '主選單' : '頁尾選單' }}</p>
 
         <div v-for="top in topOf(items)" :key="top.id" class="adm-repeater" style="margin-bottom: var(--sp-4)">
-          <div class="adm-repeater__row">
+          <div
+            class="adm-repeater__row"
+            v-bind="drag.itemProps(`${menuKey}:top`, top.id)"
+            :class="drag.itemClass(`${menuKey}:top`, top.id)"
+          >
+            <DragHandle v-if="canEdit" v-bind="drag.handleProps(top.id)" />
             <div class="adm-repeater__fields">
               <div class="adm-field">
                 <label class="adm-field__label">項目名稱</label>
@@ -332,15 +354,21 @@ function removeSocialLink(index: number) {
             </div>
             <div class="adm-inline-actions">
               <button type="button" class="btn btn--primary btn--sm" :disabled="!canEdit || !isDirty(top)" @click="commitRow(top)">{{ isDirty(top) ? '儲存＊' : '儲存' }}</button>
-              <button type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="moveItem(top, -1)">↑</button>
-              <button type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="moveItem(top, 1)">↓</button>
               <button type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="toggleChildForm(top.id)">＋子項目</button>
               <button type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="removeItem(top)">刪除</button>
             </div>
           </div>
 
           <!-- 子項目（最多兩層，這一層不可再有子項目） -->
-          <div v-for="child in childrenOf(items, top.id)" :key="child.id" class="adm-repeater__row" style="margin-left: var(--sp-6)">
+          <div
+            v-for="child in childrenOf(items, top.id)"
+            :key="child.id"
+            class="adm-repeater__row"
+            style="margin-left: var(--sp-6)"
+            v-bind="drag.itemProps(`${menuKey}:child:${top.id}`, child.id)"
+            :class="drag.itemClass(`${menuKey}:child:${top.id}`, child.id)"
+          >
+            <DragHandle v-if="canEdit" v-bind="drag.handleProps(child.id)" />
             <div class="adm-repeater__fields">
               <div class="adm-field">
                 <label class="adm-field__label">項目名稱</label>
@@ -382,8 +410,6 @@ function removeSocialLink(index: number) {
             </div>
             <div class="adm-inline-actions">
               <button type="button" class="btn btn--primary btn--sm" :disabled="!canEdit || !isDirty(child)" @click="commitRow(child)">{{ isDirty(child) ? '儲存＊' : '儲存' }}</button>
-              <button type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="moveItem(child, -1)">↑</button>
-              <button type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="moveItem(child, 1)">↓</button>
               <button type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="promoteItem(child)" title="升為頂層項目">升層</button>
               <button type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="removeItem(child)">刪除</button>
             </div>

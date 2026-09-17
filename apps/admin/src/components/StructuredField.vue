@@ -85,10 +85,10 @@ function toFormMode() {
     </p>
 
     <div v-else class="adm-struct__modes">
-      <button type="button" class="btn btn--sm" :class="raw ? 'btn--ghost' : 'btn--line'" :disabled="disabled || !raw" @click="toFormMode">
+      <button type="button" class="btn btn--sm" :class="raw ? 'btn--line' : 'btn--primary'" :disabled="disabled || !raw" @click="toFormMode">
         表單
       </button>
-      <button type="button" class="btn btn--sm" :class="raw ? 'btn--line' : 'btn--ghost'" :disabled="disabled || raw" @click="toRawMode">
+      <button type="button" class="btn btn--sm" :class="raw ? 'btn--primary' : 'btn--line'" :disabled="disabled || raw" @click="toRawMode">
         進階：直接編輯 JSON
       </button>
     </div>
@@ -128,5 +128,13 @@ function toFormMode() {
 <style scoped>
 .adm-struct { display: flex; flex-direction: column; gap: var(--sp-2); }
 .adm-struct__modes { display: flex; gap: var(--sp-2); }
+/* 選中的那一顆 ＝ 實心藍（btn--primary），未選 ＝ 灰線框（btn--line）。
+   ⚠️ 不要再對調回去：base.css 的 --ghost 是「藍框藍字」、比 --line 重，
+   拿它當未選狀態的結果就是「沒選的那顆比較亮」（2026-09-17 修）。
+   下面兩行凍結 disabled 時的 hover —— CSS 的 :hover 會匹配 disabled 元素，
+   不凍結的話選中那顆滑過去會變色，暗示它按得下去。 */
+.adm-struct__modes .btn:disabled { cursor: default; }
+.adm-struct__modes .btn--primary:disabled:hover { background: var(--brand-600); border-color: var(--brand-600); }
+.adm-struct__modes .btn--line:disabled:hover { border-color: var(--line); background: transparent; }
 .adm-struct__raw { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--fs-xs); }
 </style>

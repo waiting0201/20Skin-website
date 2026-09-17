@@ -57,6 +57,8 @@
    15. 登入頁               .adm-login（左右分欄，獨立版面）
    16. 小工具               .adm-muted／.adm-divider／.adm-inline-actions
    17. RWD 斷點總覽
+   18. 拖曳排序            .adm-drag-handle／.is-dragging／.is-drop-*
+   19. 返回列表            .adm-page__back
    ========================================================================= */
 
 
@@ -818,3 +820,46 @@
 .adm-struct__line-actions { display: flex; gap: var(--sp-1); flex: none; }
 /* 貼多行的入口刻意做窄：它不是欄位，是一個工具 */
 .adm-struct__paste { flex: 1; min-width: 12em; resize: vertical; }
+
+
+/* ── 18. 拖曳排序（drag-sort.ts）─────────────────────────────────────────
+   內容清單、首頁版位、導覽選單三處共用。2026-09-17 取代上／下移動按鈕。
+   ⚠️ 一定要有「把手」：三處的列裡面都有輸入框，整列 draggable 會讓那些欄位
+      連字都選不起來（見 drag-sort.ts 檔頭）。把手就是這顆 .adm-drag-handle。 */
+.adm-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8em;
+  height: 1.8em;
+  flex: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ink-50);
+  border-radius: var(--radius-sm);
+  cursor: grab;
+  line-height: 1;
+  transition: background .15s ease, color .15s ease;
+}
+.adm-drag-handle:hover { background: var(--surface-alt); color: var(--brand-600); }
+.adm-drag-handle:active { cursor: grabbing; }
+
+/* 被拖著的那一列：留在原位但淡出，讓插入線成為視線焦點。 */
+.is-dragging { opacity: .4; }
+
+/* 插入位置的指示線。⚠️ 表格列不能直接上 border（border-collapse 會吃掉它），
+   一律用 inset box-shadow；表格那一路畫在 td 上，tr 自己不畫。 */
+.is-drop-before { box-shadow: inset 0 2px 0 0 var(--brand-600); }
+.is-drop-after { box-shadow: inset 0 -2px 0 0 var(--brand-600); }
+.adm-table tbody tr.is-drop-before,
+.adm-table tbody tr.is-drop-after { box-shadow: none; }
+.adm-table tbody tr.is-drop-before > td { box-shadow: inset 0 2px 0 0 var(--brand-600); }
+.adm-table tbody tr.is-drop-after > td { box-shadow: inset 0 -2px 0 0 var(--brand-600); }
+.adm-table__handle { width: 2.4em; }
+
+
+/* ── 19. 返回列表（EditPage）──────────────────────────────────────────────
+   編輯畫面回到該單元列表的逃生口。⚠️ 它是 <RouterLink>，不是 history.back()：
+   直接貼網址進來的人沒有上一頁，而麵包屑在窄螢幕會被擠掉。 */
+.adm-page__back { margin-bottom: var(--sp-3); }

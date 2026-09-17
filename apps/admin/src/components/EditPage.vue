@@ -466,6 +466,13 @@ async function removeRecord() {
   </div>
 
   <div v-else-if="record">
+    <!-- 回列表的逃生口。⚠️ 用固定目的地（該單元的列表）而不是 history.back()：
+         直接貼網址進來的人沒有上一頁，而 back 也可能把人送回登入頁或站外。
+         走 RouterLink 還有一個好處 —— 會經過 onBeforeRouteLeave 的
+         「有尚未儲存的變更」確認，不會安靜地把編輯到一半的東西丟掉。 -->
+    <p class="adm-page__back">
+      <RouterLink class="btn btn--line btn--sm" :to="`/${unit}`">← 回到{{ def.label }}列表</RouterLink>
+    </p>
     <div class="adm-page__head">
       <div>
         <h1 class="adm-page__title">{{ record.title || `（未命名${def.labelSingular}）` }}</h1>

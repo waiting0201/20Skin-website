@@ -116,6 +116,67 @@ await step('貼整段程式碼會被當場擋下', async () => {
   return JSON.stringify((await page.locator('.adm-field__error').first().innerText()).slice(0, 30))
 })
 
+section('編輯頁的返回按鈕')
+await step('編輯頁回得去列表', async () => {
+  await openEdit(page, 'treatment', ids.treatment)
+  const back = page.locator('.adm-page__back a')
+  await back.waitFor({ timeout: 15000 })
+  const label = await back.innerText()
+  await back.click()
+  await page.waitForTimeout(1200)
+  if (!/\/admin\/treatment$/.test(page.url())) throw new Error(`按下去到了 ${page.url()}`)
+  return JSON.stringify(label)
+})
+
+section('清單的拖曳排序（唯讀：只看有沒有、不真的拖）')
+await step('療程：每一列都有把手，而且沒有 ↑↓ 了', async () => {
+  // 🔴 真的拖一次在 publish-flow.mjs（那一支才會寫資料）。這裡只擋「把手不見了」
+  //    與「↑↓ 又長回來」—— 兩者 typecheck 與 build 都看不到。
+  await page.waitForSelector('.adm-table tbody tr', { timeout: 20000 })
+  const rows = await page.locator('.adm-table tbody tr').count()
+  const handles = await page.locator('.adm-table tbody tr .adm-drag-handle').count()
+  if (rows !== handles) throw new Error(`${rows} 列只有 ${handles} 個把手`)
+  const arrows = await page.locator('.adm-table button', { hasText: /^[↑↓]$/ }).count()
+  if (arrows) throw new Error(`還有 ${arrows} 顆箭頭按鈕`)
+  return `${handles} 個把手、0 顆箭頭`
+})
+await step('文章：超過上限就不給拖，而且說得出為什麼', async () => {
+  // ⚠️ 排序送出的是**整個單元**的順序，超過 API 的 100 筆上限就整支被擋
+  //    （ListPage.vue 檔頭）。不給拖是刻意的，但一定要讓人看得到原因。
+  await navigate(page, '/admin/article')
+  await page.waitForSelector('.adm-table tbody tr', { timeout: 25000 })
+  await page.waitForTimeout(600)
+  const handles = await page.locator('.adm-table .adm-drag-handle').count()
+  if (handles) throw new Error(`文章有 ${handles} 個把手 —— 拖了會把 1100 筆的順序洗掉`)
+  const hint = page.locator('.adm-field__hint', { hasText: '超過一次排序的上限' })
+  if (!(await hint.count())) throw new Error('沒有說明為什麼不能拖')
+  return (await hint.first().innerText()).replace(/\s+/g, ' ').slice(0, 34)
+})
+
+section('模式切換：選中的那顆要看得出來')
+await step('表單／進階 JSON 的選中狀態沒有反過來', async () => {
+  // 🔴 這一條擋的是「亮的是沒被選中的那一顆」（2026-09-17 修）：base.css 的
+  //    btn--ghost 是藍框藍字、比中性的 btn--line 重，早先卻拿它當「未選」。
+  //    typecheck 與 build 看不到 class 的輕重關係，只有真的看一眼才知道。
+  // ⚠️ 刻意放在最後：切換模式會讓表單變成「有未儲存的變更」，之後再換頁會跳
+  //    confirm，而 Playwright 預設會取消它 —— 後面的檢查就全部卡住了。
+  await openEdit(page, 'treatment', ids.treatment)
+  const modes = fieldByLabel(page, '適應症').locator('.adm-struct__modes')
+  await modes.waitFor({ timeout: 20000 })
+  const formBtn = modes.locator('button', { hasText: '表單' })
+  const rawBtn = modes.locator('button', { hasText: '進階' })
+  const lit = async (b) => /btn--primary/.test((await b.getAttribute('class')) ?? '')
+
+  if (!(await lit(formBtn))) throw new Error('表單模式下，「表單」那顆不是實心（btn--primary）')
+  if (await lit(rawBtn)) throw new Error('沒被選中的「進階」那顆是實心的 —— 選中狀態反了')
+
+  await rawBtn.click()
+  await page.waitForTimeout(400)
+  if (!(await lit(rawBtn))) throw new Error('切到 JSON 模式後，「進階」那顆不是實心')
+  if (await lit(formBtn)) throw new Error('切到 JSON 模式後，「表單」那顆還是實心 —— 選中狀態反了')
+  return '選中＝實心藍、未選＝灰線框'
+})
+
 section('瀏覽器')
 await step('console 沒有錯誤、沒有 404', async () => {
   // 🔴 這一條擋的是③：dev 的 /assets/base.css 與 logo 曾經一律 404，

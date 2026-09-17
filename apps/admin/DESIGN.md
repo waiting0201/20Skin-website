@@ -164,8 +164,13 @@ token 直接寫 hex。
 ### 3.3 列表頁（`ListPage.vue` 現在的樣子，供參考）
 `.adm-page__head` → `.adm-filters`（篩選列，含 `.adm-filters__spacer` 把批次
 操作按鈕推到最右）→ `.adm-table-wrap > table.adm-table` → `.adm-pagination`。
-表格列的「標題」欄位用 `.adm-table__title`（會 hover 變品牌色），排序用
-`.adm-table__drag`（現在是上下移動按鈕，之後真的做拖曳排序也是同一個 class）。
+表格列的「標題」欄位用 `.adm-table__title`（會 hover 變品牌色）。排序是**拖曳**
+（2026-09-17）：第一欄 `.adm-table__handle` 放 `<DragHandle>`（`.adm-drag-handle`），
+機制在 `src/drag-sort.ts`，樣式在 admin.css §18。
+⚠️ 把手只在「這個單元排得動」時才出現 —— 一次排序超過 100 筆會被 API 擋下，
+所以文章與分類標籤那種量級不給拖，改在表格下方說明原因。
+⚠️ `.adm-table__drag` 是**另一回事**：它是 `StructuredNode`／關聯選擇器那些
+仍用 ↑↓ 的小圖示按鈕，不要跟拖曳把手混用。
 
 ### 3.4 編輯表單
 `.adm-form` 包住整個編輯區；每個欄位群組用 `.adm-fieldset`

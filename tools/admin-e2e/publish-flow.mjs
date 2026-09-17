@@ -16,7 +16,7 @@
 import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { openAdmin, openEdit, assertStructured, fieldByLabel, apiLogin, api, findWithContent, step, section, summary, realErrors, ADMIN, API, WEB } from './_shared.mjs'
+import { openAdmin, openEdit, navigate, dragRow, assertStructured, fieldByLabel, apiLogin, api, findWithContent, step, section, summary, realErrors, ADMIN, API, WEB } from './_shared.mjs'
 
 const MARKER = `（端到端驗證 ${new Date().toISOString().slice(11, 19)}）`
 const backupDir = mkdtempSync(join(tmpdir(), 'skin20-e2e-'))
@@ -124,9 +124,53 @@ await step('療程頁出現剛剛改的字', async () => {
   return '新值已生效、舊值已消失'
 })
 
-await browser.close()
+// ── C. 清單的拖曳排序 ─────────────────────────────────────────────────
+//
+// 🔴 這一段抓的是「拖對了、但寫錯範圍」——2026-09-17 導入拖曳時實際踩到：
+//    原本送出的是**當頁那 20 筆**配 0..19，而資料庫裡的 `SortOrder` 幾乎整批
+//    是 0，於是沒出現在那一頁的項目全部跟著洗牌。畫面上「拖動的那一列」看起來
+//    是對的，要**重新載入**才看得出整個清單已經亂掉。
+//    所以下面一定要「拖完 → 回 API 對整個單元的順序」，不能只看畫面。
+//
+// 用醫師（14 筆、一頁放得下）：拖完的順序可以整串驗，也拖得回來。
+// ⚠️ 還原的是**順序**；`SortOrder` 的值會從全 0 變成 0..13，那是排序功能本來
+//    就會做的事（也正是它修好撞號的方式），不視為未還原。
+
+section('C. 醫師清單：拖曳排序（會寫 SortOrder）')
+
+const doctorOrder = async () => (await api('/admin/doctor?page=1&pageSize=100')).data.items.map((i) => i.id)
+const doctorRow = (i) => page.locator('.adm-table tbody tr').nth(i)
+let doctorBefore = []
+
+await step('把第 1 列拖到第 3 列下面', async () => {
+  doctorBefore = await doctorOrder()
+  if (doctorBefore.length < 4) throw new Error(`醫師只有 ${doctorBefore.length} 筆，驗不了排序`)
+  await navigate(page, '/admin/doctor')
+  await page.waitForSelector('.adm-table tbody tr .adm-drag-handle', { timeout: 25000 })
+  await page.waitForTimeout(600)
+  await dragRow(page, doctorRow(0).locator('.adm-drag-handle'), doctorRow(2), { below: true })
+
+  const [a, b, c, ...rest] = doctorBefore
+  const want = [b, c, a, ...rest]
+  const now = await doctorOrder()
+  if (JSON.stringify(now) !== JSON.stringify(want)) {
+    throw new Error(`整個單元的順序不對\n      現在 ${now.join(',')}\n      預期 ${want.join(',')}`)
+  }
+  return `${doctorBefore.slice(0, 3).join(',')} → ${now.slice(0, 3).join(',')}`
+})
+
+await step('拖回原位，整串順序與動手之前相同', async () => {
+  await dragRow(page, doctorRow(2).locator('.adm-drag-handle'), doctorRow(0), { below: false })
+  const now = await doctorOrder()
+  if (JSON.stringify(now) !== JSON.stringify(doctorBefore)) {
+    throw new Error(`沒還原\n      現在 ${now.join(',')}\n      原本 ${doctorBefore.join(',')}`)
+  }
+  return '已還原'
+})
 
 // ── 還原 ──────────────────────────────────────────────────────────────
+
+await browser.close()
 
 section('還原')
 await step('把療程的 facts 改回原值並重新發布', async () => {

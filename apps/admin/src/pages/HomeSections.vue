@@ -35,7 +35,9 @@ import { hasPermission } from '@/permissions'
 import type { RelationItem, UnitKey } from '@/types'
 import type { RelationField } from '@/unit-schema'
 import { UNIT_REGISTRY } from '@/units'
+import DragHandle from '@/components/DragHandle.vue'
 import RelationPicker from '@/components/RelationPicker.vue'
+import { useDragSort } from '@/drag-sort'
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
@@ -62,6 +64,12 @@ const isLocked = computed(() => state.value?.status === 2)
 const canEdit = computed(() => canEditBase.value && !isLocked.value)
 
 const sortedSections = computed(() => [...sections].sort((a, b) => a.sortOrder - b.sortOrder))
+
+const drag = useDragSort<HomeSectionKey>({
+  keys: () => sortedSections.value.map((s) => s.sectionKey),
+  onReorder: (_group, orderedKeys) => reorderSections(orderedKeys),
+  enabled: () => canEdit.value,
+})
 
 // 內容標題快取：{ unit: { id: label } }，畫面上把 ContentItemId 換成可讀標題。
 const titleCache = reactive<Record<string, Record<number, string>>>({})
@@ -143,16 +151,14 @@ async function load() {
 
 onMounted(load)
 
-function moveSection(key: HomeSectionKey, direction: -1 | 1) {
-  const ordered = sortedSections.value
-  const index = ordered.findIndex((s) => s.sectionKey === key)
-  const target = index + direction
-  if (target < 0 || target >= ordered.length) return
-  const a = ordered[index]
-  const b = ordered[target]
-  const tmp = a.sortOrder
-  a.sortOrder = b.sortOrder
-  b.sortOrder = tmp
+// 拖曳排序（2026-09-17 取代上／下移動按鈕）。
+// ⚠️ 這裡只改本地的 sortOrder，**不打 API** —— 版位編排是「改完一次存草稿、
+//    再送審」，跟清單頁那種「動一下就即時寫回」不一樣。存檔仍走 saveDraft()。
+function reorderSections(orderedKeys: HomeSectionKey[]) {
+  orderedKeys.forEach((key, index) => {
+    const section = sections.find((s) => s.sectionKey === key)
+    if (section) section.sortOrder = index
+  })
 }
 
 function addHeroImage(hero: HomeHeroSettings) {
@@ -265,10 +271,17 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布
 
       <div class="adm-editor-layout">
         <div>
-          <div v-for="section in sortedSections" :key="section.sectionKey" class="adm-card">
+          <div
+            v-for="section in sortedSections"
+            :key="section.sectionKey"
+            class="adm-card"
+            v-bind="drag.itemProps('sections', section.sectionKey)"
+            :class="drag.itemClass('sections', section.sectionKey)"
+          >
             <div class="adm-page__head" style="margin-bottom: var(--sp-3)">
               <div>
-                <p class="adm-card__title" style="margin-bottom: 0">
+                <p class="adm-card__title" style="margin-bottom: 0; display: flex; align-items: center; gap: var(--sp-2)">
+                  <DragHandle v-if="canEdit" v-bind="drag.handleProps(section.sectionKey)" />
                   {{ section.title }}
                   <span class="adm-muted" style="font-weight: 400; font-size: var(--fs-xs)">（{{ section.sectionKey }}）</span>
                 </p>
@@ -278,10 +291,6 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布
                 <p v-else class="adm-field__hint">
                   唯一例外：沒有對應的內容模型，CTA 與外部導流連結存在版位設定裡。
                 </p>
-              </div>
-              <div class="adm-page__actions">
-                <button type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="moveSection(section.sectionKey, -1)">↑ 上移</button>
-                <button type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="moveSection(section.sectionKey, 1)">↓ 下移</button>
               </div>
             </div>
 

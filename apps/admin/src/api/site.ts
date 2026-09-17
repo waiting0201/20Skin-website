@@ -701,26 +701,35 @@ const menu = {
     throw new ApiError('NOT_FOUND', `找不到選單項目 #${id}。`)
   },
 
-  /** 同層排序（上／下移動）。 */
-  async move(id: number, direction: -1 | 1, _userId: number): Promise<void> {
-    for (const menuKey of ['main', 'footer'] as MenuKey[]) {
-      const items = await loadMenu(menuKey)
+  /**
+   * 同層排序：`orderedIds` 是**這一層的完整新順序**（拖曳排序用，2026-09-17
+   * 取代原本一次移動一格的 `move(id, ±1)`）。
+   *
+   * ⚠️ **只重新分配這幾筆自己原有的 sortOrder 值**，不重編號成 0..n —— 同一
+   *    份選單裡別層的項目沒有被這次操作碰到，整份重編會讓它們的相對關係跟著
+   *    變動。這也是原本 `move` 交換兩個 sortOrder 的語意。
+   * 🔴 呼叫端只能傳**同一層的兄弟節點**。跨層搬移是「升層／降層」
+   *    （`changeParent`）的事，不是排序。
+   */
+  async reorder(menuKey: MenuKey, orderedIds: number[], _userId: number): Promise<void> {
+    if (orderedIds.length < 2) return
+    const items = await loadMenu(menuKey)
+
+    const moved = orderedIds.map((id) => {
       const item = items.find((i) => i.id === id)
-      if (!item) continue
+      if (!item) throw new ApiError('NOT_FOUND', `找不到選單項目 #${id}。`)
+      return item
+    })
 
-      const siblings = items.filter((i) => i.parentId === item.parentId).sort((a, b) => a.sortOrder - b.sortOrder)
-      const index = siblings.findIndex((i) => i.id === id)
-      const targetIndex = index + direction
-      if (targetIndex < 0 || targetIndex >= siblings.length) return
-
-      const tmp = siblings[index].sortOrder
-      siblings[index].sortOrder = siblings[targetIndex].sortOrder
-      siblings[targetIndex].sortOrder = tmp
-
-      await saveMenu(menuKey, items)
-      return
+    const parentIds = new Set(moved.map((i) => i.parentId ?? null))
+    if (parentIds.size > 1) {
+      throw new ApiError('CONFLICT_STATE', '排序只能在同一層之內進行。')
     }
-    throw new ApiError('NOT_FOUND', `找不到選單項目 #${id}。`)
+
+    const slots = moved.map((i) => i.sortOrder).sort((a, b) => a - b)
+    moved.forEach((item, index) => { item.sortOrder = slots[index] })
+
+    await saveMenu(menuKey, items)
   },
 
   /** 升／降一層（promote：newParentId=null；demote：newParentId=某個同選單的頂層項目）。 */
