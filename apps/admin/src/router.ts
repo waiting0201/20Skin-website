@@ -17,17 +17,32 @@ const UnitEdit = () => import('@/pages/UnitEdit.vue')
 
 // 系統類畫面（docs/06-page-inventory.md §5）。九個內容模型走上面的通用
 // /:unit 路由，這些各有各的形狀，所以一個畫面一支元件。
-const SYSTEM_SCREENS: { path: string; name: string; permission: string; component: () => Promise<unknown> }[] = [
-  { path: '/review',        name: 'review',        permission: 'review.approve',   component: () => import('@/pages/Review.vue') },
-  { path: '/questions',     name: 'questions',     permission: 'content.faq.edit', component: () => import('@/pages/Questions.vue') },
-  { path: '/sitemap',       name: 'sitemap',       permission: 'settings.edit',  component: () => import('@/pages/SitemapSettings.vue') },
-  { path: '/redirects',     name: 'redirects',     permission: 'redirect.manage', component: () => import('@/pages/Redirects.vue') },
-  { path: '/export',        name: 'export',        permission: 'settings.edit',  component: () => import('@/pages/Export.vue') },
-  { path: '/home-sections', name: 'home-sections', permission: 'home.arrange',     component: () => import('@/pages/HomeSections.vue') },
-  { path: '/menu',          name: 'menu',          permission: 'menu.edit',     component: () => import('@/pages/Menu.vue') },
-  { path: '/settings',      name: 'settings',      permission: 'settings.edit',  component: () => import('@/pages/Settings.vue') },
-  { path: '/users',         name: 'users',         permission: 'account.manage',     component: () => import('@/pages/Users.vue') },
-  { path: '/roles',         name: 'roles',         permission: 'account.manage',     component: () => import('@/pages/Roles.vue') },
+//
+// 🔴 **這是系統類畫面的單一清單：路由與側邊選單都讀它**（`label` 就是選單文字）。
+//    2026-09-17 之前 AdminLayout.vue 另外維護了一份 SYSTEM_NAV，兩份的權限碼
+//    分岔了 —— 選單那份用的是 `review.view`／`setting.view`／`user.view` 這類
+//    **已作廢的舊命名**（CLAUDE.md 決策 16、permissions.ts 檔頭：權限碼只有
+//    docs/08 §A-2 那 31 列，裡面沒有任何 `*.view`）。
+//    後果是十個項目對非超管一律查不到權限、整組選單消失，而路由其實放行。
+//    ⚠️ 超級管理員一律通過，所以用超管帳號測是看不出來的 —— 這也是它能一直
+//       留著沒被發現的原因。合成一份之後，這種分岔在結構上就不可能發生。
+export const SYSTEM_SCREENS: {
+  path: string
+  name: string
+  label: string
+  permission: string
+  component: () => Promise<unknown>
+}[] = [
+  { path: '/review',        name: 'review',        label: '審核佇列',       permission: 'review.approve',   component: () => import('@/pages/Review.vue') },
+  { path: '/questions',     name: 'questions',     label: '未命中題目清單', permission: 'content.faq.edit', component: () => import('@/pages/Questions.vue') },
+  { path: '/sitemap',       name: 'sitemap',       label: 'sitemap 設定',   permission: 'settings.edit',    component: () => import('@/pages/SitemapSettings.vue') },
+  { path: '/redirects',     name: 'redirects',     label: '301 轉址管理',   permission: 'redirect.manage',  component: () => import('@/pages/Redirects.vue') },
+  { path: '/export',        name: 'export',        label: 'FAQ／語料匯出',  permission: 'settings.edit',    component: () => import('@/pages/Export.vue') },
+  { path: '/home-sections', name: 'home-sections', label: '首頁版位編排',   permission: 'home.arrange',     component: () => import('@/pages/HomeSections.vue') },
+  { path: '/menu',          name: 'menu',          label: '導覽選單與頁尾', permission: 'menu.edit',        component: () => import('@/pages/Menu.vue') },
+  { path: '/settings',      name: 'settings',      label: '全站設定',       permission: 'settings.edit',    component: () => import('@/pages/Settings.vue') },
+  { path: '/users',         name: 'users',         label: '帳號管理',       permission: 'account.manage',   component: () => import('@/pages/Users.vue') },
+  { path: '/roles',         name: 'roles',         label: '角色權限設定',   permission: 'account.manage',   component: () => import('@/pages/Roles.vue') },
 ]
 
 declare module 'vue-router' {

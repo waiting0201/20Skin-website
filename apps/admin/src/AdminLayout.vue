@@ -7,6 +7,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { currentUser, logout } from '@/auth'
 import { can, hasPermission } from '@/permissions'
+import { SYSTEM_SCREENS } from '@/router'
 import { UNIT_REGISTRY } from '@/units'
 import { ROLE_LABEL, type UnitKey } from '@/types'
 
@@ -29,27 +30,20 @@ const unitNavItems = computed<NavItem[]>(() =>
   })),
 )
 
-// 系統類畫面（docs/06-page-inventory.md §5 的其餘 11 個）。
-// 顯示與否一律照權限碼判斷，與 router.ts 的 SYSTEM_SCREENS 一一對應。
-// ⚠️ 兩處的權限碼要一致 —— 選單看得到卻進不去，比選單不顯示更難查。
-const SYSTEM_NAV: { label: string; href: string; permission: string }[] = [
-  { label: '審核佇列', href: '/review', permission: 'review.view' },
-  { label: '未命中題目清單', href: '/questions', permission: 'question.view' },
-  { label: 'sitemap 設定', href: '/sitemap', permission: 'setting.view' },
-  { label: '301 轉址管理', href: '/redirects', permission: 'redirect.view' },
-  { label: 'FAQ／語料匯出', href: '/export', permission: 'setting.view' },
-  { label: '首頁版位編排', href: '/home-sections', permission: 'home.view' },
-  { label: '導覽選單與頁尾', href: '/menu', permission: 'menu.view' },
-  { label: '全站設定', href: '/settings', permission: 'setting.view' },
-  { label: '帳號管理', href: '/users', permission: 'user.view' },
-  { label: '角色權限設定', href: '/roles', permission: 'role.view' },
-]
-
+// 系統類畫面：清單直接讀 router.ts 的 SYSTEM_SCREENS，**這裡不再自己維護一份**。
+//
+// 🔴 2026-09-17 修掉的 bug：原本這裡有一份 SYSTEM_NAV，權限碼寫的是
+//    `review.view`／`setting.view`／`user.view` 這類**已作廢的舊命名**
+//    （CLAUDE.md 決策 16、permissions.ts 檔頭 —— 權限碼只有 docs/08 §A-2 那
+//    31 列，沒有任何 `*.view`）。查不到的碼一律回 false，所以**非超管的人
+//    整組「系統」選單十個項目全部不會出現**，而 router 用的是正確的碼、其實放行。
+//    ⚠️ 超管一律通過，用超管帳號測完全看不出來 —— 這就是它一直沒被發現的原因。
+//    現在兩邊同一份資料，分岔在結構上不可能再發生。
 const systemNavItems = computed<NavItem[]>(() =>
-  SYSTEM_NAV.map((item) => ({
-    label: item.label,
-    href: item.href,
-    visible: hasPermission(permCtx.value, item.permission),
+  SYSTEM_SCREENS.map((screen) => ({
+    label: screen.label,
+    href: screen.path,
+    visible: hasPermission(permCtx.value, screen.permission),
   })),
 )
 
