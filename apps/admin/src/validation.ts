@@ -332,8 +332,11 @@ export function validateSeo(seo: SeoDraft): FieldErrors {
     try {
       JSON.parse(structured)
     } catch {
-      // 🔴 API 不驗這一欄（原樣存、前台原樣輸出）。壞掉的 JSON-LD 不會報錯，
-      //    只會讓那一頁的結構化資料整段被搜尋引擎丟掉——所以前端一定要擋。
+      // 🔴 壞掉的 JSON-LD 不會報錯，只會讓那一頁的結構化資料整段失效。
+      //    ⚠️ 2026-09-17 更正這段註解：原本寫「前台原樣輸出」——那是錯的，
+      //    在同一天接上之前，前台**根本沒有讀過這一欄**（零引用）。
+      //    現在它是真的會輸出了（`usePageHead` 的覆寫分支），而且是**整段取代**
+      //    這一頁自動產生的結構化資料。
       errors.structuredDataOverride = '結構化資料不是有效的 JSON，請檢查引號與逗號。'
     }
   }

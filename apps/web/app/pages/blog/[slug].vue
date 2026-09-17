@@ -60,6 +60,9 @@ const reviewedOnText = article.reviewedOn ? formatDisplayDate(article.reviewedOn
 const ORIGIN = 'https://20skin.tw'
 
 usePageHead({
+  // 後台 SEO 區塊的覆寫（標題／描述／OG 圖／canonical／noindex／結構化資料）。
+  // ⚠️ 讀的是已核准的版本快照，所以後台改完要重新發布才會生效。
+  seo: article.seo,
   title: article.title,
   description: article.metaDescription ?? article.summary,
   pageCss: '/assets/pages/07-article-detail.css',

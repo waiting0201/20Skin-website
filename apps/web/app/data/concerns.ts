@@ -94,6 +94,7 @@ export interface Concern {
   overviewTags: string[]
   /** AI 摘要：40–60 字直答式段落，渲染成頁面第一段可見文字（docs/03-seo-geo.md §4 ②）。 */
   aiSummary: string
+  seo: ReturnType<typeof seoOverridesOf>
   lede: string
   relatedConcernSlugs: string[]
   heroImage: Image
@@ -108,7 +109,8 @@ export interface Concern {
 //    （ContentRelations.Note 是逐筆的推薦理由，不是整段引言）。
 
 import {
-  REL, TERM, UNIT, img, loadUnit, parseBlocks, relationsOf, termsOf, type ContentRecord,
+  REL, TERM, UNIT, img, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termsOf,
+  type ContentRecord,
 } from './_content'
 import { formatDisplayDate } from './articles'
 import { CONCERN_EYEBROW } from './_presentation'
@@ -226,6 +228,7 @@ function toConcern(ctx: ConcernContext, record: ContentRecord): Concern {
     overviewDesc: record.summary ?? '',
     overviewTags: treatments.slice(0, 3).map((t) => t.name),
     aiSummary: (record.seo?.aiSummary as string) ?? '',
+    seo: seoOverridesOf(record),
     lede: record.summary ?? '',
     relatedConcernSlugs: relationsOf(record, REL.concernToConcern).map((r) => r.toSlug as string),
     heroImage: toImage(f.cover, record.title),

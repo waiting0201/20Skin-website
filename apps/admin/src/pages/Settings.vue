@@ -106,9 +106,21 @@ function copyFromClinic(index: number) {
   form.nap[index].address = String(check.matched.fields.address ?? '')
 }
 
+/**
+ * 追蹤 ID 的格式。與 API 的 `SettingHandler.TrackingIdPattern` 逐條對應 ——
+ * 改一邊就要改另一邊。
+ */
+const TRACKING_ID_PATTERN = /^\s*(G-[A-Z0-9]{4,20}|GTM-[A-Z0-9]{4,10})(\s*,\s*(G-[A-Z0-9]{4,20}|GTM-[A-Z0-9]{4,10}))*\s*$/i
+const trackingError = ref('')
+
 const pendingImages = computed(() => countPendingImages(form.logo) + countPendingImages(form.defaultOgImage))
 
 async function save() {
+  trackingError.value = ''
+  if (form.trackingCodes.trim() && !TRACKING_ID_PATTERN.test(form.trackingCodes)) {
+    trackingError.value = '只收 GA4 的評估 ID（G-XXXXXXXX）或 GTM 的容器 ID（GTM-XXXXXXX），多組以逗號分隔。不要貼整段程式碼。'
+    return
+  }
   saving.value = true
   actionError.value = ''
   actionNotice.value = ''
@@ -191,8 +203,27 @@ async function save() {
               <p class="adm-field__hint">表單只寄通知信，後台不留存收件紀錄。</p>
             </div>
             <div class="adm-field adm-field--span2">
-              <label class="adm-field__label">追蹤碼</label>
-              <textarea v-model="form.trackingCodes" class="adm-textarea" :disabled="!canEdit" placeholder="GA4／GTM／Meta Pixel 等，貼上完整程式碼片段" />
+              <label class="adm-field__label">分析追蹤 ID</label>
+              <input
+                v-model="form.trackingCodes"
+                class="adm-input"
+                :class="{ 'is-invalid': trackingError }"
+                type="text"
+                :disabled="!canEdit"
+                placeholder="G-ABCD1234，多組以逗號分隔"
+              >
+              <p v-if="trackingError" class="adm-field__error" role="alert">{{ trackingError }}</p>
+              <p class="adm-field__hint">
+                填 GA4 的評估 ID（<code>G-</code> 開頭）或 GTM 的容器 ID（<code>GTM-</code> 開頭），
+                網站會自動掛上官方的追蹤程式。存檔後下一個訪客就開始計數，不需要重新部署。
+              </p>
+              <!-- ⚠️ 這裡刻意**不收整段程式碼**（原本的 placeholder 是「貼上完整程式碼片段」）：
+                   那等於任何能改設定的人都可以在全站每一頁對每一位訪客執行任意 JavaScript，
+                   而設定類不走審核也不留痕，後台又沒有 IP 白名單與雙因素（CLAUDE.md 決策 10）。 -->
+              <p class="adm-field__hint">
+                ⚠️ 這裡只收 ID，不收整段程式碼——貼程式碼會被擋下。
+                Meta Pixel 這類非 Google 的工具目前不支援，需要的話請告知工程端。
+              </p>
             </div>
           </div>
         </div>

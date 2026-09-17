@@ -114,6 +114,8 @@ export interface Treatment {
    *    兩邊分岔的下場就是「sitemap 收了 noindex 的網址」。
    */
   indexable: boolean
+  /** 後台 SEO 區塊的覆寫（見 _content.ts 的 seoOverridesOf）。 */
+  seo: ReturnType<typeof seoOverridesOf>
   slug: string
   categorySlug: string
   /** ContentItems.Title */
@@ -189,6 +191,7 @@ const doctorHung: RelatedDoctor = {
 
 import {
   REL, TERM, UNIT, img, loadUnit, parseBlocks, relationsOf, termsOf, type ContentRecord,
+  seoOverridesOf,
 } from './_content'
 import { eyebrowFor } from './_presentation'
 
@@ -233,6 +236,7 @@ function toTreatment(ctx: TreatmentContext, record: ContentRecord): Treatment {
 
   return {
     indexable,
+    seo: seoOverridesOf(record),
     slug: record.slug as string,
     categorySlug: category?.slug ?? '',
     title: record.title,

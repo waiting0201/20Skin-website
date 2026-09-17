@@ -76,6 +76,8 @@ export interface Clinic {
   hoursSummary: string
   /** <title>／meta description 用。 */
   pageDescription: string
+  /** 後台 SEO 區塊的覆寫（見 _content.ts 的 seoOverridesOf）。 */
+  seo: ReturnType<typeof seoOverridesOf>
   /** JSON-LD description，含門診時段摘要，對應 mockup 的 MedicalClinic JSON-LD 寫法。 */
   jsonLdDescription: string
   /** docs/03-seo-geo.md §2 MedicalClinic.medicalSpecialty，直接取自該院區自己的簡述文字。 */
@@ -127,7 +129,7 @@ export interface Clinic {
 //    它們由設計稿決定，不是院方會在後台改的內容（見 _presentation.ts 的分類原則）。
 //    真正的內容（地址、電話、門診時段、交通資訊、照片、介紹）都在資料庫。
 
-import { REL, UNIT, img, loadUnit, parseBlocks, relationsOf, type ContentRecord } from './_content'
+import { REL, UNIT, img, loadUnit, parseBlocks, relationsOf, seoOverridesOf, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
 // ⚠️ CLINIC_NAP 已在檔案上方 import 過（2026-09-11 搬遷時這裡多了一份重複的）。
 //    Vite 會把相同的 import 去重，所以前台建置一直是綠的，但在標準 ES module
@@ -230,6 +232,7 @@ function toClinic(faqs: ContentRecord[], nap: Awaited<ReturnType<typeof getClini
     //    任何不一致都會降低 AI 對這個實體的確信度）。
     hoursSummary: napRow?.hours ?? '',
     pageDescription: (record.seo?.metaDescription as string) ?? record.summary ?? '',
+    seo: seoOverridesOf(record),
     jsonLdDescription: look.jsonLdDescription,
     medicalSpecialty: look.medicalSpecialty,
     facebookUrl: look.facebookUrl,

@@ -26,6 +26,9 @@ const moreCases = computed(() =>
 )
 
 usePageHead({
+  // 後台 SEO 區塊的覆寫（標題／描述／OG 圖／canonical／noindex／結構化資料）。
+  // ⚠️ 讀的是已核准的版本快照，所以後台改完要重新發布才會生效。
+  seo: item.seo,
   title: `${item.title}｜案例分享`,
   description: `${item.facts.condition}${item.title}紀錄，${item.facts.sessions}、${item.facts.period}。反應因個人體質與膚況而異，需經醫師面診評估。`,
   pageCss: '/assets/pages/15-case-detail.css',

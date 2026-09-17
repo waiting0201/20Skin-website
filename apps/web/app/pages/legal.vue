@@ -26,6 +26,8 @@ const route = useRoute()
 const doc = computed(() => LEGAL_DOCS.find((d) => d.path === route.path) ?? LEGAL_DOCS[0]!)
 
 usePageHead({
+  // 後台 SEO 區塊的覆寫。⚠️ 讀的是已核准的版本快照，改完要重新發布才會生效。
+  seo: doc.value.seo,
   title: doc.value.title,
   description: `20SKIN 美醫集團官方網站的${doc.value.title}。`,
   pageCss: '/assets/pages/21-legal.css',

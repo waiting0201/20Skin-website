@@ -84,6 +84,9 @@ if (treatment.precautionsList?.length) {
 // 建置期的內容匯出只匯已發布且在時間窗內的內容（docs/09-frontend.md §3），
 // 根本不會產生這一頁。noIndex 是那之前的安全網，兩道都要有。
 usePageHead({
+  // 後台 SEO 區塊的覆寫（標題／描述／OG 圖／canonical／noindex／結構化資料）。
+  // ⚠️ 讀的是已核准的版本快照，所以後台改完要重新發布才會生效。
+  seo: treatment.seo,
   title: treatment.title,
   description,
   pageCss: '/assets/pages/04-treatment-detail.css',

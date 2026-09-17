@@ -55,6 +55,8 @@ export interface DoctorMediaRef {
 }
 
 export interface Doctor {
+  /** 後台 SEO 區塊的覆寫（見 _content.ts 的 seoOverridesOf）。 */
+  seo: ReturnType<typeof seoOverridesOf>
   slug: string
   name: string
   isPhysician: boolean
@@ -92,7 +94,7 @@ export interface Doctor {
 // ⚠️ 反向關聯（這位醫師出現在哪些療程）要從療程那一端掃回來 ——
 //    雙向關聯一律單向存（docs/08 §D），不是資料缺漏。
 
-import { REL, TERM, UNIT, bySlug, img, inboundRelations, loadUnit, parseBlocks, relationsOf, termBy, type ContentRecord } from './_content'
+import { REL, TERM, UNIT, bySlug, img, inboundRelations, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termBy, type ContentRecord } from './_content'
 
 interface BioDocument {
   heroRole: string | null
@@ -132,6 +134,7 @@ function toDoctor(ctx: DoctorContext, record: ContentRecord): Doctor {
   return {
     slug: record.slug as string,
     name: record.title,
+    seo: seoOverridesOf(record),
     isPhysician: Boolean(f.isPhysician),
     jobTitle: (f.jobTitle as string) ?? '',
     heroRole: bio.heroRole ?? undefined,

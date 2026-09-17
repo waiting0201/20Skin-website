@@ -10,10 +10,11 @@
     "postinstall": "npm run sync:assets && npm run build:asset-version && nuxt prepare",
     "verify:css": "node scripts/verify-css.mjs",
     "typecheck": "nuxt typecheck",
-    "verify": "npm run typecheck && npm run verify:css && npm run verify:links",
+    "verify": "npm run typecheck && npm run verify:css && npm run verify:seo-head && npm run verify:links",
     "verify:links": "node scripts/verify-links.mjs",
     "export:content": "cd ../.. && dotnet run --project tools/content-export -- apps/web/content",
-    "build:asset-version": "node scripts/build-asset-version.mjs"
+    "build:asset-version": "node scripts/build-asset-version.mjs",
+    "verify:seo-head": "node scripts/verify-seo-head.mjs"
   },
   "devDependencies": {
     "nuxt": "^3.19.0",

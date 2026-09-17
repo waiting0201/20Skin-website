@@ -47,6 +47,9 @@ if (clinic.treatmentGroups?.length) {
 }
 
 usePageHead({
+  // 後台 SEO 區塊的覆寫（標題／描述／OG 圖／canonical／noindex／結構化資料）。
+  // ⚠️ 讀的是已核准的版本快照，所以後台改完要重新發布才會生效。
+  seo: clinic.seo,
   title: `${clinic.name}｜診所據點`,
   description: clinic.pageDescription,
   pageCss: '/assets/pages/08-clinic-detail.css',

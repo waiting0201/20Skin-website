@@ -57,6 +57,9 @@ const jsonLd = (() => {
 })()
 
 usePageHead({
+  // 後台 SEO 區塊的覆寫（標題／描述／OG 圖／canonical／noindex／結構化資料）。
+  // ⚠️ 讀的是已核准的版本快照，所以後台改完要重新發布才會生效。
+  seo: doctor.seo,
   title: doctor.isPhysician ? `${doctor.name} ${doctor.jobTitle.split('・')[0]}` : doctor.name,
   description: doctor.isPhysician
     ? `${doctor.name}醫師，20SKIN美醫集團${doctor.jobTitle}${doctor.specialty ? `，${doctor.specialty}專科醫師` : ''}，於${doctor.clinics.map((c) => clinicNames[c.clinicSlug]).join('、')}看診。`

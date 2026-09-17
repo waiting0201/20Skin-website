@@ -16,7 +16,7 @@
 //    系統頁不可刪除、不可改 slug（docs/08 §C-8），所以這裡一律「查既有頁面」，
 //    查不到就給空值，不自己補一個假的。
 
-import { UNIT, bySlug, img, loadUnit, parseBlocks, type ContentRecord } from './_content'
+import { UNIT, bySlug, img, loadUnit, parseBlocks, seoOverridesOf, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
 
 /** slug → 那一筆頁面。⚠️ 每個請求只取一次（`loadUnit` 以請求為範圍去重）。 */
@@ -116,6 +116,8 @@ export interface StoryPage {
   treatments: StoryTreatmentCard[]
   sisterSlug: string | null
   sisterLabel: string | null
+  /** 後台 SEO 區塊的覆寫（見 _content.ts 的 seoOverridesOf）。 */
+  seo: ReturnType<typeof seoOverridesOf>
 }
 
 const STORY_SLUGS = ['new-chinese-aesthetics', 'makeup-style']
@@ -149,6 +151,7 @@ export async function getStoryPages(): Promise<Record<string, StoryPage>> {
       treatments: doc.treatments ?? [],
       sisterSlug: doc.sister?.slug ?? null,
       sisterLabel: doc.sister?.label ?? null,
+      seo: seoOverridesOf(record),
     } satisfies StoryPage]
   }),
   )
@@ -174,6 +177,8 @@ export interface LegalDoc {
    * ⚠️ 法務三頁在條文補齊前只有骨架，那種薄內容頁不該吃索引預算。
    */
   indexable: boolean
+  /** 後台 SEO 區塊的覆寫（見 _content.ts 的 seoOverridesOf）。 */
+  seo: ReturnType<typeof seoOverridesOf>
 }
 
 const LEGAL_SLUGS: LegalDoc['slug'][] = ['privacy', 'terms', 'medical-disclaimer']
@@ -191,6 +196,7 @@ export async function getLegalDocs(): Promise<LegalDoc[]> {
       updatedOn: doc.updatedOn ?? '',
       sections: doc.sections ?? [],
       indexable: record?.indexable ?? true,
+      seo: seoOverridesOf(record),
     }
   })
 }

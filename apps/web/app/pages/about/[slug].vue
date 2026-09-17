@@ -23,6 +23,8 @@ if (!story) {
 //    編譯期巨集引用不到執行期取回的 STORY_PAGES。驗證改在下方以 404 表達。
 
 usePageHead({
+  // 後台 SEO 區塊的覆寫。⚠️ 讀的是已核准的版本快照，改完要重新發布才會生效。
+  seo: story.seo,
   title: story.title,
   description: story.lede,
   pageCss: '/assets/pages/10-story.css',

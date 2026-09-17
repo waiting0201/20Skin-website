@@ -20,6 +20,29 @@ public sealed class PublicSiteSettingsDto
     public string AiFaqWelcomeText { get; set; } = string.Empty;
     public string AiFaqHandoffBookingUrl { get; set; } = string.Empty;
     public string AiFaqHandoffLineUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// GA4／GTM 的**識別碼**（多組以逗號分隔），例如 <c>G-ABCD1234,GTM-XYZ9876</c>。
+    ///
+    /// <para>
+    /// 🔴 <b>這一欄收的是 ID，不是程式碼片段。</b> 前台拿它套官方的 snippet 模板，
+    /// 所以資料庫裡永遠不會有一段任意的 <c>&lt;script&gt;</c>。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ 原本的設計是「貼上完整程式碼片段」（後台的 placeholder 就是這樣寫的），
+    /// 但那等於<b>任何能改設定的人都可以在全站每一頁對每一位訪客執行任意 JavaScript</b>，
+    /// 而設定類不走審核也不留痕（docs/08 §I），後台又沒有 IP 白名單與雙因素
+    /// （CLAUDE.md 決策 10）。改成只收 ID 之後那條路整個關掉。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ 代價：Meta Pixel 這類非 Google 的工具貼不進來。那要另開一個設定鍵
+    /// （<c>site.ts</c> 的註解已定調「鍵是固定的，要多一個就是一支 migration」），
+    /// 並且在那個鍵上明確記錄它等同給予全站 JS 執行權。<b>不要靠放寬這一欄解決。</b>
+    /// </para>
+    /// </summary>
+    public string TrackingIds { get; set; } = string.Empty;
 }
 
 /// <summary>後台設定畫面的單一鍵值（docs/10-api.md §3.4）。</summary>

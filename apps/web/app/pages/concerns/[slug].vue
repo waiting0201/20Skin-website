@@ -49,6 +49,9 @@ const jsonLdBlocks = computed(() => {
 })
 
 usePageHead({
+  // 後台 SEO 區塊的覆寫（標題／描述／OG 圖／canonical／noindex／結構化資料）。
+  // ⚠️ 讀的是已核准的版本快照，所以後台改完要重新發布才會生效。
+  seo: concern.seo,
   title: `${concern.title}｜肌膚困擾`,
   description: concern.detail
     ? `${concern.title}的成因、自我判斷指引與建議療程方向，由 20SKIN 美醫集團皮膚科專科醫師團隊提供之照護說明。`

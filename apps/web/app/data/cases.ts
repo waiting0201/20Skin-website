@@ -42,6 +42,8 @@ export interface CaseTreatmentRef {
 }
 
 export interface CaseDetail {
+  /** 後台 SEO 區塊的覆寫（見 _content.ts 的 seoOverridesOf）。 */
+  seo: ReturnType<typeof seoOverridesOf>
   slug: string
   title: string
   concernLabel: string
@@ -87,7 +89,7 @@ export interface CaseDetail {
 //    **捏造那些欄位是法規紅線**，所以它們沒有進資料庫，也就不會出現在這裡。
 //    要恢復列表，必須由院方補齊那四個欄位 —— 這是內容問題，不是程式問題。
 
-import { REL, UNIT, img, loadUnit, parseBlocks, relationsOf, type ContentRecord } from './_content'
+import { REL, UNIT, img, loadUnit, parseBlocks, relationsOf, seoOverridesOf, type ContentRecord } from './_content'
 
 const toImage = (value: unknown, fallbackAlt = ''): Image => {
   const i = img(value)
@@ -154,6 +156,7 @@ export async function getCaseDetails(): Promise<CaseDetail[]> {
     slug: record.slug as string,
     title: record.title,
     concernLabel: '',
+    seo: seoOverridesOf(record),
     concernHref: '',
     lede: record.summary ?? '',
     shootingConditions: (f.shootingConditions as string) ?? '',

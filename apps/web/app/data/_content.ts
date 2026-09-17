@@ -30,6 +30,11 @@ export interface ContentRecord {
   sortOrder: number
   includeInSitemap: boolean
   fields: Record<string, unknown>
+  /**
+   * 後台 SEO 區塊（docs/08 §B-4）。
+   * ⚠️ 型別刻意保持寬鬆（值來自版本快照的 JSON），取用請走 `seoOverridesOf()`，
+   *    不要在各頁各自 `as string` 挖 —— 那正是這一整組欄位曾經有五個沒人讀的原因。
+   */
   seo: Record<string, unknown> | null
   relations: RelationRecord[]
   updatedAt: string
@@ -115,6 +120,12 @@ export interface PublicSiteSettings {
   aiFaqWelcomeText: string
   aiFaqHandoffBookingUrl: string
   aiFaqHandoffLineUrl: string
+  /**
+   * GA4／GTM 的**識別碼**（多組以逗號分隔），不是程式碼片段。
+   * 🔴 前台拿它套官方 snippet 模板（見 `app/app.vue`）——資料庫裡永遠不會有
+   *    一段任意的 `<script>`。理由見 API 的 `PublicSiteSettingsDto.TrackingIds`。
+   */
+  trackingIds: string
 }
 
 const EMPTY_SETTINGS: PublicSiteSettings = {
@@ -125,6 +136,7 @@ const EMPTY_SETTINGS: PublicSiteSettings = {
   aiFaqWelcomeText: '',
   aiFaqHandoffBookingUrl: '',
   aiFaqHandoffLineUrl: '',
+  trackingIds: '',
 }
 
 /** 全站設定。同樣是每個請求取一次。取不到時回預設值，不讓整頁算繪失敗。 */
@@ -179,6 +191,28 @@ export const inboundRelations = (rows: ContentRecord[], type: number, toSlug: st
   rows.filter((r) => r.relations.some((x) => x.relationType === type && x.toSlug === toSlug))
 
 /** 區塊 JSON 欄位。存進資料庫時是字串，讀出來要解析（docs/09 §8）。 */
+/**
+ * 版本快照的 `seo` → `usePageHead` 收得下的覆寫組。
+ *
+ * 🔴 **內容頁一律要傳。** 2026-09-17 之前，`seoTitle`／`ogImage`／`canonicalOverride`／
+ *    `noIndex`／`structuredDataOverride` 五欄在後台改得動、存得起來，但前台完全沒有
+ *    讀過 —— 院方填了半天，網站上什麼都沒變。
+ */
+export function seoOverridesOf(record: { seo: Record<string, unknown> | null } | null | undefined) {
+  const seo = record?.seo
+  if (!seo) return null
+  const image = seo.ogImage as { url?: string; src?: string } | null | undefined
+  return {
+    seoTitle: (seo.seoTitle as string) ?? null,
+    metaDescription: (seo.metaDescription as string) ?? null,
+    // ⚠️ 快照裡的圖片欄位是 `url`（內嵌圖片值的形狀，docs/08 §0 決策五），不是 `src`。
+    ogImage: image ? { src: image.url ?? image.src ?? null } : null,
+    canonicalOverride: (seo.canonicalOverride as string) ?? null,
+    noIndex: Boolean(seo.noIndex),
+    structuredDataOverride: (seo.structuredDataOverride as string) ?? null,
+  }
+}
+
 export function parseBlocks<T>(value: unknown, fallback: T): T {
   if (typeof value !== 'string' || value.length === 0) return fallback
   try {

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -87,11 +88,45 @@ public sealed class SettingHandler(
         return new OkObjectResult(ApiResponse.Ok("設定已更新。"));
     }
 
+    /// <summary>
+    /// GA4 的評估 ID 與 GTM 的容器 ID，多組以逗號分隔。
+    /// 例：<c>G-ABCD1234</c>、<c>GTM-XYZ9876</c>、<c>G-ABCD1234, GTM-XYZ9876</c>。
+    /// </summary>
+    private static readonly Regex TrackingIdPattern =
+        new(@"^\s*(G-[A-Z0-9]{4,20}|GTM-[A-Z0-9]{4,10})(\s*,\s*(G-[A-Z0-9]{4,20}|GTM-[A-Z0-9]{4,10}))*\s*$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// 少數幾個鍵有專屬的格式規則，型別（<see cref="SettingValueType"/>）表達不了。
+    ///
+    /// <para>
+    /// 🔴 <c>tracking.ga4</c> 是其中最重要的一個：它的值會出現在**每一頁的 HTML** 裡。
+    /// 只收 ID、不收程式碼片段，資料庫裡就永遠不會有一段任意的 <c>&lt;script&gt;</c>
+    /// （理由見 <c>PublicSiteSettingsDto.TrackingIds</c>）。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ 型別宣告是 <c>Text</c>，而下面那個 switch **沒有 Text 分支** ——
+    /// 也就是說在這一段加進來之前，這個鍵是零驗證的。
+    /// </para>
+    /// </summary>
+    private static void ValidateKeySpecific(string key, string value)
+    {
+        if (key == "tracking.ga4" && !TrackingIdPattern.IsMatch(value))
+        {
+            throw AppException.BadRequest(
+                ErrorCodes.ValidationFormat,
+                "追蹤碼只收 GA4 的評估 ID（G-XXXXXXXX）或 GTM 的容器 ID（GTM-XXXXXXX），多組以逗號分隔。不要貼整段程式碼。");
+        }
+    }
+
     private static void ValidateValueFormat(string key, SettingValueType type, string value)
     {
         // ⚠️ 空字串一律視為「尚未設定」放行，不論宣告的型別是什麼——種子資料裡
         // 有好幾個鍵預設就是空字串（docs/08 §G-1 的 handoffLineUrl、tracking.ga4 等）。
         if (value.Length == 0) return;
+
+        ValidateKeySpecific(key, value);
 
         switch (type)
         {

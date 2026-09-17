@@ -31,6 +31,12 @@ namespace Skin20.Api.Common;
 /// （「這一頁我不想被收錄」），這裡是「內容還沒寫完所以不該被收錄」。
 /// 兩個都要成立才收進 sitemap。
 /// </para>
+///
+/// <para>
+/// ⚠️ 但 SEO 區塊的 <c>noIndex</c> **是**在這裡判的（2026-09-17 加）——
+/// 它要同時作用在「頁面的 robots meta」與「sitemap 收不收」兩件事上，
+/// 而這個函式正是那兩件事唯一的共同入口。
+/// </para>
 /// </summary>
 public static class Indexability
 {
@@ -39,6 +45,21 @@ public static class Indexability
     /// </summary>
     public static bool IsIndexable(byte contentType, JsonObject snapshot)
     {
+        // 🔴 **編輯的明確意願優先於內容判斷。** SEO 區塊的 noIndex 勾起來就是不收錄，
+        //    不管內容寫得多完整。
+        //    ⚠️ 這一段放在這裡（而不是只放在前台）是刻意的：這個函式同時決定
+        //    「頁面輸出不輸出 noindex」與「收不收進 sitemap」。只改前台的話，
+        //    sitemap 照樣會把那一頁送出去 —— 正是 2026-09-15 那個坑
+        //    （sitemap 收了 29 個 noindex 網址）的形狀。
+        //    ⚠️ 2026-09-17 之前 `SeoMeta.NoIndex` 這一欄**全專案沒有任何人讀**：
+        //    後台勾得起來、存得進去，但前台與 sitemap 都當它不存在。
+        if (snapshot["seo"] is JsonObject seo
+            && seo["noIndex"] is JsonNode noIndex
+            && noIndex.GetValueKind() == JsonValueKind.True)
+        {
+            return false;
+        }
+
         var fields = snapshot["fields"] as JsonObject;
 
         return (ContentType)contentType switch

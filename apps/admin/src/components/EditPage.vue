@@ -787,8 +787,12 @@ async function removeRecord() {
               <textarea v-model="seoForm.structuredDataOverride" class="adm-textarea" :class="{ 'is-invalid': seoErrors.structuredDataOverride }" :disabled="!canEditSeo" placeholder="留空由系統自動產生" />
               <p v-if="seoErrors.structuredDataOverride" class="adm-field__error" role="alert">{{ seoErrors.structuredDataOverride }}</p>
               <p class="adm-field__hint">
-                ⚠️ API 不檢查這一欄，前台是原樣輸出——JSON 打錯一個逗號，那一頁的結構化資料就整段失效，
-                而且不會有任何錯誤訊息。所以格式檢查在這裡做，沒過就不讓存。
+                🔴 <strong>填了它，這一頁自動產生的結構化資料（MedicalWebPage、麵包屑等）會整段被取代</strong>，
+                不是疊加上去。留空才是正常情況。
+              </p>
+              <p class="adm-field__hint">
+                JSON 打錯一個逗號，那一頁的結構化資料就整段失效，所以格式檢查在這裡做，沒過就不讓存。
+                ⚠️ 這一區存檔後要<strong>重新送審發布</strong>前台才會套用——前台讀的是已核准的版本快照。
               </p>
             </div>
           </div>

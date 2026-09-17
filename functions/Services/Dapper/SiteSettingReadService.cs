@@ -38,6 +38,9 @@ public sealed class SiteSettingReadService(ISqlConnectionFactory factory) : ISit
         "aifaq.welcomeText",
         "aifaq.handoffBookingUrl",
         "aifaq.handoffLineUrl",
+        // ⚠️ 2026-09-17 加。它本來就會出現在每一頁的 HTML 裡，公開沒有問題；
+        //    但**加鍵到這張白名單是要逐個想過的**（見 PublicSiteSettingsDto 的註解）。
+        "tracking.ga4",
     ];
 
     public async Task<PublicSiteSettingsDto> GetPublicAsync(CancellationToken ct = default)
@@ -59,6 +62,7 @@ public sealed class SiteSettingReadService(ISqlConnectionFactory factory) : ISit
             AiFaqWelcomeText = map.GetValueOrDefault("aifaq.welcomeText", string.Empty),
             AiFaqHandoffBookingUrl = map.GetValueOrDefault("aifaq.handoffBookingUrl", string.Empty),
             AiFaqHandoffLineUrl = map.GetValueOrDefault("aifaq.handoffLineUrl", string.Empty),
+            TrackingIds = map.GetValueOrDefault("tracking.ga4", string.Empty),
         };
     }
 

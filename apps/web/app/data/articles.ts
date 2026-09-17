@@ -36,7 +36,7 @@ export interface ArticleCategory {
 /** 四個分類 slug 為定案值（docs/01-sitemap.md §1、CLAUDE.md）。 */
 // ── 資料來源：content/articles.json ＋ terms.json（docs/09 §3）───────────
 
-import { REL, TERM, UNIT, img, loadUnit, parseBlocks, relationsOf, termsOf, type ContentRecord } from './_content'
+import { REL, TERM, UNIT, img, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termsOf, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
 
 const toImage = (value: unknown, fallbackAlt = ''): ArticleImage => {
@@ -147,6 +147,8 @@ export interface Article {
   summary: string
   /** SEO meta description（DB: SeoMeta.MetaDescription）。留空退回 summary。 */
   metaDescription?: string
+  /** 後台 SEO 區塊的覆寫（見 _content.ts 的 seoOverridesOf）。 */
+  seo: ReturnType<typeof seoOverridesOf>
   /** AI 摘要，40–60 字直答式（DB: SeoMeta.AiSummary），渲染成內頁第一段可見文字。留空退回 summary。 */
   aiSummary?: string
   readingMinutes: number
@@ -211,6 +213,7 @@ function toArticle(ctx: ArticleContext, record: ContentRecord): Article {
     cover: toImage(f.cover, record.title),
     summary: record.summary ?? '',
     metaDescription: (record.seo?.metaDescription as string) ?? undefined,
+    seo: seoOverridesOf(record),
     aiSummary: (record.seo?.aiSummary as string) ?? undefined,
     readingMinutes: (f.readingMinutes as number) ?? 0,
     // ⚠️ **內文不在這裡** —— 見 getArticleBody()。這一欄留著只是為了讓
