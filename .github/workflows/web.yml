@@ -185,33 +185,49 @@ jobs:
       - name: Smoke test
         run: |
           BASE="${{ vars.SITE_URL }}"
-          for P in "/" "/treatments/" "/admin/"; do
-            CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 --retry 3 --retry-delay 5 "$BASE$P")
-            echo "GET $BASE$P → $CODE"
-            [ "$CODE" = "200" ] || { echo "::error::$P 回應 $CODE"; exit 1; }
-          done
+
+          # 🔴 **一定要走 probe()，不要直接 `CODE=$(curl …)`。**
+          #    `bash -e` 之下，curl 自己失敗（連不上、連線被重設、body 收到一半斷掉）
+          #    會讓那一行的指派整個失敗，步驟當場結束 —— 印不出任何一行，連 curl 的
+          #    錯誤訊息都看不到。2026-09-17 09:47 就是這樣紅的一次：整個步驟只留下
+          #    「exit code 23」，1.17 秒、零輸出，事後完全查不出打到什麼。
+          #    （查法只剩 App Insights：那一秒 SSR 正在算繪首頁，26 支 API 全部 200，
+          #    也就是站台是好的，斷的是傳輸。）
+          #
+          # 🔴 **`--retry` 擋不到那一類。** 它只重試逾時與 5xx；傳輸層的失敗
+          #    （exit 7 連線被拒／56 連線被重設／23 body 寫入失敗）一次都不重試 ——
+          #    要 `--retry-all-errors` 才會。前台是 HTTP/2 串流經 Cloudflare，
+          #    而 smoke test 打的是**部署切換後的第一個請求**（成功的幾次都要 5–6 秒
+          #    冷啟動），正是最容易被中途掐斷的一刻。
+          probe() {
+            local url="$1" want="$2" code rc
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+                     --retry 3 --retry-delay 5 --retry-all-errors --retry-connrefused "$url") || rc=$?
+            if [ -n "${rc:-}" ]; then
+              echo "::error::GET ${url} —— curl 自己失敗（exit ${rc}），三次重試都沒過"
+              return 1
+            fi
+            echo "GET ${url} → ${code}"
+            [ "$code" = "$want" ] || { echo "::error::GET ${url} 回應 ${code}，應為 ${want}"; return 1; }
+          }
+
+          for P in "/" "/treatments/" "/admin/"; do probe "$BASE$P" 200; done
+
           # 301 是部署後最容易壞掉的一條路徑（1000 條轉址的唯一出口）。
           # ⚠️ 用 /doctor.php 而不是 /index2.php —— 前者走**資料庫查表**
           #    （pages/[...slug].vue → API 的 /redirects/resolve），後者在
           #    staticwebapp.config.json 裡有快速路徑，就算整條查表鏈路壞掉它也會通過。
-          CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 --retry 3 --retry-delay 5 "$BASE/doctor.php")
-          echo "GET $BASE/doctor.php → $CODE"
-          [ "$CODE" = "301" ] || { echo "::error::301 查表回應 $CODE，應為 301"; exit 1; }
+          probe "$BASE/doctor.php" 301
 
           # SEO 產物改成執行期路由（2026-09-16）——它們現在是 SSR function 的一部分，
           # 不再是靜態檔，所以要實際打一次確認 function 起得來。
           #
-          # 🔴 **--retry 不是裝飾，是這一段唯一擋得住誤報的東西**（2026-09-17 實際踩到）：
-          #    同一個 push 會同時觸發 web 與 api 兩條工作流，而它們互不等待。那一次
-          #    api 的「Apply migrations」跑在 06:40:16–21，web 的 smoke test 正好在
-          #    06:40:18 打 /sitemap.xml —— sitemap 要掃 1163 筆 ContentItems，正式庫是
-          #    Azure SQL Basic（5 DTU），撞上遷移交易就超過 proxySeo 的 8 秒 timeout，
-          #    前台依約回 503（決策 14：拿不到 ≠ 查不到）。站台完全正常，紅的只有這一步。
-          #    ⚠️ 上面第一個迴圈本來就有 --retry，這兩段沒有 —— 差別只是當初漏了。
-          #    curl 的 --retry 會對 5xx 重試，三次 × 5 秒足以蓋過遷移（5 秒）與
-          #    Function App 重新部署（約 18 秒）這兩個窗口，而真的掛掉的 API 仍然會紅。
-          for P in "/sitemap.xml" "/robots.txt" "/sitemap-blog.xml"; do
-            CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 --retry 3 --retry-delay 5 "$BASE$P")
-            echo "GET $BASE$P → $CODE"
-            [ "$CODE" = "200" ] || { echo "::error::$P 回應 $CODE"; exit 1; }
-          done
+          # ⚠️ 這三條特別需要重試（2026-09-17 實際踩到）：同一個 push 會同時觸發
+          #    web 與 api 兩條工作流，而它們互不等待。那一次 api 的「Apply migrations」
+          #    跑在 06:40:16–21，web 的 smoke test 正好在 06:40:18 打 /sitemap.xml ——
+          #    sitemap 要掃 1163 筆 ContentItems，正式庫是 Azure SQL Basic（5 DTU），
+          #    撞上遷移交易就超過 proxySeo 的 8 秒 timeout，前台依約回 503
+          #    （決策 14：拿不到 ≠ 查不到）。站台完全正常，紅的只有這一步。
+          #    三次 × 5 秒足以蓋過遷移（5 秒）與 Function App 重新部署（約 18 秒），
+          #    而真的掛掉的 API 仍然會紅。
+          for P in "/sitemap.xml" "/robots.txt" "/sitemap-blog.xml"; do probe "$BASE$P" 200; done

@@ -119,7 +119,21 @@ jobs:
       - name: Open SQL firewall for this runner
         id: fw
         run: |
-          IP=$(curl -s https://api.ipify.org)
+          # ⚠️ `-s` 不加 `-S` 的話 curl 失敗時一個字都不印，而 `bash -e` 會讓整個
+          #    步驟當場結束，只留下一個 curl 的 exit code —— web.yml 的 smoke test
+          #    2026-09-17 就是這樣紅了一次，事後完全查不出打到什麼。
+          #    `--retry-all-errors` 是必要的：`--retry` 只重試逾時與 5xx，
+          #    連不上、連線被重設這類傳輸層失敗它一次都不重試。
+          IP=$(curl -sS --max-time 15 --retry 3 --retry-delay 3 --retry-all-errors \
+                 --retry-connrefused https://api.ipify.org) || {
+            echo "::error::取不到 runner 的對外 IP（curl exit $?）——沒有它就開不了 SQL 防火牆"
+            exit 1
+          }
+          # 空字串會讓 az 建出一條 0.0.0.0 的規則然後在下一步莫名其妙地連不上。
+          case "$IP" in
+            *.*.*.*) ;;
+            *) echo "::error::api.ipify.org 回了非 IP 的內容：「${IP}」"; exit 1 ;;
+          esac
           RULE="gha-${{ github.run_id }}"
           echo "rule=$RULE" >> "$GITHUB_OUTPUT"
           az sql server firewall-rule create \

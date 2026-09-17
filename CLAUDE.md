@@ -24,6 +24,13 @@ pnpm-workspace.yaml    packages = apps/*
                        ⚠️ 同一個 push 會**同時**觸發兩條、互不等待 —— web 的部署後 smoke test
                        可能打在 api 的遷移／重新部署中間（2026-09-17 實際踩到：sitemap 回 503，
                        站台其實正常）。兩邊的 curl 都要帶 --retry，見 web.yml 的註解
+                       🔴 **`--retry` 只重試逾時與 5xx，傳輸層的失敗它一次都不重試**
+                       （2026-09-17 第二次踩到：部署切換後的第一個請求，curl exit 23，
+                       整個步驟 1.17 秒、零輸出。App Insights 顯示那一秒 SSR 正在算繪首頁、
+                       26 支 API 全部 200 —— 站台是好的，斷的是傳輸）。因此
+                       **一律再加 `--retry-all-errors --retry-connrefused`**，
+                       且**不可以寫成 `CODE=$(curl …)`** —— `bash -e` 之下 curl 自己失敗
+                       會讓步驟當場結束，連它的錯誤訊息都印不出來，事後查不出打到什麼
 apps/
   web/                 前台：Nuxt 3 **執行期 SSR**（21 個模板，每個請求即時算繪）
                        ⚠️ 2026-09-16 由「純靜態預渲染」改成 SSR，見決策 6
