@@ -65,14 +65,36 @@
 .adm-sidebar__brand span { display: block; font-size: var(--fs-eyebrow); color: rgba(255, 255, 255, .55); }
 
 .adm-nav { padding: var(--sp-3); flex: 1; }
-.adm-nav__group { margin-bottom: var(--sp-4); }
-.adm-nav__label {
+.adm-nav__group { margin-bottom: var(--sp-2); }
+/* 分組標題兼開合鈕（accordion）。預設全關，只有「系統」是開的，
+   開合狀態在 AdminLayout.vue 的 openGroups。 */
+.adm-nav__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  width: 100%;
   padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  background: none;
+  font-family: inherit;
   font-size: var(--fs-eyebrow);
   letter-spacing: .1em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, .45);
+  cursor: pointer;
+  border-radius: var(--adm-radius);
+  transition: color .15s ease, background .15s ease;
 }
+.adm-nav__toggle:hover { background: rgba(255, 255, 255, .06); color: rgba(255, 255, 255, .8); }
+.adm-nav__chevron {
+  font-size: 1.1em;
+  line-height: 1;
+  transition: transform .15s ease;
+}
+.adm-nav__toggle[aria-expanded="true"] .adm-nav__chevron { transform: rotate(90deg); }
+.adm-nav__items { padding-bottom: var(--sp-2); }
+.adm-nav__link--top { margin-bottom: var(--sp-2); }
 .adm-nav__link {
   display: flex;
   align-items: center;

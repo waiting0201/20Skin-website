@@ -3,7 +3,7 @@
 //
 // ⚠️ 這是後台專用 layout（獨立 SPA，不再與前台共用同一個 Nuxt app）。
 // 樣式來自 src/admin.css，在 src/main.ts 統一匯入一次，這裡不重複 import。
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { currentUser, logout } from '@/auth'
 import { can, hasPermission } from '@/permissions'
@@ -53,6 +53,34 @@ const systemNavItems = computed<NavItem[]>(() =>
   })),
 )
 
+// 選單分組（accordion）。預設全關，只有「系統」是開的。
+// 各組獨立開合 —— 不是「開一組就關掉別組」的單開式，因為後台常常要在
+// 內容模型與審核佇列之間來回。
+const navGroups = computed(() => [
+  { key: 'content', label: '內容模型', items: unitNavItems.value },
+  { key: 'system', label: '系統', items: systemNavItems.value },
+])
+
+const openGroups = ref<Record<string, boolean>>({ content: false, system: true })
+
+function toggleGroup(key: string) {
+  openGroups.value[key] = !openGroups.value[key]
+}
+
+function isActive(href: string) {
+  return route.path.startsWith(href)
+}
+
+// 深連結進來時（例如重新整理停在 /treatments/5），把該筆所在的組打開 ——
+// 否則畫面上那一頁是「選單裡看不到的項目」。
+// ⚠️ 只在載入時做一次，不掛 watch：SPA 內部切換不會重載，
+//    使用者手動關掉的組不該又被路由推開。
+for (const group of navGroups.value) {
+  if (group.items.some((item) => item.visible && isActive(item.href))) {
+    openGroups.value[group.key] = true
+  }
+}
+
 const breadcrumb = computed(() => {
   // ⚠️ vue-router 的 base（'/admin/'）已經吃掉 /admin 這一段，
   // 這裡的 route.path 不再帶 /admin 前綴（對照 Nuxt 版是 ['admin', unit?, id?]）。
@@ -90,39 +118,33 @@ function onLogout() {
         </div>
 
         <nav class="adm-nav">
-          <div class="adm-nav__group">
-            <p class="adm-nav__label">系統</p>
-            <RouterLink class="adm-nav__link" to="/" :class="{ 'is-active': route.path === '/' }">
-              儀表板
-            </RouterLink>
-          </div>
+          <RouterLink class="adm-nav__link adm-nav__link--top" to="/" :class="{ 'is-active': route.path === '/' }">
+            儀表板
+          </RouterLink>
 
-          <div class="adm-nav__group">
-            <p class="adm-nav__label">內容模型</p>
-            <template v-for="item in unitNavItems" :key="item.href">
-              <RouterLink
-                v-if="item.visible"
-                class="adm-nav__link"
-                :to="item.href"
-                :class="{ 'is-active': route.path.startsWith(item.href) }"
-              >
-                {{ item.label }}
-              </RouterLink>
-            </template>
-          </div>
-
-          <div class="adm-nav__group">
-            <p class="adm-nav__label">系統</p>
-            <template v-for="item in systemNavItems" :key="item.href">
-              <RouterLink
-                v-if="item.visible"
-                class="adm-nav__link"
-                :to="item.href"
-                :class="{ 'is-active': route.path.startsWith(item.href) }"
-              >
-                {{ item.label }}
-              </RouterLink>
-            </template>
+          <div v-for="group in navGroups" :key="group.key" class="adm-nav__group">
+            <button
+              type="button"
+              class="adm-nav__toggle"
+              :aria-expanded="openGroups[group.key]"
+              :aria-controls="`adm-nav-${group.key}`"
+              @click="toggleGroup(group.key)"
+            >
+              <span>{{ group.label }}</span>
+              <span class="adm-nav__chevron" aria-hidden="true">›</span>
+            </button>
+            <div v-show="openGroups[group.key]" :id="`adm-nav-${group.key}`" class="adm-nav__items">
+              <template v-for="item in group.items" :key="item.href">
+                <RouterLink
+                  v-if="item.visible"
+                  class="adm-nav__link"
+                  :to="item.href"
+                  :class="{ 'is-active': isActive(item.href) }"
+                >
+                  {{ item.label }}
+                </RouterLink>
+              </template>
+            </div>
           </div>
         </nav>
 
