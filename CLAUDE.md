@@ -40,6 +40,10 @@ tools/content-export/  🔴 **前台已完全不使用它**（2026-09-16）。�
                        **不要因為看到它還在，就以為建置流程需要先跑它**
                        ⚠️ 與 API 共用 Visibility.cs 與 ExportFormats.cs
                        （<Compile Include>，不是抄一份）
+tools/content-roundtrip/ 區塊 JSON schema 的回歸測試（決策 17）——正式資料整批往返比對
+                       🔴 改了 apps/admin/src/units/schemas/ 就要跑
+tools/content-audit/   21 個區塊 JSON 欄位的**唯讀**稽核：非法 JSON、雙重編碼、
+                       schema 沒描述到的鍵（那些鍵不可以在改版時被吃掉）
 tools/blob-reconcile/  孤兒檔對帳：Blob 容器 vs 資料庫引用（見該目錄 README）
                        🔴 **只能對正式資料庫跑** —— 儲存體只有一個、所有環境共用，
                           對本機庫跑會把正式的圖誤判成孤兒（實測 75%）。
@@ -151,6 +155,16 @@ pnpm --filter web typecheck   # 🔴 型別檢查，不需要跑著的站台
                               #   全部是「Vue 讀不存在的東西不會報錯，只渲染成空白」。
                               #   ⚠️ 這類錯誤**建置一律會成功**，只靠建置等於沒有檢查。
 pnpm --filter web verify:css  # 樣式照抄，不需要跑著的站台
+pnpm --filter web verify:seo-head  # JSON-LD 的 </script> 跳脫與覆寫容錯（決策 18）
+
+# 改了後台的區塊 JSON schema（apps/admin/src/units/schemas/）一定要跑（決策 17）——
+# 它拿正式資料整批 parse →（不編輯）→ 送出，與原值深度相等比對。
+# 🔴 抄錯 schema 不會有編譯錯誤，症狀是前台那一區靜默消失。
+node --experimental-strip-types --import ./tools/content-roundtrip/register.mjs \
+     tools/content-roundtrip/check.mjs
+
+# 21 個區塊 JSON 欄位的唯讀稽核（非法 JSON／雙重編碼／schema 沒描述的鍵）
+node tools/content-audit/audit-json-fields.mjs
 
 # 🔴 verify:links 需要一個**跑著的站台**（而站台需要跑得動的 API）——
 #    SSR 之下頁面是算繪當下才存在的，沒有 API 就沒有 HTML 可檢查。
@@ -412,6 +426,29 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    權限碼一律用 docs/08 §A-2 的 31 列（`content.{unit}.edit` 這種），
    `{unit}.view`／`review.decide`／`user.*`／`setting.*` 全是舊命名。
    ⚠️ 這仍然只管「按鈕出不出現」，**不是安全邊界** —— 擋得住的授權在 API 的 `AppRouter`（預設拒絕）。
+17. **內容欄位的「區塊 JSON」在後台一律是表單，不是讓人手打 JSON**（2026-09-17）。
+   21 個欄位（療程 7／困擾 5／醫師 2／據點 2／案例 1／分類 1／文章內文／頁面內文）
+   由 `apps/admin/src/units/schemas/*.ts` 宣告形狀，`StructuredField`／`StructuredNode` 遞迴渲染。
+   🔴 **那份宣告是第二份形狀定義，真實來源是前台的型別**（`apps/web/app/data/*.ts`）。
+   抄錯不會有編譯錯誤 —— 症狀是前台那一區**靜默消失**（`parseBlocks` 回 fallback，HTTP 仍 200）。
+   改任一邊都要跑 `node --experimental-strip-types --import ./tools/content-roundtrip/register.mjs tools/content-roundtrip/check.mjs`。
+   🔴 **兩條寫入路徑，弄錯都是靜默的**：19 欄走 `JStr` 要送 **JSON 字串**（送物件會被寫成 NULL）；
+   文章與頁面的 `bodyBlocks` 要送 **物件／陣列**。規則宣告在欄位的 `wire` 上，**不要在序列化那裡 if 單元名**。
+   ⚠️ **schema 沒描述到的鍵一定要原樣保留** —— 560/1083 篇文章的段落帶著前台不讀的 `runs`，
+   用 schema 重建物件就會永久消失。寫入一律 `{ ...原物件, [key]: v }`。
+   ⚠️ **段落是純文字**（前台是 `{{ block.text }}`），不做行內粗體與連結（Tim 定案）。
+   要加就得同時改前台渲染 ＋ 加一套 HTML 淨化（API 目前一行淨化都沒有），是獨立的一件事。
+   ⚠️ `page.bodyBlocks` **依 slug 分派**（那六頁的 `SystemKey` 是 null）。其餘頁面**刻意沒有 schema**，
+   走原始 JSON 模式 —— 硬套一份的結果是「表單看起來正常、填了、前台什麼都沒變」。
+18. **後台不收「一整段程式碼」**（2026-09-17）。追蹤碼欄位只收 GA4／GTM 的**識別碼**
+   （`G-XXXXXXXX`／`GTM-XXXXXXX`），由前台套官方 snippet 模板。
+   🔴 收整段 `<script>` 等於**任何能改設定的人都可以在全站每一頁對每一位訪客執行任意 JavaScript**，
+   而設定類不走審核也不留痕（docs/08 §I），後台又沒有 IP 白名單與雙因素（決策 10）。
+   ⚠️ 代價：Meta Pixel 這類非 Google 的工具貼不進來。那要**另開一個設定鍵**並在該鍵上明確記錄
+   「等同給予全站 JS 執行權」，**不是靠放寬追蹤碼這一欄**。
+   ⚠️ 連帶：`usePageHead` 輸出 JSON-LD 一律走 `serializeJsonLd()`（把 `<` 換成 `\u003c`）——
+   `JSON.stringify` 不跳脫 `<`，而「結構化資料覆寫」是院方編得動的欄位。由
+   `pnpm --filter web verify:seo-head` 把關。
 
 ---
 

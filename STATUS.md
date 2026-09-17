@@ -253,6 +253,56 @@ spinner 永遠轉下去（`loading = false` 寫在最後一行而不是 `finally
 - 過期文案：轉址畫面仍在講 `/api/fallback`（2026-09-16 已整支刪除）與「約 770 條」（實數 1000）；
   匯出／sitemap 畫面仍在講「建置期由 nuxt generate 產生」（早已是執行期向 API 取）
 
+### 🔴 2026-09-17（第二輪）：21 個「手打 JSON」的欄位改成表單
+
+**起點是一句話**：「後台有很多內容是輸入 json 格式，客戶可能不太懂」。盤點之後
+問題比預期大，而且**不只是不好用**。
+
+**① 先修了一個會毀資料的 bug。** `Article.BodyBlocks`／`Page.BodyBlocks` 的讀寫
+不對稱（讀端給字串、寫端 `GetRawText()`），所以「讀出來→不改→存回去」每存一次
+就多包一層編碼。前台 `JSON.parse` 拿到字串不是陣列，`v-for` 跑字串會逐字元迭代，
+**整篇內文靜默消失**。⚠️ 症狀與操作隔了一次發布（存檔會把工作副本打回草稿，
+前台讀的是已核准快照），所以沒有人會把兩件事連起來。
+`tools/api-smoke/write.mjs` 補了八個檢查——修正前同一支會紅四條。
+另加 `tools/content-audit`：實跑確認**目前資料全部乾淨，這個 bug 還沒被觸發過**。
+
+**② 21 個欄位改成 schema 驅動的表單。** 分布在療程 7 欄、困擾 5 欄、醫師 2 欄、
+據點 2 欄、案例 1 欄、分類 1 欄、文章內文、頁面內文。最極端的是療程的
+「儀器／原廠資訊」——它是**單行 input**，而要填的是一整個 `{label,value}[]` 陣列。
+
+| 檔案 | 角色 |
+|---|---|
+| `apps/admin/src/structured-schema.ts` | 型別與純函式（不含 Vue，要能被 Node 直接跑） |
+| `apps/admin/src/units/schemas/*.ts` | 21 份形狀宣告，每份檔頭註明對應的前台型別與行號 |
+| `StructuredField.vue`／`StructuredNode.vue` | 外框 ＋ 遞迴渲染 |
+| `tools/content-roundtrip/` | **回歸測試**：正式資料整批 parse →（不編輯）→ 送出，與原值深度相等比對 |
+
+四個要記住的設計點：
+- **模式旗標就是值的型別**：物件／陣列＝表單，字串＝原始 JSON 模式。一條約定同時
+  解決「parse 失敗」「使用者要直接編 JSON」「這頁沒有 schema」三件事。
+- **`wire` 宣告在欄位上**：19 欄走 `JStr` 要送字串（送物件會被靜默寫成 NULL），
+  文章與頁面的 `bodyBlocks` 送物件。這條規則原本只活在匯入腳本的註解裡。
+- **未宣告的鍵一律保留**（`{ ...原物件, [key]: v }`，不用 schema 重建）——
+  560/1083 篇文章的段落帶著前台不讀的 `runs`，重建一次就永久消失。
+- **`page` 依 slug 分派**（那六頁的 SystemKey 都是 null）。其餘 11 頁**刻意沒有
+  schema**：硬套一份的結果是「表單看起來正常、填了、前台什麼都沒變」。
+
+✅ **1189 筆全數往返一致**（含 1083 篇文章內文的 `runs` 一個都沒少）。
+
+**③ 接上六個「後台改得動、前台根本沒在讀」的欄位**：`seoTitle`／`ogImage`／
+`canonicalOverride`／`noIndex`／`structuredDataOverride`（SEO 區塊五欄，前台零引用）
+與 `trackingCodes`（被公開設定白名單擋住）。
+- `noIndex` 一併加進 `Indexability.cs` —— 只改前台的話 sitemap 照樣會送出那一頁。
+- 🔴 順手修掉一條 **stored XSS**：`usePageHead` 的 `JSON.stringify` 不會跳脫 `<`，
+  `</script>` 會提前結束標籤。新增 `pnpm --filter web verify:seo-head` 守住它。
+- 追蹤碼**改成只收 ID**（`G-`／`GTM-`），由前台套官方 snippet ——
+  收整段程式碼等於任何能改設定的人都能在全站執行任意 JS。
+  ⚠️ 代價：Meta Pixel 這類貼不進來，需要的話是另開一個設定鍵。
+
+**④ `FieldType` 的 `richtext` 更名為 `longtext`**。那個名字名不副實：實作一直只是
+`textarea` ＋ `min-height`，全後台從來沒有富文本。段落維持純文字是 Tim 定案
+（2026-09-17），要加行內格式得同時改前台渲染並加一套 HTML 淨化，是另一件事。
+
 ### ✅ 已接上真 API（2026-09-12）
 
 localStorage mock 全部移除 —— `src/api/mock-store.ts` 與 `src/api/mock-seed.ts` **已刪除**。
@@ -295,7 +345,7 @@ localStorage mock 全部移除 —— `src/api/mock-store.ts` 與 `src/api/mock-
 
 | 缺口 | 說明 |
 |---|---|
-| 富文本 | 等寬文字框模擬，未接區塊編輯器 |
+| ~~富文本~~ | ✅ **2026-09-17 解決**：21 個區塊 JSON 欄位改成 schema 驅動的表單（見 §三）。⚠️ 段落仍是**純文字**，不支援行內粗體與連結——那是 Tim 的定案，不是缺口 |
 | 拖曳排序 | 現為上／下移動按鈕 |
 | 「我的退件」只看得到內容與原因 | `GET /admin/review` 只查待審那一批（docs/10 §3.4），已核准／已退回的送審紀錄沒有端點可查 —— 所以畫面上顯示不出「誰在什麼時候送審／核准」。這是契約範圍，不是漏接 |
 | 首頁版位的送審者與時間 | 同上。只在「送審中」時用首頁那筆 Page 的 `updatedAt` 近似顯示 |
