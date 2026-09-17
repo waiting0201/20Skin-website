@@ -173,6 +173,34 @@ await step('文章：超過上限就不給拖，而且說得出為什麼', async
   return (await hint.first().innerText()).replace(/\s+/g, ' ').slice(0, 34)
 })
 
+section('分類與標籤：型別篩選')
+await step('篩得出那 4 筆療程分類', async () => {
+  // 🔴 這一條擋的是「維護得到但找不到」：term 一張表混了四種東西，406 筆裡
+  //    393 筆是文章標籤，而 ORDER BY SortOrder, Id 之下四個療程分類落在
+  //    第 20–21 頁（共 21 頁）。2026-09-17 補上型別篩選（API 的 termType 參數）。
+  await navigate(page, '/admin/term')
+  await page.waitForSelector('.adm-table tbody tr', { timeout: 25000 })
+  await page.waitForTimeout(800)
+  const typeSelect = page.locator('.adm-filters select').nth(1)
+  if (!(await typeSelect.count())) throw new Error('沒有型別篩選器')
+  await typeSelect.selectOption({ label: '療程分類' })
+  await page.waitForTimeout(1500)
+  // ⚠️ 欄位順序是 [勾選, 名稱, 型別, 使用筆數, 狀態]，型別是第 3 欄。
+  const types = [...new Set(await page.locator('.adm-table tbody tr td:nth-child(3)').allInnerTexts())]
+  if (JSON.stringify(types) !== JSON.stringify(['療程分類'])) throw new Error(`混到：${types.join('、')}`)
+  const names = await page.locator('.adm-table__title a').allInnerTexts()
+  return `${names.length} 筆：${names.join('、')}`
+})
+await step('篩到 4 筆也不會冒出拖曳把手', async () => {
+  // 🔴 排序送的是**整個單元**的順序（406 筆），篩選後的筆數不能拿來決定給不給拖 ——
+  //    否則就是一個按了必定跳「超過上限」的把手（2026-09-17 加篩選時當場踩到）。
+  const handles = await page.locator('.adm-table .adm-drag-handle').count()
+  if (handles) throw new Error(`冒出 ${handles} 個把手`)
+  const hint = page.locator('.adm-field__hint', { hasText: '超過一次排序的上限' })
+  if (!(await hint.count())) throw new Error('也沒有說明為什麼不能拖')
+  return '沒有把手，且說得出原因'
+})
+
 section('模式切換：選中的那顆要看得出來')
 await step('表單／進階 JSON 的選中狀態沒有反過來', async () => {
   // 🔴 這一條擋的是「亮的是沒被選中的那一顆」（2026-09-17 修）：base.css 的

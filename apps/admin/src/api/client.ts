@@ -396,6 +396,7 @@ const content = {
           keyword: query.keyword,
           status: query.status,
           categoryId: query.categoryId,
+          termType: query.termType,
           ownerUserId: query.ownerUserId,
         },
       }),

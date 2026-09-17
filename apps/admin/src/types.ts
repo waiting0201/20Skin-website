@@ -156,6 +156,8 @@ export interface ListQuery {
   keyword?: string
   status?: ContentStatus
   categoryId?: number
+  /** 只有 term 用得到：1 療程分類／2 文章分類／3 FAQ 分類／4 文章標籤。其餘單元會被 API 忽略。 */
+  termType?: number
 }
 
 /** docs/08-database.md §B-3。 */

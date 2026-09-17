@@ -172,7 +172,7 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 
 | 端點 | 權限碼 | 說明 |
 |---|---|---|
-| `GET /admin/{unit}` | 登入即可 | 清單。共同參數 `page`／`pageSize`／`status`／`categoryId`／`keyword`／`ownerUserId` |
+| `GET /admin/{unit}` | 登入即可 | 清單。共同參數 `page`／`pageSize`／`status`／`categoryId`／`keyword`／`ownerUserId`。**`term` 另支援 `termType`**（1 療程分類／2 文章分類／3 FAQ 分類／4 文章標籤）—— 那一張表混了四種東西，實測 406 筆裡 393 筆是標籤，沒有它就找不到那 4 筆療程分類。⚠️ 其餘單元忽略此參數（只有 `Terms` 有這個欄位）；值域外當成「不篩」而不是 400 |
 | `GET /admin/{unit}/{id}` | 登入即可 | 單筆（含 `SeoMeta`、關聯、`BodyBlocks`） |
 | `POST /admin/{unit}` | `content.{unit}.edit` | 新增 |
 | `PUT /admin/{unit}/{id}` | `content.{unit}.edit` | 更新本文 |

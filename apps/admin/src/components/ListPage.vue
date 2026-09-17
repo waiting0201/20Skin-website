@@ -51,8 +51,22 @@ const totalCount = ref(0)
 const loading = ref(true)
 const selected = ref<Set<number>>(new Set())
 
-const query = reactive({ page: 1, pageSize: 20, keyword: '', status: '' as '' | ContentStatus, categoryId: '' })
+const query = reactive({ page: 1, pageSize: 20, keyword: '', status: '' as '' | ContentStatus, categoryId: '', termType: '' })
 const categoryOptions = ref<{ value: string; label: string }[]>([])
+
+/**
+ * 「分類與標籤」的型別篩選（2026-09-17）。
+ *
+ * ⚠️ 為什麼非有不可：term 一張表混了四種東西，實測 406 筆裡 393 筆是文章標籤，
+ *    而清單是 `ORDER BY SortOrder, Id`、term 的 SortOrder 全是 0 —— 四個療程分類
+ *    落在第 20–21 頁（共 21 頁）。沒有這個下拉，維護療程分類只能靠關鍵字猜名字。
+ *
+ * ⚠️ 選項**從 term 單元的欄位宣告讀**，不在這裡再抄一份四個標籤 ——
+ *    抄一份的下場是「新增對話框叫療程分類、篩選器叫別的名字」。
+ */
+const termTypeOptions = computed(
+  () => def.value.fields.find((f) => f.key === 'termType')?.options ?? [],
+)
 
 // 醫師角色只能編輯自己的內容——清單預設先幫他們濾出自己的（docs/10-api.md §3.3：
 // OwnerUserId 判定）。這是體驗上的便利，不是安全邊界；勾掉一樣看得到別人的（若有 view 權限）。
@@ -92,6 +106,7 @@ async function load() {
       keyword: query.keyword || undefined,
       status: query.status || undefined,
       categoryId: query.categoryId ? Number(query.categoryId) : undefined,
+      termType: query.termType ? Number(query.termType) : undefined,
       ownerUserId: onlyMine.value && user ? user.id : undefined,
     })
     items.value = result.items
@@ -108,6 +123,7 @@ async function load() {
 
 onMounted(async () => {
   await loadCategoryOptions()
+  await loadUnitTotal()
   await load()
   // 有人手打 /admin/{unit}/new 時，UnitEdit.vue 會把他導到這裡並帶上 ?new=1
   // （那條路原本是直接建一筆空白草稿，對五個單元一律 400，見 UnitEdit.vue）。
@@ -118,8 +134,16 @@ onMounted(async () => {
     router.replace(`/${props.unit}`)
   }
 })
-watch(() => props.unit, async () => { query.page = 1; await loadCategoryOptions(); await load() })
-watch([() => query.keyword, () => query.status, () => query.categoryId, onlyMine], () => { query.page = 1; load() })
+watch(() => props.unit, async () => {
+  query.page = 1
+  // ⚠️ 換單元一定要清掉 term 專用的篩選：留著的話它在別的單元上是一個
+  //    「畫面上看不到、卻真的送出去」的過濾條件（API 會忽略，但下次切回 term 就詭異了）。
+  query.termType = ''
+  await loadCategoryOptions()
+  await loadUnitTotal()
+  await load()
+})
+watch([() => query.keyword, () => query.status, () => query.categoryId, () => query.termType, onlyMine], () => { query.page = 1; load() })
 watch(() => query.page, load)
 
 const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / query.pageSize)))
@@ -158,8 +182,31 @@ async function batchPublish(status: 3 | 4) {
 /** 一次排序的筆數上限，對齊 API 的 `Paging.MaxPageSize`（超過整支被擋）。 */
 const SORT_MAX = 100
 
+/**
+ * 這個單元的**總筆數**，不帶任何篩選。
+ *
+ * 🔴 **排序能不能用要看它，不能看 `totalCount`** —— 後者是篩選之後的數字。
+ *    2026-09-17 加上 term 的型別篩選時當場踩到：篩「療程分類」剩 4 筆，
+ *    把手就冒出來了，但 reorder 送的是**整個單元**的順序（406 筆），
+ *    一拖必定跳「超過上限 100 筆」。等於給了一個按了保證失敗的把手。
+ *    ⚠️ 這個洞在加篩選之前就存在：文章用分類或狀態篩到 100 筆以內是同一件事。
+ * ⚠️ 單元的總數只在新增／刪除時才變，而那兩件事都會離開這個畫面，
+ *    所以掛載與換單元時各抓一次就夠，不需要跟著每次篩選重抓。
+ */
+const unitTotalCount = ref(0)
+
+async function loadUnitTotal() {
+  try {
+    unitTotalCount.value = (await adminApi.content.list(props.unit, { page: 1, pageSize: 1 })).totalCount
+  }
+  catch {
+    // 拿不到就當作不能排序 —— 寧可少一個把手，也不要給一個按了會失敗的。
+    unitTotalCount.value = 0
+  }
+}
+
 /** 這個單元排得動嗎 —— 全部筆數要能一次送完，理由見檔頭。 */
-const sortable = computed(() => canEdit.value && totalCount.value > 1 && totalCount.value <= SORT_MAX)
+const sortable = computed(() => canEdit.value && unitTotalCount.value > 1 && unitTotalCount.value <= SORT_MAX)
 
 async function reorder(orderedPageIds: number[]) {
   errorMessage.value = ''
@@ -463,6 +510,10 @@ const newTagTermType = ref('1')
           <option value="">全部分類</option>
           <option v-for="opt in categoryOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
+        <select v-if="unit === 'term'" v-model="query.termType">
+          <option value="">全部型別</option>
+          <option v-for="opt in termTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
         <label v-if="def.ownershipRestricted && user?.roles.includes('Doctor') && !user?.isSuperAdmin" class="adm-checkbox">
           <input v-model="onlyMine" type="checkbox"> 只看我自己的
         </label>
@@ -530,8 +581,8 @@ const newTagTermType = ref('1')
             </tr>
           </tbody>
         </table>
-        <p v-if="canEdit && totalCount > SORT_MAX" class="adm-field__hint" style="margin-top: var(--sp-2)">
-          {{ def.label }}共 {{ totalCount }} 筆，超過一次排序的上限（{{ SORT_MAX }} 筆），因此這個清單不提供拖曳排序。
+        <p v-if="canEdit && unitTotalCount > SORT_MAX" class="adm-field__hint" style="margin-top: var(--sp-2)">
+          {{ def.label }}共 {{ unitTotalCount }} 筆，超過一次排序的上限（{{ SORT_MAX }} 筆），因此這個清單不提供拖曳排序。
           需要固定順序請到該筆的編輯畫面填「排序值」。
         </p>
       </div>

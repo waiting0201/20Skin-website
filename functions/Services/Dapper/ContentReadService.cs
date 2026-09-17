@@ -72,6 +72,7 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
     public async Task<(IReadOnlyList<ContentListRow> Items, int TotalCount)> ListAsync(
         string unit, ContentType contentType, int page, int pageSize,
         byte? status, int? categoryTermId, string? keyword, int? ownerUserId,
+        byte? termType = null,
         CancellationToken ct = default)
     {
         if (!UnitTables.TryGetValue(unit, out var meta))
@@ -89,6 +90,17 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
         var categoryTitleSelect = hasCategory ? "term.Title" : "CAST(NULL AS nvarchar(200))";
         var categoryFilter = hasCategory
             ? $"(@CategoryTermId IS NULL OR u.[{meta.CategoryColumn}] = @CategoryTermId)"
+            : "(1 = 1)";
+
+        // 「分類與標籤」的型別篩選（2026-09-17）。
+        // 🔴 **只有 term 這個單元有 TermType 欄位**——其餘八個單元的 u 別名指向
+        //    Treatments／Articles…，寫進去會是「Invalid column name 'TermType'」，
+        //    而那是執行期錯誤，編譯與 typecheck 都攔不到。
+        // ⚠️ 為什麼需要它：term 一張表混了四種東西，實測 406 筆裡有 393 筆是文章標籤，
+        //    而 ORDER BY SortOrder, Id 之下四個療程分類落在第 20–21 頁（共 21 頁）。
+        //    沒有這個篩選等於「要維護療程分類只能靠關鍵字猜名字」。
+        var termTypeFilter = unit == UnitCodes.Term
+            ? "(@TermType IS NULL OR u.TermType = @TermType)"
             : "(1 = 1)";
 
         // 分類與標籤的「使用筆數」：後台清單要顯示它，刪除也靠它擋（docs/10 §3.3 —— 仍有引用回 409）。
@@ -131,6 +143,7 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
             WHERE ci.ContentType = @ContentType
               AND (@Status IS NULL OR ci.Status = @Status)
               AND {categoryFilter}
+              AND {termTypeFilter}
               AND (@OwnerUserId IS NULL OR ci.OwnerUserId = @OwnerUserId)
               AND (@Keyword IS NULL OR ci.Title LIKE @KeywordPattern ESCAPE '\')
             ORDER BY ci.SortOrder, ci.Id
@@ -142,6 +155,7 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
             WHERE ci.ContentType = @ContentType
               AND (@Status IS NULL OR ci.Status = @Status)
               AND {categoryFilter}
+              AND {termTypeFilter}
               AND (@OwnerUserId IS NULL OR ci.OwnerUserId = @OwnerUserId)
               AND (@Keyword IS NULL OR ci.Title LIKE @KeywordPattern ESCAPE '\');
             """;
@@ -151,6 +165,7 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
             ContentType = (byte)contentType,
             Status = status,
             CategoryTermId = categoryTermId,
+            TermType = termType,
             OwnerUserId = ownerUserId,
             Keyword = keyword,
             KeywordPattern = keyword is null ? null : $"%{EscapeLike(keyword)}%",

@@ -86,7 +86,13 @@ public sealed class ContentHandler(
         string? keyword = req.Query["keyword"];
         if (string.IsNullOrWhiteSpace(keyword)) keyword = null;
 
-        var (rows, total) = await _read.ListAsync(unit, contentType, page, pageSize, status, categoryTermId, keyword, ownerUserId, ct);
+        // 「分類與標籤」專用的型別篩選（1 療程分類／2 文章分類／3 FAQ 分類／4 文章標籤）。
+        // ⚠️ 其餘單元忽略這個參數 —— 只有 Terms 有 TermType 欄位（見 ContentReadService）。
+        // ⚠️ 值域外一律當成「沒有指定」而不是 400：它是篩選器，給錯值的合理行為是不篩，
+        //    不是讓整個清單打不開。
+        byte? termType = byte.TryParse(req.Query["termType"], out var tt) && tt is >= 1 and <= 4 ? tt : null;
+
+        var (rows, total) = await _read.ListAsync(unit, contentType, page, pageSize, status, categoryTermId, keyword, ownerUserId, termType, ct);
 
         var items = rows.Select(r => new ContentListItemDto(
             r.Id, unit, r.Title, r.Slug, r.UrlPath, r.Status, StatusName((ContentStatus)r.Status),
