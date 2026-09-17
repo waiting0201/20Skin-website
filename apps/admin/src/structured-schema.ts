@@ -199,17 +199,30 @@ export function toWire(
 
 // ── 給畫面用的小工具 ──────────────────────────────────────────────────
 
-/** 摺疊起來的那一列要顯示什麼。 */
+/**
+ * 摺疊起來的那一列要顯示什麼。
+ *
+ * ⚠️ 呼叫端傳進來的是**陣列節點**，而摘要看的是那一列（成員）的形狀 ——
+ * union 的判斷要往 `node.item` 走一層。少了這一步，文章的區塊列會顯示
+ * 原始的型別代碼（`lead`、`paragraph`）而不是「前言」「段落　實際文字…」。
+ */
 export function summaryOf(node: StructuredNode, value: unknown, index: number): string {
   if (value === null || value === undefined) return `第 ${index + 1} 項`
   if (typeof value !== 'object') return String(value).slice(0, 60) || `第 ${index + 1} 項`
 
   const row = value as Record<string, unknown>
-  if (node.kind === 'union') {
-    const variant = node.variants.find((v) => String(row[node.discriminator]) === v.value)
-    const text = firstText(row)
-    return variant ? `${variant.label}　${text}`.trim() : `未知型別：${String(row[node.discriminator] ?? '—')}`
+  const itemNode = node.kind === 'array' ? node.item : node
+
+  if (itemNode.kind === 'union') {
+    const current = String(row[itemNode.discriminator] ?? '')
+    const variant = itemNode.variants.find((v) => v.value === current)
+    if (!variant) return `未知型別：${current || '—'}`
+    // ⚠️ 要跳過 discriminator 本身 —— 它是物件的第一個鍵，不跳過的話
+    //    摘要就會變成型別代碼而不是內容。
+    const text = firstText(row, itemNode.discriminator)
+    return text ? `${variant.label}　${text}` : variant.label
   }
+
   if (node.kind === 'array' && node.summaryKeys?.length) {
     const parts = node.summaryKeys.map((k) => row[k]).filter((v) => typeof v === 'string' && v).map(String)
     if (parts.length) return parts.join('・').slice(0, 80)
@@ -217,9 +230,32 @@ export function summaryOf(node: StructuredNode, value: unknown, index: number): 
   return firstText(row) || `第 ${index + 1} 項`
 }
 
-function firstText(row: Record<string, unknown>): string {
-  for (const v of Object.values(row)) {
+/**
+ * 摺疊列要顯示哪一段文字。
+ *
+ * ⚠️ **不能只取「第一個字串值」。** 物件的鍵順序是資料決定的，文章的標題區塊是
+ * `{type, level, id, text}` —— 照順序取會拿到錨點 id（`why-ages-faster`），
+ * 提示框會拿到樣式代碼（`info`）。所以先照這份偏好清單找真正的內容欄位。
+ */
+const SUMMARY_PREFERRED_KEYS = ['text', 'title', 'heading', 'label', 'name', 'caption', 'q', 'when', 'lede']
+
+function firstText(row: Record<string, unknown>, skipKey?: string): string {
+  const pick = (key: string) => {
+    const v = row[key]
+    return typeof v === 'string' && v.trim() ? v.trim().slice(0, 60) : ''
+  }
+  for (const key of SUMMARY_PREFERRED_KEYS) {
+    if (key === skipKey) continue
+    const hit = pick(key)
+    if (hit) return hit
+  }
+  for (const [key, v] of Object.entries(row)) {
+    if (key === skipKey || SUMMARY_PREFERRED_KEYS.includes(key)) continue
     if (typeof v === 'string' && v.trim()) return v.trim().slice(0, 60)
+  }
+  // 清單與表格這種「內容全在子陣列裡」的區塊：沒有可顯示的字串，就報幾項。
+  for (const v of Object.values(row)) {
+    if (Array.isArray(v) && v.length) return `${v.length} 項`
   }
   return ''
 }

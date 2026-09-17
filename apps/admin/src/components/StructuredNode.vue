@@ -118,9 +118,24 @@ function pasteLines(text: string) {
 }
 
 const rowKey = (index: number) => `${props.path}[${index}]`
-const isOpen = (index: number) => props.openRows[rowKey(index)] !== false
+
+/**
+ * 摺疊列預設開還是關。
+ *
+ * 🔴 `collapsible` 的陣列**預設關起來**（文章內文就是）。實測一篇 28 個區塊的
+ *    文章全部展開會同時渲染 104 個輸入欄位，而正式資料裡最長的文章有上百個區塊。
+ *    ⚠️ 這個旗標原本宣告了卻沒有人讀 —— 是實際開後台跑一遍才發現的。
+ * ⚠️ 其餘陣列（規格數據列這種一列兩格的）預設開著，關起來反而多一次點擊。
+ */
+const defaultOpen = computed(() => !(props.node.kind === 'array' && props.node.collapsible))
+const isOpen = (index: number) => props.openRows[rowKey(index)] ?? defaultOpen.value
 function toggleRow(index: number) {
   props.openRows[rowKey(index)] = !isOpen(index)
+}
+
+/** 全部展開／收合：區塊多的時候，一列一列點是折磨。 */
+function setAllRows(open: boolean) {
+  arrayValue.value.forEach((_, index) => { props.openRows[rowKey(index)] = open })
 }
 
 // ── union（文章的區塊）────────────────────────────────────────────────
@@ -240,9 +255,16 @@ const fieldPath = (key: string) => (props.path ? `${props.path}.${key}` : key)
       </div>
     </div>
     <p v-if="!arrayValue.length" class="adm-muted">尚未新增任何{{ node.itemLabel }}。</p>
-    <button type="button" class="btn btn--ghost btn--sm" style="align-self:flex-start" :disabled="disabled" @click="insertAt(arrayValue.length)">
-      ＋ 新增{{ node.itemLabel }}
-    </button>
+    <div class="adm-inline-actions">
+      <button type="button" class="btn btn--ghost btn--sm" :disabled="disabled" @click="insertAt(arrayValue.length)">
+        ＋ 新增{{ node.itemLabel }}
+      </button>
+      <template v-if="node.collapsible && arrayValue.length > 1">
+        <button type="button" class="btn btn--ghost btn--sm" @click="setAllRows(true)">全部展開</button>
+        <button type="button" class="btn btn--ghost btn--sm" @click="setAllRows(false)">全部收合</button>
+        <span class="adm-muted">共 {{ arrayValue.length }} 個{{ node.itemLabel }}</span>
+      </template>
+    </div>
   </div>
 
   <!-- union -->
