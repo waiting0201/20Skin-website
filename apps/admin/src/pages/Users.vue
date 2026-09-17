@@ -2,8 +2,11 @@
 // 帳號管理（/users）—— 規格見 docs/02 §4、docs/08 §A、docs/10 §3.4。
 //
 // 🔴 沒有雙因素（2026-09-11 院方決定）。這個畫面刻意不出現任何 2FA 相關 UI，
-// 而是把連帶後果講清楚：帳密是唯一憑證、登入次數限制是唯一防線、
-// 種子密碼 Admin@123 上線前必須更換（STATUS.md §八、docs/02 §4、docs/08 §A-5）。
+// 而是把連帶後果講清楚：帳密是唯一憑證、登入次數限制是唯一防線。
+// ⚠️ 2026-09-17 更正文案：原本寫「種子密碼 Admin@123 上線前必須更換」，
+//    那是已作廢的敘述 —— Tim 於 2026-09-16 判定它不是上線阻斷項
+//    （CLAUDE.md 決策 10、STATUS.md §八）。畫面仍然標示哪些帳號沒換過密碼，
+//    但不再把它講成上線條件，也不要再改回去。
 //
 // ⚠️ UI 的權限判斷只管看不看得到，不是安全邊界（docs/09 §8）——真正擋得住的
 // 是 API 端對 user.* 的驗證。這裡的權限碼只決定按鈕出不出現。
@@ -195,20 +198,29 @@ function fmtDate(iso: string | null): string {
       </div>
     </div>
 
-    <p class="adm-workflow__note users-security-note">
+    <p class="adm-alert adm-alert--warn">
       🔴 <strong>後台安全防線只剩登入次數限制這一道。</strong>
       雙因素不做（2026-09-11 院方決定）、IP 白名單不做（2026-08-13 決定），
       而後台路徑 <code>/admin/</code> 是客戶指定、公開可猜。帳號密碼是唯一憑證——
-      種子密碼（<code>sa</code> 的 <code>Admin@123</code> 等）<strong>上線前必須全部更換</strong>，
-      下表「密碼」欄標示為種子密碼的帳號都還沒換過。
+      下表「密碼」欄標示為種子密碼（<code>sa</code> 的 <code>Admin@123</code> 等）的帳號都還沒換過，
+      換掉它們是目前最有效的一件事。
     </p>
 
     <div class="adm-filters">
       <input v-model="keyword" type="search" placeholder="搜尋帳號或顯示名稱">
     </div>
 
-    <div v-if="loading" class="adm-empty">載入中…</div>
-    <div v-else-if="!filtered.length" class="adm-empty">沒有符合的帳號。</div>
+    <div v-if="loading" class="adm-loading">
+      <span class="adm-spinner" aria-hidden="true"></span>
+      <span>載入中…</span>
+    </div>
+    <div v-else-if="!filtered.length" class="adm-empty">
+      <div class="adm-empty__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l2.5-7h13L21 13" /><path d="M3 13v6a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-6" /><path d="M3 13h5l1.2 2.4h5.6L16 13h5" /></svg>
+      </div>
+      <p class="adm-empty__title">沒有符合的帳號</p>
+      <p class="adm-empty__desc">{{ keyword ? `沒有帳號或顯示名稱包含「${keyword}」，換個關鍵字再試一次。` : '目前還沒有建立任何帳號。' }}</p>
+    </div>
 
     <div v-else class="adm-table-wrap">
       <table class="adm-table">
@@ -232,15 +244,15 @@ function fmtDate(iso: string | null): string {
             <td>{{ a.notifyEmail || '（未填）' }}</td>
             <td>{{ a.doctorId ? `#${a.doctorId}` : '—' }}</td>
             <td>
-              <span class="u-badge" :class="a.isActive ? 'u-badge--on' : 'u-badge--off'">
+              <span class="adm-badge" :class="a.isActive ? 'adm-badge--published' : 'adm-badge--draft'">
                 {{ a.isActive ? '啟用中' : '已停用' }}
               </span>
             </td>
             <td>
               <!-- ⚠️ 這是「首登尚未改密碼」，不是「上一次改密碼是什麼時候」——
-                   Users 沒有 PasswordUpdatedAt 欄位（docs/08 §A-1）。對「種子密碼
-                   上線前必須更換」這個唯一用途來說夠用：建立帳號一律帶這個旗標，改完就清掉。 -->
-              <span v-if="a.mustChangePassword" class="u-badge u-badge--warn" title="尚未改過密碼，上線前必須更換">密碼未更換</span>
+                   Users 沒有 PasswordUpdatedAt 欄位（docs/08 §A-1）。對「標出誰還沒換過
+                   密碼」這個唯一用途來說夠用：建立帳號一律帶這個旗標，改完就清掉。 -->
+              <span v-if="a.mustChangePassword" class="adm-badge adm-badge--review" title="尚未改過密碼，仍在用建立帳號時給的那一組">密碼未更換</span>
               <span v-else class="adm-muted">已更換</span>
             </td>
             <td class="adm-table__actions">
@@ -342,34 +354,12 @@ function fmtDate(iso: string | null): string {
 </template>
 
 <style scoped>
-.users-security-note {
-  margin-bottom: var(--sp-4);
-  border-left: 3px solid var(--danger, #b5442e);
-}
 .users-panel {
   margin-top: var(--sp-4);
 }
 .users-role-checks {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-3, 12px);
-}
-.u-badge {
-  display: inline-block;
-  padding: 0.2em 0.7em;
-  border-radius: 999px;
-  font-size: var(--fs-eyebrow, 0.8em);
-  border: 1px solid var(--ink-15, #ccc);
-}
-.u-badge--on {
-  color: var(--ink);
-}
-.u-badge--off {
-  color: var(--ink-50, #888);
-}
-.u-badge--warn {
-  color: #a9410f;
-  border-color: #a9410f;
-  background: rgba(169, 65, 15, 0.08);
+  gap: var(--sp-3);
 }
 </style>

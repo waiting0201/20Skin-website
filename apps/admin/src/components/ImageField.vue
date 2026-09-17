@@ -90,7 +90,10 @@ function remove() {
       @input="setAlt(($event.target as HTMLInputElement).value)"
     >
 
-    <p v-if="error" class="adm-upload__todo">{{ error }}</p>
+    <!-- 錯誤訊息原本跟下面的提醒文字共用同一個灰色 class，跟一般說明文字
+         分不出差異——改用 .adm-field__error（危險色）,讓「上傳失敗」這種
+         真的需要使用者注意的訊息不會被當成裝飾性小字忽略掉。 -->
+    <p v-if="error" class="adm-field__error" role="alert">{{ error }}</p>
     <p v-if="modelValue" class="adm-upload__todo">
       ⚠️ 移除或換圖之後，舊檔案會在存檔時從 Blob 刪除，版本還原不會把它變回來。
     </p>

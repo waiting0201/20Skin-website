@@ -125,12 +125,15 @@ async function save() {
       </div>
     </header>
 
-    <div v-if="loading" class="adm-empty">載入中…</div>
+    <div v-if="loading" class="adm-loading">
+      <span class="adm-spinner" aria-hidden="true"></span>
+      <span>載入中…</span>
+    </div>
 
     <template v-else>
-      <p v-if="actionNotice" class="adm-workflow__banner" style="margin-bottom: var(--sp-4)">{{ actionNotice }}</p>
-      <p v-if="actionError" class="adm-login__error" style="margin-bottom: var(--sp-4)">{{ actionError }}</p>
-      <p v-if="!canEdit" class="adm-workflow__note" style="margin-bottom: var(--sp-4)">
+      <p v-if="actionNotice" class="adm-alert adm-alert--success" style="margin-bottom: var(--sp-4)">{{ actionNotice }}</p>
+      <p v-if="actionError" class="adm-alert adm-alert--danger" role="alert" style="margin-bottom: var(--sp-4)">{{ actionError }}</p>
+      <p v-if="!canEdit" class="adm-alert adm-alert--info" style="margin-bottom: var(--sp-4)">
         目前帳號沒有編輯權限，以下僅供檢視。
       </p>
 

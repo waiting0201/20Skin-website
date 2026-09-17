@@ -121,14 +121,17 @@ const marketingHasExtraEdit = computed(() =>
       </div>
     </div>
 
-    <p class="adm-workflow__note roles-mock-note">
+    <p class="adm-alert adm-alert--info">
       ⚠️ 儲存後<strong>後端的授權立即生效</strong>，但<strong>目前登入中的人要重新登入</strong>，
       畫面上的選單與按鈕才會跟著變 —— 權限是登入當下發下來的。
     </p>
 
-    <p v-if="!canEditRoles" class="adm-empty">沒有編輯角色權限的權限，以下為唯讀檢視。</p>
+    <p v-if="!canEditRoles" class="adm-alert adm-alert--info">沒有編輯角色權限的權限，以下為唯讀檢視。</p>
 
-    <div v-if="loading" class="adm-empty">載入中…</div>
+    <div v-if="loading" class="adm-loading">
+      <span class="adm-spinner" aria-hidden="true"></span>
+      <span>載入中…</span>
+    </div>
 
     <template v-else>
       <div class="roles-toolbar">
@@ -230,10 +233,6 @@ const marketingHasExtraEdit = computed(() =>
 </template>
 
 <style scoped>
-.roles-mock-note {
-  margin-bottom: var(--sp-4);
-  border-left: 3px solid var(--brand, #a9410f);
-}
 .roles-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -251,14 +250,22 @@ const marketingHasExtraEdit = computed(() =>
   flex-direction: column;
   gap: 0.4em;
 }
-.roles-rules__ok { color: var(--ink-50, #4a7a4a); }
-.roles-rules__bad { color: #b5442e; font-weight: 600; }
-.roles-rules__note { color: var(--ink-50, #888); }
+.roles-rules__ok { color: var(--adm-ok); }
+.roles-rules__bad { color: var(--adm-danger); font-weight: 600; }
+.roles-rules__note { color: var(--ink-50); }
 .roles-matrix__group td {
-  background: var(--fill-hover, #f4f2ee);
+  background: var(--fill-hover);
   font-weight: 600;
 }
 .roles-matrix__cell { text-align: center; }
-.roles-matrix__always { color: var(--ink-50, #888); }
-.roles-term-card { margin-top: var(--sp-5, 24px); }
+.roles-matrix__always { color: var(--ink-50); }
+.roles-term-card { margin-top: var(--sp-5); }
+
+/* 31 個權限碼＋5 個角色的矩陣一長串，密度是這頁的重點——表頭固定在頂列
+   （貼齊 .adm-topbar 下緣），往下捲動時仍看得到「這一欄是哪個角色」。 */
+.roles-matrix thead th {
+  position: sticky;
+  top: var(--adm-topbar-h);
+  z-index: 2;
+}
 </style>

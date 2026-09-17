@@ -1,27 +1,92 @@
 /* =========================================================================
-   後台管理介面樣式。
+   20SKIN 後台管理介面樣式
    =========================================================================
    ⚠️ 不受 pnpm verify:css 的「照抄 mockup」四條規則管（後台沒有設計稿，
    是依功能切的，見 frontend/README.md 與 docs/09-frontend.md §8）。
 
-   沿用 base.css 的設計 token（--brand／--ink／--line／--sp-*／--fs-*／
-   --font-base／--radius-*），讓後台「像同一個品牌」，但版面是工具型的：
-   密度更高、對齊靠格線與表格，不套前台的藝廊留白感。
+   2026-09-17 全面重做（Tim 評語「設計不夠精緻」，第一階段：設計系統與外框）。
+   方向：延續 mockup A（apps/web 前台）的設計語彙——白底、直角＋細框、
+   暖金 --accent、宋體標題 × 黑體內文的對比——但密度更高、對齊靠格線與
+   表格，不套前台的藝廊留白感。前後台要讀起來是同一個品牌，不是兩套系統
+   拼在一起，所以規則很簡單：
+
+   　　**凡是「標題」（頁面標題、卡片標題）一律宋體；凡是「操作或密集資料」
+   　　（按鈕、表格、表單、標籤、麵包屑、側欄選單）一律黑體。**
+
+   這跟 base.css 的 h1–h6 全宋體、按鈕/nav 全黑體是同一條規則，只是套用到
+   後台自己的元件上——這樣兩套系統才不會各自表述。
+
+   色彩、字體、間距、圓角一律沿用 base.css 的 token（--brand／--ink／--line／
+   --sp-*／--fs-*／--font-serif／--font-base／--radius-*／--accent）。
+   **不要改 base.css**，它是前台的檔案；後台專屬的密度／狀態色 token 放在
+   下面 :root 區塊，一律用 --adm- 前綴。
 
    命名慣例延續 base.css：`.adm-*` 是本檔的元件前綴，避免與 `.c-*`（前台）
-   混淆；按鈕／標籤等泛用元件直接沿用 base.css 的 .btn／.c-tag。
+   混淆；按鈕／標籤等泛用元件直接沿用 base.css 的 .btn／.c-tag，不要重新
+   發明一套後台自己的按鈕樣式。
+
+   ⚠️ 卡片不用陰影——這是刻意的，不是漏寫。前台的 .c-card 也沒有陰影
+   （見 base.css §11 的「去框、留線」）；後台資料需要邊框做分組（工具型
+   介面，不是雜誌排版），但陰影是「SaaS 卡片組」最常見的樣板化痕跡之一，
+   這裡刻意不用，靠留白與細線分層。
+
+   ⚠️ 側欄維持深色（brand-700），但不是照抄原本「深色側欄＋淺色內容」的
+   泛用後台模板，而是把它接上前台頁尾（.c-footer）已經在用的同一套深色
+   語彙：頂端一道暖金細線、一圈白色描邊的月洞門（.c-ring），讓後台的
+   「這是同一個機構」讀起來有憑有據，而不是巧合。全站暖金僅兩處的規矩
+   （base.css §1）在後台比照辦理——後台裡暖金只出現在側欄頂端細線、
+   選中選單項目的左側標記，僅此兩處，不要再加。
+
+   ---------------------------------------------------------------------
+   目錄
+   ---------------------------------------------------------------------
+   1.  Tokens              後台專屬 --adm-* 變數（密度、狀態色）
+   2.  App 容器             .adm-app
+   3.  外框                 .adm-shell／.adm-sidebar／.adm-body／.adm-main
+   4.  品牌區塊             .adm-brand（含月洞門 ring、宋體 wordmark）
+   5.  側欄選單             .adm-nav（accordion，四項硬性行為見內文 ⚠️）
+   6.  頂列                 .adm-topbar／.adm-breadcrumb／使用者區
+   7.  頁面共用外框          .adm-page／.adm-page__head／.adm-card
+   8.  儀表板               .adm-stat-*／.adm-dashboard-grid／.adm-list-item
+   9.  篩選列與表格          .adm-filters／.adm-table／.adm-pagination
+   10. 狀態徽章             .adm-badge
+   11. 表單                 .adm-form／.adm-field／.adm-input 等
+   12. 訊息元件             .adm-alert／.adm-empty／.adm-loading（新）
+   13. 特殊表單元件          repeater／tags／hours／relation／upload／risk-hit
+   14. 編輯畫面版面          .adm-editor-layout／.adm-workflow
+   15. 登入頁               .adm-login（左右分欄，獨立版面）
+   16. 小工具               .adm-muted／.adm-divider／.adm-inline-actions
+   17. RWD 斷點總覽
    ========================================================================= */
 
-/* -- 後台專用 token：只覆寫「密度」，顏色與字體一律用 base.css 的變數 ---- */
+
+/* =========================================================================
+   1. Tokens
+   -------------------------------------------------------------------------
+   顏色與字體一律用 base.css 的變數；這裡只放「後台才需要」的東西：
+   密度尺寸，以及狀態色的具名 token（草稿／審核／發布／下架／提醒，
+   共用同一組色票，不要在各元件裡各自寫一次 hex）。
+   ========================================================================= */
 :root {
   --adm-sidebar-w: 240px;
-  --adm-topbar-h: 56px;
+  --adm-topbar-h: 60px;
   --adm-radius: var(--radius-md);
-  --adm-danger: #B3452C;
-  --adm-warn-bg: #FBF3E9;
-  --adm-ok: #2F6B4F;
+  --adm-content-max: 1280px;
+
+  /* -- 狀態色：具名 token，供徽章／訊息框／風險提示共用 ------------------ */
+  --adm-danger:    #B3452C;
+  --adm-danger-bg: #F5E9E6;
+  --adm-warn:      #8A5A22;
+  --adm-warn-bg:   #FBF3E9;
+  --adm-ok:        #2F6B4F;
+  --adm-ok-bg:     #E9F3EC;
+  --adm-info:      var(--brand-700);
+  --adm-info-bg:   var(--brand-050);
 }
 
+/* =========================================================================
+   2. App 容器
+   ========================================================================= */
 .adm-app {
   min-height: 100vh;
   min-height: 100dvh;
@@ -32,8 +97,9 @@
   line-height: 1.6;
 }
 
+
 /* =========================================================================
-   外框：側欄 ＋ 頂列 ＋ 內容
+   3. 外框：側欄 ＋ 頂列 ＋ 內容
    ========================================================================= */
 .adm-shell {
   display: grid;
@@ -52,22 +118,98 @@
   height: 100vh;
   height: 100dvh;
   overflow-y: auto;
+  overflow-x: hidden; /* 讓品牌區塊的月洞門可以貼齊邊緣裁切，不撐出捲軸 */
 }
-.adm-sidebar__brand {
+/* 頂端暖金細線——直接對應前台頁尾 .c-footer::before 同一道線，
+   是「後台＝同一個機構」最便宜也最有效的一個訊號。 */
+.adm-sidebar::before {
+  content: "";
+  display: block;
+  height: 2px;
+  background: var(--accent);
+  opacity: .7;
+  flex: none;
+}
+
+.adm-body { display: flex; flex-direction: column; min-width: 0; }
+
+.adm-main {
+  padding: var(--sp-6);
+  max-width: var(--adm-content-max);
+}
+
+@media (max-width: 900px) {
+  .adm-shell { grid-template-columns: 1fr; }
+  .adm-sidebar { position: static; height: auto; }
+  .adm-main { padding: var(--sp-4); }
+}
+
+
+/* =========================================================================
+   4. 品牌區塊（側欄頂部）
+   -------------------------------------------------------------------------
+   簽名視覺語言的第二處：月洞門細線圓框（.c-ring，base.css §21），呼應前台
+   頁尾的 .c-ring--footer 用法——白色描邊、置於深色底、裁切到畫面外。
+   這裡不是裝飾抽屜，是整份文件裡唯一挪用前台簽名 motif 的位置，用完即止。
+   ========================================================================= */
+.adm-brand {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-5);
   border-bottom: 1px solid rgba(255, 255, 255, .12);
+  overflow: hidden;
 }
-.adm-sidebar__brand img { width: 32px; height: 32px; mix-blend-mode: screen; opacity: .9; }
-.adm-sidebar__brand strong { color: #fff; font-size: var(--fs-sm); font-weight: 700; letter-spacing: .04em; }
-.adm-sidebar__brand span { display: block; font-size: var(--fs-eyebrow); color: rgba(255, 255, 255, .55); }
+/* 沿用 base.css 的 .c-ring 基礎（absolute、圓形、pointer-events:none），
+   這裡只補位置／尺寸／描邊色——不複製它的規則。 */
+.adm-brand__ring {
+  width: 168px;
+  height: 168px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  top: -64px;
+  right: -56px;
+}
 
+.adm-brand__mark {
+  position: relative;
+  width: 34px;
+  height: 35px;
+  flex: none;
+  mix-blend-mode: screen; /* logo 是白底點陣圖：深色底用 screen，前台白底才用 multiply */
+}
+.adm-brand__text { position: relative; display: flex; flex-direction: column; gap: 2px; }
+.adm-brand__name {
+  font-family: var(--font-serif);
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: #fff;
+}
+.adm-brand__sub {
+  font-family: var(--font-base);
+  font-size: var(--fs-eyebrow);
+  letter-spacing: .16em;
+  color: rgba(255, 255, 255, .5);
+}
+
+
+/* =========================================================================
+   5. 側欄選單（accordion）
+   -------------------------------------------------------------------------
+   🔴 以下四項是 2026-09-17 剛定案的行為，樣式可以重做，這四件事不能退回去：
+   1. 單開式——開一組就關掉另一組（狀態是 AdminLayout.vue 的 openGroup 單一值）。
+   2. 開合緩動用 grid-template-rows: 0fr → 1fr，不是 max-height／v-show。
+   3. 關著的面板 DOM 還在，用 visibility ＋ transition-delay 把裡面的連結
+      移出 Tab 焦點順序（收合時「立刻」visibility:hidden 會讓動畫看起來像
+      硬切，所以「開場立刻顯示、收合等動畫跑完才隱藏」）。
+   4. prefers-reduced-motion: reduce 時関掉這裡的過場動畫。
+   ========================================================================= */
 .adm-nav { padding: var(--sp-3); flex: 1; }
-.adm-nav__group { margin-bottom: var(--sp-2); }
-/* 分組標題兼開合鈕（accordion，單開式）。預設只有「系統」是開的，
-   開合狀態在 AdminLayout.vue 的 openGroup（單一值，不是每組一個布林）。 */
+
+.adm-nav__link--top { margin-bottom: var(--sp-3); }
+
+.adm-nav__group { margin-bottom: var(--sp-1); }
 .adm-nav__toggle {
   display: flex;
   align-items: center;
@@ -77,10 +219,9 @@
   padding: var(--sp-2) var(--sp-3);
   border: 0;
   background: none;
-  font-family: inherit;
+  font-family: var(--font-base);
   font-size: var(--fs-eyebrow);
   letter-spacing: .1em;
-  text-transform: uppercase;
   color: rgba(255, 255, 255, .45);
   cursor: pointer;
   border-radius: var(--adm-radius);
@@ -90,16 +231,11 @@
 .adm-nav__chevron {
   font-size: 1.1em;
   line-height: 1;
-  transition: transform var(--dur) var(--ease);   /* 與面板同一組節奏 */
+  transition: transform var(--dur) var(--ease); /* 與面板同一組節奏 */
 }
 .adm-nav__toggle[aria-expanded="true"] .adm-nav__chevron { transform: rotate(90deg); }
-/* 開合的緩動：用 grid-template-rows 0fr → 1fr，不是 max-height ——
-   max-height 要先猜一個「夠大」的值，猜大了收合會有一段空轉、換組時兩邊
-   節奏對不起來（單開式是一開一關同時在跑，差異看得出來）。
-   ⚠️ 面板不能用 v-show（display:none 無法緩動），所以關著的時候 DOM 還在：
-      必須靠 visibility 把它移出 Tab 焦點順序，否則鍵盤會 tab 進看不見的連結。
-      visibility 沒有中間值，用 transition-delay 讓它「開場立刻顯示、
-      收合等動畫跑完才隱藏」。 */
+
+/* 開合動畫：見上方 ⚠️ 第 2、3 點 */
 .adm-nav__panel {
   display: grid;
   grid-template-rows: 0fr;
@@ -108,8 +244,11 @@
 .adm-nav__panel.is-open { grid-template-rows: 1fr; }
 .adm-nav__items {
   overflow: hidden;
-  min-height: 0;          /* grid 項目的預設 min-height:auto 會擋住收合 */
+  min-height: 0; /* grid 項目預設 min-height:auto 會擋住收合 */
   padding-bottom: var(--sp-2);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   visibility: hidden;
   transition: visibility 0s linear var(--dur);
 }
@@ -120,20 +259,29 @@
   .adm-nav__items,
   .adm-nav__chevron { transition-duration: 0s; transition-delay: 0s; }
 }
-.adm-nav__link--top { margin-bottom: var(--sp-2); }
+
+/* 選單項目：拿掉整塊底色高亮，改成左側 2px 暖金標記——
+   暖金全後台僅兩處之一（另一處是側欄頂端那條線），不要再加第三處。 */
 .adm-nav__link {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-2);
   padding: var(--sp-3);
-  border-radius: var(--adm-radius);
-  color: rgba(255, 255, 255, .82);
+  padding-left: calc(var(--sp-3) - 2px);
+  border-left: 2px solid transparent;
+  color: rgba(255, 255, 255, .78);
   font-size: var(--fs-sm);
-  transition: background .15s ease;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
 }
-.adm-nav__link:hover { background: rgba(255, 255, 255, .08); color: #fff; }
-.adm-nav__link.is-active { background: rgba(255, 255, 255, .14); color: #fff; font-weight: 600; }
+.adm-nav__link:hover { background: rgba(255, 255, 255, .05); color: #fff; }
+.adm-nav__link.is-active {
+  background: rgba(255, 255, 255, .05);
+  border-left-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+/* 保留、目前沒有畫面在用——之後若要在「審核佇列」掛未讀數字，接這個 class 即可 */
 .adm-nav__badge {
   min-width: 1.5em;
   padding: .1em .45em;
@@ -146,13 +294,16 @@
 }
 
 
+/* =========================================================================
+   6. 頂列
+   ========================================================================= */
 .adm-topbar {
   height: var(--adm-topbar-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--sp-4);
-  padding-inline: var(--sp-5);
+  padding-inline: var(--sp-6);
   background: var(--paper);
   border-bottom: 1px solid var(--line);
   position: sticky;
@@ -166,31 +317,40 @@
 
 .adm-topbar__user { display: flex; align-items: center; gap: var(--sp-3); }
 .adm-topbar__name { font-weight: 600; }
-.adm-topbar__role { font-size: var(--fs-xs); color: var(--ink-50); }
-
-.adm-main { padding: var(--sp-6); max-width: 1240px; }
-
-@media (max-width: 900px) {
-  .adm-shell { grid-template-columns: 1fr; }
-  .adm-sidebar { position: static; height: auto; }
-  .adm-main { padding: var(--sp-4); }
+/* 角色標籤：黑體、細追蹤字距，語彙上比照 .c-tag（標記而非按鈕），
+   但直接寫死不依賴 base.css 的 class，避免兩邊 padding/line-height 疊加打架。 */
+.adm-topbar__role {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--ink-50);
 }
 
+
 /* =========================================================================
-   頁面共用外框
+   7. 頁面共用外框
    ========================================================================= */
+/* 9 個系統畫面（帳號、角色、301、sitemap…）套的最外層包裝——
+   之前完全沒有樣式規則（套了等於沒套），現在給它一個實際作用：
+   段落之間統一垂直節奏，不必每頁自己再排一次。 */
+.adm-page { display: flex; flex-direction: column; gap: var(--sp-5); }
+
 .adm-page__head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--sp-4);
-  margin-bottom: var(--sp-5);
   flex-wrap: wrap;
 }
-.adm-page__title { font-family: var(--font-base); font-size: var(--fs-xl); font-weight: 700; }
-.adm-page__desc { font-size: var(--fs-sm); color: var(--ink-50); margin-top: var(--sp-1); }
+/* 頁面標題＝宋體。這是後台唯一等同前台 h1/h2 位階的標題，套用同一條
+   「標題宋體、操作黑體」規則——不是為了好看而好看，是延續品牌識別。 */
+.adm-page__title { font-family: var(--font-serif); font-size: var(--fs-xl); font-weight: 700; color: var(--ink); }
+.adm-page__desc { font-size: var(--fs-sm); color: var(--ink-50); margin-top: var(--sp-1); display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .adm-page__actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 
+/* 卡片：邊框＋留白分組，不用陰影（理由見檔頭）。 */
 .adm-card {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -198,12 +358,14 @@
   padding: var(--sp-5);
 }
 .adm-card + .adm-card { margin-top: var(--sp-4); }
-.adm-card__title { font-size: var(--fs-md); font-weight: 700; margin-bottom: var(--sp-4); }
+/* 卡片標題＝宋體，比照頁面標題的位階邏輯（見上）。 */
+.adm-card__title { font-family: var(--font-serif); font-size: var(--fs-md); font-weight: 700; margin-bottom: var(--sp-4); color: var(--ink); }
+
 
 /* =========================================================================
-   儀表板
+   8. 儀表板
    ========================================================================= */
-.adm-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-5); }
+.adm-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--sp-4); }
 .adm-stat-card {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -229,8 +391,9 @@
 .adm-list-item__title { font-weight: 600; }
 .adm-list-item__meta { font-size: var(--fs-xs); color: var(--ink-50); }
 
+
 /* =========================================================================
-   篩選列與表格
+   9. 篩選列與表格
    ========================================================================= */
 .adm-filters {
   display: flex;
@@ -249,27 +412,47 @@
   background: var(--paper);
   color: var(--ink);
 }
+.adm-filters input[type="search"]:focus,
+.adm-filters select:focus { outline: none; border-color: var(--brand-600); }
 .adm-filters__spacer { flex: 1; }
 
-.adm-table-wrap { overflow-x: auto; }
+.adm-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--adm-radius); }
 .adm-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 .adm-table th, .adm-table td { padding: var(--sp-3); text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
-.adm-table th { color: var(--ink-50); font-weight: 600; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; }
+.adm-table tbody tr:last-child td { border-bottom: 0; }
+.adm-table th {
+  color: var(--ink-50);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  letter-spacing: .04em;
+  background: var(--surface-alt);
+}
 .adm-table td.is-wrap { white-space: normal; }
 .adm-table tbody tr:hover { background: var(--fill-hover); }
 .adm-table__check { width: 2em; }
 .adm-table__actions { display: flex; gap: var(--sp-2); justify-content: flex-end; }
 .adm-table__title a { font-weight: 600; }
 .adm-table__title a:hover { color: var(--brand-600); }
-.adm-table__drag { cursor: grab; color: var(--ink-50); }
-
-.adm-empty { padding: var(--sp-8) var(--sp-4); text-align: center; color: var(--ink-50); }
+.adm-table__drag {
+  width: 1.8em; height: 1.8em;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--ink-50);
+  border-radius: var(--radius-sm);
+  transition: background .15s ease, color .15s ease;
+}
+.adm-table__drag:hover:not(:disabled) { background: var(--surface-alt); color: var(--brand-600); }
+.adm-table__drag:disabled { opacity: .35; cursor: not-allowed; }
 
 .adm-pagination { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); margin-top: var(--sp-4); font-size: var(--fs-sm); color: var(--ink-50); }
 .adm-pagination__controls { display: flex; gap: var(--sp-2); }
 
+
 /* =========================================================================
-   狀態徽章
+   10. 狀態徽章
+   -------------------------------------------------------------------------
+   五種狀態共用一組具名 token（見 §1），不要在這裡再寫死一次 hex——
+   徽章與 §12 的訊息框刻意共用同一批顏色，讓「這是警示」「這是安全」
+   在全後台只有一種視覺語言。
    ========================================================================= */
 .adm-badge {
   display: inline-flex;
@@ -282,16 +465,19 @@
   white-space: nowrap;
 }
 .adm-badge--draft { background: var(--line-soft); color: var(--ink-70); }
-.adm-badge--review { background: var(--adm-warn-bg); color: #8A5A22; }
-.adm-badge--published { background: #E9F3EC; color: var(--adm-ok); }
-.adm-badge--scheduled { background: var(--brand-050); color: var(--brand-700); }
-.adm-badge--unpublished { background: #F5E9E6; color: var(--adm-danger); }
+.adm-badge--review { background: var(--adm-warn-bg); color: var(--adm-warn); }
+.adm-badge--published { background: var(--adm-ok-bg); color: var(--adm-ok); }
+.adm-badge--scheduled { background: var(--adm-info-bg); color: var(--adm-info); }
+.adm-badge--unpublished { background: var(--adm-danger-bg); color: var(--adm-danger); }
+
 
 /* =========================================================================
-   表單
+   11. 表單
    ========================================================================= */
 .adm-form { display: flex; flex-direction: column; gap: var(--sp-5); }
 .adm-fieldset { border: 0; padding: 0; margin: 0; }
+/* fieldset 的段落標題是「結構標籤」不是「標題」——維持黑體，
+   跟 .adm-card__title（宋體）刻意拉開，兩者不是同一層級。 */
 .adm-fieldset__legend { font-size: var(--fs-md); font-weight: 700; margin-bottom: var(--sp-3); padding-bottom: var(--sp-2); border-bottom: 1px solid var(--line); width: 100%; }
 .adm-field-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-4); }
 .adm-field-grid--single { grid-template-columns: 1fr; }
@@ -315,6 +501,7 @@
   color: var(--ink);
   background: var(--paper);
   width: 100%;
+  transition: border-color .15s ease;
 }
 .adm-input:focus, .adm-textarea:focus, .adm-select:focus { outline: none; border-color: var(--brand-600); }
 .adm-input:disabled, .adm-textarea:disabled, .adm-select:disabled, .adm-input[readonly], .adm-textarea[readonly] { background: var(--surface-alt); color: var(--ink-50); }
@@ -323,18 +510,108 @@
 
 .adm-checkbox { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-sm); }
 
+
+/* =========================================================================
+   12. 訊息元件（新）
+   -------------------------------------------------------------------------
+   之前錯誤／成功／提醒訊息各自散落在 .adm-login__error（只在登入頁該有的
+   名字，卻被拿去給清單頁與編輯頁的一般錯誤用）與 .adm-workflow__banner
+   （名字是工作流專屬，其實只是一般提示）。統一成一個訊息家族，語意與
+   命名對得起來。
+
+   ⚠️ 第一階段曾把舊名 .adm-login__error／.adm-workflow__banner 保留成別名當
+   過渡，**2026-09-17 第二階段改完後整個專案已經沒有任何一處在用，別名一併
+   刪除**。留著一組沒有消費者的選擇器，下一個人只會以為兩種寫法都是對的。
+   ========================================================================= */
+.adm-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--adm-radius);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  border: 1px solid transparent;
+}
+.adm-alert strong { font-weight: 700; }
+
+.adm-alert--danger {
+  background: var(--adm-danger-bg);
+  color: var(--adm-danger);
+  border-color: color-mix(in srgb, var(--adm-danger) 28%, transparent);
+}
+.adm-alert--success {
+  background: var(--adm-ok-bg);
+  color: var(--adm-ok);
+  border-color: color-mix(in srgb, var(--adm-ok) 24%, transparent);
+}
+.adm-alert--info {
+  background: var(--adm-info-bg);
+  color: var(--adm-info);
+  border-color: color-mix(in srgb, var(--brand-600) 20%, transparent);
+}
+.adm-alert--warn {
+  background: var(--adm-warn-bg);
+  color: var(--adm-warn);
+  border-color: color-mix(in srgb, var(--adm-warn) 26%, transparent);
+}
+
+/* -- 空狀態 --------------------------------------------------------------
+   `.adm-empty` 單獨使用（純文字，現有 14 個畫面的寫法）維持不變；
+   要完整的「圖示＋標題＋說明」時再加 __icon/__title/__desc 三個子元素，
+   兩種寫法共用同一個外框，第二階段可以逐頁升級，不必一次全改。 */
+.adm-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-8) var(--sp-4);
+  text-align: center;
+  color: var(--ink-50);
+  font-size: var(--fs-sm);
+}
+.adm-empty__icon { width: 40px; height: 40px; color: var(--line); }
+.adm-empty__icon svg { width: 100%; height: 100%; }
+.adm-empty__title { font-family: var(--font-serif); font-weight: 600; font-size: var(--fs-md); color: var(--ink-70); }
+.adm-empty__desc { color: var(--ink-50); max-width: 40ch; }
+
+/* -- 載入中 ---------------------------------------------------------------
+   新元件：文字旁邊一個轉圈的細線圈（不是實心 spinner——沿用全站「細線」
+   語彙，不要換成填色圓盤）。現有頁面的 `載入中…` 純文字寫法
+   （class="adm-empty"）不強制換，但新畫面請用這個。 */
+.adm-loading { display: flex; align-items: center; justify-content: center; gap: var(--sp-3); padding: var(--sp-8) var(--sp-4); color: var(--ink-50); font-size: var(--fs-sm); }
+.adm-spinner {
+  width: 1.1em; height: 1.1em;
+  flex: none;
+  border: 2px solid var(--line);
+  border-top-color: var(--brand-600);
+  border-radius: 50%;
+  animation: adm-spin .7s linear infinite;
+}
+@keyframes adm-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  /* 轉圈本身就是動態效果，沒有「慢下來」這個選項，尊重系統偏好只能整個關掉，
+     退化成一個安靜的靜態圈，不假裝還在動。 */
+  .adm-spinner { animation: none; border-top-color: var(--line); }
+}
+
+
+/* =========================================================================
+   13. 特殊表單元件
+   ========================================================================= */
 .adm-risk-hit {
   margin-top: var(--sp-2);
   padding: var(--sp-3);
   background: var(--adm-warn-bg);
-  border: 1px solid #E3C79A;
+  border: 1px solid color-mix(in srgb, var(--adm-warn) 35%, transparent);
   border-radius: var(--adm-radius);
   font-size: var(--fs-xs);
-  color: #8A5A22;
+  color: var(--adm-warn);
 }
 .adm-risk-hit strong { text-decoration: underline; text-decoration-color: var(--adm-danger); text-underline-offset: 3px; }
 
-/* -- 上傳欄位（瀏覽器直傳 Blob 的三步流程已實作，見 src/api/upload.ts）-- */
+/* -- 上傳欄位（瀏覽器直傳 Blob，見 src/api/upload.ts）--------------------- */
 .adm-upload { display: flex; flex-direction: column; gap: var(--sp-2); }
 .adm-upload__preview {
   width: 100%;
@@ -399,8 +676,9 @@
 .adm-relation__add { display: flex; gap: var(--sp-2); }
 .adm-relation__add select { flex: 1; }
 
+
 /* =========================================================================
-   編輯畫面：主欄 ＋ 右側工作流側欄
+   14. 編輯畫面：主欄 ＋ 右側工作流側欄
    ========================================================================= */
 .adm-editor-layout { display: grid; grid-template-columns: 1fr 300px; gap: var(--sp-5); align-items: start; }
 @media (max-width: 1000px) { .adm-editor-layout { grid-template-columns: 1fr; } }
@@ -410,43 +688,84 @@
 .adm-workflow__label { color: var(--ink-50); }
 .adm-workflow__actions { display: flex; flex-direction: column; gap: var(--sp-2); }
 .adm-workflow__note { font-size: var(--fs-xs); color: var(--ink-50); line-height: 1.7; }
-.adm-workflow__banner {
-  padding: var(--sp-3);
-  border-radius: var(--adm-radius);
-  font-size: var(--fs-xs);
-  background: var(--brand-050);
-  color: var(--brand-700);
-}
+
 
 /* =========================================================================
-   登入頁
+   15. 登入頁
+   -------------------------------------------------------------------------
+   唯一不套 AdminLayout 的畫面，版面獨立設計：左側深色品牌欄（延續 §4 的
+   月洞門與宋體 wordmark），右側白底表單。840px 以下品牌欄收成一條窄橫幅，
+   保留識別但不擠壓表單。
    ========================================================================= */
 .adm-login {
   min-height: 100vh;
   min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+}
+
+.adm-login__aside {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--brand-700);
-  padding: var(--sp-5);
+  overflow: hidden;
+  padding: var(--sp-6);
 }
-.adm-login__card {
-  width: 100%;
-  max-width: 380px;
-  background: var(--paper);
-  border-radius: var(--adm-radius);
-  padding: var(--sp-7) var(--sp-6);
-  box-shadow: var(--shadow-md);
+.adm-login__aside::before {
+  /* 同一道暖金頂線，這次是側邊欄自己的版本——登入頁沒有側欄，
+     改貼在品牌欄與表單欄的交界處，效果等同 §4。 */
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: .7;
 }
-.adm-login__brand { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-6); text-align: center; }
-.adm-login__brand img { width: 48px; height: 49px; }
-.adm-login__brand h1 { font-size: var(--fs-lg); }
-.adm-login__error { padding: var(--sp-3); background: #F5E9E6; color: var(--adm-danger); border-radius: var(--adm-radius); font-size: var(--fs-sm); }
+.adm-login__ring {
+  width: 340px;
+  height: 340px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  bottom: -120px;
+  left: -100px;
+}
+.adm-login__aside-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); text-align: center; max-width: 22em; }
+.adm-login__mark { width: 52px; height: 53px; mix-blend-mode: screen; }
+.adm-login__wordmark { font-family: var(--font-serif); font-size: var(--fs-2xl); font-weight: 700; color: #fff; letter-spacing: .02em; }
+.adm-login__tagline { font-family: var(--font-base); font-size: var(--fs-sm); letter-spacing: .08em; color: rgba(255, 255, 255, .6); }
+
+.adm-login__main { display: flex; align-items: center; justify-content: center; padding: var(--sp-5); background: var(--paper); }
+.adm-login__card { width: 100%; max-width: 360px; }
+.adm-login__title { font-family: var(--font-serif); font-size: var(--fs-lg); font-weight: 700; color: var(--ink); }
+.adm-login__subtitle { font-size: var(--fs-sm); color: var(--ink-50); margin-top: var(--sp-1); margin-bottom: var(--sp-6); }
 .adm-login__hint { margin-top: var(--sp-5); font-size: var(--fs-xs); color: var(--ink-50); line-height: 1.7; border-top: 1px solid var(--line); padding-top: var(--sp-4); }
 
+@media (max-width: 840px) {
+  .adm-login { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .adm-login__aside { padding: var(--sp-5); }
+  .adm-login__ring { width: 200px; height: 200px; bottom: -80px; left: -60px; }
+  .adm-login__aside-inner { flex-direction: row; gap: var(--sp-3); text-align: left; }
+  .adm-login__mark { width: 36px; height: 37px; }
+  .adm-login__wordmark { font-size: var(--fs-lg); }
+  .adm-login__tagline { display: none; } /* 空間有限，標語先讓給表單 */
+  .adm-login__main { padding: var(--sp-6) var(--sp-5); }
+}
+
+
 /* =========================================================================
-   小工具
+   16. 小工具
    ========================================================================= */
 .adm-muted { color: var(--ink-50); }
-.adm-inline-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.adm-inline-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
 .adm-divider { border: 0; border-top: 1px solid var(--line); margin: var(--sp-4) 0; }
+
+
+/* =========================================================================
+   17. RWD 斷點總覽
+   ========================================================================= */
+/* 900px：側欄由 sticky 改 static（疊在內容上方，不做 off-canvas 抽屜——
+   後台是工作站工具，行動版只求「看得到、按得到」，不追求手機體驗）
+   840px：登入頁改單欄，品牌欄收成橫幅
+   700px：表單欄位 grid 收 1 欄
+   1000px：編輯畫面主欄／工作流側欄收 1 欄 */

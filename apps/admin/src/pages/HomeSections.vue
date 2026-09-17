@@ -48,6 +48,10 @@ const loading = ref(true)
 const saving = ref(false)
 const actionError = ref('')
 const actionNotice = ref('')
+// 純粹為了呈現：actionNotice 這顆 ref 在四個不同動作（存草稿／送審／核准／退回）
+// 共用同一段文字訊息，但語意其實不一樣——跟著訊息意圖挑對應的 .adm-alert modifier，
+// 而不是全部套同一種顏色（DESIGN.md §3.6 對 EditPage.vue 的同類要求，這裡比照）。
+const actionNoticeVariant = ref<'success' | 'info' | 'warn'>('info')
 const decisionNote = ref('')
 
 const state = ref<HomeSectionsState | null>(null)
@@ -149,6 +153,7 @@ async function saveDraft() {
     )
     applyState(next)
     actionNotice.value = '草稿已儲存。尚未送審，前台不會有任何變化。'
+    actionNoticeVariant.value = 'success'
   } catch (e) {
     actionError.value = e instanceof Error ? e.message : '儲存失敗。'
   } finally {
@@ -161,12 +166,14 @@ async function submit() {
   const next = await adminApi.site.home.submit(user!.id)
   applyState(next)
   actionNotice.value = '已送出審核，請等待審核者核准。'
+  actionNoticeVariant.value = 'info'
 }
 
 async function approve() {
   const next = await adminApi.site.home.approve(user!.id)
   applyState(next)
   actionNotice.value = '已核准，首頁版位已更新為這個版本。'
+  actionNoticeVariant.value = 'success'
 }
 
 async function reject() {
@@ -178,6 +185,7 @@ async function reject() {
   applyState(next)
   decisionNote.value = ''
   actionNotice.value = '已退回。'
+  actionNoticeVariant.value = 'warn'
 }
 
 const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布' })[state.value?.status ?? 3])
@@ -194,11 +202,14 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中', 3: '已發布
       </div>
     </header>
 
-    <div v-if="loading" class="adm-empty">載入中…</div>
+    <div v-if="loading" class="adm-loading">
+      <span class="adm-spinner" aria-hidden="true"></span>
+      <span>載入中…</span>
+    </div>
 
     <template v-else-if="state">
-      <p v-if="actionNotice" class="adm-workflow__banner" style="margin-bottom: var(--sp-4)">{{ actionNotice }}</p>
-      <p v-if="actionError" class="adm-login__error" style="margin-bottom: var(--sp-4)">{{ actionError }}</p>
+      <p v-if="actionNotice" class="adm-alert" :class="`adm-alert--${actionNoticeVariant}`" role="status">{{ actionNotice }}</p>
+      <p v-if="actionError" class="adm-alert adm-alert--danger" role="alert">{{ actionError }}</p>
 
       <div class="adm-editor-layout">
         <div>

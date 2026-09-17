@@ -37,6 +37,8 @@ function updateRow(index: number, patch: Partial<HourRow>) {
     <div class="adm-hours-editor__row adm-hours-editor__row--head">
       <span>星期</span><span>開始</span><span>結束</span><span></span>
     </div>
+    <!-- 一列都沒有時只剩表頭，容易看起來像沒載入完成——說明清楚這是合法狀態 -->
+    <p v-if="!rows.length" class="adm-muted">目前完全沒有設定時段（等同整週公休）。</p>
     <div v-for="(row, index) in rows" :key="index" class="adm-hours-editor__row">
       <select class="adm-select" :value="row.dayOfWeek" @change="updateRow(index, { dayOfWeek: Number(($event.target as HTMLSelectElement).value) })">
         <option v-for="d in DAYS" :key="d.value" :value="d.value">{{ d.label }}</option>

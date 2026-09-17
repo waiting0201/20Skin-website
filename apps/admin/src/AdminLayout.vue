@@ -105,15 +105,18 @@ function onLogout() {
   <div class="adm-app">
     <div class="adm-shell">
       <aside class="adm-sidebar">
-        <div class="adm-sidebar__brand">
+        <div class="adm-brand">
+          <!-- 月洞門 motif（.c-ring 是 base.css 的基礎規則，adm-brand__ring 只補
+               尺寸與位置，見 admin.css §4）。呼應前台頁尾 .c-ring--footer 的用法。 -->
+          <div class="c-ring adm-brand__ring" aria-hidden="true"></div>
           <!-- 動態綁定：靜態 src="/assets/..." 會被 Vue 編譯器在 build 時轉成
                import 交給 Rollup 解析，但這個檔案在後台專案裡並不存在——它是
                正式站的公開素材，交給瀏覽器在執行期直接打 /assets/ 這條路徑
                （dev 靠 scripts/link-assets.mjs 的 symlink）。 -->
-          <img :src="'/assets/logo.jpg'" alt="" width="32" height="32">
-          <div>
-            <strong>20SKIN 後台</strong>
-            <span>Admin Console</span>
+          <img class="adm-brand__mark" :src="'/assets/logo.jpg'" alt="" width="34" height="35">
+          <div class="adm-brand__text">
+            <strong class="adm-brand__name">20SKIN</strong>
+            <span class="adm-brand__sub">後台管理</span>
           </div>
         </div>
 
@@ -158,7 +161,7 @@ function onLogout() {
 
       </aside>
 
-      <div>
+      <div class="adm-body">
         <header class="adm-topbar">
           <nav class="adm-breadcrumb" aria-label="麵包屑">
             <template v-for="(item, i) in breadcrumb" :key="item.href">

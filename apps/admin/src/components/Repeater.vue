@@ -71,6 +71,10 @@ function updateCell(index: number, key: string, value: string) {
       <button type="button" class="btn btn--line btn--sm adm-repeater__remove" @click="removeRow(index)">移除</button>
     </div>
 
+    <!-- 空狀態：一列都沒有時光禿一顆按鈕容易讓人以為壞了，補一行文字
+         呼應 RelationPicker 的「尚未設定。」寫法，維持全後台一致 -->
+    <p v-if="!modelValue.length" class="adm-muted">尚未新增任何項目。</p>
+
     <button type="button" class="btn btn--ghost btn--sm" style="align-self:flex-start" @click="addRow">＋ 新增一列</button>
   </div>
 </template>

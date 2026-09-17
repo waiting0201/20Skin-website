@@ -234,7 +234,7 @@ const previewRowsToShow = computed(() => importPreview.value?.rows.slice(0, PREV
       </div>
     </div>
 
-    <p v-if="!canView" class="adm-empty">沒有檢視這個畫面的權限。</p>
+    <p v-if="!canView" class="adm-alert adm-alert--info">沒有檢視這個畫面的權限。</p>
 
     <template v-else>
       <div class="adm-card">
@@ -256,13 +256,20 @@ const previewRowsToShow = computed(() => importPreview.value?.rows.slice(0, PREV
 
       <div v-if="promoted.length" class="adm-card">
         <h2 class="adm-card__title">已寫進 staticwebapp.config.json 的規則（走最快路徑）</h2>
+        <!-- ⚠️ 這裡原本多一欄「命中次數」表頭，但底下完全沒有對應的 <td>——
+             Redirects 表沒有這個欄位（見 api/redirect.ts 的說明，命中數要靠
+             Application Insights 離線彙總），表頭是量測不到的欄位，拿掉比留一個
+             永遠空白、還讓其他欄位對不齊的欄位好。 -->
+        <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
+          命中次數不在這張表裡——<code>Redirects</code> 沒有這個欄位，要看流量得走 Application Insights 離線彙總。
+        </p>
         <div class="adm-table-wrap">
           <table class="adm-table">
-            <thead><tr><th>來源路徑</th><th>目標路徑</th><th>命中次數</th></tr></thead>
+            <thead><tr><th>來源路徑</th><th>目標路徑</th></tr></thead>
             <tbody>
               <tr v-for="r in promoted" :key="r.id">
-                <td>{{ r.fromPath }}</td>
-                <td>{{ r.toPath }}</td>
+                <td class="is-wrap">{{ r.fromPath }}</td>
+                <td class="is-wrap">{{ r.toPath }}</td>
               </tr>
             </tbody>
           </table>
@@ -272,7 +279,7 @@ const previewRowsToShow = computed(() => importPreview.value?.rows.slice(0, PREV
       <!-- 新增／編輯表單 -->
       <div v-if="formOpen" class="adm-card">
         <h2 class="adm-card__title">{{ editingId === null ? '新增轉址規則' : `編輯轉址規則 #${editingId}` }}</h2>
-        <p v-if="formError" class="adm-login__error" style="margin-bottom: var(--sp-3)">{{ formError }}</p>
+        <p v-if="formError" class="adm-alert adm-alert--danger" role="alert" style="margin-bottom: var(--sp-3)">{{ formError }}</p>
         <form class="adm-form" @submit.prevent="submitForm">
           <div class="adm-field-grid">
             <div class="adm-field adm-field--span2">
@@ -320,7 +327,10 @@ const previewRowsToShow = computed(() => importPreview.value?.rows.slice(0, PREV
         </p>
         <input ref="fileInput" type="file" accept=".csv,text/csv" @change="onFileSelected">
 
-        <div v-if="importChecking" class="adm-empty">檢查中…</div>
+        <div v-if="importChecking" class="adm-loading">
+          <span class="adm-spinner" aria-hidden="true"></span>
+          <span>檢查中…</span>
+        </div>
 
         <template v-else-if="importPreview">
           <div class="adm-stat-grid" style="margin-top: var(--sp-4)">
@@ -378,7 +388,7 @@ const previewRowsToShow = computed(() => importPreview.value?.rows.slice(0, PREV
           </div>
         </template>
 
-        <p v-if="importResultMsg" class="adm-login__error" style="background: #E9F3EC; color: var(--adm-ok); margin-top: var(--sp-3)">{{ importResultMsg }}</p>
+        <p v-if="importResultMsg" class="adm-alert adm-alert--success" style="margin-top: var(--sp-3)">{{ importResultMsg }}</p>
       </div>
 
       <!-- 清單 -->
@@ -395,8 +405,17 @@ const previewRowsToShow = computed(() => importPreview.value?.rows.slice(0, PREV
         </select>
       </div>
 
-      <div v-if="loading" class="adm-empty">載入中…</div>
-      <div v-else-if="!items.length" class="adm-empty">沒有符合條件的規則。</div>
+      <div v-if="loading" class="adm-loading">
+        <span class="adm-spinner" aria-hidden="true"></span>
+        <span>載入中…</span>
+      </div>
+      <div v-else-if="!items.length" class="adm-empty">
+        <div class="adm-empty__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l2.5-7h13L21 13" /><path d="M3 13v6a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-6" /><path d="M3 13h5l1.2 2.4h5.6L16 13h5" /></svg>
+        </div>
+        <p class="adm-empty__title">沒有符合條件的轉址規則</p>
+        <p class="adm-empty__desc">{{ query.keyword || query.isActive || query.source ? '調整篩選條件或關鍵字再試一次。' : '目前還沒有建立任何轉址規則，可以用下方「CSV 匯入」批次建立，或按上方「新增規則」逐筆加入。' }}</p>
+      </div>
 
       <div v-else class="adm-table-wrap">
         <table class="adm-table">

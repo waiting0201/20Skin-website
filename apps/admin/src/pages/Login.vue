@@ -84,53 +84,63 @@ async function submitNewPassword() {
 <template>
   <div class="adm-app">
     <div class="adm-login">
-      <div class="adm-login__card">
-        <div class="adm-login__brand">
+      <!-- 左：品牌欄（裝飾用，實際內容都在右側表單）。840px 以下收成頂端橫幅，
+           見 admin.css §15。 -->
+      <div class="adm-login__aside" aria-hidden="true">
+        <div class="c-ring adm-login__ring"></div>
+        <div class="adm-login__aside-inner">
           <!-- 動態綁定，理由見 src/AdminLayout.vue 同一張圖的註解。 -->
-          <img :src="'/assets/logo.jpg'" alt="" width="48" height="49">
-          <h1>20SKIN 後台管理</h1>
+          <img class="adm-login__mark" :src="'/assets/logo.jpg'" alt="" width="52" height="53">
+          <p class="adm-login__wordmark">20SKIN</p>
+          <p class="adm-login__tagline">美醫集團・後台管理系統</p>
         </div>
+      </div>
 
-        <form v-if="!mustChangePassword" class="adm-form" @submit.prevent="submitCredentials">
-          <p v-if="errorMessage" class="adm-login__error">{{ errorMessage }}</p>
-          <div class="adm-field">
-            <label class="adm-field__label" for="userName">帳號</label>
-            <input id="userName" v-model="userName" class="adm-input" type="text" autocomplete="username" required>
-          </div>
-          <div class="adm-field">
-            <label class="adm-field__label" for="password">密碼</label>
-            <input id="password" v-model="password" class="adm-input" type="password" autocomplete="current-password" required>
-          </div>
-          <button type="submit" class="btn btn--primary btn--block" :disabled="submitting">
-            {{ submitting ? '登入中…' : '登入' }}
-          </button>
-        </form>
-
-        <form v-else class="adm-form" @submit.prevent="submitNewPassword">
-          <p v-if="errorMessage" class="adm-login__error">{{ errorMessage }}</p>
-          <p class="adm-login__hint">
-            這組帳號還在用建立時給的密碼，請先設定新密碼才能進入後台。
+      <div class="adm-login__main">
+        <div class="adm-login__card">
+          <h1 class="adm-login__title">{{ mustChangePassword ? '設定新密碼' : '登入' }}</h1>
+          <p class="adm-login__subtitle">
+            {{ mustChangePassword ? '這組帳號還在用建立時給的密碼，請先設定新密碼才能進入後台。' : '請輸入帳號與密碼以繼續。' }}
           </p>
-          <div class="adm-field">
-            <label class="adm-field__label" for="newPassword">新密碼</label>
-            <input id="newPassword" v-model="newPassword" class="adm-input" type="password" autocomplete="new-password" required minlength="8">
-          </div>
-          <div class="adm-field">
-            <label class="adm-field__label" for="newPasswordConfirm">再輸入一次</label>
-            <input id="newPasswordConfirm" v-model="newPasswordConfirm" class="adm-input" type="password" autocomplete="new-password" required minlength="8">
-          </div>
-          <button type="submit" class="btn btn--primary btn--block" :disabled="submitting">
-            {{ submitting ? '處理中…' : '設定新密碼並登入' }}
-          </button>
-        </form>
 
-        <p v-if="botCheckEnabled" class="adm-login__hint">
-          <!-- 🔴 Google 的條款：使用 reCAPTCHA 就必須顯示這段聲明，兩個連結都要留著。
-               ⚠️ 不要改寫成自己的說法 —— 它是使用條款要求的文字。 -->
-          本頁受 reCAPTCHA 保護，適用 Google 的
-          <a href="https://policies.google.com/privacy" target="_blank" rel="noopener external">隱私權政策</a>與
-          <a href="https://policies.google.com/terms" target="_blank" rel="noopener external">服務條款</a>。
-        </p>
+          <form v-if="!mustChangePassword" class="adm-form" @submit.prevent="submitCredentials">
+            <p v-if="errorMessage" class="adm-alert adm-alert--danger" role="alert">{{ errorMessage }}</p>
+            <div class="adm-field">
+              <label class="adm-field__label" for="userName">帳號</label>
+              <input id="userName" v-model="userName" class="adm-input" type="text" autocomplete="username" required>
+            </div>
+            <div class="adm-field">
+              <label class="adm-field__label" for="password">密碼</label>
+              <input id="password" v-model="password" class="adm-input" type="password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn btn--primary btn--block" :disabled="submitting">
+              {{ submitting ? '登入中…' : '登入' }}
+            </button>
+          </form>
+
+          <form v-else class="adm-form" @submit.prevent="submitNewPassword">
+            <p v-if="errorMessage" class="adm-alert adm-alert--danger" role="alert">{{ errorMessage }}</p>
+            <div class="adm-field">
+              <label class="adm-field__label" for="newPassword">新密碼</label>
+              <input id="newPassword" v-model="newPassword" class="adm-input" type="password" autocomplete="new-password" required minlength="8">
+            </div>
+            <div class="adm-field">
+              <label class="adm-field__label" for="newPasswordConfirm">再輸入一次</label>
+              <input id="newPasswordConfirm" v-model="newPasswordConfirm" class="adm-input" type="password" autocomplete="new-password" required minlength="8">
+            </div>
+            <button type="submit" class="btn btn--primary btn--block" :disabled="submitting">
+              {{ submitting ? '處理中…' : '設定新密碼並登入' }}
+            </button>
+          </form>
+
+          <p v-if="botCheckEnabled" class="adm-login__hint">
+            <!-- 🔴 Google 的條款：使用 reCAPTCHA 就必須顯示這段聲明，兩個連結都要留著。
+                 ⚠️ 不要改寫成自己的說法 —— 它是使用條款要求的文字。 -->
+            本頁受 reCAPTCHA 保護，適用 Google 的
+            <a href="https://policies.google.com/privacy" target="_blank" rel="noopener external">隱私權政策</a>與
+            <a href="https://policies.google.com/terms" target="_blank" rel="noopener external">服務條款</a>。
+          </p>
+        </div>
       </div>
     </div>
   </div>

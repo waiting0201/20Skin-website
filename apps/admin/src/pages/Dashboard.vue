@@ -2,9 +2,10 @@
 // 儀表板。docs/08-database.md §K：沒有專屬資料表，全部是聚合查詢；
 // docs/10-api.md §3.4：GET /admin/dashboard，含「我的退件」
 // （ContentReviews WHERE Status=3 AND SubmittedByUserId=@me）。
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { adminApi, type DashboardSummary } from '@/api/client'
 import { currentUser } from '@/auth'
+import { hasPermission } from '@/permissions'
 import { UNIT_REGISTRY } from '@/units'
 import type { UnitKey } from '@/types'
 
@@ -12,6 +13,11 @@ import type { UnitKey } from '@/types'
 // （對應原本 Nuxt 的 definePageMeta({ layout: 'admin', middleware: 'admin-auth' })）。
 
 const user = currentUser()
+// 純粹為了呈現：「待審核」卡片的快捷連結只給看得到審核佇列的人看，
+// 沒有權限的人點了會被 router 的 beforeEach 導回儀表板（體驗層守門，見 router.ts），
+// 與其讓連結出現又被彈回來，不如直接不顯示——跟側欄選單的做法一致。
+const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
+const canReview = computed(() => hasPermission(permCtx, 'review.approve'))
 const summary = ref<DashboardSummary | null>(null)
 const loading = ref(true)
 
@@ -25,7 +31,7 @@ const unitKeys = Object.keys(UNIT_REGISTRY) as UnitKey[]
 </script>
 
 <template>
-  <div>
+  <div class="adm-page">
     <div class="adm-page__head">
       <div>
         <h1 class="adm-page__title">儀表板</h1>
@@ -33,7 +39,10 @@ const unitKeys = Object.keys(UNIT_REGISTRY) as UnitKey[]
       </div>
     </div>
 
-    <div v-if="loading" class="adm-empty">載入中…</div>
+    <div v-if="loading" class="adm-loading">
+      <span class="adm-spinner" aria-hidden="true"></span>
+      <span>載入中…</span>
+    </div>
 
     <template v-else-if="summary">
       <div class="adm-stat-grid">
@@ -44,7 +53,8 @@ const unitKeys = Object.keys(UNIT_REGISTRY) as UnitKey[]
         <div class="adm-stat-card">
           <div class="adm-stat-card__label">待審核</div>
           <div class="adm-stat-card__value">{{ summary.pendingReviewCount }}</div>
-          <div class="adm-stat-card__sub">審核佇列畫面下一輪才做，此數字先由聚合查詢示範</div>
+          <RouterLink v-if="canReview" to="/review" class="adm-stat-card__sub">前往審核佇列 →</RouterLink>
+          <div v-else class="adm-stat-card__sub">待審核項目數量</div>
         </div>
         <div class="adm-stat-card">
           <div class="adm-stat-card__label">我的退件</div>
@@ -60,19 +70,19 @@ const unitKeys = Object.keys(UNIT_REGISTRY) as UnitKey[]
               <thead>
                 <tr>
                   <th>單元</th>
-                  <th>草稿</th>
-                  <th>送審中</th>
-                  <th>已發布</th>
-                  <th>已下架</th>
+                  <th style="text-align: right">草稿</th>
+                  <th style="text-align: right">送審中</th>
+                  <th style="text-align: right">已發布</th>
+                  <th style="text-align: right">已下架</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="unit in unitKeys" :key="unit">
-                  <td><RouterLink :to="`/${unit}`">{{ UNIT_REGISTRY[unit].label }}</RouterLink></td>
-                  <td>{{ summary.statusCounts[unit][1] }}</td>
-                  <td>{{ summary.statusCounts[unit][2] }}</td>
-                  <td>{{ summary.statusCounts[unit][3] }}</td>
-                  <td>{{ summary.statusCounts[unit][4] }}</td>
+                  <td class="adm-table__title"><RouterLink :to="`/${unit}`">{{ UNIT_REGISTRY[unit].label }}</RouterLink></td>
+                  <td style="text-align: right">{{ summary.statusCounts[unit][1] }}</td>
+                  <td style="text-align: right">{{ summary.statusCounts[unit][2] }}</td>
+                  <td style="text-align: right">{{ summary.statusCounts[unit][3] }}</td>
+                  <td style="text-align: right">{{ summary.statusCounts[unit][4] }}</td>
                 </tr>
               </tbody>
             </table>
@@ -93,7 +103,7 @@ const unitKeys = Object.keys(UNIT_REGISTRY) as UnitKey[]
             </div>
           </div>
           <hr class="adm-divider">
-          <p class="adm-workflow__note">
+          <p class="adm-field__hint">
             ⚠️ 退回不寄信——帳號沒有必填 email，退回通知一律由這個待辦清單呈現。
           </p>
         </div>

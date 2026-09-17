@@ -81,7 +81,7 @@ function download(key: TabKey) {
       </div>
     </div>
 
-    <p v-if="!canView" class="adm-empty">沒有檢視這個畫面的權限。</p>
+    <p v-if="!canView" class="adm-alert adm-alert--info">沒有檢視這個畫面的權限。</p>
 
     <template v-else>
       <div class="adm-card">
@@ -93,9 +93,12 @@ function download(key: TabKey) {
         </p>
       </div>
 
-      <p v-if="errorMessage" class="adm-empty">{{ errorMessage }}</p>
+      <p v-if="errorMessage" class="adm-alert adm-alert--danger" role="alert">{{ errorMessage }}</p>
 
-      <div v-if="loading" class="adm-empty">載入中…</div>
+      <div v-if="loading" class="adm-loading">
+        <span class="adm-spinner" aria-hidden="true"></span>
+        <span>載入中…</span>
+      </div>
 
       <template v-else>
         <div class="adm-filters" style="border: 0; padding: 0">

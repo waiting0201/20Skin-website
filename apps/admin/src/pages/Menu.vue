@@ -255,12 +255,15 @@ function removeSocialLink(index: number) {
       </div>
     </header>
 
-    <div v-if="loading" class="adm-empty">載入中…</div>
+    <div v-if="loading" class="adm-loading">
+      <span class="adm-spinner" aria-hidden="true"></span>
+      <span>載入中…</span>
+    </div>
 
     <template v-else>
-      <p v-if="actionNotice" class="adm-workflow__banner" style="margin-bottom: var(--sp-4)">{{ actionNotice }}</p>
-      <p v-if="actionError" class="adm-login__error" style="margin-bottom: var(--sp-4)">{{ actionError }}</p>
-      <p v-if="!canEdit" class="adm-workflow__note" style="margin-bottom: var(--sp-4)">
+      <p v-if="actionNotice" class="adm-alert adm-alert--success" role="status">{{ actionNotice }}</p>
+      <p v-if="actionError" class="adm-alert adm-alert--danger" role="alert">{{ actionError }}</p>
+      <p v-if="!canEdit" class="adm-alert adm-alert--info">
         目前帳號沒有編輯權限，以下僅供檢視。
       </p>
 
@@ -367,51 +370,81 @@ function removeSocialLink(index: number) {
             </div>
           </div>
 
-          <!-- 新增子項目表單 -->
+          <!-- 新增子項目表單：欄位標籤比照上面既有項目列，不要因為是「新增」就少了層級 -->
           <div v-if="openChildForm[top.id]" class="adm-repeater__row" style="margin-left: var(--sp-6); background: var(--surface-alt)">
             <div class="adm-repeater__fields">
-              <input class="adm-input" type="text" placeholder="子項目名稱" v-model="childDrafts[top.id].label">
-              <select class="adm-select" v-model.number="childDrafts[top.id].linkKind">
-                <option :value="1">站內內容</option>
-                <option :value="2">站內路徑</option>
-                <option :value="3">外部網址</option>
-              </select>
+              <div class="adm-field">
+                <label class="adm-field__label">子項目名稱</label>
+                <input class="adm-input" type="text" placeholder="子項目名稱" v-model="childDrafts[top.id].label">
+              </div>
+              <div class="adm-field">
+                <label class="adm-field__label">型態</label>
+                <select class="adm-select" v-model.number="childDrafts[top.id].linkKind">
+                  <option :value="1">站內內容</option>
+                  <option :value="2">站內路徑</option>
+                  <option :value="3">外部網址</option>
+                </select>
+              </div>
               <template v-if="childDrafts[top.id].linkKind === 1">
-                <select class="adm-select" v-model="childDrafts[top.id].contentUnit" @change="childDrafts[top.id].contentItemId = ''">
-                  <option value="">選擇單元…</option>
-                  <option v-for="u in UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
-                </select>
-                <select class="adm-select" v-model="childDrafts[top.id].contentItemId">
-                  <option value="">選擇項目…</option>
-                  <option v-for="opt in contentOptions[childDrafts[top.id].contentUnit || ''] ?? []" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
+                <div class="adm-field">
+                  <label class="adm-field__label">單元</label>
+                  <select class="adm-select" v-model="childDrafts[top.id].contentUnit" @change="childDrafts[top.id].contentItemId = ''">
+                    <option value="">選擇單元…</option>
+                    <option v-for="u in UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
+                  </select>
+                </div>
+                <div class="adm-field">
+                  <label class="adm-field__label">內容項目</label>
+                  <select class="adm-select" v-model="childDrafts[top.id].contentItemId">
+                    <option value="">選擇項目…</option>
+                    <option v-for="opt in contentOptions[childDrafts[top.id].contentUnit || ''] ?? []" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                  </select>
+                </div>
               </template>
-              <input v-else class="adm-input" type="text" placeholder="網址" v-model="childDrafts[top.id].url">
+              <div v-else class="adm-field adm-field--span2">
+                <label class="adm-field__label">網址</label>
+                <input class="adm-input" type="text" placeholder="網址" v-model="childDrafts[top.id].url">
+              </div>
             </div>
             <button type="button" class="btn btn--primary btn--sm" @click="addChildItem(top)">新增</button>
           </div>
         </div>
 
-        <!-- 新增頂層項目表單 -->
+        <!-- 新增頂層項目表單：同上，補齊欄位標籤 -->
         <div class="adm-repeater__row" style="background: var(--surface-alt)">
           <div class="adm-repeater__fields">
-            <input class="adm-input" type="text" placeholder="新頂層項目名稱" v-model="topDrafts[menuKey as MenuKey].label" :disabled="!canEdit">
-            <select class="adm-select" v-model.number="topDrafts[menuKey as MenuKey].linkKind" :disabled="!canEdit">
-              <option :value="1">站內內容</option>
-              <option :value="2">站內路徑</option>
-              <option :value="3">外部網址</option>
-            </select>
+            <div class="adm-field">
+              <label class="adm-field__label">新頂層項目名稱</label>
+              <input class="adm-input" type="text" placeholder="新頂層項目名稱" v-model="topDrafts[menuKey as MenuKey].label" :disabled="!canEdit">
+            </div>
+            <div class="adm-field">
+              <label class="adm-field__label">型態</label>
+              <select class="adm-select" v-model.number="topDrafts[menuKey as MenuKey].linkKind" :disabled="!canEdit">
+                <option :value="1">站內內容</option>
+                <option :value="2">站內路徑</option>
+                <option :value="3">外部網址</option>
+              </select>
+            </div>
             <template v-if="topDrafts[menuKey as MenuKey].linkKind === 1">
-              <select class="adm-select" v-model="topDrafts[menuKey as MenuKey].contentUnit" :disabled="!canEdit" @change="topDrafts[menuKey as MenuKey].contentItemId = ''">
-                <option value="">選擇單元…</option>
-                <option v-for="u in UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
-              </select>
-              <select class="adm-select" v-model="topDrafts[menuKey as MenuKey].contentItemId" :disabled="!canEdit">
-                <option value="">選擇項目…</option>
-                <option v-for="opt in contentOptions[topDrafts[menuKey as MenuKey].contentUnit || ''] ?? []" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-              </select>
+              <div class="adm-field">
+                <label class="adm-field__label">單元</label>
+                <select class="adm-select" v-model="topDrafts[menuKey as MenuKey].contentUnit" :disabled="!canEdit" @change="topDrafts[menuKey as MenuKey].contentItemId = ''">
+                  <option value="">選擇單元…</option>
+                  <option v-for="u in UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
+                </select>
+              </div>
+              <div class="adm-field">
+                <label class="adm-field__label">內容項目</label>
+                <select class="adm-select" v-model="topDrafts[menuKey as MenuKey].contentItemId" :disabled="!canEdit">
+                  <option value="">選擇項目…</option>
+                  <option v-for="opt in contentOptions[topDrafts[menuKey as MenuKey].contentUnit || ''] ?? []" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+              </div>
             </template>
-            <input v-else class="adm-input" type="text" placeholder="網址" v-model="topDrafts[menuKey as MenuKey].url" :disabled="!canEdit">
+            <div v-else class="adm-field adm-field--span2">
+              <label class="adm-field__label">網址</label>
+              <input class="adm-input" type="text" placeholder="網址" v-model="topDrafts[menuKey as MenuKey].url" :disabled="!canEdit">
+            </div>
           </div>
           <button type="button" class="btn btn--primary btn--sm" :disabled="!canEdit" @click="addTopItem(menuKey as MenuKey)">＋ 新增頂層項目</button>
         </div>

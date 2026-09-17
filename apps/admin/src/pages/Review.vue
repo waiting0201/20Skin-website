@@ -82,7 +82,7 @@ function timeLabel(iso: string): string {
 </script>
 
 <template>
-  <section>
+  <section class="adm-page">
     <div class="adm-page__head">
       <div>
         <h1 class="adm-page__title">審核佇列</h1>
@@ -90,16 +90,29 @@ function timeLabel(iso: string): string {
       </div>
     </div>
 
-    <p class="adm-workflow__note" style="margin-bottom: var(--sp-4)">
+    <p class="adm-field__hint">
       ⚠️ 核准即進入「已發布」狀態，與 <code>PublishAt</code> 排程無關——「已排程」只是
       <code>已發布 ＋ PublishAt 尚未到</code> 推導出來的顯示狀態。退回<strong>不寄信</strong>
       （帳號沒有必填 email），改由對方儀表板的「我的退件」待辦清單呈現。
     </p>
 
-    <p v-if="errorMessage" class="adm-login__error" style="margin-bottom: var(--sp-4)">{{ errorMessage }}</p>
+    <p v-if="errorMessage" class="adm-alert adm-alert--danger" role="alert">{{ errorMessage }}</p>
 
-    <p v-if="loading" class="adm-empty">載入中…</p>
-    <p v-else-if="!items.length" class="adm-empty">目前沒有待審項目。</p>
+    <div v-if="loading" class="adm-loading">
+      <span class="adm-spinner" aria-hidden="true"></span>
+      <span>載入中…</span>
+    </div>
+    <div v-else-if="!items.length" class="adm-empty">
+      <div class="adm-empty__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M4 13V6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 13l3.5 4h9L20 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 13h4.5a1 1 0 0 1 .9.55l.6 1.2a1 1 0 0 0 .9.55h2.2a1 1 0 0 0 .9-.55l.6-1.2a1 1 0 0 1 .9-.55H20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <p class="adm-empty__title">目前沒有待審項目</p>
+      <p class="adm-empty__desc">所有送審內容都已處理完畢，之後有人送出審核時會出現在這裡。</p>
+    </div>
 
     <div v-else class="adm-table-wrap">
       <table class="adm-table">

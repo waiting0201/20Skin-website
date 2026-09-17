@@ -156,6 +156,9 @@ const savingBody = ref(false)
 const savingSeo = ref(false)
 const actionError = ref('')
 const actionNotice = ref('')
+// 訊息語意分兩種，純粹用來挑下面提示框的 CSS modifier（DESIGN.md §3.6／§5）——
+// 不影響任何資料或流程，只決定要套 --success 還是 --info。
+const actionNoticeKind = ref<'success' | 'info'>('success')
 
 async function saveBody() {
   savingBody.value = true
@@ -164,6 +167,7 @@ async function saveBody() {
     record.value = await adminApi.content.update(props.unit, props.id, { ...bodyForm }, user!.id)
     resetForms()
     actionNotice.value = '本文已儲存。'
+    actionNoticeKind.value = 'success'
   } catch (e) {
     actionError.value = e instanceof ApiError ? e.message : '儲存失敗。'
   } finally {
@@ -178,6 +182,7 @@ async function saveSeo() {
     record.value = await adminApi.content.updateSeo(props.unit, props.id, { ...seoForm }, user!.id)
     resetForms()
     actionNotice.value = 'SEO 設定已儲存。'
+    actionNoticeKind.value = 'success'
   } catch (e) {
     actionError.value = e instanceof ApiError ? e.message : '儲存失敗。'
   } finally {
@@ -208,15 +213,25 @@ async function submitForReview() {
   riskFlagsFromSubmit.value = result.riskFlags
   record.value = await adminApi.content.get(props.unit, props.id)
   actionNotice.value = '已送出審核。'
+  actionNoticeKind.value = 'success'
 }
 
 async function publishNow() {
   record.value = await adminApi.content.setPublishState(props.unit, props.id, 3, user!.id)
-  actionNotice.value = '已核准發布，網站重建中（發布中／已上線見下方狀態）。'
+  // ⚠️ 這行文字原本寫「網站重建中」，是靜態站時代的殘留文案——SSR 之後
+  // 已經沒有建置這一步了（見上方 2026-09-16 註解），文字沒跟著改掉，內容
+  // 其實是錯的。順手修正，讓它與下方排程卡片的說明（同一份檔案 §排程）一致。
+  //
+  // ⚠️ 連帶：這裡是 success 而不是 info。info 是留給「還有下文」的訊息
+  //    （例如排程），而發布是整個工作流最終的完成點，沒有後續了 ——
+  //    「重建中」那個會變的狀態消失之後，它就不再是「提示」而是「完成」。
+  actionNotice.value = '已核准發布，前台已經看得到了。'
+  actionNoticeKind.value = 'success'
 }
 async function unpublishNow() {
   record.value = await adminApi.content.setPublishState(props.unit, props.id, 4, user!.id)
   actionNotice.value = '已下架。'
+  actionNoticeKind.value = 'success'
 }
 
 const scheduleForm = reactive({ publishAt: '', unpublishAt: '' })
@@ -235,7 +250,11 @@ async function saveSchedule() {
     scheduleForm.unpublishAt ? new Date(scheduleForm.unpublishAt).toISOString() : null,
     user!.id,
   )
+  // 排程是這裡唯一的 info：內容還沒上線，真正生效在未來某個時間點。
+  // 其餘五個動作都是當場就完成了，所以是 success（DESIGN.md §3.6 把
+  // --adm-info 定義為「已排程／一般提示」，與徽章的「已排程」同一個顏色）。
   actionNotice.value = '已更新排程。到這個時間點，前台就會看得到。'
+  actionNoticeKind.value = 'info'
 }
 
 async function removeRecord() {
@@ -263,8 +282,20 @@ async function removeRecord() {
 </script>
 
 <template>
-  <div v-if="loading" class="adm-empty">載入中…</div>
-  <div v-else-if="notFound" class="adm-empty">找不到這筆{{ def.labelSingular }}。</div>
+  <div v-if="loading" class="adm-loading">
+    <span class="adm-spinner" aria-hidden="true"></span>
+    <span>載入{{ def.labelSingular }}中…</span>
+  </div>
+  <div v-else-if="notFound" class="adm-empty">
+    <div class="adm-empty__icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="m20 20-4.4-4.4" />
+      </svg>
+    </div>
+    <p class="adm-empty__title">找不到這筆{{ def.labelSingular }}</p>
+    <p class="adm-empty__desc">可能已經被刪除，或網址列的 id 打錯了。<RouterLink :to="`/${unit}`">回到{{ def.label }}列表</RouterLink>。</p>
+  </div>
 
   <div v-else-if="record">
     <div class="adm-page__head">
@@ -277,8 +308,8 @@ async function removeRecord() {
       </div>
     </div>
 
-    <p v-if="actionNotice" class="adm-workflow__banner" style="margin-bottom: var(--sp-4)">{{ actionNotice }}</p>
-    <p v-if="actionError" class="adm-login__error" style="margin-bottom: var(--sp-4)">{{ actionError }}</p>
+    <p v-if="actionNotice" class="adm-alert" :class="actionNoticeKind === 'info' ? 'adm-alert--info' : 'adm-alert--success'" style="margin-bottom: var(--sp-4)">{{ actionNotice }}</p>
+    <p v-if="actionError" class="adm-alert adm-alert--danger" role="alert" style="margin-bottom: var(--sp-4)">{{ actionError }}</p>
 
     <div class="adm-editor-layout">
       <!-- ============================ 主欄：本文 ============================ -->

@@ -164,8 +164,18 @@ const newTagTermType = ref('1')
       </div>
     </div>
 
-    <p v-if="errorMessage" class="adm-login__error" style="margin-bottom: var(--sp-4)">{{ errorMessage }}</p>
-    <p v-if="!canView" class="adm-empty">沒有檢視這個單元的權限。</p>
+    <p v-if="errorMessage" class="adm-alert adm-alert--danger" role="alert" style="margin-bottom: var(--sp-4)">{{ errorMessage }}</p>
+
+    <div v-if="!canView" class="adm-empty">
+      <div class="adm-empty__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="5" y="10.5" width="14" height="9" rx="1.5" />
+          <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+        </svg>
+      </div>
+      <p class="adm-empty__title">沒有檢視權限</p>
+      <p class="adm-empty__desc">你的帳號角色目前沒有「{{ def.label }}」的檢視權限，如果這是誤判，請聯絡系統管理員調整角色權限設定。</p>
+    </div>
 
     <template v-else>
       <div class="adm-filters">
@@ -193,8 +203,24 @@ const newTagTermType = ref('1')
         </template>
       </div>
 
-      <div v-if="loading" class="adm-empty">載入中…</div>
-      <div v-else-if="!items.length" class="adm-empty">目前沒有資料。</div>
+      <div v-if="loading" class="adm-loading">
+        <span class="adm-spinner" aria-hidden="true"></span>
+        <span>載入{{ def.label }}中…</span>
+      </div>
+      <div v-else-if="!items.length" class="adm-empty">
+        <div class="adm-empty__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3.5 9 6 4h12l2.5 5" />
+            <path d="M3.5 9v9a1.2 1.2 0 0 0 1.2 1.2h14.6a1.2 1.2 0 0 0 1.2-1.2V9" />
+            <path d="M3.5 9h5.7l.8 2.2a1.2 1.2 0 0 0 1.13.8h1.74a1.2 1.2 0 0 0 1.13-.8L14.8 9h5.7" />
+          </svg>
+        </div>
+        <p class="adm-empty__title">目前沒有{{ def.label }}</p>
+        <p class="adm-empty__desc">
+          <template v-if="query.keyword || query.status || query.categoryId || onlyMine">目前的篩選條件下沒有符合的項目，調整關鍵字或篩選條件再試一次。</template>
+          <template v-else>還沒有任何資料，用右上角的新增功能建立第一筆。</template>
+        </p>
+      </div>
 
       <div v-else class="adm-table-wrap">
         <table class="adm-table">

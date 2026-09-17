@@ -141,11 +141,24 @@ async function remove(item: QuestionInboxRecord) {
       </select>
     </div>
 
-    <p v-if="actionError" class="adm-field__error">{{ actionError }}</p>
-    <p v-if="!canEdit" class="adm-empty">沒有處理權限，以下為唯讀檢視。</p>
+    <p v-if="actionError" class="adm-alert adm-alert--danger" role="alert">{{ actionError }}</p>
+    <p v-if="!canEdit" class="adm-alert adm-alert--info">沒有處理權限，以下為唯讀檢視。</p>
 
-    <div v-if="loading" class="adm-empty">載入中…</div>
-    <div v-else-if="!items.length" class="adm-empty">目前沒有符合條件的提問。</div>
+    <div v-if="loading" class="adm-loading">
+      <span class="adm-spinner" aria-hidden="true"></span>
+      <span>載入中…</span>
+    </div>
+    <div v-else-if="!items.length" class="adm-empty">
+      <div class="adm-empty__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M4 13V6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 13l3.5 4h9L20 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 13h4.5a1 1 0 0 1 .9.55l.6 1.2a1 1 0 0 0 .9.55h2.2a1 1 0 0 0 .9-.55l.6-1.2a1 1 0 0 1 .9-.55H20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <p class="adm-empty__title">目前沒有符合條件的提問</p>
+      <p class="adm-empty__desc">試試清除篩選條件，或等待站內搜尋與 AI FAQ 累積更多未命中紀錄。</p>
+    </div>
 
     <div v-else class="adm-table-wrap">
       <table class="adm-table">
@@ -197,7 +210,7 @@ async function remove(item: QuestionInboxRecord) {
             </tr>
             <tr v-if="linkingId === item.id">
               <td colspan="7">
-                <div class="q-link-row">
+                <div class="adm-inline-actions" style="padding: var(--sp-3) 0">
                   <select v-model="linkTarget" class="adm-select">
                     <option value="">選擇既有 FAQ…</option>
                     <option v-for="opt in faqOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
@@ -213,13 +226,3 @@ async function remove(item: QuestionInboxRecord) {
     </div>
   </section>
 </template>
-
-<style scoped>
-.q-link-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sp-2, 8px);
-  padding: var(--sp-3, 12px) 0;
-}
-</style>

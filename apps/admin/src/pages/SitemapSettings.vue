@@ -169,7 +169,7 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
       </div>
     </div>
 
-    <p v-if="!canView" class="adm-empty">沒有檢視這個畫面的權限。</p>
+    <p v-if="!canView" class="adm-alert adm-alert--info">沒有檢視這個畫面的權限。</p>
 
     <template v-else>
       <div class="adm-card">
@@ -180,7 +180,10 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
           以及該分檔預設的 changefreq／priority。
         </p>
 
-        <div v-if="filesLoading" class="adm-empty">載入中…</div>
+        <div v-if="filesLoading" class="adm-loading">
+          <span class="adm-spinner" aria-hidden="true"></span>
+          <span>載入中…</span>
+        </div>
         <div v-else class="adm-table-wrap">
           <table class="adm-table">
             <thead>
@@ -231,8 +234,17 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
           「不要收錄這頁」。兩者反過來搭配是常見且正確的（例如標籤頁通常兩者都關——不主動送出、也不希望被收錄）；
           <strong>但兩者都開會自相矛盾</strong>——sitemap 把頁面送出去了，同一頁卻標著不要收錄。下面只列出這種矛盾組合。
         </p>
-        <div v-if="snapshotLoading" class="adm-empty">載入中…</div>
-        <p v-else-if="!consistencyIssues.length" class="adm-empty">目前沒有發現矛盾的設定。</p>
+        <div v-if="snapshotLoading" class="adm-loading">
+          <span class="adm-spinner" aria-hidden="true"></span>
+          <span>載入中…</span>
+        </div>
+        <div v-else-if="!consistencyIssues.length" class="adm-empty">
+          <div class="adm-empty__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.5 2.5L16 9.5" /></svg>
+          </div>
+          <p class="adm-empty__title">沒有發現矛盾的設定</p>
+          <p class="adm-empty__desc">目前所有內容的 IncludeInSitemap 與 NoIndex 設定彼此一致，不需要處理。</p>
+        </div>
         <div v-else class="adm-table-wrap">
           <table class="adm-table">
             <thead><tr><th>單元</th><th>標題</th><th>網址</th><th>問題</th><th></th></tr></thead>
@@ -264,7 +276,7 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
           <input v-model="robotsAckWarning" type="checkbox"> 我了解上面的風險，仍要照這樣儲存
         </label>
 
-        <p v-if="robotsSavedMsg" class="adm-login__error" style="background: #E9F3EC; color: var(--adm-ok); margin-top: var(--sp-2)">{{ robotsSavedMsg }}</p>
+        <p v-if="robotsSavedMsg" class="adm-alert adm-alert--success" style="margin-top: var(--sp-2)">{{ robotsSavedMsg }}</p>
 
         <div v-if="canEdit" class="adm-inline-actions" style="margin-top: var(--sp-3)">
           <button type="button" class="btn btn--primary" :disabled="robotsSaving || (Boolean(robotsWarning) && !robotsAckWarning)" @click="saveRobots">
