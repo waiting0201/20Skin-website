@@ -2,9 +2,12 @@
 // 模板 3 —— 長版故事（mockup/10-story.html）
 //
 // 兩個網址共用一個模板：/about/new-chinese-aesthetics/、/about/makeup-style/
-// （docs/01-sitemap.md §1）。mockup 只把 new-chinese-aesthetics 寫成完整的一篇，
-// makeup-style（同樣叫「新中式美學」，2026-09-14 更名）目前只有零散的句子
-// （見 ~/data/pages.ts 的註解），
+// （docs/01-sitemap.md §1）。mockup 只把「新中式美學」寫成完整的一篇，
+// 「彩妝式輕醫美」目前只有零散的句子（見 ~/data/pages.ts 的註解），
+// ⚠️ 2026-09-14 曾把 makeup-style 的顯示名稱改成「新中式美學」，2026-09-17 又把
+//    **前台文案**改回「彩妝式輕醫美」（Tim 指定，只有首頁 hero 維持新名）——
+//    因為兩頁同名讓文案出現「新中式美學與新中式美學」這種句子。
+//    🔴 種子與遷移 10 仍帶新名，資料庫那一半還沒動，見 STATUS §七。
 // 所以這一頁的部分區塊（目錄／常見疑問／相關療程）用 v-if 依資料是否存在顯示，
 // 不是所有故事頁都會長得一樣豐富。
 import { getStoryPages } from '~/data/pages'

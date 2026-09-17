@@ -316,7 +316,7 @@ usePageHead({
             <p>以古為師，將東方的美學藝術與醫美微整形創新結合，追求歷久彌新的自然樣貌。</p>
           </div>
           <div class="home-philosophy__point">
-            <h4 class="c-heading-bar">新中式美學</h4>
+            <h4 class="c-heading-bar">彩妝式輕醫美</h4>
             <p>強調五官與氣質的整體協調，而非單一標準的網紅罐頭臉。</p>
           </div>
         </div>

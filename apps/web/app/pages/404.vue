@@ -26,7 +26,7 @@ const entries = [
   { href: '/cases/', label: '案例分享', desc: '個案紀錄，含條件、次數與時間區間。' },
   { href: '/faq/', label: '常見問題', desc: '門診最常被問到的問題，依主題分類。' },
   { href: '/clinics/', label: '診所據點', desc: '兩個院區的門診時段、位置與就診流程。' },
-  { href: '/about/', label: '品牌理念', desc: '新中式美學與新中式美學的完整說明。' },
+  { href: '/about/', label: '品牌理念', desc: '新中式美學與彩妝式輕醫美的完整說明。' },
 ]
 </script>
 
