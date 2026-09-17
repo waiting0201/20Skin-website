@@ -25,6 +25,26 @@ const ids = {
 
 const { browser, page, errors } = await openAdmin()
 
+section('側邊選單')
+await step('登入後停在儀表板時，兩組都是收起來的', async () => {
+  // 🔴 一定要在這裡驗：下面每一個 section 都會換頁，換過頁之後看到的是
+  //    「使用者（腳本）自己開的那一組」，不是預設值。
+  // ⚠️ 預設全關是 2026-09-17 Tim 指定的（原本寫死展開「系統」）。
+  //    深連結進來時該頁所在的組仍然會自動打開 —— 那是 AdminLayout 的
+  //    landedGroup，只在掛載時算一次，SPA 內部換頁不重算。
+  await page.waitForSelector('.adm-nav__group', { timeout: 20000 })
+  const groups = page.locator('.adm-nav__group')
+  const open = []
+  for (let i = 0; i < await groups.count(); i++) {
+    const btn = groups.nth(i).locator('button').first()
+    if (await btn.getAttribute('aria-expanded') === 'true') {
+      open.push((await btn.locator('span').first().innerText()).trim())
+    }
+  }
+  if (open.length) throw new Error(`還有 ${open.length} 組是展開的：${open.join('、')}`)
+  return `${await groups.count()} 組、全關`
+})
+
 section('療程：七個區塊 JSON 欄位')
 await step('開得起編輯頁', () => openEdit(page, 'treatment', ids.treatment))
 for (const label of ['規格數據列', '儀器／原廠資訊', '適應症', '原理', '療程流程', '術後照護', '禁忌症與注意事項']) {

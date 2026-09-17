@@ -56,7 +56,11 @@ const navGroups = computed(() => [
   { key: 'system', label: '系統', items: systemNavItems.value },
 ])
 
-const openGroup = ref<string | null>('system')
+// 🔴 **預設全關**（Tim 指定 2026-09-17）。原本寫死 'system'，是 a944637 隨手挑的
+//    初始值、沒有留下理由，而它只在儀表板看得到 —— 也就是每次登入第一眼都是
+//    「系統」展開，但日常工作是九個內容模型，系統那組是偶爾才動的。
+//    ⚠️ 這不影響下面的 landedGroup：深連結進到某一頁時，該頁所在的組仍然會打開。
+const openGroup = ref<string | null>(null)
 
 function toggleGroup(key: string) {
   openGroup.value = openGroup.value === key ? null : key
