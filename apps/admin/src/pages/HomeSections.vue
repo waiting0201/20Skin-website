@@ -1,11 +1,20 @@
 <script setup lang="ts">
 // 首頁版位編排（/home-sections）—— 規格見 docs/02 §3、docs/08 §G-2。
 //
-// 七個版位為種子資料，可停用、可排序，不可新增刪除。除了 hero（主視覺／CTA／
-// 外部導流連結，沒有對應的站內內容，存在 Settings JSON）之外，每個版位都只能
+// 七個版位為種子資料，可停用、可排序，不可新增刪除。除了 hero（主視覺輪播，
+// 沒有對應的站內內容，存在 Settings JSON）之外，每個版位都只能
 // 從既有內容裡「挑選」，不能另打文案——這裡刻意重用 RelationPicker（跟九個
 // 內容模型編輯畫面的「關聯」欄位同一顆元件），選項一律來自 adminApi.taxonomy
 // .unitOptions()，UI 上沒有任何自由文字輸入欄位可以填內容本文。
+//
+// 🔴 **2026-09-17：主視覺的輪播圖改成在這裡維護**（Tim 指定）。在此之前這一區
+//    是一段「要換圖請洽工程」的警告 —— 因為舊的表單假設 `hero.settings` 是
+//    `{headline, ctaLabel, images[]}` 這種物件，而正式資料是
+//    `{image, caption}[]` 的陣列，兩者對不上。現在形狀由
+//    `units/schemas/home.ts` 宣告，用九個內容模型同一套 `StructuredField` 渲染。
+//    ⚠️ 主標題、eyebrow、「立即預約」按鈕**仍然寫死在前台**（決策 14：
+//    「院方會想改它嗎？」的答案是版面留前台），所以這裡沒有那些欄位 ——
+//    不要因為舊表單有過就補回來，補了也只是存進資料庫沒有人讀。
 //
 // 🔴 **2026-09-17：送審那一層整個拿掉了**（Tim 指定，CLAUDE.md 決策 20）。
 //    這一頁的動作只剩「儲存草稿」與「發布」，與九個內容模型一致。
@@ -17,19 +26,22 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { adminApi, ApiError } from '@/api/client'
 import type {
-  HomeHeroSettings,
   HomeSection,
   HomeSectionItemRef,
   HomeSectionKey,
   HomeSectionsState,
 } from '@/api/site'
+import { HOME_SECTION_SETTINGS_SCHEMA } from '@/api/site'
 import { currentUser } from '@/auth'
+import { countPendingImages, uploadPendingImages } from '@/image-value'
 import { hasPermission } from '@/permissions'
 import type { RelationItem, UnitKey } from '@/types'
 import type { RelationField } from '@/unit-schema'
 import { UNIT_REGISTRY } from '@/units'
+import { validateStructured } from '@/validation'
 import DragHandle from '@/components/DragHandle.vue'
 import RelationPicker from '@/components/RelationPicker.vue'
+import StructuredField from '@/components/StructuredField.vue'
 import { useDragSort } from '@/drag-sort'
 
 const user = currentUser()
@@ -153,22 +165,55 @@ function reorderSections(orderedKeys: HomeSectionKey[]) {
   })
 }
 
-function addHeroImage(hero: HomeHeroSettings) {
-  hero.images = [...hero.images, { url: '', alt: '' }]
+// ── 版位設定（目前只有 hero 的輪播圖）─────────────────────────────────
+//
+// 錯誤鍵用**路徑**（`hero[0].image`），`StructuredNode` 會把紅字顯示在那一格旁邊 ——
+// 與九個內容模型的區塊 JSON 欄位同一套。
+const settingsErrors = reactive<Record<string, string>>({})
+
+function schemaOf(section: HomeSection) {
+  return HOME_SECTION_SETTINGS_SCHEMA[section.sectionKey]
 }
-function removeHeroImage(hero: HomeHeroSettings, index: number) {
-  hero.images = hero.images.filter((_, i) => i !== index)
+
+/** 這一份草稿裡還有幾張圖沒上傳（按鈕文案要講清楚，見 image-value.ts 檔頭）。 */
+const pendingImages = computed(() =>
+  sections.reduce((sum, s) => sum + countPendingImages(s.settingsValue), 0))
+
+/**
+ * 🔴 **順序是「驗證 → 上傳 → 送出」，不可對調**（CLAUDE.md 決策 9）。
+ *    先上傳再驗證的話，一次沒過的儲存就已經在 Blob 留下沒有人引用的孤兒檔，
+ *    而前端刪不掉它（SAS 是 write-only）。
+ * @returns 通過驗證沒有。
+ */
+function validateSettings(): boolean {
+  for (const key of Object.keys(settingsErrors)) delete settingsErrors[key]
+  for (const section of sections) {
+    const schema = schemaOf(section)
+    if (!schema) continue
+    Object.assign(
+      settingsErrors,
+      validateStructured({ key: section.sectionKey, label: section.title }, schema, section.settingsValue),
+    )
+  }
+  return Object.keys(settingsErrors).length === 0
 }
 
 /** @returns 有沒有真的存起來。發布那條路要靠它決定要不要繼續。 */
 async function saveDraft(): Promise<boolean> {
-  saving.value = true
   actionError.value = ''
+  if (!validateSettings()) {
+    actionError.value = '版位設定有欄位沒填完，紅字標在那一格旁邊。修好之後再存一次。'
+    return false
+  }
+  saving.value = true
   try {
-    const next = await adminApi.site.home.saveDraft(
-      sections.map((s) => JSON.parse(JSON.stringify(s))),
-      user!.id,
-    )
+    // 🔴 圖片在這一刻才真的上傳（選檔時只產生預覽，見 src/image-value.ts）。
+    //    `uploadPendingImages` 回傳的是**新的**結構，不就地改寫 reactive 的來源 ——
+    //    所以它同時取代了原本那行 `JSON.parse(JSON.stringify(s))` 的深拷貝。
+    //    ⚠️ 不可以退回 JSON 深拷貝：`File` 與 object URL 都活不過序列化，
+    //    一張待上傳的圖會被寫成 `{"pending":true,"alt":null}` 存進資料庫。
+    const payload = await uploadPendingImages(sections.map((s) => ({ ...s })))
+    const next = await adminApi.site.home.saveDraft(payload, user!.id)
     applyState(next)
     actionNotice.value = '草稿已儲存。還沒發布，前台不會有任何變化。'
     actionNoticeVariant.value = 'success'
@@ -237,7 +282,11 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
       <!-- 與編輯畫面同一套：發布（藍，對外）在左，儲存草稿（綠，留在後台）在右。 -->
       <div v-if="state" class="adm-page__actions">
         <button v-if="canPublish" type="button" class="btn btn--primary" :disabled="saving || workflowBusy" @click="publish">發布</button>
-        <button v-if="canEdit" type="button" class="btn btn--save" :disabled="saving" @click="saveDraft">{{ saving ? '儲存中…' : '儲存草稿' }}</button>
+        <button v-if="canEdit" type="button" class="btn btn--save" :disabled="saving" @click="saveDraft">
+          <template v-if="saving">儲存中…</template>
+          <template v-else-if="pendingImages">上傳 {{ pendingImages }} 張圖片並儲存</template>
+          <template v-else>儲存草稿</template>
+        </button>
       </div>
     </header>
 
@@ -274,21 +323,23 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
                 <p v-if="section.targetUnit" class="adm-field__hint">
                   內容來源：{{ UNIT_REGISTRY[section.targetUnit].label }}——只能從既有的{{ UNIT_REGISTRY[section.targetUnit].label }}挑選，不能另打文案。
                 </p>
+                <p v-else-if="schemaOf(section)" class="adm-field__hint">
+                  唯一例外：沒有對應的內容模型，圖與圖說直接存在版位設定裡。
+                </p>
                 <p v-else class="adm-field__hint">
-                  唯一例外：沒有對應的內容模型，CTA 與外部導流連結存在版位設定裡。
+                  這一區的內容存在版位設定裡，不在這個畫面編輯——這裡只能開關與調整順序。
                 </p>
               </div>
             </div>
 
+            <!-- 🔴 **這裡沒有「版位標題」與「副標／Eyebrow」兩格**（Tim 指定 2026-09-17）。
+                 兩個理由，缺一都不夠：
+                 ① `putSections` 只送 `sectionKey／isEnabled／sortOrder／settings／items`，
+                    **標題與副標根本沒有被送上去** —— 打了字、按了儲存、什麼都沒發生；
+                 ② 就算送上去也沒有用：前台那兩行字來自 `app/data/_presentation.ts`
+                    （決策 14：版面留前台），資料庫的 `HomeSections.Title` 只給匯出用。
+                 ⚠️ 版位叫什麼名字看卡片標題那一行就好，它來自 `HOME_SECTION_META`。 -->
             <div class="adm-field-grid" style="margin-bottom: var(--sp-4)">
-              <div class="adm-field">
-                <label class="adm-field__label">版位標題</label>
-                <input v-model="section.title" class="adm-input" type="text" :disabled="!canEdit">
-              </div>
-              <div class="adm-field">
-                <label class="adm-field__label">副標／Eyebrow</label>
-                <input v-model="section.subtitle" class="adm-input" type="text" :disabled="!canEdit">
-              </div>
               <div class="adm-field">
                 <label class="adm-checkbox">
                   <input v-model="section.isEnabled" type="checkbox" :disabled="!canEdit">
@@ -297,58 +348,33 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
               </div>
             </div>
 
-            <!-- hero：唯一例外，沒有內容選擇器。
-                 🔴 **正式資料進不了這組欄位，所以正式環境看到的是下面那段說明。**
-                 前台讀的 `hero.settings` 是一個**輪播圖陣列**
-                 （apps/web/app/data/home.ts），不是這裡假設的
-                 `{ headline, ctaLabel, images… }` 物件 —— 兩種形狀對不上，
-                 硬灌進表單再存回去等於把四張輪播圖換成一個物件。
-                 詳見 src/api/site.ts 的 `HomeSection.rawSettings`。 -->
-            <div v-if="section.sectionKey === 'hero' && !section.heroSettings" class="adm-alert adm-alert--warn">
-              主視覺的輪播圖<strong>目前不在這個畫面編輯</strong>（資料形狀與這裡的表單對不上，
-              硬編會把圖弄丟）。這一區只能停用或調整順序；要換圖請洽工程。
-            </div>
-            <div v-else-if="section.sectionKey === 'hero' && section.heroSettings">
-              <div class="adm-field-grid">
-                <div class="adm-field adm-field--span2">
-                  <label class="adm-field__label">主標題</label>
-                  <input v-model="section.heroSettings.headline" class="adm-input" type="text" :disabled="!canEdit">
-                </div>
-                <div class="adm-field">
-                  <label class="adm-field__label">按鈕文字（站內）</label>
-                  <input v-model="section.heroSettings.ctaLabel" class="adm-input" type="text" :disabled="!canEdit">
-                </div>
-                <div class="adm-field">
-                  <label class="adm-field__label">按鈕連結（站內路徑）</label>
-                  <input v-model="section.heroSettings.ctaUrl" class="adm-input" type="text" placeholder="/contact/" :disabled="!canEdit">
-                </div>
-                <div class="adm-field">
-                  <label class="adm-field__label">按鈕文字（外部導流）</label>
-                  <input v-model="section.heroSettings.externalCtaLabel" class="adm-input" type="text" :disabled="!canEdit">
-                </div>
-                <div class="adm-field">
-                  <label class="adm-field__label">按鈕連結（外部導流）</label>
-                  <input v-model="section.heroSettings.externalCtaUrl" class="adm-input" type="text" :disabled="!canEdit">
-                  <p class="adm-field__hint">例如 booking.20skin.tw——但正式的外部連結維護入口是「導覽選單與頁尾」，這裡只是主視覺按鈕本身要指到哪裡。</p>
-                </div>
-              </div>
-
-              <div class="adm-field adm-field--span2" style="margin-top: var(--sp-4)">
-                <label class="adm-field__label">輪播圖片（示意用網址輸入）</label>
-                <div class="adm-repeater">
-                  <div v-for="(img, idx) in section.heroSettings.images" :key="idx" class="adm-repeater__row">
-                    <div class="adm-repeater__fields">
-                      <input class="adm-input" type="text" placeholder="圖片網址" v-model="img.url" :disabled="!canEdit">
-                      <input class="adm-input" type="text" placeholder="替代文字（alt）" v-model="img.alt" :disabled="!canEdit">
-                    </div>
-                    <button type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="removeHeroImage(section.heroSettings!, idx)">移除</button>
-                  </div>
-                  <button type="button" class="btn btn--ghost btn--sm" style="align-self:flex-start" :disabled="!canEdit" @click="addHeroImage(section.heroSettings!)">＋ 新增圖片</button>
-                </div>
-              </div>
+            <!-- 版位設定（目前只有 hero 的輪播圖）——形狀宣告在 units/schemas/home.ts，
+                 用九個內容模型同一套 StructuredField 渲染，含上傳與「進階：直接編輯 JSON」。
+                 🔴 圖是**按下儲存才上傳**（src/image-value.ts），所以 saveDraft 一定要
+                    先跑 uploadPendingImages()。 -->
+            <div v-if="schemaOf(section)" class="adm-field">
+              <label class="adm-field__label">主視覺輪播</label>
+              <StructuredField
+                :schema="schemaOf(section)"
+                :model-value="section.settingsValue"
+                :disabled="!canEdit"
+                :path="section.sectionKey"
+                :errors="settingsErrors"
+                @update:model-value="(v) => (section.settingsValue = v)"
+              />
+              <!-- ⚠️ 換圖之後**舊檔不會被刪**：內容模型的圖是由發布流程清掉上一版
+                   獨有的 blob（ContentHandler），版位設定沒有走那條路。留下來的
+                   孤兒檔靠 tools/blob-reconcile 離線對帳 —— 寧可多留幾個檔案，
+                   也不要刪到已發布快照還指著的那一張（那是線上破圖）。 -->
+              <p class="adm-field__hint">
+                ⚠️ 換掉或移除的舊圖會留在儲存體裡（不會自動刪除），不影響前台顯示。
+              </p>
             </div>
 
-            <!-- 其餘六個版位：只能挑選既有內容 -->
+            <!-- 其餘五個版位：只能挑選既有內容
+                 ⚠️ **是五個不是六個** —— specialties 的挑選器已於 2026-09-17 拿掉
+                 （它存進 HomeSectionItems，而前台讀的是 settings，見 api/site.ts 的
+                 HOME_SECTION_META）。 -->
             <div v-else-if="section.targetUnit">
               <RelationPicker
                 v-if="canEdit"
@@ -363,11 +389,24 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
                 <p v-if="!section.items.length" class="adm-muted">尚未設定。</p>
               </div>
             </div>
+
+            <!-- 既沒有挑選器、也沒有 schema 的版位（目前是 specialties：八大專科入口）。
+                 🔴 **它的 `settings` 仍然原樣往返**（`HomeSection.rawSettings`）——
+                 少了那條，按一次「儲存草稿」就會把那八個入口連同圖示清成 null，
+                 而且沒有任何錯誤訊息（2026-09-17 實際踩到）。 -->
+            <p v-else class="adm-field__hint">
+              八大專科入口的標題、連結與圖示存在版位設定裡，儲存時會原樣保留。
+              要增刪或換圖請洽工程端。
+            </p>
           </div>
 
           <div v-if="canEdit" class="adm-form-actions">
             <span class="adm-muted">儲存草稿不會影響前台</span>
-            <button type="button" class="btn btn--save" :disabled="saving" @click="saveDraft">{{ saving ? '儲存中…' : '儲存草稿' }}</button>
+            <button type="button" class="btn btn--save" :disabled="saving" @click="saveDraft">
+              <template v-if="saving">儲存中…</template>
+              <template v-else-if="pendingImages">上傳 {{ pendingImages }} 張圖片並儲存草稿</template>
+              <template v-else>儲存草稿</template>
+            </button>
           </div>
 
           <p class="adm-alert adm-alert--warn">

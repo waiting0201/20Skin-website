@@ -1,8 +1,15 @@
 <script setup lang="ts">
 // 全站設定（/settings）—— 規格見 docs/02 §3、docs/08 §G-1。
 //
-// 站名／Logo／預設 OG 圖／全站 NAP 主資料／追蹤碼／`/contact/` 收件信箱，
+// 站名／預設 OG 圖／全站 NAP 主資料／追蹤碼／`/contact/` 收件信箱，
 // 外加 AI 問答面板設定（docs/04-ai-faq.md §4：不新增畫面，併入這裡）。
+//
+// 🔴 **沒有 Logo 上傳欄位**（Tim 指定 2026-09-17，**不要加回來**）。站徽走建置產物
+//    `/assets/logo.jpg`，前台三處（頁首、頁尾、首頁 JSON-LD 的 Organization.logo）
+//    都是寫死指過去的，**從來沒有讀過 `site.logoImage`** ——
+//    所以在此之前那個欄位是「傳了也沒有用」：檔案真的進 Blob、設定鍵真的被寫入，
+//    而前台一個像素都不會變。要換站徽是換建置產物那張圖（並重新部署），
+//    見 apps/admin/src/api/site.ts 的 `SiteSettingsData`。
 //
 // 設定類（setting.edit，限超級管理員）：不走審核，儲存即生效，而且沒有留痕
 // （2026-09-11 定案不做操作日誌，docs/08 §I）——畫面上刻意不做「版本歷程」
@@ -26,11 +33,10 @@ const saving = ref(false)
 const actionError = ref('')
 const actionNotice = ref('')
 
-// ⚠️ 型別是 SiteSettingsDraft 不是 SiteSettingsData：Logo 與預設 OG 圖在編輯中
+// ⚠️ 型別是 SiteSettingsDraft 不是 SiteSettingsData：預設 OG 圖在編輯中
 //    可能還沒上傳（選了檔案只是預覽，見 src/image-value.ts）。
 const form = reactive<SiteSettingsDraft>({
   siteName: '',
-  logo: null,
   defaultOgImage: null,
   nap: [],
   trackingCodes: '',
@@ -113,7 +119,7 @@ function copyFromClinic(index: number) {
 const TRACKING_ID_PATTERN = /^\s*(G-[A-Z0-9]{4,20}|GTM-[A-Z0-9]{4,10})(\s*,\s*(G-[A-Z0-9]{4,20}|GTM-[A-Z0-9]{4,10}))*\s*$/i
 const trackingError = ref('')
 
-const pendingImages = computed(() => countPendingImages(form.logo) + countPendingImages(form.defaultOgImage))
+const pendingImages = computed(() => countPendingImages(form.defaultOgImage))
 
 async function save() {
   trackingError.value = ''
@@ -127,15 +133,12 @@ async function save() {
   try {
     // 🔴 圖片在這一刻才真的上傳（選檔時只產生預覽，見 src/image-value.ts）。
     //    先換成 UploadedImage 再組 payload —— `update()` 收的是 SiteSettingsData，
-    //    漏掉這兩行是編譯錯誤，不是執行期的靜默錯誤。
-    const logo = await resolveImage(form.logo)
+    //    漏掉這一行是編譯錯誤，不是執行期的靜默錯誤。
     const defaultOgImage = await resolveImage(form.defaultOgImage)
-    form.logo = logo
     form.defaultOgImage = defaultOgImage
 
     const patch: Partial<SiteSettingsData> = {
       siteName: form.siteName,
-      logo,
       defaultOgImage,
       nap: form.nap,
       trackingCodes: form.trackingCodes,
@@ -189,8 +192,19 @@ async function save() {
               <input v-model="form.siteName" class="adm-input" type="text" :disabled="!canEdit">
             </div>
             <div class="adm-field">
-              <label class="adm-field__label">Logo</label>
-              <ImageField :model-value="form.logo" :disabled="!canEdit" @update:model-value="(v) => (form.logo = v)" />
+              <label class="adm-field__label">網站標誌（Logo）</label>
+              <!-- ⚠️ 刻意**沒有上傳欄位**（Tim 指定 2026-09-17）——前台是寫死指向
+                   建置產物的那張圖，上傳到這裡的檔案沒有任何地方會讀。 -->
+              <div class="adm-upload__preview" style="max-width: 120px">
+                <!-- ⚠️ `:src` 是綁定不是字面值，與 AdminLayout.vue／Login.vue 一致 ——
+                     寫成 `src="/assets/logo.jpg"` 會被 Vite 依 `base: '/admin/'`
+                     改寫成 `/admin/assets/logo.jpg`，正式環境就是 404。 -->
+                <img :src="'/assets/logo.jpg'" alt="20SKIN 美醫集團標誌" width="58" height="59">
+              </div>
+              <p class="adm-field__hint">
+                頁首、頁尾與搜尋引擎的品牌標誌都直接用網站內建的這一張，不需要另外上傳。
+                要換標誌請告知工程端（換的是網站的圖檔本身，一次全站生效）。
+              </p>
             </div>
             <div class="adm-field">
               <label class="adm-field__label">預設 OG 分享圖</label>

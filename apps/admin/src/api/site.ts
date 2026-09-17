@@ -8,6 +8,8 @@
 
 import type { UploadedImage } from './upload'
 import type { ImageValue } from '../image-value'
+import { parseStructured, toWire } from '../structured-schema'
+import { HOME_SECTION_SETTINGS_SCHEMA } from '../units/schemas/home'
 import type { UnitKey } from '../types'
 import { ApiError } from './errors'
 import { normalizePaged, request, type ServerPaged } from './http'
@@ -46,8 +48,14 @@ export interface AiFaqSettings {
 
 export interface SiteSettingsData {
   siteName: string
-  /** ⚠️ 內嵌圖片欄位，不是媒體庫的 Id——對應 SiteSettings 的 `site.logoImage`（JSON）。 */
-  logo: UploadedImage | null
+  // 🔴 **沒有 `logo`。** 站徽是**版面素材**，不是院方會改的內容（CLAUDE.md 決策 14
+  //    「院方會想改它嗎？」）—— 前台三個用到它的地方（`SiteHeader.vue`、
+  //    `SiteFooter.vue`、首頁 JSON-LD 的 Organization.logo）一律指向建置產物的
+  //    `/assets/logo.jpg`，**從來沒有讀過 `site.logoImage` 這個設定鍵**。
+  //    ⚠️ 所以 2026-09-17 之前那個上傳欄位是**傳了也沒有用**：檔案真的進 Blob、
+  //    鍵真的被寫入，而前台一個像素都不會變（Tim 指定拿掉）。
+  //    ⚠️ 設定鍵 `site.logoImage` 仍留在資料庫（拿掉要一支 migration，而它沒有害處），
+  //    但**不要再從這裡寫它** —— 寫了就又製造出「後台有、前台沒有」的落差。
   /** 個別內容頁沒設 OG 圖時的退回值。對應 `site.defaultOgImage`（JSON）。 */
   defaultOgImage: UploadedImage | null
   /** 全站 NAP 主資料。⚠️ 必須與據點頁、頁尾逐字一致（CLAUDE.md／docs/03 §4 ③）。 */
@@ -67,12 +75,11 @@ export interface SiteSettingsData {
 }
 
 /**
- * 編輯中的全站設定：兩個圖片欄位可能還是「待上傳」的那一種（src/image-value.ts）。
+ * 編輯中的全站設定：圖片欄位可能還是「待上傳」的那一種（src/image-value.ts）。
  * 🔴 `update()` 收的是 `SiteSettingsData`，所以送出前一定要先 `resolveImage()`——
  *    型別分開就是為了讓漏掉那一步在編譯期就被抓到。
  */
-export type SiteSettingsDraft = Omit<SiteSettingsData, 'logo' | 'defaultOgImage'> & {
-  logo: ImageValue | null
+export type SiteSettingsDraft = Omit<SiteSettingsData, 'defaultOgImage'> & {
   defaultOgImage: ImageValue | null
 }
 
@@ -87,7 +94,7 @@ export type SiteSettingsDraft = Omit<SiteSettingsData, 'logo' | 'defaultOgImage'
 //    要開放編輯應該是「全站 SEO」那一區的事，不是塞進這張表。
 const KEYS = {
   siteName: 'site.name',
-  logo: 'site.logoImage',
+  // ⚠️ `site.logoImage` 刻意不列在這裡——站徽走建置產物，見 SiteSettingsData 的註解。
   defaultOgImage: 'site.defaultOgImage',
   nap: 'nap.json',
   trackingCodes: 'tracking.ga4',
@@ -111,7 +118,6 @@ const settings = {
 
     return {
       siteName: settingText(map, KEYS.siteName),
-      logo: settingJson<UploadedImage | null>(map, KEYS.logo, null),
       defaultOgImage: settingJson<UploadedImage | null>(map, KEYS.defaultOgImage, null),
       nap: settingJson<NapEntry[]>(map, KEYS.nap, []),
       trackingCodes: settingText(map, KEYS.trackingCodes),
@@ -142,7 +148,6 @@ const settings = {
   async update(patch: Partial<SiteSettingsData>, _userId: number): Promise<SiteSettingsData> {
     const changes: Record<string, string> = {}
     if (patch.siteName !== undefined) changes[KEYS.siteName] = patch.siteName
-    if (patch.logo !== undefined) changes[KEYS.logo] = patch.logo ? JSON.stringify(patch.logo) : ''
     if (patch.defaultOgImage !== undefined) changes[KEYS.defaultOgImage] = patch.defaultOgImage ? JSON.stringify(patch.defaultOgImage) : ''
     if (patch.nap !== undefined) changes[KEYS.nap] = JSON.stringify(patch.nap)
     if (patch.trackingCodes !== undefined) changes[KEYS.trackingCodes] = patch.trackingCodes
@@ -193,17 +198,11 @@ export interface HomeSectionItemRef {
   sortOrder: number
 }
 
-/** 唯一例外：hero 的主視覺與外部導流 CTA 沒有對應的站內內容，放在 `HomeSections.Settings`
- * 這個 JSON 欄位裡（docs/08 §G-2）。 */
-export interface HomeHeroSettings {
-  eyebrow: string
-  headline: string
-  images: { url: string; alt: string }[]
-  ctaLabel: string
-  ctaUrl: string
-  externalCtaLabel: string
-  externalCtaUrl: string
-}
+/**
+ * 版位設定的形狀宣告在 `units/schemas/home.ts`（與九個內容模型的區塊 JSON schema 同一處）。
+ * 這裡轉出去，讓畫面只需要 import `@/api/site` 一個地方。
+ */
+export { HOME_SECTION_SETTINGS_SCHEMA } from '../units/schemas/home'
 
 export interface HomeSection {
   sectionKey: HomeSectionKey
@@ -211,21 +210,24 @@ export interface HomeSection {
   subtitle: string
   isEnabled: boolean
   sortOrder: number
-  /** 這個版位可以挑哪個單元的內容；hero 為 null（沒有內容項目，見 heroSettings）。 */
+  /** 這個版位可以挑哪個單元的內容；hero 為 null（沒有內容項目，圖在 settingsValue）。 */
   targetUnit: UnitKey | null
   items: HomeSectionItemRef[]
-  heroSettings: HomeHeroSettings | null
+  /**
+   * 版位設定的**表單值**（只有 `HOME_SECTION_SETTINGS_SCHEMA` 有宣告的版位才有）。
+   *
+   * ⚠️ 型別就是模式旗標（見 structured-schema.ts）：物件／陣列＝表單模式，
+   *    字串＝原始 JSON 模式（資料形狀與 schema 對不上時的逃生口）。
+   *    沒有 schema 的版位是 `undefined`，那時候走 `rawSettings`。
+   */
+  settingsValue: unknown
   /**
    * 🔴 **伺服器上那個 `settings` JSON 字串的原樣備份，存檔時原封不動送回去。**
    *
-   * 這個畫面**沒有任何一個版位的 settings 是編得動的**，所以送回去的一定要是
-   * 讀回來的那一份。原本的寫法是「hero 送 heroSettings、其餘一律送 null」，
-   * 於是按一次「儲存草稿」就會：
-   *   - 把 `specialties` 的**八大專科入口（含圖示）整組清成 null**；
-   *   - 把 `hero` 的**四張輪播圖**（前台讀的是一個陣列）覆寫成
-   *     `{"0":…,"1":…, eyebrow:"WELCOME TO 20SKIN", …}` 這種物件。
-   * 兩者都不會有任何錯誤訊息，前台首頁會直接少掉那兩區
-   * （2026-09-17 實測踩到，見 apps/web/app/data/home.ts 對 settings 的讀法）。
+   * 給**沒有 schema 的版位**用（目前是 `specialties`）。原本的寫法是
+   * 「hero 送那份假的物件形狀、其餘一律送 null」，於是按一次「儲存草稿」就會把
+   * `specialties` 的**八大專科入口（含圖示）整組清成 null** ——
+   * 不會有任何錯誤訊息，前台首頁直接少掉那一區（2026-09-17 實測踩到）。
    */
   rawSettings: string | null
 }
@@ -261,10 +263,23 @@ export interface HomeSectionsState {
  * 版位的標題、英文小標與「這個版位收哪個單元」是**版面**，留在前台
  * （CLAUDE.md 決策 14：「院方會想改它嗎？」）。資料庫的 HomeSections 也有
  * Title／Subtitle，但那是給匯出用的；後台這個畫面顯示的是這一份。
+ *
+ * 🔴 **`title` 與 `subtitle` 是唯讀的顯示字串，`putSections` 不會送它們。**
+ *    後台畫面 2026-09-17 起也不再提供那兩格輸入（Tim 指定）—— 在此之前它們是
+ *    可以打字的，但打了按儲存什麼都不會發生：既沒有被送上去，前台那兩行字
+ *    也來自 `app/data/_presentation.ts`。`title` 現在只用在卡片標題與錯誤訊息，
+ *    `subtitle` 純粹留作「這個版位在前台長什麼樣」的備註。
  */
 const HOME_SECTION_META: Record<HomeSectionKey, { title: string; subtitle: string; targetUnit: UnitKey | null }> = {
   hero: { title: '主視覺', subtitle: 'WELCOME TO 20SKIN', targetUnit: null },
-  specialties: { title: '看皮膚　找四季', subtitle: 'SKIN CONCERNS', targetUnit: 'concern' },
+  // 🔴 **`specialties` 的 targetUnit 是 null，不是 'concern'**（Tim 指定 2026-09-17）。
+  //    在此之前這個版位在後台長出一個困擾挑選器，而**前台根本不讀它** ——
+  //    八大專科入口讀的是 `settings` 那八列（標題＋slug＋urlPath＋圖示，
+  //    `apps/web/app/data/home.ts` 的 `settingsArrayOf('specialties')`），
+  //    `HomeSectionItems` 在正式資料是 0 筆。挑了、存了、發布了，首頁完全沒有變化。
+  //    ⚠️ **不要因為「其餘版位都有挑選器」就把它改回 'concern'** —— 那是一個
+  //    前台看不到效果的假功能（與決策 21「文章不給拖」同一條理由）。
+  specialties: { title: '看皮膚　找四季', subtitle: 'SKIN CONCERNS', targetUnit: null },
   'featured-treatments': { title: '精選療程', subtitle: 'FEATURED TREATMENTS', targetUnit: 'treatment' },
   'latest-articles': { title: '最新文章', subtitle: 'LATEST ARTICLES', targetUnit: 'article' },
   doctors: { title: '醫師團隊', subtitle: 'OUR DOCTORS', targetUnit: 'doctor' },
@@ -283,38 +298,17 @@ interface ServerHomeSection {
   items: { id: number; contentItemId: number; contentTitle: string; contentUrlPath: string | null; contentType: number; sortOrder: number }[]
 }
 
-function defaultHeroSettings(): HomeHeroSettings {
-  return {
-    eyebrow: 'WELCOME TO 20SKIN',
-    headline: '',
-    images: [],
-    ctaLabel: '',
-    ctaUrl: '',
-    externalCtaLabel: '',
-    externalCtaUrl: '',
-  }
-}
-
 function toHomeSection(row: ServerHomeSection): HomeSection {
   const key = row.sectionKey as HomeSectionKey
   const meta = HOME_SECTION_META[key]
-  // hero 的表單欄位（eyebrow／headline／CTA）只有在 settings 真的是那個物件形狀時才成立。
+  // 版位設定 → 表單值。`parseStructured` 自己會處理三種例外（JSON 壞掉、雙重編碼、
+  // 最外層型別對不上），一律退回原始 JSON 模式讓人看得到原文去修，而不是把畫面弄空。
   //
-  // 🔴 **正式資料不是那個形狀** —— `hero.settings` 是前台讀的**輪播圖陣列**
-  //    （apps/web/app/data/home.ts：`settings as { image, caption }[]`），
-  //    而 `{ ...defaultHeroSettings(), ...陣列 }` 會展開成 `{0:…,1:…,eyebrow:…}`。
-  //    所以陣列一律**不進表單**，維持 null，畫面上那組欄位會停用並說明原因。
-  let heroSettings: HomeHeroSettings | null = null
-  if (key === 'hero' && row.settings) {
-    try {
-      const parsed: unknown = JSON.parse(row.settings)
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        heroSettings = { ...defaultHeroSettings(), ...(parsed as HomeHeroSettings) }
-      }
-    } catch {
-      // settings 是自由 JSON 欄位，壞掉時不進表單，而不是讓整個畫面開不起來。
-    }
-  }
+  // 🔴 **hero 的最外層是陣列。** 舊版後台假設它是 `{eyebrow, headline, images…}`
+  //    這種物件，於是 `{ ...預設值, ...陣列 }` 展開成 `{0:…,1:…,eyebrow:…}`，
+  //    存回去就是首頁 500（見 units/schemas/home.ts）。現在形狀由 schema 宣告，
+  //    `topKindMatches` 會擋下對不上的資料。
+  const schema = HOME_SECTION_SETTINGS_SCHEMA[key]
   return {
     sectionKey: key,
     title: meta?.title ?? row.title,
@@ -326,7 +320,7 @@ function toHomeSection(row: ServerHomeSection): HomeSection {
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((i) => ({ contentItemId: i.contentItemId, sortOrder: i.sortOrder })),
-    heroSettings,
+    settingsValue: schema ? parseStructured(schema, row.settings) : undefined,
     rawSettings: row.settings,
   }
 }
@@ -384,6 +378,14 @@ async function loadHomeState(): Promise<HomeSectionsState> {
   }
 }
 
+/** 這個版位要送什麼 `settings` 字串上去。 */
+function settingsWireOf(section: HomeSection): string | null {
+  const schema = HOME_SECTION_SETTINGS_SCHEMA[section.sectionKey]
+  if (!schema) return section.rawSettings
+  // schema 都宣告 `wire: 'json-string'`，所以 toWire 的回傳一定是字串或 null。
+  return toWire(schema, section.settingsValue) as string | null
+}
+
 /** 把目前畫面上的版位整批送回 `PUT /admin/home-section`（那支是整批替換）。 */
 async function putSections(sections: HomeSection[]): Promise<void> {
   await request<ServerHomeSection[]>('/admin/home-section', {
@@ -393,11 +395,14 @@ async function putSections(sections: HomeSection[]): Promise<void> {
         sectionKey: s.sectionKey,
         isEnabled: s.isEnabled,
         sortOrder: index,
-        // 🔴 **原樣送回讀到的那一份**，除非 hero 真的是表單編得動的物件形狀。
-        //    舊寫法（hero 送 heroSettings、其餘送 null）會在每一次存檔時清掉
-        //    specialties 的八大專科、並把 hero 的輪播圖陣列壓成物件 —— 見
-        //    HomeSection.rawSettings 的註解。
-        settings: s.sectionKey === 'hero' && s.heroSettings ? JSON.stringify(s.heroSettings) : s.rawSettings,
+        // 有 schema 的版位送表單值（`toWire` 會序列化成 JSON 字串）；
+        // 🔴 **其餘一律原樣送回讀到的那一份**，見 HomeSection.rawSettings 的註解。
+        //
+        // 🔴 **呼叫端必須先跑過 `uploadPendingImages()`。** 待上傳的圖是
+        //    `{pending:true, file, previewUrl}`，`JSON.stringify` 它不會報錯，
+        //    只會把一張圖寫成 `{"pending":true,"alt":null}` 存進資料庫 ——
+        //    前台那一張就是破圖，而後台看起來一切正常（src/image-value.ts 檔頭）。
+        settings: settingsWireOf(s),
         items: s.items.map((i, itemIndex) => ({ contentItemId: i.contentItemId, sortOrder: itemIndex })),
       })),
     },
@@ -416,7 +421,7 @@ const home = {
    */
   async updateSection(
     key: HomeSectionKey,
-    patch: Partial<Pick<HomeSection, 'title' | 'subtitle' | 'isEnabled' | 'items' | 'heroSettings'>>,
+    patch: Partial<Pick<HomeSection, 'title' | 'subtitle' | 'isEnabled' | 'items' | 'settingsValue'>>,
     _userId: number,
   ): Promise<HomeSectionsState> {
     const state = await loadHomeState()

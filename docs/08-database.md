@@ -538,9 +538,11 @@ CHECK ((RelationType, FromContentType, ToContentType) IN (...合法組合...))
 
 `SettingKey` nvarchar(100) PK, `SettingValue` nvarchar(max), `ValueType` tinyint, `UpdatedByUserId`, `UpdatedAt`
 
-收納：站名、Logo、預設 OG 圖、全站 NAP 主資料、追蹤碼、`/contact/` 收件信箱、頁尾社群連結與版權文案、`robots.txt` 內容、**sitemap 五個分檔的設定**（`seo.sitemapFiles`，見 §H）、AI FAQ 的啟用開關／面板標題／歡迎文案／轉真人出口網址。
+收納：站名、預設 OG 圖、全站 NAP 主資料、追蹤碼、`/contact/` 收件信箱、頁尾社群連結與版權文案、`robots.txt` 內容、**sitemap 五個分檔的設定**（`seo.sitemapFiles`，見 §H）、AI FAQ 的啟用開關／面板標題／歡迎文案／轉真人出口網址。
 
 ⚠️ **鍵是固定的，不能在執行期新增。** `PUT /admin/setting` 對不存在的 `SettingKey` 回 404 —— 要多一個設定就是一支 migration ＋ 一列種子（`seo.sitemapFiles` 就是 2026-09-12 這樣加的）。
+
+⚠️ **`site.logoImage` 這一列是死的**（2026-09-17）：種子還在，但**沒有任何讀者，後台也不再寫它** —— 站徽走建置產物的 `/assets/logo.jpg`，見 [02](02-backend-cms.md) §3。留著只是因為拿掉要一支 migration，而 `PUT /admin/setting` 只更新呼叫端明確送上來的鍵。**不要因為看到它還在，就把後台那個上傳欄位加回去。**
 
 **用 key-value 而非固定欄位**：這組設定會持續增加（AI FAQ 那四項就是後加的），固定欄位每加一項要一次 migration，而**沒有 staging，每次遷移都必須向後相容**（[07](07-deployment.md) §5）。設定類不值得付這個代價。
 
@@ -560,7 +562,19 @@ hero  specialties  featured-treatments  latest-articles  doctors  clinics  brand
 
 ⚠️ **這張表只有 `ContentItemId`，沒有任何 `Title` 或 `Text` 欄位，是刻意的。** [02](02-backend-cms.md) §3：「每個版位只能挑選已存在的內容，不能另打一份文案」—— 舊站 `index2.php` 的病根就是首頁自成一份資料、與內頁長期不同步。**在 schema 裡不給文案欄位，這件事就不可能再發生。**
 
-唯一例外是 `hero` 的主視覺與外部導流 CTA（沒有對應的站內內容），放在 `HomeSections.Settings` 的 JSON 裡。
+唯一例外是 `hero` 主視覺輪播（沒有對應的站內內容），放在 `HomeSections.Settings` 的 JSON 裡：
+
+```jsonc
+// 🔴 最外層是**陣列**。2026-09-17 正式站踩過：舊版後台把它壓成
+//    {"0":…,"1":…,"eyebrow":…} 這種物件，前台的 (settings ?? []).map()
+//    當場丟 ".map is not a function" ——**整個首頁 500**。
+[{ "image": { "blobPath": "…", "url": "…", "alt": "…", "width": 320, "height": 220, "variants": null },
+   "caption": "四季診所．大廳與候診區" }]
+```
+
+形狀的真實來源是前台的 `HeroSlide`（`apps/web/app/data/home.ts`）；後台的第二份宣告在 `apps/admin/src/units/schemas/home.ts`，兩邊由 [tools/content-roundtrip](../tools/content-roundtrip/) 把關（決策 17 同一條規則）。
+
+⚠️ `specialties`（八大專科入口）的 `Settings` **刻意不開放編輯**：每一列都帶著 `slug` 與 `urlPath`，必須跟困擾頁實際的網址對得上。後台讀到什麼就原樣存回什麼 —— 少了這條，一次存檔就會把那一區清成 `null`（2026-09-17 實際踩到）。
 
 版位編排的送審與版本歷程掛在 `SystemKey='home'` 那筆 ContentItem 上（§C-8），快照時把 `HomeSections` ＋ `HomeSectionItems` 一併序列化進 `ContentVersions.Snapshot`。
 

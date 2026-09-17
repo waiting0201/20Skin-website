@@ -448,6 +448,13 @@ public static class SeedData
             SettingValueType.Text);
         // ⚠️ 存的是內嵌圖片的 JSON（url／blobPath／alt／…），不是媒體庫的 Id——
         //    不做媒體庫之後沒有可以指過去的表（docs/08 §0 決策五）。
+        //
+        // 🔴 `site.logoImage` **已經沒有任何讀者，後台也不再寫它**（Tim 指定 2026-09-17）：
+        //    站徽是版面素材，前台三處（頁首、頁尾、首頁 JSON-LD 的 Organization.logo）
+        //    一律寫死指向建置產物的 `/assets/logo.jpg`。這一列留著只是因為拿掉要一支
+        //    migration，而 `UpdateAsync` 只會更新呼叫端明確送上來的鍵 ——
+        //    ⚠️ **不要因為看到它還在，就把後台那個上傳欄位加回去**（加了也只是
+        //    讓檔案進 Blob、設定鍵被寫入，而前台一個像素都不會變）。
         Add("site.logoImage", "", SettingValueType.Json);
         Add("site.defaultOgImage", "", SettingValueType.Json);
 

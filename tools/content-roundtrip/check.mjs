@@ -22,6 +22,10 @@ const adminSrc = resolve(here, '../../apps/admin/src')
 
 const { parseStructured, toWire, isEmptyValue, emptyValueFor } = await import(join(adminSrc, 'structured-schema.ts'))
 const { UNIT_REGISTRY } = await import(join(adminSrc, 'units/index.ts'))
+// ⚠️ 直接 import schema 檔本身，不要走 `api/site.ts` —— 那會把整包 API client
+//    （fetch、token、路由）拖進 Node。那個檔對 HomeSectionKey 只有 `import type`，
+//    所以這個檔是純資料，Node 直接跑得動。
+const { HOME_SECTION_SETTINGS_SCHEMA } = await import(join(adminSrc, 'units/schemas/home.ts'))
 
 const contentDir = resolve(process.argv[2] ?? 'apps/web/content')
 if (!existsSync(contentDir)) {
@@ -138,6 +142,28 @@ if (existsSync(bodiesDir)) {
   }
 }
 
+// ── 首頁版位的設定 JSON（HomeSections.Settings）────────────────────────
+//
+// 🔴 這一份與九個內容模型的區塊 JSON 是同一類東西、同一種錯法：抄錯不會有編譯錯誤，
+//    症狀是前台首頁那一區靜默消失。所以一起在這裡驗。
+//
+// ⚠️ **匯出檔裡的 `settings` 已經是 parse 過的值**，而後台讀到的是**字串**
+//    （`GET /admin/home-section` 回的是 `Settings` 欄位原文）——
+//    這裡要先 stringify 回去才是在驗同一條路徑。少了這一步，
+//    `parseStructured` 的「最外層型別對不對」整個被跳過（它對非字串一律原樣放行），
+//    而那正是 hero 最容易出事的地方（陣列被壓成物件 → 首頁 500）。
+const homePath = join(contentDir, 'home.json')
+if (existsSync(homePath)) {
+  const rows = JSON.parse(readFileSync(homePath, 'utf8'))
+    .filter((r) => HOME_SECTION_SETTINGS_SCHEMA[r.sectionKey])
+  console.log(`\n── 首頁版位設定（${rows.length} 個有 schema 的版位）`)
+  for (const row of rows) {
+    const raw = row.settings === null || row.settings === undefined ? null : JSON.stringify(row.settings)
+    checkRecord('home', { key: row.sectionKey, structured: HOME_SECTION_SETTINGS_SCHEMA[row.sectionKey] },
+      { slug: row.sectionKey }, raw)
+  }
+}
+
 // ── 空白值：新建一筆內容時每一欄的起始狀態 ────────────────────────────
 //
 // round-trip 驗的是「既有資料進得來、出得去」；這一段驗的是「從零開始也不會壞」。
@@ -167,6 +193,18 @@ for (const [unit, def] of Object.entries(UNIT_REGISTRY)) {
         console.log(`  ✗ ${label}：${e.message}`)
       }
     }
+  }
+}
+for (const [key, schema] of Object.entries(HOME_SECTION_SETTINGS_SCHEMA)) {
+  const label = `home.${key}`
+  const wire = toWire(schema, emptyValueFor(schema.root), schema.wire)
+  if (wire !== null) {
+    emptyFailed += 1
+    console.log(`  ✗ ${label}：空白值沒有收斂成 null，而是 ${JSON.stringify(wire).slice(0, 80)}`)
+  }
+  if (typeof parseStructured(schema, null) === 'string') {
+    emptyFailed += 1
+    console.log(`  ✗ ${label}：空白值切不進表單模式`)
   }
 }
 if (!emptyFailed) console.log('  ✓ 每一份 schema 的空白值都收斂成 null，也都進得了表單')

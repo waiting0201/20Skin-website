@@ -325,7 +325,17 @@ Tim 的三點，一次做完。**每一點都不只是藏畫面**。
 **前台根本不讀、資料裡也不存在**的形狀。
 修法：`settings` 一律原樣往返（`HomeSection.rawSettings`），hero 欄位在形狀對不上時
 不給假表單、改顯示一行說明。**`tools/admin-e2e/publish-flow.mjs` 補了場景 D 常設把關。**
-⚠️ 真正的 hero 輪播圖編輯器還沒有 —— 那是獨立的一件事。
+✅ **2026-09-17 稍晚：真正的 hero 輪播圖編輯器做好了**（CLAUDE.md 決策 23）——
+形狀宣告在 `apps/admin/src/units/schemas/home.ts`（`{image, caption}[]`，真實來源是前台的
+`HeroSlide`），用九個內容模型同一套 `StructuredField` 渲染，上傳／換圖／改圖說／調順序都在
+那一區。`tools/content-roundtrip` 一併把首頁版位的設定納入往返比對（正式資料 1 個版位通過）。
+⚠️ 那組「前台根本不讀」的欄位（eyebrow／headline／CTA）**整組移除**，沒有補回去 ——
+主標題與「立即預約」按鈕是版面，留在 `pages/index.vue`（決策 14）。
+⚠️ `specialties` 仍走原樣往返，**刻意不開放編輯**（每一列帶 `slug`／`urlPath`，
+要跟困擾頁的網址對得上）；它原本那個困擾挑選器**整個拿掉**了 —— 存進 `HomeSectionItems`
+而前台不讀，是個看不到效果的假功能。
+⚠️ 順帶把每張卡片的「版位標題／副標」兩格輸入也拿掉：`putSections` 從來沒有送過它們。
+**每個版位在後台剩三件事**：開關、拖曳排序、挑選內容（hero 則是編輯輪播圖）。
 
 閘門：`typecheck`／`build`／`dotnet build`／`check.mjs`（29）／`publish-flow.mjs`（**22**，含新增的
 場景 D）／`api-smoke/read.mjs`（36）全過。

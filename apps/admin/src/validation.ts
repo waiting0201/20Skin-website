@@ -189,7 +189,8 @@ function validateField(field: UnitField, value: unknown): string | null {
  *    而且 API 與前台都不會報錯。
  */
 export function validateStructured(
-  field: UnitField,
+  /** ⚠️ 只要 key／label —— 首頁版位的設定 JSON 也用這一支，那裡沒有 `UnitField`。 */
+  field: Pick<UnitField, 'key' | 'label'>,
   schema: StructuredSchema | undefined,
   value: unknown,
 ): FieldErrors {

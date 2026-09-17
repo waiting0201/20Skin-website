@@ -56,7 +56,8 @@ tools/content-export/  🔴 **前台已完全不使用它**（2026-09-16）。�
                        （<Compile Include>，不是抄一份）
 tools/content-roundtrip/ 區塊 JSON schema 的回歸測試（決策 17）——正式資料整批往返比對
                        🔴 改了 apps/admin/src/units/schemas/ 就要跑
-tools/content-audit/   21 個區塊 JSON 欄位的**唯讀**稽核：非法 JSON、雙重編碼、
+tools/content-audit/   九個內容單元那 21 個區塊 JSON 欄位的**唯讀**稽核（不含首頁版位設定）：
+                       非法 JSON、雙重編碼、
                        schema 沒描述到的鍵（那些鍵不可以在改版時被吃掉）
 tools/blob-reconcile/  孤兒檔對帳：Blob 容器 vs 資料庫引用（見該目錄 README）
                        🔴 **只能對正式資料庫跑** —— 儲存體只有一個、所有環境共用，
@@ -177,7 +178,7 @@ pnpm --filter web verify:seo-head  # JSON-LD 的 </script> 跳脫與覆寫容錯
 node --experimental-strip-types --import ./tools/content-roundtrip/register.mjs \
      tools/content-roundtrip/check.mjs
 
-# 21 個區塊 JSON 欄位的唯讀稽核（非法 JSON／雙重編碼／schema 沒描述的鍵）
+# 九個內容單元那 21 個區塊 JSON 欄位的唯讀稽核（非法 JSON／雙重編碼／schema 沒描述的鍵）
 node tools/content-audit/audit-json-fields.mjs
 
 # 🔴 verify:links 需要一個**跑著的站台**（而站台需要跑得動的 API）——
@@ -451,7 +452,8 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    ⚠️ 31 是舊數字 —— `content.submit`／`review.approve`／`review.reject` 已於 2026-09-17 刪除（決策 20）。
    ⚠️ 這仍然只管「按鈕出不出現」，**不是安全邊界** —— 擋得住的授權在 API 的 `AppRouter`（預設拒絕）。
 17. **內容欄位的「區塊 JSON」在後台一律是表單，不是讓人手打 JSON**（2026-09-17）。
-   21 個欄位（療程 7／困擾 5／醫師 2／據點 2／案例 1／分類 1／文章內文／頁面內文）
+   22 個欄位（療程 7／困擾 5／醫師 2／據點 2／案例 1／分類 1／文章內文／頁面內文／
+   **首頁主視覺輪播**）
    由 `apps/admin/src/units/schemas/*.ts` 宣告形狀，`StructuredField`／`StructuredNode` 遞迴渲染。
    🔴 **那份宣告是第二份形狀定義，真實來源是前台的型別**（`apps/web/app/data/*.ts`）。
    抄錯不會有編譯錯誤 —— 症狀是前台那一區**靜默消失**（`parseBlocks` 回 fallback，HTTP 仍 200）。
@@ -520,6 +522,37 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    🔴 **還原要在 setup 這一層、任何 watcher 註冊之前做完**，不可以放進 `onMounted` ——
    那支 `immediate: true` 的記憶 watcher 會在 setup 當下先用新實例的預設值蓋掉記憶。
    ⚠️ 不放網址列是刻意的：token 只在記憶體，重新整理就是登出，可貼上的清單網址沒有意義。
+
+23. **首頁主視覺輪播（hero banner）改由後台維護**（Tim 指定 2026-09-17）。
+   形狀是 `{image, caption}[]`，存在 `HomeSections.Settings`；後台用九個內容模型同一套
+   `StructuredField` 渲染（schema 在 `apps/admin/src/units/schemas/home.ts`，決策 17 同一條規則）。
+   ⚠️ 在此之前那一區是一段「要換圖請洽工程」的警告 —— 因為舊表單假設它是
+   `{headline, ctaLabel, images[]}` 這種**物件**，而正式資料是陣列。
+   🔴 **最外層必須是陣列**：壓成物件就是前台 `(settings ?? []).map()` 丟
+   `.map is not a function`、**整個首頁 500**（2026-09-17 正式站踩過）。
+   🔴 **主標題、英文小標、「立即預約」按鈕仍然寫死在前台**（決策 14：版面留前台）——
+   舊表單那幾個欄位**前台從來沒有讀過**，已移除，**不要補回去**。
+   🔴 **`specialties`（八大專科入口）的挑選器整個拿掉**（Tim 指定）：它存進 `HomeSectionItems`，
+   而前台讀的是 `settings` 那八列（正式資料 items 是 0 筆）—— 挑了、存了、發布了，
+   首頁完全沒有變化。`HOME_SECTION_META` 的 `targetUnit` 因此由 `'concern'` 改成 `null`。
+   ⚠️ **`settings` 仍然原樣往返**（`rawSettings`）：少了那條，一次存檔就把那八個入口
+   連同圖示清成 null。那八列帶著 `slug` 與 `urlPath`，要跟困擾頁的網址對得上，
+   所以也不宣告 schema —— 要開放的正解是做成困擾內容的挑選器並改前台去讀 items，
+   那是獨立的一件事。
+   🔴 **每張卡片的「版位標題／副標」兩格輸入也拿掉**（Tim 指定）：`putSections` 從來
+   沒有送過它們，而前台那兩行字來自 `app/data/_presentation.ts`（決策 14）——
+   打了字、按了儲存、什麼都不會發生。版位叫什麼看卡片標題那一行即可。
+   ⚠️ **換圖不會刪舊檔**：版位設定沒有走內容模型那條「發布時清掉上一版獨有的 blob」的路，
+   孤兒檔靠 `tools/blob-reconcile` 離線對帳。寧可多留檔案，也不要刪到已發布快照還指著的圖。
+
+24. **全站設定不做 Logo 上傳**（Tim 指定 2026-09-17：「直接使用網站的 logo 就好」）。
+   站徽是版面素材（決策 14 的判準），前台三處（`SiteHeader.vue`、`SiteFooter.vue`、
+   首頁 JSON-LD 的 `Organization.logo`）一律指向建置產物的 `/assets/logo.jpg`。
+   🔴 **那個欄位在此之前是「傳了也沒有用」** —— 檔案真的進 Blob、`site.logoImage` 真的被寫入，
+   而前台一個像素都不會變。設定畫面改成顯示目前這張標誌加一句說明。
+   ⚠️ 設定鍵 `site.logoImage` **留在資料庫**（拿掉要一支 migration，而它沒有害處），
+   `PUT /admin/setting` 只更新呼叫端明確送上來的鍵 ——
+   **不要因為看到它還在，就把上傳欄位加回去**。要換標誌是換那張圖檔並重新部署。
 
 ---
 
