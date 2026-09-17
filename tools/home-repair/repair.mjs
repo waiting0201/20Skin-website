@@ -135,17 +135,54 @@ if (good === null) {
 }
 
 console.log(`\n→ 最後一版好的是 v${good}`)
+
+// ── 4. 只把壞掉的那兩欄搬回來 ─────────────────────────────────────────
+//
+// 🔴 **不要用 `POST .../versions/{no}/restore`。** 那支還原的是**整筆 Page**
+//    （標題、欄位、SEO、關聯、`SortOrder`，以及每個版位引用了哪幾筆內容），
+//    等於把「壞掉之後到現在」的每一個編輯都一起退掉。
+//    2026-09-17 正式站實際比對：v2 → v4 之間有人重排過「精選療程」
+//    （[1140,1149,1156,1163] → [1156,1140,1149,1163]），整筆還原會把那次調整吃掉；
+//    首頁那筆 Page 的 `SortOrder` 也會被寫回舊值，破壞「排序值不重複」
+//    （當頁內拖曳排序的前提，見 CLAUDE.md 決策 21）。
+//
+//    ⚠️ 壞掉的只有 `hero` 與 `specialties` 兩欄的 `settings`，就只搬那兩欄。
+//    其餘一律用**現在**的值。
+const goodSnapshotRaw = (await call('GET', `/admin/page/${home.id}/versions/${good}`)).json?.data
+const goodParsed = typeof (goodSnapshotRaw?.snapshot ?? goodSnapshotRaw) === 'string'
+  ? JSON.parse(goodSnapshotRaw.snapshot)
+  : (goodSnapshotRaw?.snapshot ?? goodSnapshotRaw)
+const goodSections = goodParsed?.homeSections ?? []
+const settingsFrom = (key) => goodSections.find((x) => x.sectionKey === key)?.settings ?? null
+
+const REPAIR_KEYS = ['hero', 'specialties']
+const payload = {
+  sections: live.map((r) => ({
+    sectionKey: r.sectionKey,
+    isEnabled: r.isEnabled,
+    sortOrder: r.sortOrder,
+    settings: REPAIR_KEYS.includes(r.sectionKey) ? settingsFrom(r.sectionKey) : r.settings,
+    items: (r.items ?? []).map((i) => ({ contentItemId: i.contentItemId, sortOrder: i.sortOrder })),
+  })),
+}
+
+console.log('\n【打算怎麼修】只換掉這兩欄的 settings，其餘（引用的內容、啟用狀態、排序）全部沿用現況：')
+for (const key of REPAIR_KEYS) {
+  const from = settingsFrom(key)
+  const parsed = from ? JSON.parse(from) : null
+  console.log(`  ${key.padEnd(12)} ← v${good} 的 ${Array.isArray(parsed) ? `陣列 ${parsed.length} 筆` : String(parsed)}`)
+}
+
 if (!APPLY) {
-  console.log('\n🟢 只看不改。要真的動手請加 --apply（會把工作表還原成 v' + good + ' 並重新發布首頁）。')
+  console.log('\n🟢 只看不改。要真的動手請加 --apply。')
   process.exit(0)
 }
 
-// ── 4. 還原並重新發布 ─────────────────────────────────────────────────
-// ⚠️ restore 只還原**工作副本**，前台讀的是已核准快照 —— 一定要再發布一次。
-const restored = await call('POST', `/admin/page/${home.id}/versions/${good}/restore`, {})
-if (!restored.json?.success) throw new Error(`還原失敗：${restored.json?.code} ${restored.json?.message}`)
-console.log(`✓ 已把工作表還原成 v${good}`)
+const put = await call('PUT', '/admin/home-section', payload)
+if (!put.json?.success) throw new Error(`寫回版位失敗：${put.json?.code} ${put.json?.message}`)
+console.log(`\n✓ 已把 ${REPAIR_KEYS.join('、')} 的設定寫回工作表`)
 
+// ⚠️ PUT 改的是工作副本，前台讀的是已核准快照 —— 一定要再發布一次。
 const published = await call('PATCH', `/admin/page/${home.id}/publish`, { action: 'publish' })
 if (!published.json?.success) throw new Error(`重新發布失敗：${published.json?.code} ${published.json?.message}`)
 console.log('✓ 已重新發布首頁')
@@ -157,7 +194,7 @@ console.log('\n【公開端點 GET /home（前台真的讀到的）】')
 console.log(`  hero        ${ok(after.heroOk)} ${after.heroShape}`)
 console.log(`  specialties ${ok(after.specialtiesOk)} ${after.specialtiesShape}`)
 if (!after.heroOk || !after.specialtiesOk) {
-  console.error('\n🔴 還原完了，公開端點仍然不對 —— 不要就此收工，請回報。')
+  console.error('\n🔴 修完了，公開端點仍然不對 —— 不要就此收工，請回報。')
   process.exit(1)
 }
 console.log('\n完成。請實際打開前台首頁確認主視覺輪播與八大專科入口都回來了。')
