@@ -121,6 +121,31 @@ function hoursFieldValue(key: string): HourRow[] {
   return (bodyForm.fields[key] as HourRow[] | undefined) ?? []
 }
 
+// ── 標籤欄位（醫師的「專長標籤」與「擅長項目」）──────────────────────
+//
+// 🔴 chip 是純文字、不可編輯，所以**新增一定要有輸入框** —— 原本只有一顆
+//    「＋ 新增」按鈕塞一個寫死的 '新標籤' 進去，等於這兩個欄位完全填不了。
+// 一個畫面上有兩個 tags 欄位，草稿值因此要依 field.key 分開存。
+const tagDrafts = reactive<Record<string, string>>({})
+
+function tagList(key: string): string[] {
+  const value = bodyForm.fields[key]
+  return Array.isArray(value) ? (value as string[]) : []
+}
+
+function addTag(key: string): void {
+  const text = (tagDrafts[key] ?? '').trim()
+  if (!text) return
+  const current = tagList(key)
+  // 同一欄裡重複的標籤沒有意義（前台就是照這個陣列渲染），靜默略過並清空輸入。
+  if (!current.includes(text)) bodyForm.fields[key] = [...current, text]
+  tagDrafts[key] = ''
+}
+
+function removeTag(key: string, index: number): void {
+  bodyForm.fields[key] = tagList(key).filter((_, i) => i !== index)
+}
+
 /**
  * 新增一張圖時的空白列。
  * ⚠️ 逐張的額外欄位（案例的階段、拍攝日期）要一起給預設值 ——
@@ -716,13 +741,22 @@ async function removeRecord() {
 
                 <!-- tags -->
                 <div v-else-if="field.type === 'tags'" class="adm-tags">
-                  <span v-for="(tag, idx) in (bodyForm.fields[field.key] as string[] | undefined) ?? []" :key="idx" class="c-tag">
-                    {{ tag }}
-                    <button type="button" class="adm-tags__remove" :disabled="!canEditBody"
-                      @click="(bodyForm.fields[field.key] as string[]).splice(idx, 1)">✕</button>
-                  </span>
-                  <button type="button" class="btn btn--ghost btn--sm" :disabled="!canEditBody"
-                    @click="bodyForm.fields[field.key] = [...((bodyForm.fields[field.key] as string[]) ?? []), '新標籤']">＋ 新增</button>
+                  <div v-if="tagList(field.key).length" class="adm-tags__list">
+                    <span v-for="(tag, idx) in tagList(field.key)" :key="idx" class="c-tag">
+                      {{ tag }}
+                      <button type="button" class="adm-tags__remove" :disabled="!canEditBody"
+                        :aria-label="`移除 ${tag}`" @click="removeTag(field.key, idx)">✕</button>
+                    </span>
+                  </div>
+                  <!-- ⚠️ Enter 要 .prevent —— 這是在 <form> 裡，不擋的話按 Enter 會直接送出整張表單。 -->
+                  <div class="adm-tags__add">
+                    <input v-model="tagDrafts[field.key]" class="adm-input" type="text" maxlength="60"
+                      placeholder="輸入後按 Enter 或「新增」" :disabled="!canEditBody"
+                      @keydown.enter.prevent="addTag(field.key)">
+                    <button type="button" class="btn btn--line btn--sm"
+                      :disabled="!canEditBody || !(tagDrafts[field.key] ?? '').trim()"
+                      @click="addTag(field.key)">＋ 新增</button>
+                  </div>
                 </div>
 
                 <!-- repeater -->

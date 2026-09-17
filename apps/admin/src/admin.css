@@ -656,10 +656,13 @@
 .adm-repeater__remove { flex: none; }
 
 /* -- Tags（醫師專長標籤）--------------------------------------------------- */
-.adm-tags { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+/* 兩列：已加入的 chip 一列（可換行）、輸入框一列。 */
+.adm-tags { display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-start; }
+.adm-tags__list { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .adm-tags .c-tag { padding: .3em .8em; border: 1px solid var(--line); border-radius: 999px; display: inline-flex; align-items: center; gap: var(--sp-1); }
 .adm-tags__remove { color: var(--ink-50); }
-.adm-tags__add { display: flex; gap: var(--sp-2); }
+.adm-tags__add { display: flex; gap: var(--sp-2); align-items: center; width: 100%; max-width: 32em; }
+.adm-tags__add .adm-input { flex: 1; }
 
 /* -- 星期 × 時段矩陣（據點營業時間）---------------------------------------- */
 .adm-hours-editor { display: flex; flex-direction: column; gap: var(--sp-3); }
