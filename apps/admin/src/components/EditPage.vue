@@ -25,6 +25,8 @@ import RelationPicker from './RelationPicker.vue'
 import Repeater from './Repeater.vue'
 import HoursEditor from './HoursEditor.vue'
 import ImageField from './ImageField.vue'
+import StructuredField from './StructuredField.vue'
+import { resolveSchema } from '@/api/content-fields'
 
 const props = defineProps<{ unit: UnitKey; id: number }>()
 const router = useRouter()
@@ -240,7 +242,7 @@ async function saveBody(): Promise<boolean> {
   actionError.value = ''
   actionNotice.value = ''
 
-  bodyErrors.value = validateBody(def.value, bodyForm, slugRequired.value)
+  bodyErrors.value = validateBody(def.value, bodyForm, slugRequired.value, { slug: record.value?.slug ?? null })
   if (hasErrors(bodyErrors.value)) {
     const count = Object.keys(bodyErrors.value).length
     actionError.value = count > 1
@@ -536,7 +538,7 @@ async function removeRecord() {
                   v-for="field in def.fields.filter((f) => (f.group || '內容') === group)"
                   :key="field.key"
                   class="adm-field"
-                  :class="{ 'adm-field--span2': ['textarea', 'richtext', 'repeater', 'gallery', 'hours', 'tags'].includes(field.type) }"
+                  :class="{ 'adm-field--span2': ['textarea', 'longtext', 'structured', 'repeater', 'gallery', 'hours', 'tags'].includes(field.type) }"
                 >
                   <label class="adm-field__label">
                     {{ field.label }}<span v-if="field.required" class="adm-field__required">＊</span>
@@ -563,11 +565,12 @@ async function removeRecord() {
                     {{ field.hint ? '' : '是' }}
                   </label>
 
-                  <!-- textarea / richtext（此輪先以純文字區塊模擬區塊編輯器，見下方註記） -->
+                  <!-- textarea / longtext：純文字長文。⚠️ 這裡沒有、也不會有富文本 ——
+                       段落在前台是 `{{ }}` 純文字輸出（Tim 定案 2026-09-17）。 -->
                   <textarea
-                    v-else-if="field.type === 'textarea' || field.type === 'richtext'"
+                    v-else-if="field.type === 'textarea' || field.type === 'longtext'"
                     class="adm-textarea"
-                    :class="{ 'adm-textarea--tall': field.type === 'richtext' }"
+                    :class="{ 'adm-textarea--tall': field.type === 'longtext' }"
                     :value="String(bodyForm.fields[field.key] ?? '')"
                     :disabled="!canEditBody || field.readOnly"
                     @input="bodyForm.fields[field.key] = ($event.target as HTMLTextAreaElement).value"
@@ -596,6 +599,19 @@ async function removeRecord() {
                     <option value="">請選擇…</option>
                     <option v-for="opt in fieldOptions[field.key] ?? []" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                   </select>
+
+                  <!-- structured：區塊 JSON 的表單（見 structured-schema.ts）。
+                       ⚠️ 這些欄位原本全是裸的 textarea，要使用者自己打出
+                       `[{"label":"療程時間","value":"約 30–45 分鐘"}]` 這種東西。 -->
+                  <StructuredField
+                    v-else-if="field.type === 'structured'"
+                    :schema="resolveSchema(field, { slug: record.slug ?? null })"
+                    :model-value="bodyForm.fields[field.key]"
+                    :disabled="!canEditBody"
+                    :path="field.key"
+                    :errors="bodyErrors"
+                    @update:model-value="(v) => (bodyForm.fields[field.key] = v)"
+                  />
 
                   <!-- image：上傳就在欄位裡，沒有媒體庫可挑（docs/08 §0 決策五）-->
                   <ImageField
@@ -678,11 +694,14 @@ async function removeRecord() {
 
                   <p v-if="bodyErrors[field.key]" class="adm-field__error" role="alert">{{ bodyErrors[field.key] }}</p>
                   <p v-if="field.hint" class="adm-field__hint">{{ field.hint }}</p>
-                  <p v-if="field.minLength || field.maxLength" class="adm-field__count">
+                  <p v-if="(field.minLength || field.maxLength) && field.type !== 'structured'" class="adm-field__count">
                     {{ String(bodyForm.fields[field.key] ?? '').length }} 字
                     <span v-if="field.minLength && field.maxLength">（建議 {{ field.minLength }}–{{ field.maxLength }} 字）</span>
                   </p>
-                  <p v-if="field.riskScan && riskHitsFor(bodyForm.fields[field.key]).length" class="adm-risk-hit">
+                  <!-- ⚠️ structured 欄位的高風險字詞掃描改在 StructuredField 裡逐格做
+                       （這裡的值是物件不是字串，掃不到東西）。送審時伺服器仍會自己重掃，
+                       那才是真正記進 ContentReviews.RiskFlags 的那一份。 -->
+                  <p v-if="field.riskScan && field.type !== 'structured' && riskHitsFor(bodyForm.fields[field.key]).length" class="adm-risk-hit">
                     ⚠️ 偵測到高風險字詞：<strong>{{ riskHitsFor(bodyForm.fields[field.key]).join('、') }}</strong>
                     ——不會擋下輸入，但送審時會一併記錄供審核者重點檢視。
                   </p>

@@ -4,6 +4,7 @@
 // （IsSystemLocked）。法務三頁另外限超級管理員編輯（page.ts 的權限判斷見
 // src/permissions.ts 的 canEditLegalPage / canCreateTerm 兩個相鄰函式）。
 import type { UnitDefinition } from '../unit-schema'
+import { PAGE_BODY_SCHEMAS } from './schemas/page'
 
 export const pageUnit: UnitDefinition = {
   key: 'page',
@@ -32,7 +33,17 @@ export const pageUnit: UnitDefinition = {
     },
     { key: 'systemKey', label: '系統鍵值', type: 'text', readOnly: true, group: '基本資料', hint: '系統頁專用識別碼，種子建立，不可編輯。' },
     { key: 'lead', label: '導言', type: 'textarea', group: '內容' },
-    { key: 'bodyBlocks', label: '內文', type: 'richtext', group: '內容', hint: '系統頁列表內容由對應模型自動帶出，這裡只管頁面外框文案。' },
+    {
+      key: 'bodyBlocks',
+      label: '內文',
+      type: 'structured',
+      group: '內容',
+      hint: '系統頁列表內容由對應模型自動帶出，這裡只管頁面外框文案。',
+      // 🔴 依 slug 分派：六個有內文的頁面各有各的形狀，其餘頁面的這一欄前台根本不讀。
+      structuredBySlug: PAGE_BODY_SCHEMAS,
+      // ⚠️ 查不到 schema 時走哪一條寫入路徑。少了它，改掉 slug 之後存檔會清空整個內文。
+      structuredWire: 'json-value',
+    },
     { key: 'cover', label: '封面圖', type: 'image', group: '圖片' },
     {
       key: 'listSortRule',

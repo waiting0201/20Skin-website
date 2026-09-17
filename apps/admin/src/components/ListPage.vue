@@ -188,6 +188,9 @@ function defaultFieldsFor(): Record<string, unknown> {
     if (f.readOnly) continue
     if (f.type === 'boolean') fields[f.key] = f.key === 'isPhysician' // 14 位成員多數是醫師，預設打開，安喬那筆進去再手動關閉
     else if (['repeater', 'gallery', 'tags', 'hours'].includes(f.type)) fields[f.key] = []
+    // ⚠️ 區塊 JSON 欄位**整個不送**（undefined）。送空字串的話，走 json-value 的
+    //    那兩欄（文章與頁面的內文）會被 API 當成「不是合法 JSON」而擋下新增。
+    else if (f.type === 'structured') continue
     else fields[f.key] = ''
   }
   return fields
@@ -340,7 +343,7 @@ const newTagTermType = ref('1')
             v-for="field in createFields"
             :key="field.key"
             class="adm-field"
-            :class="{ 'adm-field--span2': field.type === 'textarea' || field.type === 'richtext' }"
+            :class="{ 'adm-field--span2': field.type === 'textarea' || field.type === 'longtext' }"
           >
             <label class="adm-field__label">{{ field.label }}<span class="adm-field__required">＊</span></label>
 
@@ -364,7 +367,7 @@ const newTagTermType = ref('1')
             </label>
 
             <textarea
-              v-else-if="field.type === 'textarea' || field.type === 'richtext'"
+              v-else-if="field.type === 'textarea' || field.type === 'longtext'"
               class="adm-textarea"
               :class="{ 'is-invalid': createErrors[field.key] }"
               :value="createFieldText(field.key)"

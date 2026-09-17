@@ -164,7 +164,8 @@ function toAdminRecord(unit: UnitKey, dto: ServerDetail): AdminRecord {
     updatedByUserId: dto.updatedByUserId,
     createdAt: dto.createdAt,
     updatedAt: dto.updatedAt,
-    fields: fieldsFromServer(unit, dto.fields, dto.summary),
+    // ⚠️ slug 要傳下去：`page.bodyBlocks` 依 slug 決定用哪一份 schema（見 unit-schema.ts）。
+    fields: fieldsFromServer(unit, dto.fields, dto.summary, { slug: dto.slug ?? null }),
     relations: groupRelations(unit, dto.relations),
     seo: toSeo(dto.seo),
   }
@@ -373,7 +374,9 @@ function buildBody(
   if (payload.includeInSitemap !== undefined) body.includeInSitemap = payload.includeInSitemap
   if (payload.ownerUserId !== undefined) body.ownerUserId = payload.ownerUserId
   if (payload.fields) {
-    const mapped = fieldsToServer(unit, payload.fields, isCreate)
+    // ⚠️ 同上：送出時也要靠 slug 找到同一份 schema，否則 page 的內文會被當成沒有 schema
+    //    而走原始 JSON 模式的路徑。
+    const mapped = fieldsToServer(unit, payload.fields, isCreate, { slug: payload.slug ?? null })
     body.fields = mapped.fields
     if (mapped.summary !== undefined) body.summary = mapped.summary
   }

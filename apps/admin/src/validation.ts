@@ -15,6 +15,14 @@
 //    只會讓那一頁的結構化資料整段失效（docs/03 §4）。
 
 import type { UnitDefinition, UnitField } from './unit-schema'
+import { resolveSchema } from './api/content-fields'
+import {
+  isEmptyValue,
+  isRawMode,
+  topKindMatches,
+  type StructuredNode,
+  type StructuredSchema,
+} from './structured-schema'
 import type { SeoDraft } from './types'
 
 /** 欄位鍵 → 錯誤訊息。空物件＝通過。 */
@@ -104,6 +112,7 @@ function isCollectionField(field: UnitField): boolean {
 }
 
 function requiredMessage(field: UnitField): string {
+  if (field.type === 'structured') return `「${field.label}」為必填，目前是空的。`
   if (field.type === 'image') return `「${field.label}」為必填，請選一張圖片。`
   if (isCollectionField(field)) return `「${field.label}」為必填，至少要有一列。`
   if (field.type === 'relation-single' || field.type === 'select') return `「${field.label}」為必填，請選擇一個項目。`
@@ -115,7 +124,10 @@ function validateField(field: UnitField, value: unknown): string | null {
   if (field.readOnly && !field.settableOnCreate) return null
 
   if (field.required) {
-    if (field.type === 'image') {
+    if (field.type === 'structured') {
+      // ⚠️ structured 的值可能是物件、陣列或（原始模式的）字串，用 isEmptyValue 一視同仁。
+      if (isEmptyValue(value)) return requiredMessage(field)
+    } else if (field.type === 'image') {
       if (!value) return requiredMessage(field)
     } else if (isCollectionField(field)) {
       if (!Array.isArray(value) || value.length === 0) return requiredMessage(field)
@@ -162,6 +174,82 @@ function validateField(field: UnitField, value: unknown): string | null {
   return null
 }
 
+// ── 結構化欄位 ────────────────────────────────────────────────────────
+
+/**
+ * 結構化欄位的驗證。錯誤鍵用**路徑**（`bodyBlocks[3].image`、`selfCheckGuide.types[1].title`），
+ * `StructuredNode` 會依同一個路徑把紅字顯示在那一格旁邊。
+ *
+ * ⚠️ 兩種模式驗的東西不一樣：
+ *  - **原始 JSON 模式**（值是字串）：只驗語法與最外層型別。深層形狀不驗 ——
+ *    使用者刻意切到這個模式，多半就是因為表單表達不了他要的東西。
+ *  - **表單模式**：遞迴驗 `required`。
+ *
+ * 🔴 最外層型別非驗不可：文章的內文要陣列、頁面要物件，弄反了就是整頁內文不渲染，
+ *    而且 API 與前台都不會報錯。
+ */
+export function validateStructured(
+  field: UnitField,
+  schema: StructuredSchema | undefined,
+  value: unknown,
+): FieldErrors {
+  const errors: FieldErrors = {}
+
+  if (isRawMode(value)) {
+    const raw = value.trim()
+    if (raw === '') return errors
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch (e) {
+      errors[field.key] = `「${field.label}」不是有效的 JSON：${e instanceof Error ? e.message : String(e)}`
+      return errors
+    }
+    const root = schema?.root
+    if (root && !topKindMatches(root, parsed)) {
+      const want = root.kind === 'array' ? '陣列' : '物件'
+      errors[field.key] = `「${field.label}」的最外層必須是 ${want}。`
+    }
+    return errors
+  }
+
+  if (schema) walkNode(schema.root, value, field.key, field.label, errors)
+  return errors
+}
+
+function walkNode(node: StructuredNode, value: unknown, path: string, label: string, errors: FieldErrors) {
+  if (node.kind === 'object') {
+    const row = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>
+    for (const f of node.fields) {
+      const childPath = `${path}.${f.key}`
+      if (f.required && isEmptyValue(row[f.key])) {
+        errors[childPath] = `「${f.label}」為必填。`
+        continue
+      }
+      walkNode(f.node, row[f.key], childPath, f.label, errors)
+    }
+    return
+  }
+
+  if (node.kind === 'array' && Array.isArray(value)) {
+    value.forEach((item, index) => walkNode(node.item, item, `${path}[${index}]`, `${node.itemLabel} ${index + 1}`, errors))
+    return
+  }
+
+  if (node.kind === 'union') {
+    const row = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>
+    const current = String(row[node.discriminator] ?? '')
+    if (!current) {
+      errors[path] = `${label}還沒有選型別。`
+      return
+    }
+    const variant = node.variants.find((v) => v.value === current)
+    // ⚠️ 前台不認識的型別**不驗** —— 我們不懂它的形狀，不該對它有意見。
+    //    它在畫面上是唯讀的，原樣保留。
+    if (variant) walkNode(variant.node, value, path, label, errors)
+  }
+}
+
 export interface BodyFormShape {
   title: string
   slug: string
@@ -173,7 +261,13 @@ export interface BodyFormShape {
  *
  * @param slugRequired 這個單元的 slug 是不是必填（`producesUrl` 且沒有被系統鎖定）。
  */
-export function validateBody(def: UnitDefinition, form: BodyFormShape, slugRequired: boolean): FieldErrors {
+export function validateBody(
+  def: UnitDefinition,
+  form: BodyFormShape,
+  slugRequired: boolean,
+  /** page 的 `bodyBlocks` 要靠 slug 才找得到 schema。 */
+  context: { slug: string | null } = { slug: null },
+): FieldErrors {
   const errors: FieldErrors = {}
 
   if (isBlank(form.title)) errors.title = '標題為必填。'
@@ -199,7 +293,15 @@ export function validateBody(def: UnitDefinition, form: BodyFormShape, slugRequi
     }
 
     const problem = validateField(field, form.fields[field.key])
-    if (problem) errors[field.key] = problem
+    if (problem) {
+      errors[field.key] = problem
+      continue
+    }
+
+    // 結構化欄位的細部錯誤：鍵是路徑，讓紅字顯示在真正出錯的那一格旁邊。
+    if (field.type === 'structured') {
+      Object.assign(errors, validateStructured(field, resolveSchema(field, context), form.fields[field.key]))
+    }
   }
 
   return errors

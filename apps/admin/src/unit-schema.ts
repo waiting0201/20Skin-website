@@ -5,11 +5,16 @@
 // 九個模型的實際宣告在 src/units/*.ts，本檔只定義「宣告要長什麼樣」。
 
 import type { TermType, UnitKey } from './types'
+import type { StructuredSchema } from './structured-schema'
 
 export type FieldType =
   | 'text'
   | 'textarea'
-  | 'richtext' // 區塊編輯器（docs/09 §8：內文以區塊結構儲存）。此輪先以文字區塊模擬，見 EditPage 註解
+  | 'longtext' // 比 textarea 高的純文字框（FAQ 的網頁版答案這種長文）。
+               // ⚠️ 2026-09-17 由 'richtext' 更名：那個名字名不副實——它的實作一直只是
+               //    textarea ＋ min-height，全後台從來沒有富文本。而原本標成 richtext 的
+               //    欄位大多其實是「區塊 JSON」，那些已改用 'structured'。
+  | 'structured' // 區塊 JSON：用 shape 宣告出表單，取代要人手打 JSON 的 textarea（見 structured-schema.ts）
   | 'number'
   | 'date'
   | 'boolean'
@@ -90,6 +95,26 @@ export interface UnitField {
    *    FAQ／據點**一按就 400**，而使用者連一個可以填的欄位都沒看到。
    */
   requiredOnCreate?: boolean
+  /**
+   * `type === 'structured'` 時的形狀宣告。
+   * ⚠️ 形狀的真實來源是前台的型別（`apps/web/app/data/*.ts`），每一份 schema
+   *    的檔頭都要註明對應的檔案與行號 —— 抄錯的症狀是前台那一區靜默消失。
+   */
+  structured?: StructuredSchema
+  /**
+   * `page.bodyBlocks` 專用：**依 slug** 分派不同的 schema。
+   *
+   * ⚠️ 是 slug 不是 systemKey —— 品牌理念、長版故事、法務三頁的 `SystemKey` 都是 null
+   *    （它們是 `PageKind.Free`），前台 `apps/web/app/data/pages.ts` 查的也是 slug。
+   * ⚠️ **查不到就沒有表單**，退回原始 JSON 模式。不要為未知頁面硬套一份 schema：
+   *    套錯的結果是「表單看起來正常、填了、前台什麼都沒變」，比一個坦白的 JSON 框糟得多。
+   */
+  structuredBySlug?: Record<string, StructuredSchema>
+  /**
+   * 用 `structuredBySlug` 時必填：**查不到 schema 的情況下**，這一欄走哪一條寫入路徑。
+   * ⚠️ 少了它，改掉 page 的 slug 之後下一次存檔會把整個內文欄位清空。
+   */
+  structuredWire?: StructuredSchema['wire']
   /** 高風險字詞即時警示要掃描的欄位（docs/02-backend-cms.md §5）。 */
   riskScan?: boolean
 }

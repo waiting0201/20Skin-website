@@ -1,6 +1,7 @@
 // 單元宣告：醫師 Doctor。docs/08-database.md §C-2
 // （Doctors ＋ DoctorTags ＋ DoctorCredentials ＋ DoctorSchedules）。
 import type { UnitDefinition } from '../unit-schema'
+import { doctorBioSchema, doctorPublicationsSchema } from './schemas/misc'
 
 export const doctorUnit: UnitDefinition = {
   key: 'doctor',
@@ -51,8 +52,8 @@ export const doctorUnit: UnitDefinition = {
     },
     { key: 'tags', label: '專長標籤', type: 'tags', group: '學經歷', hint: '列表卡片上的標籤。刻意不走「分類與標籤」模型——專長標籤不產生 URL、不需要 SEO 欄位。' },
     { key: 'expertiseTags', label: '擅長項目', type: 'tags', group: '學經歷', hint: '個人頁的「擅長項目」區塊，與上面的專長標籤是兩個不同的區塊（DoctorTags.Type）。' },
-    { key: 'bio', label: '簡介', type: 'richtext', group: '簡介', riskScan: true },
-    { key: 'publications', label: '著作', type: 'textarea', group: '簡介' },
+    { key: 'bio', label: '簡介', type: 'structured', group: '簡介', structured: doctorBioSchema },
+    { key: 'publications', label: '著作', type: 'structured', group: '簡介', structured: doctorPublicationsSchema },
     {
       key: 'schedules',
       label: '看診時段',

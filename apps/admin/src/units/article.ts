@@ -1,5 +1,6 @@
 // 單元宣告：文章 Article。docs/08-database.md §C-4。
 import type { UnitDefinition } from '../unit-schema'
+import { articleBodySchema } from './schemas/article'
 
 export const articleUnit: UnitDefinition = {
   key: 'article',
@@ -30,7 +31,7 @@ export const articleUnit: UnitDefinition = {
     },
     { key: 'cover', label: '封面圖', type: 'image', group: '圖片', hint: '建議尺寸 1600×1000（16:10）。' },
     { key: 'summary', label: '摘要', type: 'textarea', required: true, group: '內容' },
-    { key: 'bodyBlocks', label: '內文', type: 'richtext', required: true, group: '內容', riskScan: true },
+    { key: 'bodyBlocks', label: '內文', type: 'structured', required: true, group: '內容', structured: articleBodySchema },
     { key: 'readingMinutes', label: '閱讀時間（分鐘）', type: 'number', group: '內容', hint: '可由字數自動估算，此輪先手動填。' },
     {
       key: 'sourceSite',

@@ -2,6 +2,7 @@
 // ⚠️ 四個法規揭露欄位在資料庫是 NOT NULL（遷移腳本會繞過 API 直寫，
 // 只有資料庫約束擋得住）。這裡在 UI 層一併標成必填，兩層防護對齊。
 import type { UnitDefinition } from '../unit-schema'
+import { caseNarrativeSchema } from './schemas/misc'
 
 export const caseUnit: UnitDefinition = {
   key: 'case',
@@ -17,7 +18,7 @@ export const caseUnit: UnitDefinition = {
   fields: [
     { key: 'treatmentId', label: '對應療程', type: 'relation-single', required: true, optionsFromUnit: 'treatment', group: '基本資料', requiredOnCreate: true },
     { key: 'sessionsText', label: '次數與週期', type: 'text', group: '基本資料' },
-    { key: 'narrative', label: '敘述', type: 'richtext', group: '基本資料', riskScan: true },
+    { key: 'narrative', label: '敘述', type: 'structured', group: '基本資料', structured: caseNarrativeSchema },
     {
       key: 'individualVarianceStatement',
       label: '個案差異聲明',

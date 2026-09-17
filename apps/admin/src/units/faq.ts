@@ -31,7 +31,7 @@ export const faqUnit: UnitDefinition = {
     {
       key: 'webAnswer',
       label: '網頁版答案',
-      type: 'richtext',
+      type: 'longtext',
       required: true,
       requiredOnCreate: true,
       group: '答案',

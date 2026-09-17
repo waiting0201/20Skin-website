@@ -774,3 +774,47 @@
    840px：登入頁改單欄，品牌欄收成橫幅
    700px：表單欄位 grid 收 1 欄
    1000px：編輯畫面主欄／工作流側欄收 1 欄 */
+
+/* ── 17. 結構化欄位（StructuredField／StructuredNode）──────────────────
+   21 個「區塊 JSON」欄位的表單。沿用 .adm-field／.adm-repeater 的既有語彙，
+   這裡只補「摺疊列」與「縮排」兩件既有樣式表達不了的事。 */
+.adm-struct__object { display: flex; flex-direction: column; gap: var(--sp-3); }
+.adm-struct__list { display: flex; flex-direction: column; gap: var(--sp-2); }
+
+.adm-struct__row {
+  border: 1px solid var(--line);
+  border-radius: var(--adm-radius);
+  background: var(--surface);
+}
+.adm-struct__row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-alt);
+  border-radius: var(--adm-radius) var(--adm-radius) 0 0;
+}
+.adm-struct__row-body { padding: var(--sp-3); }
+
+.adm-struct__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  padding: 0;
+}
+.adm-struct__caret { color: var(--ink-50); flex: none; }
+.adm-struct__summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.adm-struct__line { display: flex; align-items: flex-start; gap: var(--sp-2); }
+.adm-struct__line-input { flex: 1; }
+.adm-struct__line-actions { display: flex; gap: var(--sp-1); flex: none; }
+/* 貼多行的入口刻意做窄：它不是欄位，是一個工具 */
+.adm-struct__paste { flex: 1; min-width: 12em; resize: vertical; }

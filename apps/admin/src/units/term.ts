@@ -5,6 +5,7 @@
 // src/permissions.ts 的 canCreateTerm／canDeleteTerm，畫面依 termType
 // 呼叫，不在這裡重複判斷。
 import type { UnitDefinition } from '../unit-schema'
+import { ledeSchema } from './schemas/shared'
 
 export const termUnit: UnitDefinition = {
   key: 'term',
@@ -33,7 +34,8 @@ export const termUnit: UnitDefinition = {
         { value: '4', label: '文章標籤' },
       ],
     },
-    { key: 'intro', label: '介紹文案', type: 'textarea', group: '基本資料' },
+    { key: 'intro', label: '介紹文案', type: 'structured', group: '基本資料',
+      structured: ledeSchema('分類頁頂端的一句介紹。') },
     { key: 'cover', label: '封面圖', type: 'image', group: '圖片' },
     {
       key: 'usageCount',

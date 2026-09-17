@@ -13,12 +13,34 @@
 //       ⚠️ 它也不是 `seo.aiSummary` —— 那是 40–60 字的 GEO 直答段落，兩者不可互換。
 //  ③ **圖庫的 sortOrder 由順序決定**：畫面上是拖排順序，資料庫要一個明確的數字。
 //
+//  ④ **區塊 JSON 欄位在畫面上是表單，在 API 是字串。** 21 個欄位存的是 JSON，
+//     編輯畫面拿到的是已經 parse 的 JS 值（`structured-schema.ts`）。這一層負責
+//     parse 與 stringify，**而且要分辨兩條寫入路徑**：
+//     `json-string`（19 欄，走 `JStr`）要送字串，送物件會被靜默寫成 NULL；
+//     `json-value`（文章與頁面的 `bodyBlocks`）送物件。規則宣告在欄位上，
+//     不在這裡 if 單元名 —— 見 `StructuredSchema.wire`。
+//
 // ⚠️ 這裡**不做驗證**，只做形狀轉換。必填、字數、法規揭露四欄那些把關全部在 API
 //    （docs/11 §3），前端重寫一份只會有兩份會各自漂移的規則。
 
 import type { UnitKey } from '../types'
 import { UNIT_REGISTRY } from '../units'
 import type { UnitField } from '../unit-schema'
+import { parseStructured, toWire, type StructuredSchema } from '../structured-schema'
+
+/**
+ * 這一欄該用哪一份 schema。`page.bodyBlocks` 依 slug 分派，其餘用固定的那一份。
+ * 回 undefined ＝ 沒有對應的表單，走原始 JSON 模式。
+ */
+export function resolveSchema(field: UnitField, context: FieldContext): StructuredSchema | undefined {
+  if (field.structuredBySlug) return context.slug ? field.structuredBySlug[context.slug] : undefined
+  return field.structured
+}
+
+/** 解析 schema 需要的上下文。目前只有 page 用得到 slug。 */
+export interface FieldContext {
+  slug: string | null
+}
 
 /** API 的 `fields` 字典。值的型別由單元決定，這裡一律當 unknown 處理。 */
 export type ServerFields = Record<string, unknown>
@@ -98,7 +120,12 @@ function mergeDoctorTags(tags: unknown, expertiseTags: unknown): ServerDoctorTag
  * @param summary 內容主幹的一句話導言（`ContentDetailDto.summary`）。文章的編輯畫面
  *   把它當成一般欄位顯示，所以在這裡塞回 `fields.summary`。
  */
-export function fieldsFromServer(unit: UnitKey, serverFields: ServerFields | null | undefined, summary: string | null): AdminFields {
+export function fieldsFromServer(
+  unit: UnitKey,
+  serverFields: ServerFields | null | undefined,
+  summary: string | null,
+  context: FieldContext = { slug: null },
+): AdminFields {
   const source = serverFields ?? {}
   const out: AdminFields = { ...source }
 
@@ -118,6 +145,10 @@ export function fieldsFromServer(unit: UnitKey, serverFields: ServerFields | nul
   for (const field of UNIT_REGISTRY[unit].fields) {
     if (isCollectionField(field) && !Array.isArray(out[field.key])) {
       out[field.key] = []
+    }
+    // 區塊 JSON → 已 parse 的 JS 值（parse 不了就保持字串＝原始 JSON 模式）。
+    if (field.type === 'structured') {
+      out[field.key] = parseStructured(resolveSchema(field, context), source[field.key])
     }
   }
 
@@ -140,7 +171,12 @@ export interface ServerBodyFields {
  * @param isCreate 新增時為 true。影響 `settableOnCreate` 那幾個欄位要不要送
  *   （`Terms.TermType`／`Pages.PageKind`：建立後不可改，但新增時是必填）。
  */
-export function fieldsToServer(unit: UnitKey, adminFields: AdminFields, isCreate = false): ServerBodyFields {
+export function fieldsToServer(
+  unit: UnitKey,
+  adminFields: AdminFields,
+  isCreate = false,
+  context: FieldContext = { slug: null },
+): ServerBodyFields {
   const def = UNIT_REGISTRY[unit]
   const out: ServerFields = {}
   let summary: string | null | undefined
@@ -161,6 +197,14 @@ export function fieldsToServer(unit: UnitKey, adminFields: AdminFields, isCreate
 
     if (unit === 'doctor' && (field.key === 'tags' || field.key === 'expertiseTags')) {
       // 兩個輸入框合成同一個 tags 陣列，在迴圈外統一處理，這裡跳過。
+      continue
+    }
+
+    if (field.type === 'structured') {
+      // 🔴 `wire` 決定送字串還是送物件。送錯的兩種下場都是靜默的：
+      //    該送字串卻送物件 → `JStr` 回 null → 欄位被清空；
+      //    該送物件卻送字串 → 以前會被雙重編碼（API 已於 2026-09-17 改成兩種都收）。
+      out[field.key] = toWire(resolveSchema(field, context), value, field.structuredWire ?? 'json-string')
       continue
     }
 
