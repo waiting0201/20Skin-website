@@ -66,8 +66,8 @@
 
 .adm-nav { padding: var(--sp-3); flex: 1; }
 .adm-nav__group { margin-bottom: var(--sp-2); }
-/* 分組標題兼開合鈕（accordion）。預設全關，只有「系統」是開的，
-   開合狀態在 AdminLayout.vue 的 openGroups。 */
+/* 分組標題兼開合鈕（accordion，單開式）。預設只有「系統」是開的，
+   開合狀態在 AdminLayout.vue 的 openGroup（單一值，不是每組一個布林）。 */
 .adm-nav__toggle {
   display: flex;
   align-items: center;
@@ -90,10 +90,36 @@
 .adm-nav__chevron {
   font-size: 1.1em;
   line-height: 1;
-  transition: transform .15s ease;
+  transition: transform var(--dur) var(--ease);   /* 與面板同一組節奏 */
 }
 .adm-nav__toggle[aria-expanded="true"] .adm-nav__chevron { transform: rotate(90deg); }
-.adm-nav__items { padding-bottom: var(--sp-2); }
+/* 開合的緩動：用 grid-template-rows 0fr → 1fr，不是 max-height ——
+   max-height 要先猜一個「夠大」的值，猜大了收合會有一段空轉、換組時兩邊
+   節奏對不起來（單開式是一開一關同時在跑，差異看得出來）。
+   ⚠️ 面板不能用 v-show（display:none 無法緩動），所以關著的時候 DOM 還在：
+      必須靠 visibility 把它移出 Tab 焦點順序，否則鍵盤會 tab 進看不見的連結。
+      visibility 沒有中間值，用 transition-delay 讓它「開場立刻顯示、
+      收合等動畫跑完才隱藏」。 */
+.adm-nav__panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur) var(--ease);
+}
+.adm-nav__panel.is-open { grid-template-rows: 1fr; }
+.adm-nav__items {
+  overflow: hidden;
+  min-height: 0;          /* grid 項目的預設 min-height:auto 會擋住收合 */
+  padding-bottom: var(--sp-2);
+  visibility: hidden;
+  transition: visibility 0s linear var(--dur);
+}
+.adm-nav__panel.is-open > .adm-nav__items { visibility: visible; transition-delay: 0s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-nav__panel,
+  .adm-nav__items,
+  .adm-nav__chevron { transition-duration: 0s; transition-delay: 0s; }
+}
 .adm-nav__link--top { margin-bottom: var(--sp-2); }
 .adm-nav__link {
   display: flex;

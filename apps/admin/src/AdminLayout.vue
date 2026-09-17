@@ -53,18 +53,19 @@ const systemNavItems = computed<NavItem[]>(() =>
   })),
 )
 
-// 選單分組（accordion）。預設全關，只有「系統」是開的。
-// 各組獨立開合 —— 不是「開一組就關掉別組」的單開式，因為後台常常要在
-// 內容模型與審核佇列之間來回。
+// 選單分組（accordion）。**單開式：開一組就關掉另一組**（Tim 指定 2026-09-17）。
+// 因此狀態是「哪一組開著」一個值，不是每組一個布林 —— 用布林表的話
+// 「同時兩組都開」在型別上仍是合法狀態，遲早會有人寫出那種寫法。
+// null＝全關（點自己可以收起來）。
 const navGroups = computed(() => [
   { key: 'content', label: '內容模型', items: unitNavItems.value },
   { key: 'system', label: '系統', items: systemNavItems.value },
 ])
 
-const openGroups = ref<Record<string, boolean>>({ content: false, system: true })
+const openGroup = ref<string | null>('system')
 
 function toggleGroup(key: string) {
-  openGroups.value[key] = !openGroups.value[key]
+  openGroup.value = openGroup.value === key ? null : key
 }
 
 function isActive(href: string) {
@@ -75,11 +76,10 @@ function isActive(href: string) {
 // 否則畫面上那一頁是「選單裡看不到的項目」。
 // ⚠️ 只在載入時做一次，不掛 watch：SPA 內部切換不會重載，
 //    使用者手動關掉的組不該又被路由推開。
-for (const group of navGroups.value) {
-  if (group.items.some((item) => item.visible && isActive(item.href))) {
-    openGroups.value[group.key] = true
-  }
-}
+const landedGroup = navGroups.value.find((group) =>
+  group.items.some((item) => item.visible && isActive(item.href)),
+)
+if (landedGroup) openGroup.value = landedGroup.key
 
 const breadcrumb = computed(() => {
   // ⚠️ vue-router 的 base（'/admin/'）已經吃掉 /admin 這一段，
@@ -126,24 +126,32 @@ function onLogout() {
             <button
               type="button"
               class="adm-nav__toggle"
-              :aria-expanded="openGroups[group.key]"
+              :aria-expanded="openGroup === group.key"
               :aria-controls="`adm-nav-${group.key}`"
               @click="toggleGroup(group.key)"
             >
               <span>{{ group.label }}</span>
               <span class="adm-nav__chevron" aria-hidden="true">›</span>
             </button>
-            <div v-show="openGroups[group.key]" :id="`adm-nav-${group.key}`" class="adm-nav__items">
-              <template v-for="item in group.items" :key="item.href">
-                <RouterLink
-                  v-if="item.visible"
-                  class="adm-nav__link"
-                  :to="item.href"
-                  :class="{ 'is-active': isActive(item.href) }"
-                >
-                  {{ item.label }}
-                </RouterLink>
-              </template>
+            <!-- ⚠️ 這裡不用 v-show：display:none 沒有中間值，緩動不起來。
+                 改成永遠渲染、由 .is-open 控制高度（樣式見 admin.css）。 -->
+            <div
+              :id="`adm-nav-${group.key}`"
+              class="adm-nav__panel"
+              :class="{ 'is-open': openGroup === group.key }"
+            >
+              <div class="adm-nav__items">
+                <template v-for="item in group.items" :key="item.href">
+                  <RouterLink
+                    v-if="item.visible"
+                    class="adm-nav__link"
+                    :to="item.href"
+                    :class="{ 'is-active': isActive(item.href) }"
+                  >
+                    {{ item.label }}
+                  </RouterLink>
+                </template>
+              </div>
             </div>
           </div>
         </nav>
