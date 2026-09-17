@@ -53,7 +53,8 @@
    11. 表單                 .adm-form／.adm-field／.adm-input 等
    12. 訊息元件             .adm-alert／.adm-empty／.adm-loading（新）
    13. 特殊表單元件          repeater／tags／hours／relation／upload／risk-hit
-   14. 編輯畫面版面          .adm-editor-layout／.adm-workflow
+   14. 編輯畫面版面          .adm-editor-main（單欄）／.adm-editor-layout（兩欄）
+                            ＋ .adm-form-actions／.btn--save／.btn--danger／.adm-danger-zone
    15. 登入頁               .adm-login（左右分欄，獨立版面）
    16. 小工具               .adm-muted／.adm-divider／.adm-inline-actions
    17. RWD 斷點總覽
@@ -685,8 +686,27 @@
 
 
 /* =========================================================================
-   14. 編輯畫面：主欄 ＋ 右側工作流側欄
+   14. 編輯畫面
+   -------------------------------------------------------------------------
+   兩種版面：
+   ① `.adm-editor-main`  單欄，內容編輯頁（EditPage.vue）用。
+      ⚠️ 2026-09-17 由兩欄改成單欄 —— 右側工作流側欄整個拿掉（Tim 指定：
+         「只需要草稿跟發佈就好」），剩下的兩個動作搬到標題列與頁尾。
+      ⚠️ 寬度刻意壓在 960px，不是「單欄了就攤滿」：那正好是原本主欄的量測寬度
+         （1280 內容上限 − 300 側欄 − 間距），一行的字數不變，既有的兩欄
+         `.adm-field-grid` 也維持原本的欄寬。
+   ② `.adm-editor-layout` 兩欄，首頁版位（HomeSections.vue）仍在用。
    ========================================================================= */
+/* 🔴 寬度上限掛在最外層（含標題列與訊息框），不是只掛內容欄 ——
+   只掛內容欄的話，標題列右側的「發布」會被推到 1280px 的右緣，
+   與下方 960px 的卡片右緣對不齊，看起來像是浮在旁邊的另一個東西。 */
+.adm-editor { max-width: 960px; }
+/* ⚠️ 用 `* + *` 而不是 gap：`.adm-form-actions` 要比段落之間更貼上一段
+   （它是上一段的結尾，不是獨立的一段），gap 給不出兩種間距。 */
+.adm-editor-main > * + * { margin-top: var(--sp-5); }
+.adm-editor-main > .adm-card + .adm-card { margin-top: var(--sp-5); }
+.adm-editor-main > .adm-form-actions { margin-top: var(--sp-4); }
+
 .adm-editor-layout { display: grid; grid-template-columns: 1fr 300px; gap: var(--sp-5); align-items: start; }
 @media (max-width: 1000px) { .adm-editor-layout { grid-template-columns: 1fr; } }
 
@@ -695,6 +715,48 @@
 .adm-workflow__label { color: var(--ink-50); }
 .adm-workflow__actions { display: flex; flex-direction: column; gap: var(--sp-2); }
 .adm-workflow__note { font-size: var(--fs-xs); color: var(--ink-50); line-height: 1.7; }
+
+/* 表單段落的結尾動作列：**靠右，且在白底卡片之外**。
+   ⚠️ 靠右不是排版偏好 —— 靠左時按鈕與下一張卡片切齊同一條左緣，看起來像是
+      下一段的開頭。右緣沒有別的東西，按鈕落在那裡才明確屬於「上面這一段」。
+   說明文字（未存變更、幾張圖待上傳）排在按鈕左邊。 */
+.adm-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  font-size: var(--fs-sm);
+}
+
+/* 🔴 儲存＝綠色，不是品牌藍。
+   結構化欄位的「表單／原始 JSON」切換用的就是 `.btn--primary` 的實心藍
+   （StructuredField.vue），兩者同時出現在畫面上時分不出哪一顆是「存檔」、
+   哪一顆只是切換檢視。綠色沿用狀態色 --adm-ok（＝徽章「已發布」的綠），
+   不引入新色票。
+   ⚠️ 標題列的「發布」維持品牌藍：儲存是留在後台，發布是對外，兩件事不同色。 */
+.btn--save { background: var(--adm-ok); color: #fff; border-color: var(--adm-ok); }
+.btn--save:hover:not(:disabled) { background: #25543C; border-color: #25543C; }
+.btn--save:disabled { opacity: .55; cursor: not-allowed; }
+
+/* 刪除：線框紅，不是實心 —— 實心紅在畫面上比「儲存」還搶眼，而它是這一頁
+   最不該被誤按的東西。 */
+.btn--danger { background: transparent; color: var(--adm-danger); border-color: var(--adm-danger); }
+.btn--danger:hover:not(:disabled) { background: var(--adm-danger-bg); }
+.btn--danger:disabled { opacity: .55; cursor: not-allowed; }
+
+/* 危險區：整頁最後一段，與上面的內容用一條線隔開。
+   🔴 位置就是防護 —— 要捲到底才看得到，而且離兩顆儲存按鈕最遠。 */
+.adm-danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--line);
+}
+.adm-danger-zone__title { font-weight: 700; color: var(--ink); font-size: var(--fs-sm); }
 
 
 /* =========================================================================

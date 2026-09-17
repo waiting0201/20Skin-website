@@ -72,8 +72,11 @@ const saveBody = async () => {
   await page.waitForSelector('.adm-alert--success', { timeout: 25000 })
   return (await page.locator('.adm-alert--success').first().innerText()).trim()
 }
+// ⚠️ 2026-09-17 改：按鈕文字由「直接發布」變成「發布」，而且從右側工作流側欄
+//    搬到標題列（EditPage.vue 的工作流側欄整個拿掉了）。用 `exact: true` 比對，
+//    不然 `hasText: '發布'` 會同時命中「取消發布」。
 const publish = async () => {
-  await page.locator('button', { hasText: '直接發布' }).first().click()
+  await page.getByRole('button', { name: '發布', exact: true }).first().click()
   await page.waitForTimeout(3500)
   return (await page.locator('.adm-alert--success').first().innerText()).trim()
 }

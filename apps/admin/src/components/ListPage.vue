@@ -121,10 +121,20 @@ async function load() {
   }
 }
 
+/**
+ * 進入這個畫面要做的三件事。
+ * ⚠️ **三件事彼此不相依，所以一起發、不要排隊。** 原本是三個 `await` 串起來，
+ *    等於把三趟往返的延遲相加 —— 在 Azure SQL Basic（5 DTU）上，
+ *    光是分類選項那一趟就是整個畫面「開很慢」的主因（見 client.ts termOptions）。
+ * ⚠️ 三支都自己包了 try/catch，所以 Promise.all 不會因為其中一支失敗而
+ *    把另外兩支的結果丟掉。
+ */
+async function loadAll() {
+  await Promise.all([loadCategoryOptions(), loadUnitTotal(), load()])
+}
+
 onMounted(async () => {
-  await loadCategoryOptions()
-  await loadUnitTotal()
-  await load()
+  await loadAll()
   // 有人手打 /admin/{unit}/new 時，UnitEdit.vue 會把他導到這裡並帶上 ?new=1
   // （那條路原本是直接建一筆空白草稿，對五個單元一律 400，見 UnitEdit.vue）。
   // ⚠️ term 排除在外：它的 termType 由上方那兩顆專用按鈕決定，
@@ -139,9 +149,7 @@ watch(() => props.unit, async () => {
   // ⚠️ 換單元一定要清掉 term 專用的篩選：留著的話它在別的單元上是一個
   //    「畫面上看不到、卻真的送出去」的過濾條件（API 會忽略，但下次切回 term 就詭異了）。
   query.termType = ''
-  await loadCategoryOptions()
-  await loadUnitTotal()
-  await load()
+  await loadAll()
 })
 watch([() => query.keyword, () => query.status, () => query.categoryId, () => query.termType, onlyMine], () => { query.page = 1; load() })
 watch(() => query.page, load)
@@ -298,7 +306,8 @@ async function openCreate(override: Record<string, unknown> = {}) {
   errorMessage.value = ''
   createOpen.value = true
 
-  for (const field of createFields.value) {
+  // ⚠️ 一起發，不要排隊：一個欄位一趟往返，串起來等於把延遲相加。
+  await Promise.all(createFields.value.map(async (field) => {
     try {
       if (field.optionsFromTermType) createOptions[field.key] = await adminApi.taxonomy.termOptions(field.optionsFromTermType)
       if (field.optionsFromUnit) createOptions[field.key] = await adminApi.taxonomy.unitOptions(field.optionsFromUnit)
@@ -306,7 +315,7 @@ async function openCreate(override: Record<string, unknown> = {}) {
       createOptions[field.key] = []
       console.error(`載入「${field.label}」選項失敗`, e)
     }
-  }
+  }))
 }
 
 function closeCreate() {

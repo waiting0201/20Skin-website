@@ -1,12 +1,13 @@
 <script setup lang="ts">
 // 通用編輯畫面：九個內容模型共用（docs/09-frontend.md §8）。
-// 左側本文（依單元宣告動態產生欄位）＋ 底部（此輪合併在主欄下方，
-// 版面夠單純時不必真的擠在「最底部」一段）共用 SEO 區塊 ＋ 右側工作流側欄。
+// 單欄，由上而下：發布動作（標題列）→ 本文 → 關聯 → 共用 SEO 區塊 → 排程 → 危險區。
+// ⚠️ 2026-09-17 由「主欄 ＋ 右側工作流側欄」改成單欄，見下方「發布」一節。
 //
 // 權限模型（docs/10-api.md §4、docs/11-backend-design.md §5.4）：
 //   - 本文（含關聯）：{unit}.edit，且醫師角色僅限 OwnerUserId=自己
 //   - SEO 區塊：{unit}.seo（行銷角色的落點，與 edit 完全分離）
-//   - 送審：{unit}.submit　　發布／下架／排程：{unit}.publish　　刪除：{unit}.delete
+//   - 發布／下架／排程：{unit}.publish　　刪除：{unit}.delete
+//   ⚠️ `{unit}.submit`（送審）在這個畫面已經沒有入口，權限碼本身仍然存在。
 // ⚠️ 這裡的權限判斷只管「看不看得到、能不能按」，不是安全邊界——
 // 真正擋得住的是 API 端（見 src/permissions.ts 檔頭註解）。
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
@@ -77,7 +78,6 @@ const canEditBody = computed(() => {
   return true
 })
 const canEditSeo = computed(() => can(permCtx, props.unit, 'seo'))
-const canSubmit = computed(() => can(permCtx, props.unit, 'submit') && record.value?.status === 1)
 const canPublish = computed(() => can(permCtx, props.unit, 'publish'))
 const canDelete = computed(() => {
   if (record.value?.isSystemLocked) return false
@@ -172,9 +172,17 @@ async function load() {
   loadError.value = ''
   optionLoadErrors.value = []
   try {
-    record.value = await adminApi.content.get(props.unit, props.id)
+    // ⚠️ **本文與下拉選項一起發，不要排隊。** 選項查詢不依賴這一筆資料
+    //    （它問的是「有哪些分類／醫師可選」），原本卻是「先等本文回來，
+    //    再一個欄位一趟地串下去」—— 延遲整串相加，療程就是卡在這裡。
+    //    ⚠️ loadOptionsFor 自己包了 try/catch，所以 Promise.all 只會被
+    //    content.get 的失敗中斷，下面那個 catch 的語意沒有改變。
+    const [row] = await Promise.all([
+      adminApi.content.get(props.unit, props.id),
+      ...def.value.fields.map(loadOptionsFor),
+    ])
+    record.value = row
     resetForms()
-    for (const field of def.value.fields) await loadOptionsFor(field)
   } catch (e) {
     if (e instanceof ApiError && e.code === 'NOT_FOUND') notFound.value = true
     else loadError.value = messageOf(e, '載入失敗。')
@@ -185,12 +193,11 @@ async function load() {
 
 onMounted(async () => {
   // 高風險字詞只是輔助提示，取不到不該擋住編輯（docs/02 §5）。
-  try {
-    riskTerms.value = await adminApi.taxonomy.riskTerms()
-  } catch (e) {
-    console.error('載入高風險字詞清單失敗，字詞警示這一輪不作用', e)
-  }
-  await load()
+  // ⚠️ 與 load() 併發：它與本文無關，排在前面等於白白多一趟往返的等待。
+  const risk = adminApi.taxonomy.riskTerms()
+    .then((terms) => { riskTerms.value = terms })
+    .catch((e) => { console.error('載入高風險字詞清單失敗，字詞警示這一輪不作用', e) })
+  await Promise.all([risk, load()])
 })
 
 watch([() => props.unit, () => props.id], load)
@@ -316,9 +323,18 @@ async function updateRelation(key: string, items: RelationItem[]) {
   }
 }
 
-// ── 工作流 ────────────────────────────────────────────────────────────
-const riskFlagsFromSubmit = ref<string[]>([])
-
+// ── 發布 ──────────────────────────────────────────────────────────────
+//
+// 🔴 **2026-09-17：送審那一層拿掉了**（Tim 指定：「只需要草稿跟發佈就好」）。
+//    這個畫面上剩下的狀態只有兩個：草稿與已發布，動作只有「發布／取消發布」。
+//    ⚠️ 拿掉的是**這個畫面的入口**，不是 API 與資料庫的狀態機 ——
+//    `POST /admin/{unit}/{id}/submit`、`ContentReviews`、審核佇列畫面都還在，
+//    首頁版位（HomeSections.vue）也仍是送審制。理由與「版本歷程」那次相同：
+//    端點留著沒有害處，而既有那些卡在「審核中」的資料仍然要有辦法放行
+//    （審核佇列頁還在，而這裡的「發布」對狀態 2 一樣按得下去）。
+//    🔴 因此 `canEditBody` 的 `status === 2` 鎖定**不可以跟著拿掉** ——
+//    API 端 `ContentHandler` 對審核中的內容一律拒絕更新，前端放行只會換來 409。
+//
 // 🔴 **2026-09-16：「發布中，網站重建進行中」那一整套拿掉了。**
 //    前台改成執行期 SSR 之後沒有建置這一步 —— 核准的下一個請求就看得到，
 //    沒有「進行中」這個狀態可以顯示，也沒有東西可以輪詢。
@@ -326,7 +342,7 @@ const riskFlagsFromSubmit = ref<string[]>([])
 const workflowBusy = ref(false)
 
 /**
- * 包住五個工作流動作。**每一個都要包** —— 這五支原本一個 try 都沒有，
+ * 包住發布／下架／排程。**每一個都要包** —— 這幾支原本一個 try 都沒有，
  * API 一出錯（權限不足、狀態機不允許、連不上）就是一個沒有人接的 promise rejection：
  * 畫面完全沒有反應，使用者只會再按一次。
  */
@@ -342,27 +358,19 @@ async function runWorkflow(fallback: string, fn: () => Promise<void>) {
   }
 }
 
-async function submitForReview() {
-  // ⚠️ 原本是「按取消就整個不送審」——但問句問的是「要不要先儲存」，
-  //    按取消的意思是「不要存」，不是「不要送審」。而且送審送的是**已存檔的**
-  //    內容，未存的修改根本不會進審核，所以這裡改成：不存就不送，並說明原因。
-  if (bodyDirty.value) {
-    if (!window.confirm('本文有尚未儲存的變更。送審送出的是已儲存的版本，要先儲存再送審嗎？')) {
-      actionError.value = '已取消送審——未儲存的修改不會進入審核，請先儲存或放棄變更。'
-      return
-    }
-    if (!await saveBody()) return // 存不起來就不要送審，錯誤訊息已經顯示在上面
-  }
-  await runWorkflow('送審失敗。', async () => {
-    const result = await adminApi.content.submit(props.unit, props.id, user!.id, user!.displayName)
-    riskFlagsFromSubmit.value = result.riskFlags
-    record.value = await adminApi.content.get(props.unit, props.id)
-    actionNotice.value = '已送出審核。'
-    actionNoticeKind.value = 'success'
-  })
-}
-
 async function publishNow() {
+  // ⚠️ 未存的修改不會上線。原本這句話只是側欄裡的一行小字，而側欄拿掉之後
+  //    「發布」與「儲存」離得更遠了 —— 所以這裡改成真的擋一下並問清楚，
+  //    問句問的是「要不要先儲存」，按取消＝不存，那就照舊發布已儲存的版本。
+  if (bodyDirty.value || seoDirty.value) {
+    if (window.confirm('有尚未儲存的變更。發布的是已儲存的版本，要先儲存再發布嗎？')) {
+      // 存不起來就不要發布，錯誤訊息已經由 saveBody／saveSeo 顯示在上面。
+      // ⚠️ 兩份都要存：本文與 SEO 是兩顆獨立的按鈕、兩個權限，只存一邊
+      //    等於把另一邊的修改留在畫面上，而使用者以為它一起上線了。
+      if (bodyDirty.value && !await saveBody()) return
+      if (seoDirty.value && !await saveSeo()) return
+    }
+  }
   await runWorkflow('發布失敗。', async () => {
   record.value = await adminApi.content.setPublishState(props.unit, props.id, 3, user!.id)
   // ⚠️ 這行文字原本寫「網站重建中」，是靜態站時代的殘留文案——SSR 之後
@@ -465,7 +473,9 @@ async function removeRecord() {
     <p class="adm-empty__desc">可能已經被刪除，或網址列的 id 打錯了。<RouterLink :to="`/${unit}`">回到{{ def.label }}列表</RouterLink>。</p>
   </div>
 
-  <div v-else-if="record">
+  <!-- ⚠️ max-width 掛在最外層，不是只掛主欄：不然標題列的「發布」會被推到
+       1280px 的右緣，與下方 960px 的內容對不齊，看起來像浮在旁邊。 -->
+  <div v-else-if="record" class="adm-editor">
     <!-- 回列表的逃生口。⚠️ 用固定目的地（該單元的列表）而不是 history.back()：
          直接貼網址進來的人沒有上一頁，而 back 也可能把人送回登入頁或站外。
          走 RouterLink 還有一個好處 —— 會經過 onBeforeRouteLeave 的
@@ -479,9 +489,23 @@ async function removeRecord() {
         <p class="adm-page__desc">
           <StatusBadge :status="record.status" :publish-at="record.publishAt" />
           <span v-if="record.urlPath"> ・ {{ record.urlPath }}</span>
+          <span> ・ 更新於 {{ new Date(record.updatedAt).toLocaleString('zh-TW') }}</span>
         </p>
       </div>
+      <!-- 只剩「草稿 ↔ 發布」兩個動作，所以放在標題列而不是一張卡片裡
+           （Tim 指定 2026-09-17：送審那一層拿掉）。⚠️ 不跟兩顆儲存按鈕
+           同色：儲存是「留在後台」，發布是「對外」，兩件事不該長得一樣。 -->
+      <div v-if="canPublish" class="adm-page__actions">
+        <button v-if="record.status !== 3" type="button" class="btn btn--primary" :disabled="workflowBusy" @click="publishNow">發布</button>
+        <button v-else type="button" class="btn btn--line" :disabled="workflowBusy" @click="unpublishNow">取消發布</button>
+      </div>
     </div>
+
+    <!-- ⚠️ 未存的修改不會上線：這句話原本在側欄裡，側欄拿掉之後要跟著搬到
+         發布按鈕看得到的地方，不然使用者按了「發布」會以為畫面上的改動也一起上線了。 -->
+    <p v-if="canPublish && (bodyDirty || seoDirty)" class="adm-alert adm-alert--warn" style="margin-bottom: var(--sp-4)">
+      目前有尚未儲存的變更。<strong>發布的是已儲存的版本</strong>，請先按下方的儲存。
+    </p>
 
     <p v-if="actionNotice" class="adm-alert" :class="actionNoticeKind === 'info' ? 'adm-alert--info' : 'adm-alert--success'" style="margin-bottom: var(--sp-4)">{{ actionNotice }}</p>
     <p v-if="actionError" class="adm-alert adm-alert--danger" role="alert" style="margin-bottom: var(--sp-4)">{{ actionError }}</p>
@@ -490,373 +514,375 @@ async function removeRecord() {
       下拉選單會是空的——請重新載入這一頁，不要把它當成「沒有可選的項目」而清掉原本的值。
     </p>
 
-    <div class="adm-editor-layout">
-      <!-- ============================ 主欄：本文 ============================ -->
-      <div>
-        <form class="adm-form" @submit.prevent="saveBody">
-          <div class="adm-card">
-            <div class="adm-fieldset">
-              <p class="adm-fieldset__legend">基本資料</p>
-              <div class="adm-field-grid">
-                <div class="adm-field adm-field--span2">
-                  <label class="adm-field__label">標題<span class="adm-field__required">＊</span></label>
-                  <input v-model="bodyForm.title" class="adm-input" :class="{ 'is-invalid': bodyErrors.title }" type="text" :disabled="!canEditBody" maxlength="200">
-                  <p v-if="bodyErrors.title" class="adm-field__error" role="alert">{{ bodyErrors.title }}</p>
-                </div>
-                <!-- ⚠️ 這裡刻意**不再**用 `v-if="def.producesUrl"` 把 FAQ 的 slug 藏起來，
-                     理由見 <script> 裡 slugRequired 的註解：藏起來的結果是 FAQ 永遠存不起來。 -->
-                <div class="adm-field">
-                  <label class="adm-field__label">Slug<span v-if="slugRequired" class="adm-field__required">＊</span></label>
-                  <input v-model="bodyForm.slug" class="adm-input" :class="{ 'is-invalid': bodyErrors.slug }" type="text" :disabled="!canEditBody || slugLocked" maxlength="160">
-                  <p v-if="bodyErrors.slug" class="adm-field__error" role="alert">{{ bodyErrors.slug }}</p>
-                  <p v-if="slugLocked" class="adm-field__hint">系統頁／系統分類不可改 slug（IsSystemLocked）。</p>
-                  <p v-else-if="!def.producesUrl" class="adm-field__hint">FAQ 不輸出獨立網址，這個 slug 是 <code>/faq/</code> 頁內的錨點，但仍是必填。</p>
-                  <p v-else class="adm-field__hint">小寫英數字與連字號，決定這一頁的網址。</p>
-                </div>
-                <div class="adm-field">
-                  <label class="adm-field__label">排序值</label>
-                  <input v-model.number="bodyForm.sortOrder" class="adm-input" type="number" :disabled="!canEditBody">
-                </div>
-                <div class="adm-field">
-                  <label class="adm-checkbox">
-                    <input v-model="bodyForm.includeInSitemap" type="checkbox" :disabled="!canEditBody">
-                    輸出至 sitemap
-                  </label>
-                  <p class="adm-field__hint">與 SEO 區塊的 noIndex 是兩件事，兩者都要設才不會自相矛盾。</p>
-                </div>
+    <!-- 單欄版面。右側的工作流側欄 2026-09-17 移除（見 <script> 末段的說明）——
+         `.adm-editor-layout` 那個兩欄 grid 仍給首頁版位畫面用，這裡不再套。 -->
+    <div class="adm-editor-main">
+      <!-- ============================ 本文 ============================ -->
+      <form id="adm-body-form" class="adm-form" @submit.prevent="saveBody">
+        <div class="adm-card">
+          <div class="adm-fieldset">
+            <p class="adm-fieldset__legend">基本資料</p>
+            <div class="adm-field-grid">
+              <div class="adm-field adm-field--span2">
+                <label class="adm-field__label">標題<span class="adm-field__required">＊</span></label>
+                <input v-model="bodyForm.title" class="adm-input" :class="{ 'is-invalid': bodyErrors.title }" type="text" :disabled="!canEditBody" maxlength="200">
+                <p v-if="bodyErrors.title" class="adm-field__error" role="alert">{{ bodyErrors.title }}</p>
+              </div>
+              <!-- ⚠️ 這裡刻意**不再**用 `v-if="def.producesUrl"` 把 FAQ 的 slug 藏起來，
+                   理由見 <script> 裡 slugRequired 的註解：藏起來的結果是 FAQ 永遠存不起來。 -->
+              <div class="adm-field">
+                <label class="adm-field__label">Slug<span v-if="slugRequired" class="adm-field__required">＊</span></label>
+                <input v-model="bodyForm.slug" class="adm-input" :class="{ 'is-invalid': bodyErrors.slug }" type="text" :disabled="!canEditBody || slugLocked" maxlength="160">
+                <p v-if="bodyErrors.slug" class="adm-field__error" role="alert">{{ bodyErrors.slug }}</p>
+                <p v-if="slugLocked" class="adm-field__hint">系統頁／系統分類不可改 slug（IsSystemLocked）。</p>
+                <p v-else-if="!def.producesUrl" class="adm-field__hint">FAQ 不輸出獨立網址，這個 slug 是 <code>/faq/</code> 頁內的錨點，但仍是必填。</p>
+                <p v-else class="adm-field__hint">小寫英數字與連字號，決定這一頁的網址。</p>
+              </div>
+              <div class="adm-field">
+                <label class="adm-field__label">排序值</label>
+                <input v-model.number="bodyForm.sortOrder" class="adm-input" type="number" :disabled="!canEditBody">
+              </div>
+              <div class="adm-field">
+                <label class="adm-checkbox">
+                  <input v-model="bodyForm.includeInSitemap" type="checkbox" :disabled="!canEditBody">
+                  輸出至 sitemap
+                </label>
+                <p class="adm-field__hint">與 SEO 區塊的 noIndex 是兩件事，兩者都要設才不會自相矛盾。</p>
               </div>
             </div>
-          </div>
-
-          <div
-            v-for="group in [...new Set(def.fields.map((f) => f.group || '內容'))]"
-            :key="group"
-            class="adm-card"
-          >
-            <div class="adm-fieldset">
-              <p class="adm-fieldset__legend">{{ group }}</p>
-              <div class="adm-field-grid">
-                <!-- ⚠️ 這裡刻意**不用** HTML 的 `required`：
-                     ① 圖片、圖庫、標籤、複列這些欄位沒有原生的必填可以用，
-                        兩套並行會變成「有些欄位跳瀏覽器泡泡、有些跳我們的紅字」；
-                     ② 原生驗證擋下來時 submit 事件根本不會發生，`saveBody()`
-                        的驗證與訊息就全部不會跑。驗證只留 validateBody 一條路。 -->
-                <div
-                  v-for="field in def.fields.filter((f) => (f.group || '內容') === group)"
-                  :key="field.key"
-                  class="adm-field"
-                  :class="{ 'adm-field--span2': ['textarea', 'longtext', 'structured', 'repeater', 'gallery', 'hours', 'tags'].includes(field.type) }"
-                >
-                  <label class="adm-field__label">
-                    {{ field.label }}<span v-if="field.required" class="adm-field__required">＊</span>
-                  </label>
-
-                  <!-- text / number / date -->
-                  <input
-                    v-if="['text', 'number', 'date'].includes(field.type)"
-                    class="adm-input"
-                    :type="field.type"
-                    :value="String(bodyForm.fields[field.key] ?? '')"
-                    :disabled="!canEditBody || field.readOnly"
-                    @input="bodyForm.fields[field.key] = ($event.target as HTMLInputElement).value"
-                  >
-
-                  <!-- boolean -->
-                  <label v-else-if="field.type === 'boolean'" class="adm-checkbox">
-                    <input
-                      type="checkbox"
-                      :checked="Boolean(bodyForm.fields[field.key])"
-                      :disabled="!canEditBody || field.readOnly"
-                      @change="bodyForm.fields[field.key] = ($event.target as HTMLInputElement).checked"
-                    >
-                    {{ field.hint ? '' : '是' }}
-                  </label>
-
-                  <!-- textarea / longtext：純文字長文。⚠️ 這裡沒有、也不會有富文本 ——
-                       段落在前台是 `{{ }}` 純文字輸出（Tim 定案 2026-09-17）。 -->
-                  <textarea
-                    v-else-if="field.type === 'textarea' || field.type === 'longtext'"
-                    class="adm-textarea"
-                    :class="{ 'adm-textarea--tall': field.type === 'longtext' }"
-                    :value="String(bodyForm.fields[field.key] ?? '')"
-                    :disabled="!canEditBody || field.readOnly"
-                    @input="bodyForm.fields[field.key] = ($event.target as HTMLTextAreaElement).value"
-                  />
-
-                  <!-- select（靜態選項） -->
-                  <select
-                    v-else-if="field.type === 'select' && !field.optionsFromTermType && !field.optionsFromUnit"
-                    class="adm-select"
-                    :value="String(bodyForm.fields[field.key] ?? '')"
-                    :disabled="!canEditBody || field.readOnly"
-                    @change="bodyForm.fields[field.key] = ($event.target as HTMLSelectElement).value"
-                  >
-                    <option value="">—</option>
-                    <option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                  </select>
-
-                  <!-- relation-single / select 動態選項（分類或另一個內容單元） -->
-                  <select
-                    v-else-if="field.type === 'relation-single' || field.optionsFromTermType || field.optionsFromUnit"
-                    class="adm-select"
-                    :value="String(bodyForm.fields[field.key] ?? '')"
-                    :disabled="!canEditBody || field.readOnly"
-                    @change="bodyForm.fields[field.key] = ($event.target as HTMLSelectElement).value"
-                  >
-                    <option value="">請選擇…</option>
-                    <option v-for="opt in fieldOptions[field.key] ?? []" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                  </select>
-
-                  <!-- structured：區塊 JSON 的表單（見 structured-schema.ts）。
-                       ⚠️ 這些欄位原本全是裸的 textarea，要使用者自己打出
-                       `[{"label":"療程時間","value":"約 30–45 分鐘"}]` 這種東西。 -->
-                  <StructuredField
-                    v-else-if="field.type === 'structured'"
-                    :schema="resolveSchema(field, { slug: record.slug ?? null })"
-                    :model-value="bodyForm.fields[field.key]"
-                    :disabled="!canEditBody"
-                    :path="field.key"
-                    :errors="bodyErrors"
-                    @update:model-value="(v) => (bodyForm.fields[field.key] = v)"
-                  />
-
-                  <!-- image：上傳就在欄位裡，沒有媒體庫可挑（docs/08 §0 決策五）-->
-                  <ImageField
-                    v-else-if="field.type === 'image'"
-                    :model-value="(bodyForm.fields[field.key] as ImageValue | null) ?? null"
-                    :disabled="!canEditBody"
-                    @update:model-value="(v) => (bodyForm.fields[field.key] = v)"
-                  />
-
-                  <!-- gallery：一列一張圖 ＋ 圖說，形狀對齊 TreatmentImages／CaseImages／ClinicPhotos -->
-                  <div v-else-if="field.type === 'gallery'" class="adm-repeater">
-                    <div v-for="(item, idx) in (bodyForm.fields[field.key] as Record<string, unknown>[] | undefined) ?? []" :key="idx" class="adm-repeater__row">
-                      <div class="adm-repeater__fields">
-                        <ImageField
-                          :model-value="(item.image as ImageValue | null) ?? null"
-                          :disabled="!canEditBody"
-                          @update:model-value="(v) => (item.image = v)"
-                        />
-                        <input class="adm-input" type="text" placeholder="圖說" :value="item.caption ?? ''" :disabled="!canEditBody"
-                          @input="item.caption = ($event.target as HTMLInputElement).value">
-
-                        <!-- 逐張的額外欄位。⚠️ 案例圖片的「階段」在 API 是必填，
-                             沒有這一段的話案例根本存不起來（docs/08 §C-5）。 -->
-                        <div v-for="sub in field.galleryItemFields ?? []" :key="sub.key" class="adm-field">
-                          <label class="adm-field__label">{{ sub.label }}</label>
-                          <select
-                            v-if="sub.type === 'select'"
-                            class="adm-select"
-                            :value="String(item[sub.key] ?? '')"
-                            :disabled="!canEditBody"
-                            @change="item[sub.key] = ($event.target as HTMLSelectElement).value"
-                          >
-                            <option value="">—</option>
-                            <option v-for="opt in sub.options ?? []" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                          </select>
-                          <input
-                            v-else
-                            class="adm-input"
-                            :type="sub.type === 'date' ? 'date' : sub.type === 'time' ? 'time' : 'text'"
-                            :value="String(item[sub.key] ?? '')"
-                            :disabled="!canEditBody"
-                            @input="item[sub.key] = ($event.target as HTMLInputElement).value"
-                          >
-                        </div>
-                      </div>
-                      <button type="button" class="btn btn--line btn--sm" :disabled="!canEditBody"
-                        @click="(bodyForm.fields[field.key] as unknown[]).splice(idx, 1)">移除</button>
-                    </div>
-                    <button type="button" class="btn btn--ghost btn--sm" style="align-self:flex-start" :disabled="!canEditBody"
-                      @click="bodyForm.fields[field.key] = [...((bodyForm.fields[field.key] as unknown[]) ?? []), newGalleryItem(field)]">
-                      ＋ 新增圖片
-                    </button>
-                  </div>
-
-                  <!-- tags -->
-                  <div v-else-if="field.type === 'tags'" class="adm-tags">
-                    <span v-for="(tag, idx) in (bodyForm.fields[field.key] as string[] | undefined) ?? []" :key="idx" class="c-tag">
-                      {{ tag }}
-                      <button type="button" class="adm-tags__remove" :disabled="!canEditBody"
-                        @click="(bodyForm.fields[field.key] as string[]).splice(idx, 1)">✕</button>
-                    </span>
-                    <button type="button" class="btn btn--ghost btn--sm" :disabled="!canEditBody"
-                      @click="bodyForm.fields[field.key] = [...((bodyForm.fields[field.key] as string[]) ?? []), '新標籤']">＋ 新增</button>
-                  </div>
-
-                  <!-- repeater -->
-                  <Repeater
-                    v-else-if="field.type === 'repeater'"
-                    :fields="field.repeaterFields ?? []"
-                    :model-value="(bodyForm.fields[field.key] as Record<string, unknown>[]) ?? []"
-                    @update:model-value="(v) => (bodyForm.fields[field.key] = v)"
-                  />
-
-                  <!-- hours -->
-                  <HoursEditor
-                    v-else-if="field.type === 'hours'"
-                    :model-value="hoursFieldValue(field.key)"
-                    @update:model-value="(v) => (bodyForm.fields[field.key] = v)"
-                  />
-
-                  <p v-if="bodyErrors[field.key]" class="adm-field__error" role="alert">{{ bodyErrors[field.key] }}</p>
-                  <p v-if="field.hint" class="adm-field__hint">{{ field.hint }}</p>
-                  <p v-if="(field.minLength || field.maxLength) && field.type !== 'structured'" class="adm-field__count">
-                    {{ String(bodyForm.fields[field.key] ?? '').length }} 字
-                    <span v-if="field.minLength && field.maxLength">（建議 {{ field.minLength }}–{{ field.maxLength }} 字）</span>
-                  </p>
-                  <!-- ⚠️ structured 欄位的高風險字詞掃描改在 StructuredField 裡逐格做
-                       （這裡的值是物件不是字串，掃不到東西）。送審時伺服器仍會自己重掃，
-                       那才是真正記進 ContentReviews.RiskFlags 的那一份。 -->
-                  <p v-if="field.riskScan && field.type !== 'structured' && riskHitsFor(bodyForm.fields[field.key]).length" class="adm-risk-hit">
-                    ⚠️ 偵測到高風險字詞：<strong>{{ riskHitsFor(bodyForm.fields[field.key]).join('、') }}</strong>
-                    ——不會擋下輸入，但送審時會一併記錄供審核者重點檢視。
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="canEditBody" class="adm-inline-actions">
-            <button type="submit" class="btn btn--primary" :disabled="savingBody">
-              <template v-if="savingBody">{{ uploadingImages ? `上傳圖片中（${uploadingImages}/${pendingBodyImages}）…` : '儲存中…' }}</template>
-              <template v-else-if="pendingBodyImages">上傳 {{ pendingBodyImages }} 張圖片並儲存</template>
-              <template v-else>儲存本文</template>
-            </button>
-            <span v-if="bodyDirty" class="adm-muted">有尚未儲存的變更</span>
-            <span v-if="pendingBodyImages" class="adm-muted">（{{ pendingBodyImages }} 張圖片還在瀏覽器裡，尚未上傳）</span>
-          </div>
-          <p v-else class="adm-muted">
-            目前沒有編輯本文的權限{{ def.ownershipRestricted ? '（或這不是你自己的內容）' : '' }}。
-          </p>
-        </form>
-
-        <!-- ============================ 關聯 ============================ -->
-        <div v-if="def.relations?.length" class="adm-card">
-          <p class="adm-fieldset__legend">關聯</p>
-          <div v-for="field in def.relations" :key="field.key" class="adm-field adm-field--span2" style="margin-bottom: var(--sp-4)">
-            <label class="adm-field__label">{{ field.label }}</label>
-            <RelationPicker
-              :field="field"
-              :model-value="record.relations[field.key] ?? []"
-              @update:model-value="(items) => updateRelation(field.key, items)"
-            />
           </div>
         </div>
 
-        <!-- ============================ 共用 SEO 區塊 ============================ -->
-        <form class="adm-card" @submit.prevent="saveSeo">
-          <p class="adm-fieldset__legend">SEO（共用區塊）</p>
-          <div class="adm-field-grid">
-            <div class="adm-field adm-field--span2">
-              <label class="adm-field__label">SEO 標題</label>
-              <input v-model="seoForm.seoTitle" class="adm-input" :class="{ 'is-invalid': seoErrors.seoTitle }" type="text" :disabled="!canEditSeo" placeholder="留空則由內容自動組出" maxlength="200">
-              <p v-if="seoErrors.seoTitle" class="adm-field__error" role="alert">{{ seoErrors.seoTitle }}</p>
-            </div>
-            <div class="adm-field adm-field--span2">
-              <label class="adm-field__label">Meta Description</label>
-              <textarea v-model="seoForm.metaDescription" class="adm-textarea" :class="{ 'is-invalid': seoErrors.metaDescription }" :disabled="!canEditSeo" maxlength="400" />
-              <p v-if="seoErrors.metaDescription" class="adm-field__error" role="alert">{{ seoErrors.metaDescription }}</p>
-              <p class="adm-field__count">{{ (seoForm.metaDescription ?? '').length }} ／ 400 字</p>
-            </div>
-            <div class="adm-field adm-field--span2">
-              <label class="adm-field__label">AI 摘要（40–60 字直答式段落）</label>
-              <textarea v-model="seoForm.aiSummary" class="adm-textarea" :class="{ 'is-invalid': seoErrors.aiSummary }" :disabled="!canEditSeo" maxlength="300" />
-              <p v-if="seoErrors.aiSummary" class="adm-field__error" role="alert">{{ seoErrors.aiSummary }}</p>
-              <p class="adm-field__hint">
-                GEO 策略落地欄位；渲染在頁面最上方，同時輸出至結構化資料。
-                <!-- ⚠️ 兩個數字不一樣，不是筆誤：40–60 是 GEO 的建議值（docs/03 §4），
-                     20–300 是 API 真的會擋下來的範圍（ContentHandler.UpdateSeoAsync）。 -->
-                填了就必須介於 20–300 字，留空則不輸出。
-              </p>
-              <p class="adm-field__count" :class="{ 'is-out-of-range': (seoForm.aiSummary ?? '').length > 0 && ((seoForm.aiSummary ?? '').length < 40 || (seoForm.aiSummary ?? '').length > 60) }">
-                {{ (seoForm.aiSummary ?? '').length }} 字（建議 40–60 字）
-              </p>
-            </div>
-            <div class="adm-field">
-              <label class="adm-field__label">OG 分享圖</label>
-              <ImageField
-                :model-value="seoForm.ogImage"
-                :disabled="!canEditSeo"
-                @update:model-value="(v) => (seoForm.ogImage = v)"
-              />
-            </div>
-            <div class="adm-field">
-              <label class="adm-field__label">Canonical 覆寫</label>
-              <input v-model="seoForm.canonicalOverride" class="adm-input" :class="{ 'is-invalid': seoErrors.canonicalOverride }" type="text" :disabled="!canEditSeo" placeholder="留空＝用這一頁自己的網址">
-              <p v-if="seoErrors.canonicalOverride" class="adm-field__error" role="alert">{{ seoErrors.canonicalOverride }}</p>
-            </div>
-            <div class="adm-field">
-              <label class="adm-checkbox"><input v-model="seoForm.noIndex" type="checkbox" :disabled="!canEditSeo"> noindex</label>
-            </div>
-            <div class="adm-field adm-field--span2">
-              <label class="adm-field__label">結構化資料覆寫（進階，JSON）</label>
-              <textarea v-model="seoForm.structuredDataOverride" class="adm-textarea" :class="{ 'is-invalid': seoErrors.structuredDataOverride }" :disabled="!canEditSeo" placeholder="留空由系統自動產生" />
-              <p v-if="seoErrors.structuredDataOverride" class="adm-field__error" role="alert">{{ seoErrors.structuredDataOverride }}</p>
-              <p class="adm-field__hint">
-                🔴 <strong>填了它，這一頁自動產生的結構化資料（MedicalWebPage、麵包屑等）會整段被取代</strong>，
-                不是疊加上去。留空才是正常情況。
-              </p>
-              <p class="adm-field__hint">
-                JSON 打錯一個逗號，那一頁的結構化資料就整段失效，所以格式檢查在這裡做，沒過就不讓存。
-                ⚠️ 這一區存檔後要<strong>重新送審發布</strong>前台才會套用——前台讀的是已核准的版本快照。
-              </p>
+        <div
+          v-for="group in [...new Set(def.fields.map((f) => f.group || '內容'))]"
+          :key="group"
+          class="adm-card"
+        >
+          <div class="adm-fieldset">
+            <p class="adm-fieldset__legend">{{ group }}</p>
+            <div class="adm-field-grid">
+              <!-- ⚠️ 這裡刻意**不用** HTML 的 `required`：
+                   ① 圖片、圖庫、標籤、複列這些欄位沒有原生的必填可以用，
+                      兩套並行會變成「有些欄位跳瀏覽器泡泡、有些跳我們的紅字」；
+                   ② 原生驗證擋下來時 submit 事件根本不會發生，`saveBody()`
+                      的驗證與訊息就全部不會跑。驗證只留 validateBody 一條路。 -->
+              <div
+                v-for="field in def.fields.filter((f) => (f.group || '內容') === group)"
+                :key="field.key"
+                class="adm-field"
+                :class="{ 'adm-field--span2': ['textarea', 'longtext', 'structured', 'repeater', 'gallery', 'hours', 'tags'].includes(field.type) }"
+              >
+                <label class="adm-field__label">
+                  {{ field.label }}<span v-if="field.required" class="adm-field__required">＊</span>
+                </label>
+
+                <!-- text / number / date -->
+                <input
+                  v-if="['text', 'number', 'date'].includes(field.type)"
+                  class="adm-input"
+                  :type="field.type"
+                  :value="String(bodyForm.fields[field.key] ?? '')"
+                  :disabled="!canEditBody || field.readOnly"
+                  @input="bodyForm.fields[field.key] = ($event.target as HTMLInputElement).value"
+                >
+
+                <!-- boolean -->
+                <label v-else-if="field.type === 'boolean'" class="adm-checkbox">
+                  <input
+                    type="checkbox"
+                    :checked="Boolean(bodyForm.fields[field.key])"
+                    :disabled="!canEditBody || field.readOnly"
+                    @change="bodyForm.fields[field.key] = ($event.target as HTMLInputElement).checked"
+                  >
+                  {{ field.hint ? '' : '是' }}
+                </label>
+
+                <!-- textarea / longtext：純文字長文。⚠️ 這裡沒有、也不會有富文本 ——
+                     段落在前台是 `{{ }}` 純文字輸出（Tim 定案 2026-09-17）。 -->
+                <textarea
+                  v-else-if="field.type === 'textarea' || field.type === 'longtext'"
+                  class="adm-textarea"
+                  :class="{ 'adm-textarea--tall': field.type === 'longtext' }"
+                  :value="String(bodyForm.fields[field.key] ?? '')"
+                  :disabled="!canEditBody || field.readOnly"
+                  @input="bodyForm.fields[field.key] = ($event.target as HTMLTextAreaElement).value"
+                />
+
+                <!-- select（靜態選項） -->
+                <select
+                  v-else-if="field.type === 'select' && !field.optionsFromTermType && !field.optionsFromUnit"
+                  class="adm-select"
+                  :value="String(bodyForm.fields[field.key] ?? '')"
+                  :disabled="!canEditBody || field.readOnly"
+                  @change="bodyForm.fields[field.key] = ($event.target as HTMLSelectElement).value"
+                >
+                  <option value="">—</option>
+                  <option v-for="opt in field.options" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+
+                <!-- relation-single / select 動態選項（分類或另一個內容單元） -->
+                <select
+                  v-else-if="field.type === 'relation-single' || field.optionsFromTermType || field.optionsFromUnit"
+                  class="adm-select"
+                  :value="String(bodyForm.fields[field.key] ?? '')"
+                  :disabled="!canEditBody || field.readOnly"
+                  @change="bodyForm.fields[field.key] = ($event.target as HTMLSelectElement).value"
+                >
+                  <option value="">請選擇…</option>
+                  <option v-for="opt in fieldOptions[field.key] ?? []" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+
+                <!-- structured：區塊 JSON 的表單（見 structured-schema.ts）。
+                     ⚠️ 這些欄位原本全是裸的 textarea，要使用者自己打出
+                     `[{"label":"療程時間","value":"約 30–45 分鐘"}]` 這種東西。 -->
+                <StructuredField
+                  v-else-if="field.type === 'structured'"
+                  :schema="resolveSchema(field, { slug: record.slug ?? null })"
+                  :model-value="bodyForm.fields[field.key]"
+                  :disabled="!canEditBody"
+                  :path="field.key"
+                  :errors="bodyErrors"
+                  @update:model-value="(v) => (bodyForm.fields[field.key] = v)"
+                />
+
+                <!-- image：上傳就在欄位裡，沒有媒體庫可挑（docs/08 §0 決策五）-->
+                <ImageField
+                  v-else-if="field.type === 'image'"
+                  :model-value="(bodyForm.fields[field.key] as ImageValue | null) ?? null"
+                  :disabled="!canEditBody"
+                  @update:model-value="(v) => (bodyForm.fields[field.key] = v)"
+                />
+
+                <!-- gallery：一列一張圖 ＋ 圖說，形狀對齊 TreatmentImages／CaseImages／ClinicPhotos -->
+                <div v-else-if="field.type === 'gallery'" class="adm-repeater">
+                  <div v-for="(item, idx) in (bodyForm.fields[field.key] as Record<string, unknown>[] | undefined) ?? []" :key="idx" class="adm-repeater__row">
+                    <div class="adm-repeater__fields">
+                      <ImageField
+                        :model-value="(item.image as ImageValue | null) ?? null"
+                        :disabled="!canEditBody"
+                        @update:model-value="(v) => (item.image = v)"
+                      />
+                      <input class="adm-input" type="text" placeholder="圖說" :value="item.caption ?? ''" :disabled="!canEditBody"
+                        @input="item.caption = ($event.target as HTMLInputElement).value">
+
+                      <!-- 逐張的額外欄位。⚠️ 案例圖片的「階段」在 API 是必填，
+                           沒有這一段的話案例根本存不起來（docs/08 §C-5）。 -->
+                      <div v-for="sub in field.galleryItemFields ?? []" :key="sub.key" class="adm-field">
+                        <label class="adm-field__label">{{ sub.label }}</label>
+                        <select
+                          v-if="sub.type === 'select'"
+                          class="adm-select"
+                          :value="String(item[sub.key] ?? '')"
+                          :disabled="!canEditBody"
+                          @change="item[sub.key] = ($event.target as HTMLSelectElement).value"
+                        >
+                          <option value="">—</option>
+                          <option v-for="opt in sub.options ?? []" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                        </select>
+                        <input
+                          v-else
+                          class="adm-input"
+                          :type="sub.type === 'date' ? 'date' : sub.type === 'time' ? 'time' : 'text'"
+                          :value="String(item[sub.key] ?? '')"
+                          :disabled="!canEditBody"
+                          @input="item[sub.key] = ($event.target as HTMLInputElement).value"
+                        >
+                      </div>
+                    </div>
+                    <button type="button" class="btn btn--line btn--sm" :disabled="!canEditBody"
+                      @click="(bodyForm.fields[field.key] as unknown[]).splice(idx, 1)">移除</button>
+                  </div>
+                  <button type="button" class="btn btn--ghost btn--sm" style="align-self:flex-start" :disabled="!canEditBody"
+                    @click="bodyForm.fields[field.key] = [...((bodyForm.fields[field.key] as unknown[]) ?? []), newGalleryItem(field)]">
+                    ＋ 新增圖片
+                  </button>
+                </div>
+
+                <!-- tags -->
+                <div v-else-if="field.type === 'tags'" class="adm-tags">
+                  <span v-for="(tag, idx) in (bodyForm.fields[field.key] as string[] | undefined) ?? []" :key="idx" class="c-tag">
+                    {{ tag }}
+                    <button type="button" class="adm-tags__remove" :disabled="!canEditBody"
+                      @click="(bodyForm.fields[field.key] as string[]).splice(idx, 1)">✕</button>
+                  </span>
+                  <button type="button" class="btn btn--ghost btn--sm" :disabled="!canEditBody"
+                    @click="bodyForm.fields[field.key] = [...((bodyForm.fields[field.key] as string[]) ?? []), '新標籤']">＋ 新增</button>
+                </div>
+
+                <!-- repeater -->
+                <Repeater
+                  v-else-if="field.type === 'repeater'"
+                  :fields="field.repeaterFields ?? []"
+                  :model-value="(bodyForm.fields[field.key] as Record<string, unknown>[]) ?? []"
+                  @update:model-value="(v) => (bodyForm.fields[field.key] = v)"
+                />
+
+                <!-- hours -->
+                <HoursEditor
+                  v-else-if="field.type === 'hours'"
+                  :model-value="hoursFieldValue(field.key)"
+                  @update:model-value="(v) => (bodyForm.fields[field.key] = v)"
+                />
+
+                <p v-if="bodyErrors[field.key]" class="adm-field__error" role="alert">{{ bodyErrors[field.key] }}</p>
+                <p v-if="field.hint" class="adm-field__hint">{{ field.hint }}</p>
+                <p v-if="(field.minLength || field.maxLength) && field.type !== 'structured'" class="adm-field__count">
+                  {{ String(bodyForm.fields[field.key] ?? '').length }} 字
+                  <span v-if="field.minLength && field.maxLength">（建議 {{ field.minLength }}–{{ field.maxLength }} 字）</span>
+                </p>
+                <!-- ⚠️ structured 欄位的高風險字詞掃描改在 StructuredField 裡逐格做
+                     （這裡的值是物件不是字串，掃不到東西）。送審時伺服器仍會自己重掃，
+                     那才是真正記進 ContentReviews.RiskFlags 的那一份。 -->
+                <p v-if="field.riskScan && field.type !== 'structured' && riskHitsFor(bodyForm.fields[field.key]).length" class="adm-risk-hit">
+                  ⚠️ 偵測到高風險字詞：<strong>{{ riskHitsFor(bodyForm.fields[field.key]).join('、') }}</strong>
+                  ——不會擋下輸入，但送審時會一併記錄供審核者重點檢視。
+                </p>
+              </div>
             </div>
           </div>
-          <div v-if="canEditSeo" class="adm-inline-actions" style="margin-top: var(--sp-4)">
-            <button type="submit" class="btn btn--primary" :disabled="savingSeo">
-              <template v-if="savingSeo">儲存中…</template>
-              <template v-else-if="pendingSeoImages">上傳 OG 圖並儲存 SEO</template>
-              <template v-else>儲存 SEO</template>
-            </button>
-            <span v-if="seoDirty" class="adm-muted">有尚未儲存的變更</span>
-          </div>
-        </form>
+        </div>
+      </form>
+
+      <!-- ⚠️ 靠右，而且在**表單與卡片之外**。原本是靠左、緊接在最後一張卡片下方，
+           於是它看起來像是下一段（關聯、SEO）的開頭而不是上一段的結尾。
+           說明文字排在按鈕左邊，讓右緣永遠是同一顆按鈕。
+           ⚠️ 按鈕用 `form=` 綁回表單 —— 移到 <form> 外面之後，沒有這個屬性
+           就不會觸發 submit，按下去完全沒有反應。 -->
+      <div v-if="canEditBody" class="adm-form-actions">
+        <span v-if="pendingBodyImages" class="adm-muted">{{ pendingBodyImages }} 張圖片還在瀏覽器裡，尚未上傳</span>
+        <span v-if="bodyDirty" class="adm-muted">有尚未儲存的變更</span>
+        <button type="submit" form="adm-body-form" class="btn btn--save" :disabled="savingBody">
+          <template v-if="savingBody">{{ uploadingImages ? `上傳圖片中（${uploadingImages}/${pendingBodyImages}）…` : '儲存中…' }}</template>
+          <template v-else-if="pendingBodyImages">上傳 {{ pendingBodyImages }} 張圖片並儲存</template>
+          <template v-else>儲存本文</template>
+        </button>
+      </div>
+      <p v-else class="adm-muted">
+        目前沒有編輯本文的權限{{ def.ownershipRestricted ? '（或這不是你自己的內容）' : '' }}。
+      </p>
+
+      <!-- ============================ 關聯 ============================ -->
+      <div v-if="def.relations?.length" class="adm-card">
+        <p class="adm-fieldset__legend">關聯</p>
+        <div v-for="field in def.relations" :key="field.key" class="adm-field adm-field--span2" style="margin-bottom: var(--sp-4)">
+          <label class="adm-field__label">{{ field.label }}</label>
+          <RelationPicker
+            :field="field"
+            :model-value="record.relations[field.key] ?? []"
+            @update:model-value="(items) => updateRelation(field.key, items)"
+          />
+        </div>
       </div>
 
-      <!-- ============================ 右側：工作流側欄 ============================ -->
-      <aside class="adm-workflow">
-        <div class="adm-card">
-          <p class="adm-card__title">工作流</p>
-          <div class="adm-workflow__row"><span class="adm-workflow__label">狀態</span><StatusBadge :status="record.status" :publish-at="record.publishAt" /></div>
-          <div class="adm-workflow__row"><span class="adm-workflow__label">更新時間</span><span>{{ new Date(record.updatedAt).toLocaleString('zh-TW') }}</span></div>
-
-
-          <div class="adm-workflow__actions">
-            <button v-if="canSubmit" type="button" class="btn btn--primary btn--block" :disabled="workflowBusy" @click="submitForReview">送出審核</button>
-            <button v-if="canPublish && record.status !== 3" type="button" class="btn btn--primary btn--block" :disabled="workflowBusy" @click="publishNow">直接發布</button>
-            <button v-if="canPublish && record.status === 3" type="button" class="btn btn--line btn--block" :disabled="workflowBusy" @click="unpublishNow">下架</button>
-            <button v-if="canDelete" type="button" class="btn btn--line btn--block" :disabled="workflowBusy" @click="removeRecord">刪除</button>
+      <!-- ============================ 共用 SEO 區塊 ============================ -->
+      <form id="adm-seo-form" class="adm-card" @submit.prevent="saveSeo">
+        <p class="adm-fieldset__legend">SEO（共用區塊）</p>
+        <div class="adm-field-grid">
+          <div class="adm-field adm-field--span2">
+            <label class="adm-field__label">SEO 標題</label>
+            <input v-model="seoForm.seoTitle" class="adm-input" :class="{ 'is-invalid': seoErrors.seoTitle }" type="text" :disabled="!canEditSeo" placeholder="留空則由內容自動組出" maxlength="200">
+            <p v-if="seoErrors.seoTitle" class="adm-field__error" role="alert">{{ seoErrors.seoTitle }}</p>
           </div>
-          <!-- ⚠️ 未存的修改不會進審核也不會上線：這裡要講出來，不然使用者按了
-               「直接發布」看到「已核准發布」，會以為畫面上這些改動一起上線了。 -->
-          <p v-if="bodyDirty || seoDirty" class="adm-workflow__note">
-            目前有尚未儲存的變更。送審與發布處理的都是<strong>已儲存的版本</strong>，請先按上方的儲存。
-          </p>
-
-          <p v-if="riskFlagsFromSubmit.length" class="adm-risk-hit">
-            送審時掃到高風險字詞：<strong>{{ riskFlagsFromSubmit.join('、') }}</strong>，已隨送審單記錄。
-          </p>
+          <div class="adm-field adm-field--span2">
+            <label class="adm-field__label">Meta Description</label>
+            <textarea v-model="seoForm.metaDescription" class="adm-textarea" :class="{ 'is-invalid': seoErrors.metaDescription }" :disabled="!canEditSeo" maxlength="400" />
+            <p v-if="seoErrors.metaDescription" class="adm-field__error" role="alert">{{ seoErrors.metaDescription }}</p>
+            <p class="adm-field__count">{{ (seoForm.metaDescription ?? '').length }} ／ 400 字</p>
+          </div>
+          <div class="adm-field adm-field--span2">
+            <label class="adm-field__label">AI 摘要（40–60 字直答式段落）</label>
+            <textarea v-model="seoForm.aiSummary" class="adm-textarea" :class="{ 'is-invalid': seoErrors.aiSummary }" :disabled="!canEditSeo" maxlength="300" />
+            <p v-if="seoErrors.aiSummary" class="adm-field__error" role="alert">{{ seoErrors.aiSummary }}</p>
+            <p class="adm-field__hint">
+              GEO 策略落地欄位；渲染在頁面最上方，同時輸出至結構化資料。
+              <!-- ⚠️ 兩個數字不一樣，不是筆誤：40–60 是 GEO 的建議值（docs/03 §4），
+                   20–300 是 API 真的會擋下來的範圍（ContentHandler.UpdateSeoAsync）。 -->
+              填了就必須介於 20–300 字，留空則不輸出。
+            </p>
+            <p class="adm-field__count" :class="{ 'is-out-of-range': (seoForm.aiSummary ?? '').length > 0 && ((seoForm.aiSummary ?? '').length < 40 || (seoForm.aiSummary ?? '').length > 60) }">
+              {{ (seoForm.aiSummary ?? '').length }} 字（建議 40–60 字）
+            </p>
+          </div>
+          <div class="adm-field">
+            <label class="adm-field__label">OG 分享圖</label>
+            <ImageField
+              :model-value="seoForm.ogImage"
+              :disabled="!canEditSeo"
+              @update:model-value="(v) => (seoForm.ogImage = v)"
+            />
+          </div>
+          <div class="adm-field">
+            <label class="adm-field__label">Canonical 覆寫</label>
+            <input v-model="seoForm.canonicalOverride" class="adm-input" :class="{ 'is-invalid': seoErrors.canonicalOverride }" type="text" :disabled="!canEditSeo" placeholder="留空＝用這一頁自己的網址">
+            <p v-if="seoErrors.canonicalOverride" class="adm-field__error" role="alert">{{ seoErrors.canonicalOverride }}</p>
+          </div>
+          <div class="adm-field">
+            <label class="adm-checkbox"><input v-model="seoForm.noIndex" type="checkbox" :disabled="!canEditSeo"> noindex</label>
+          </div>
+          <div class="adm-field adm-field--span2">
+            <label class="adm-field__label">結構化資料覆寫（進階，JSON）</label>
+            <textarea v-model="seoForm.structuredDataOverride" class="adm-textarea" :class="{ 'is-invalid': seoErrors.structuredDataOverride }" :disabled="!canEditSeo" placeholder="留空由系統自動產生" />
+            <p v-if="seoErrors.structuredDataOverride" class="adm-field__error" role="alert">{{ seoErrors.structuredDataOverride }}</p>
+            <p class="adm-field__hint">
+              🔴 <strong>填了它，這一頁自動產生的結構化資料（MedicalWebPage、麵包屑等）會整段被取代</strong>，
+              不是疊加上去。留空才是正常情況。
+            </p>
+            <p class="adm-field__hint">
+              JSON 打錯一個逗號，那一頁的結構化資料就整段失效，所以格式檢查在這裡做，沒過就不讓存。
+              ⚠️ 這一區存檔後要<strong>重新按一次「發布」</strong>前台才會套用——前台讀的是已核准的版本快照。
+            </p>
+          </div>
         </div>
+      </form>
+      <!-- ⚠️ 儲存 SEO 在白底卡片**外面**、靠右，與上方的「儲存本文」同一條規則：
+           按鈕是這一段的結尾，不是下一段的開頭。同樣靠 `form=` 綁回表單。 -->
+      <div v-if="canEditSeo" class="adm-form-actions">
+        <span v-if="seoDirty" class="adm-muted">有尚未儲存的變更</span>
+        <button type="submit" form="adm-seo-form" class="btn btn--save" :disabled="savingSeo">
+          <template v-if="savingSeo">儲存中…</template>
+          <template v-else-if="pendingSeoImages">上傳 OG 圖並儲存 SEO</template>
+          <template v-else>儲存 SEO</template>
+        </button>
+      </div>
 
-        <div v-if="canPublish" class="adm-card">
-          <p class="adm-card__title">排程</p>
+      <!-- ============================ 排程 ============================ -->
+      <!-- ⚠️ 這張卡片是「草稿／發布」的時間版本，不是被拿掉的那一層審核流程，
+           所以側欄收掉之後它留下來，只是換到頁尾。 -->
+      <div v-if="canPublish" class="adm-card">
+        <p class="adm-card__title">排程</p>
+        <div class="adm-field-grid">
           <div class="adm-field">
             <label class="adm-field__label">上線時間</label>
             <input v-model="scheduleForm.publishAt" class="adm-input" type="datetime-local">
             <!-- ⚠️ 2026-09-16 改：原本寫「不是精確發布時間——到點後仍需一次全站重建才會上線」。
                  那是靜態版的事實，SSR 之後已經不對，而且是**低估**了實際行為。 -->
-            <p class="adm-field__hint">到這個時間點，前台就會看得到（不需要重新建置）。留空＝核准後立即上線。</p>
+            <p class="adm-field__hint">到這個時間點，前台就會看得到（不需要重新建置）。留空＝按下「發布」就立即上線。</p>
           </div>
           <div class="adm-field">
             <label class="adm-field__label">下架時間</label>
             <input v-model="scheduleForm.unpublishAt" class="adm-input" :class="{ 'is-invalid': scheduleError }" type="datetime-local">
             <p v-if="scheduleError" class="adm-field__error" role="alert">{{ scheduleError }}</p>
           </div>
-          <button type="button" class="btn btn--ghost btn--block" :disabled="workflowBusy" @click="saveSchedule">儲存排程</button>
         </div>
+      </div>
+      <div v-if="canPublish" class="adm-form-actions">
+        <button type="button" class="btn btn--save" :disabled="workflowBusy" @click="saveSchedule">儲存排程</button>
+      </div>
 
-      </aside>
+      <!-- ============================ 危險區 ============================ -->
+      <!-- 🔴 刪除從側欄搬到這裡（Tim 指定 2026-09-17）。位置本身就是防護：
+           它離兩顆儲存按鈕最遠，而且要捲到底才看得到 —— 原本它與「發布」
+           上下相鄰、同寬同形，差一格就是刪掉一整筆內容。 -->
+      <div v-if="canDelete" class="adm-danger-zone">
+        <div>
+          <p class="adm-danger-zone__title">刪除這筆{{ def.labelSingular }}</p>
+          <p class="adm-field__hint">
+            連同 SEO、關聯與版本快照一起刪除，<strong>無法復原</strong>。
+            只是暫時不想讓它出現在前台的話，請用上方的「取消發布」。
+          </p>
+        </div>
+        <button type="button" class="btn btn--danger" :disabled="workflowBusy" @click="removeRecord">刪除</button>
+      </div>
     </div>
   </div>
 </template>

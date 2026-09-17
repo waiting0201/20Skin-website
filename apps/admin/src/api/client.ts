@@ -316,10 +316,20 @@ const auth = {
 // ── 分類與標籤／關聯目標的選項來源 ───────────────────────────────────
 
 const taxonomy = {
-  /** 某個 TermType 底下的分類選項（療程分類、文章分類、FAQ 分類、文章標籤）。 */
+  /**
+   * 某個 TermType 底下的分類選項（療程分類、文章分類、FAQ 分類、文章標籤）。
+   *
+   * 🔴 **`termType` 一定要送給 API 過濾，不要整份抓回來再自己 filter。**
+   *    term 一張表混了四種東西（實測 406 筆，其中 393 筆是文章標籤），
+   *    而 `/admin/term` 的每一列都要算「使用筆數」——四個相關子查詢，其中一個
+   *    掃 ContentRelations。整份抓＝**5 趟往返 × 每趟 100 列 × 4 個子查詢**，
+   *    只為了挑出 4 個療程分類。療程的清單頁與編輯頁都卡在這裡。
+   *    帶上 termType 之後是 1 趟往返、4 列。
+   * ⚠️ 前端的 filter 保留當防呆（舊版 API 會忽略這個參數），但它不再是主要機制。
+   */
   async termOptions(termType: number): Promise<{ value: string; label: string }[]> {
     const rows = await fetchAllPages<ServerListItem>(async (page, pageSize) =>
-      normalizePaged(await request<ServerPaged<ServerListItem>>('/admin/term', { query: { page, pageSize } })),
+      normalizePaged(await request<ServerPaged<ServerListItem>>('/admin/term', { query: { page, pageSize, termType } })),
     )
     return rows
       .filter((r) => Number((r.fields ?? {}).termType) === termType)
