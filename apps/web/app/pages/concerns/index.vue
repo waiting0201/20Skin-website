@@ -57,7 +57,9 @@ usePageHead({
     <div class="container">
       <div class="cov-grid">
         <article v-for="concern in CONCERNS" :key="concern.slug" class="cov-entry">
+          <!-- ⚠️ `v-if`：沒有對應圖檔時不渲染（見 data/_presentation.ts）。 -->
           <img
+            v-if="concern.icon"
             class="cov-entry__icon"
             :src="concern.icon.src"
             :alt="concern.icon.alt"

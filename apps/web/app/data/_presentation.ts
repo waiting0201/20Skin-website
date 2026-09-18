@@ -24,6 +24,38 @@ export const EYEBROW: Record<string, string> = {
 /** 八個困擾頁共用同一個小標 —— 它標示的是「這是困擾頁」，不是哪一個困擾。 */
 export const CONCERN_EYEBROW = 'SKIN CONCERN'
 
+// ── 八大困擾的科別圖示 ──────────────────────────────────────────────────
+//
+// 🔴 **檔名與 slug 無關**，所以這張對照表不可以用字串拼接代替。
+//    圖檔是設計稿交付的 `spec-01.png`…`spec-08.png`（`mockup/assets/img/`，
+//    由 `sync:assets` 複製進 `public/`），編號是設計稿裡的排列順序。
+//    2026-09-11 內容搬進資料庫時，這裡被改成 `spec-${slug}.png` —— 八個困擾頁的
+//    hero 圖示與總覽頁的八個入口圖示因此**全部 404**（2026-09-18 Tim 回報）。
+//    與 CLAUDE.md 決策 14 那個「拿 Blob 網址的檔名去算路徑」是同一類錯誤：
+//    **算得出一個看起來很合理、但不存在的路徑，而建置與型別檢查都不會有意見。**
+//
+// ⚠️ 圖示是版面素材（決策 14），所以留在這裡而不是資料庫 —— 它跟著設計稿走，
+//    不是院方會想在後台換的東西。
+// ⚠️ **新增第九個困擾時這裡沒有對應的圖**，`concernIconFor()` 因此會回 null，
+//    模板不渲染那個 `<img>`。**不要改成退回某一張預設圖** —— 掛一個別的科別的
+//    線條圖比沒有圖更糟。
+const CONCERN_ICON_FILES: Record<string, string> = {
+  acne: 'spec-01.png',
+  'sensitive-skin': 'spec-02.png',
+  pigmentation: 'spec-03.png',
+  'anti-aging': 'spec-04.png',
+  'hair-loss': 'spec-05.png',
+  'hair-removal': 'spec-06.png',
+  hyperhidrosis: 'spec-07.png',
+  dermatology: 'spec-08.png',
+}
+
+/** 困擾的科別圖示；沒有對應圖檔時回 null（模板要用 `v-if` 跳過，不要硬渲染）。 */
+export const concernIconFor = (slug: string, title: string): { src: string; alt: string } | null => {
+  const file = CONCERN_ICON_FILES[slug]
+  return file ? { src: `/assets/img/${file}`, alt: `${title} 科別圖示` } : null
+}
+
 /** 找不到對應小標時的預設值：用 slug 大寫（既有資料檔原本就是這個規則）。 */
 export const eyebrowFor = (slug: string): string => EYEBROW[slug] ?? slug.toUpperCase()
 

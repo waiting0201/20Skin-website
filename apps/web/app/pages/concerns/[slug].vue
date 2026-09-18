@@ -77,8 +77,11 @@ usePageHead({
           </ol>
         </nav>
 
+        <!-- ⚠️ `v-if`：新增的困擾還沒有對應的科別圖示（檔名不是由 slug 算出來的，
+             見 data/_presentation.ts）。沒有圖就不要渲染那個 <img>——
+             瀏覽器的破圖圖示比留白難看得多。 -->
         <div class="concern-head__icon-row">
-          <img class="concern-head__icon" :src="concern.icon.src" :alt="concern.icon.alt" width="40" height="40">
+          <img v-if="concern.icon" class="concern-head__icon" :src="concern.icon.src" :alt="concern.icon.alt" width="40" height="40">
           <span class="u-eyebrow">{{ concern.eyebrow }}</span>
         </div>
         <h1>{{ concern.title }}</h1>

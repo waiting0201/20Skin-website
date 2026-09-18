@@ -88,7 +88,8 @@ export interface Concern {
   slug: string
   title: string
   eyebrow: string
-  icon: { src: string; alt: string }
+  /** 科別圖示。🔴 **可能是 null**（新增的困擾還沒有對應圖檔），模板要 `v-if`。 */
+  icon: { src: string; alt: string } | null
   /** 總覽頁卡片的一句話簡述，來自 13-concern-overview.html。 */
   overviewDesc: string
   overviewTags: string[]
@@ -113,7 +114,7 @@ import {
   type ContentRecord,
 } from './_content'
 import { formatDisplayDate } from './articles'
-import { CONCERN_EYEBROW } from './_presentation'
+import { CONCERN_EYEBROW, concernIconFor } from './_presentation'
 
 const toImage = (value: unknown, fallbackAlt = ''): Image => {
   const i = img(value)
@@ -224,7 +225,9 @@ function toConcern(ctx: ConcernContext, record: ContentRecord): Concern {
     title: record.title,
     eyebrow: CONCERN_EYEBROW,
     // 圖示是版面素材（八大專科的線條圖），不進資料庫。
-    icon: { src: `/assets/img/spec-${record.slug}.png`, alt: record.title },
+    // 🔴 **檔名與 slug 無關**（`spec-01.png`…`spec-08.png`），一定要查對照表 ——
+    //    這裡原本是 `spec-${record.slug}.png`，八個困擾頁與總覽頁的圖示全部 404。
+    icon: concernIconFor(record.slug as string, record.title),
     overviewDesc: record.summary ?? '',
     overviewTags: treatments.slice(0, 3).map((t) => t.name),
     aiSummary: (record.seo?.aiSummary as string) ?? '',
