@@ -21,7 +21,12 @@ if (!doctor) {
   throw createError({ statusCode: 404, statusMessage: '找不到這位成員' })
 }
 
-const clinicNames: Record<'siji' | 'erlin', string> = { siji: '四季診所', erlin: '二林四季皮膚科' }
+// 🔴 院區名稱查據點清單，**不要再寫回一份寫死的對照表**（2026-09-18）——
+//    名稱是院方在後台改得動的欄位，寫死的話改了前台不跟；而新增第三個據點時，
+//    舊寫法（`Record<'siji' | 'erlin', string>`）會印出 undefined。
+//    這一頁本來就取了 `CLINICS`（下方時段表在用），沒有多打任何一支 API。
+// ⚠️ 查不到就回空字串，不印出錯的名稱。
+const clinicName = (s: string) => findClinic(s)?.name ?? ''
 
 const heroRole = doctor.heroRole ?? doctor.jobTitle
 const displayTags = doctor.expertiseTags ?? doctor.tags
@@ -50,7 +55,7 @@ const jsonLd = (() => {
   }
   base.availableAtOrFrom = doctor.clinics.map((c) => ({
     '@type': 'MedicalClinic',
-    name: clinicNames[c.clinicSlug],
+    name: clinicName(c.clinicSlug),
     address: findClinic(c.clinicSlug)?.address,
   }))
   return base
@@ -62,7 +67,7 @@ usePageHead({
   seo: doctor.seo,
   title: doctor.isPhysician ? `${doctor.name} ${roleLines(doctor.jobTitle)[0] ?? ''}`.trim() : doctor.name,
   description: doctor.isPhysician
-    ? `${doctor.name}醫師，20SKIN美醫集團${roleText(doctor.jobTitle)}${doctor.specialty ? `，${doctor.specialty}專科醫師` : ''}，於${doctor.clinics.map((c) => clinicNames[c.clinicSlug]).join('、')}看診。`
+    ? `${doctor.name}醫師，20SKIN美醫集團${roleText(doctor.jobTitle)}${doctor.specialty ? `，${doctor.specialty}專科醫師` : ''}，於${doctor.clinics.map((c) => clinicName(c.clinicSlug)).join('、')}看診。`
     : `${doctor.name}，20SKIN美醫集團${roleText(doctor.jobTitle)}。`,
   pageCss: '/assets/pages/05-doctor-detail.css',
   path: `/team/${doctor.slug}/`,
@@ -121,7 +126,7 @@ usePageHead({
             <tr v-if="doctor.yearsInPractice"><th>執業年資</th><td>{{ doctor.yearsInPractice }}</td></tr>
             <tr>
               <th>看診據點</th>
-              <td>{{ doctor.clinics.length }} 處（{{ doctor.clinics.map((c) => clinicNames[c.clinicSlug]).join('、') }}）</td>
+              <td>{{ doctor.clinics.length }} 處（{{ doctor.clinics.map((c) => clinicName(c.clinicSlug)).join('、') }}）</td>
             </tr>
             <tr v-if="doctor.specialty"><th>專科別</th><td>{{ doctor.specialty }}</td></tr>
           </tbody>
@@ -303,14 +308,14 @@ usePageHead({
       <div class="grid grid--2">
         <div v-for="assignment in doctor.clinics" :key="assignment.clinicSlug" class="doc-clinic">
           <h3 class="doc-clinic__name c-heading-bar">
-            <a :href="`/clinics/${assignment.clinicSlug}/`">{{ clinicNames[assignment.clinicSlug] }}</a>
+            <a :href="`/clinics/${assignment.clinicSlug}/`">{{ clinicName(assignment.clinicSlug) }}</a>
           </h3>
           <p v-if="assignment.scheduleNote">
             <span class="u-eyebrow">本院區時段</span>{{ assignment.scheduleNote }}
           </p>
           <template v-if="findClinic(assignment.clinicSlug)">
             <table class="c-hours">
-              <caption class="visually-hidden">{{ clinicNames[assignment.clinicSlug] }}門診時間表</caption>
+              <caption class="visually-hidden">{{ clinicName(assignment.clinicSlug) }}門診時間表</caption>
               <thead>
                 <tr>
                   <th scope="col" class="c-hours__corner">門診時間</th>

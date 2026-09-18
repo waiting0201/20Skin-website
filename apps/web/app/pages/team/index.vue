@@ -8,11 +8,16 @@
 //
 // ⚠️ **用查詢字串做，不做 client 端顯示／隱藏。** SSR 之下前者不需要 JS、
 //    可以分享網址、也能被正確算繪；後者會讓「篩選後的畫面」在 HTML 裡看不出來。
+import { getClinicOptions } from '~/data/clinics'
 import { getDoctors } from '~/data/doctors'
 
 const route = useRoute()
 
-const ALL_DOCTORS = await getDoctors()
+// 🔴 **院區這一排跟著據點單元走**（2026-09-18）——名稱、順序、有幾個都由後台決定。
+//    在那之前是寫死的兩筆 `{siji, 四季診所}／{erlin, 二林四季皮膚科}`，於是
+//    「在後台改了據點名稱」前台不跟，而「新增第三個據點」也長不出按鈕。
+//    ⚠️ 與下方專長那四顆的取捨不同：那是刻意只開四個入口，這裡是全部列出。
+const [ALL_DOCTORS, CLINICS] = await Promise.all([getDoctors(), getClinicOptions()])
 
 // 🔴 **這四個詞保留 mockup 的寫死清單**（Tim 定案 2026-09-16）——
 //    後台實際有 14 個 type 1 專長標籤，全列出來會變成 14 顆按鈕，
@@ -34,11 +39,6 @@ if (import.meta.dev) {
   }
 }
 
-const CLINIC_TABS = [
-  { slug: 'siji', label: '四季診所' },
-  { slug: 'erlin', label: '二林四季皮膚科' },
-] as const
-
 const focus = computed(() => {
   const q = route.query.focus
   const v = typeof q === 'string' ? q : ''
@@ -47,7 +47,7 @@ const focus = computed(() => {
 const site = computed(() => {
   const q = route.query.site
   const v = typeof q === 'string' ? q : ''
-  return CLINIC_TABS.some((c) => c.slug === v) ? v : ''
+  return CLINICS.some((c) => c.slug === v) ? v : ''
 })
 
 /** 兩個條件是**交集**（既是雷射光電、又在二林）。切換其中一個時保留另一個。 */
@@ -96,10 +96,17 @@ usePageHead({
   ],
 })
 
-/** 卡片上顯示的看診院區，多院區以頓號連接（例如黃勇學：四季診所、二林四季皮膚科）。 */
+/** 卡片上顯示的看診院區，多院區以「・」連接（例如黃勇學：四季診所・二林四季皮膚科）。
+ *
+ * 🔴 名稱一律查據點清單，**不要寫成 `slug === 'siji' ? A : B`** ——
+ *    那種三元判斷會把任何第三個院區靜默印成二林，而且不會有任何錯誤。
+ * ⚠️ 查不到就整個略過（據點被隱藏或還沒發布時）：寧可少一行字，
+ *    也不要印出一個錯的院區名稱。 */
+const CLINIC_NAMES = new Map(CLINICS.map((c) => [c.slug, c.name]))
 function siteLabel(doctor: (typeof ALL_DOCTORS)[number]) {
   return doctor.clinics
-    .map((c) => (c.clinicSlug === 'siji' ? '四季診所' : '二林四季皮膚科'))
+    .map((c) => CLINIC_NAMES.get(c.clinicSlug))
+    .filter((name): name is string => Boolean(name))
     .join('・')
 }
 </script>
@@ -155,9 +162,9 @@ function siteLabel(doctor: (typeof ALL_DOCTORS)[number]) {
         <!-- ⚠️ 這裡原本連到 `/clinics/siji/`（據點頁）—— 看起來是篩選、按下去卻離開這一頁。 -->
         <a class="c-tag" :class="{ 'is-active': !site }" :href="hrefWith({ site: '' })">全部</a>
         <a
-          v-for="c in CLINIC_TABS" :key="c.slug"
+          v-for="c in CLINICS" :key="c.slug"
           class="c-tag" :class="{ 'is-active': site === c.slug }" :href="hrefWith({ site: c.slug })"
-        >{{ c.label }}</a>
+        >{{ c.name }}</a>
       </div>
     </div>
   </section>

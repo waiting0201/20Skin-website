@@ -268,6 +268,24 @@ function toClinic(faqs: ContentRecord[], nap: Awaited<ReturnType<typeof getClini
   }
 }
 
+/**
+ * 院區的「代號 → 名稱」對照，依據點清單的排序。
+ *
+ * ⚠️ **刻意不用 `getClinics()`** —— 那一支還會拉 FAQ 單元與全站設定（NAP），
+ *    只要名字與順序的頁面（醫師列表）會因此每個請求多打兩支 API。
+ *    `loadUnit` 的去重是同一個請求內共用，所以這裡與 `getDoctors()` 共用同一次取得。
+ *
+ * 🔴 名稱取 `record.title`＝**已發布的快照標題**（決策 14），順序取即時的 `sortOrder`
+ *    （決策 30：拖完立刻生效）。
+ */
+export async function getClinicOptions(): Promise<{ slug: ClinicSlug; name: string }[]> {
+  const clinics = await loadUnit(UNIT.clinic)
+  return clinics
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+    .map((r) => ({ slug: r.slug as ClinicSlug, name: r.title }))
+}
+
 export async function getClinics(): Promise<Clinic[]> {
   const [clinics, faqs, nap] = await Promise.all([
     loadUnit(UNIT.clinic), loadUnit(UNIT.faq), getClinicNap(),
