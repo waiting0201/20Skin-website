@@ -135,7 +135,7 @@ export async function getLegalLinks(): Promise<NavItem[]> {
   }))
 }
 
-export const SOCIAL_LINKS = [
-  { label: '四季診所 Facebook', href: 'https://www.facebook.com/20skin4g88/' },
-  { label: '20SKIN 美醫集團 Facebook', href: 'https://www.facebook.com/20skin.tw' },
-]
+// 🔴 `SOCIAL_LINKS` 2026-09-18 移除 —— 頁尾的社群連結改讀全站設定的 `footer.social.json`
+//    （`SiteFooter.vue` 的 `SITE.socialLinks`）。那一欄後台一直編得動，只是前台不讀，
+//    所以院方怎麼改都不會變。原本寫死的兩筆已由 migration `SeedFooterSocialLinks`
+//    寫進資料庫，**不要再在這裡放一份**。

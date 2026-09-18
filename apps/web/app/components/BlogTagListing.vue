@@ -15,15 +15,20 @@
 // 標籤不是像分類一樣的固定四選一封閉清單（docs/02 §1：標籤頁 30–60 個、
 // 會隨內容成長），所以這裡不驗證 tag 是否在既有清單裡 —— 查無符合的文章時
 // 顯示空狀態，而不是 404。
-import { getTagLabel, listArticlesByTag, formatDisplayDate } from '~/data/articles'
+import { getTagLabel, listArticlesByTag, formatDisplayDate, getArticleCategories } from '~/data/articles'
 
 // ⚠️ `page` 由兩個路由各自傳進來：`/blog/tag/{標籤}/` 與 `/blog/tag/{標籤}/page/{n}/`。
 const props = withDefaults(defineProps<{ tagSlug: string; page?: number }>(), { page: 1 })
 
 const tagSlug = props.tagSlug
-const [tagLabel, paged] = await Promise.all([
+// 🔴 `ARTICLE_CATEGORIES` 2026-09-18 才改成取資料 —— 在那之前這一頁的分類 tab 是
+//    四顆寫死的 <li>（另外兩個列表元件都是 v-for）。症狀不是壞掉而是**不會跟**：
+//    在後台的「分類與標籤」改名、調順序或新增分類，只有標籤頁維持舊的那四顆；
+//    分類被刪掉的話，那一顆會連到 404，而畫面上完全看不出來。
+const [tagLabel, paged, ARTICLE_CATEGORIES] = await Promise.all([
   getTagLabel(tagSlug),
   listArticlesByTag(tagSlug, props.page),
+  getArticleCategories(),
 ])
 
 if (props.page !== paged.page) {
@@ -81,10 +86,9 @@ usePageHead({
       <nav class="c-tabs" aria-label="臻美分享分類">
         <ul class="c-tabs__list">
           <li><a class="c-tabs__btn" href="/blog/" aria-selected="false">全部文章</a></li>
-          <li><a class="c-tabs__btn" href="/blog/medical-aesthetics/" aria-selected="false">醫美新知</a></li>
-          <li><a class="c-tabs__btn" href="/blog/dermatology/" aria-selected="false">皮膚新知</a></li>
-          <li><a class="c-tabs__btn" href="/blog/media/" aria-selected="false">媒體報導</a></li>
-          <li><a class="c-tabs__btn" href="/blog/lectures/" aria-selected="false">演講授課</a></li>
+          <li v-for="cat in ARTICLE_CATEGORIES" :key="cat.slug">
+            <a class="c-tabs__btn" :href="`/blog/${cat.slug}/`" aria-selected="false">{{ cat.label }}</a>
+          </li>
         </ul>
       </nav>
     </div>

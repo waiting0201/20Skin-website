@@ -7,10 +7,16 @@ import { getTreatmentCategories, getTreatments } from '~/data/treatments'
 
 const [treatmentCategories, treatments] = await Promise.all([getTreatmentCategories(), getTreatments()])
 
+// 🔴 **數字與分類名稱一律推導，不要手寫**（首頁 2026-09-15 已經這樣改過，這一頁漏了）。
+//    寫死的「27 項」在療程 09-14 變成 28 之後就是錯的，而且沒有任何東西會在它過期時出聲；
+//    那句話裡的分類順序（光療美顏、光電美容、微針美容…）也早就跟畫面上的實際順序對不上。
+const categoryNames = treatmentCategories.map((c) => c.name).join('、')
+
 usePageHead({
   title: '專業服務',
   description:
-    '27 項療程分為光療美顏、光電美容、微針美容、醫美保養四個分類。已知道方向可直接查索引，不確定則建議先從肌膚困擾查詢症狀。',
+    `${treatments.length} 項療程分為${categoryNames} ${treatmentCategories.length} 個分類。`
+    + '已知道方向可直接查索引，不確定則建議先從肌膚困擾查詢症狀。',
   pageCss: '/assets/pages/12-treatment-overview.css',
   path: '/treatments/',
   jsonLd: breadcrumbJsonLd([
@@ -75,7 +81,7 @@ const faqs = [
       <div class="tov-hero__copy">
         <span class="u-eyebrow">TREATMENTS</span>
         <h1 class="tov-hero__title">專業服務</h1>
-        <p class="tov-hero__lede">27 項療程分為四個分類。已經知道方向可直接從索引進入；還不確定，建議先從「肌膚困擾」查詢症狀。</p>
+        <p class="tov-hero__lede">{{ treatments.length }} 項療程分為 {{ treatmentCategories.length }} 個分類。已經知道方向可直接從索引進入；還不確定，建議先從「肌膚困擾」查詢症狀。</p>
       </div>
       <div class="tov-hero__media">
         <div class="tov-hero__frame">
@@ -119,14 +125,14 @@ const faqs = [
   </section>
 
   <!-- =====================================================================
-       3. 全項目索引（27 項）
+       3. 全項目索引（全部療程）
        ===================================================================== -->
   <section class="section section--alt" id="all">
     <div class="container">
       <div class="c-sechead">
         <div class="c-sechead__text">
           <span class="u-eyebrow">ALL TREATMENTS</span>
-          <h2>全部 27 項</h2>
+          <h2>全部 {{ treatments.length }} 項</h2>
           <p>依分類排列的完整索引，點擊項目可進入該療程的細節頁。</p>
         </div>
       </div>

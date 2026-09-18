@@ -20,7 +20,9 @@ usePageHead({
 
 const entries = [
   { href: '/concerns/', label: '肌膚困擾', desc: '八個常見困擾的成因、判斷指引與對應方向。' },
-  { href: '/treatments/', label: '專業服務', desc: '27 項療程的完整索引，依四個分類排列。' },
+  // ⚠️ 這裡刻意不寫療程項數 —— 這一頁沒有療程資料，為了一個數字多打一次 API
+  //    不划算（決策 14：不做快取，每個請求都是真的往返），而寫死的數字會過期。
+  { href: '/treatments/', label: '專業服務', desc: '全部療程的完整索引，依分類排列。' },
   { href: '/team/', label: '醫療團隊', desc: '14 位成員的專長、看診院區與具名文章。' },
   { href: '/blog/', label: '臻美分享', desc: '醫美新知、皮膚新知、媒體報導與演講授課。' },
   { href: '/cases/', label: '案例分享', desc: '個案紀錄，含條件、次數與時間區間。' },

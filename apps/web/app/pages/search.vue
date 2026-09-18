@@ -237,7 +237,8 @@ watch([result, status, query], ([res, s, q]) => {
         </article>
         <article class="search-browse">
           <h3><a href="/treatments/">專業服務 →</a></h3>
-          <p>27 項療程的完整索引，依四個分類排列。</p>
+          <!-- ⚠️ 不寫項數：這一頁沒有療程資料，而寫死的數字會過期（09-14 的 27→28）。 -->
+          <p>全部療程的完整索引，依分類排列。</p>
         </article>
         <article class="search-browse">
           <h3><a href="/blog/">臻美分享 →</a></h3>

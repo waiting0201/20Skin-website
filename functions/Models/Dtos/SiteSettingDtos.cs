@@ -43,7 +43,26 @@ public sealed class PublicSiteSettingsDto
     /// </para>
     /// </summary>
     public string TrackingIds { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 頁尾的社群連結（設定鍵 <c>footer.social.json</c>）。
+    ///
+    /// <para>
+    /// ⚠️ 2026-09-18 加。在此之前這一欄是<b>後台編得動、前台不理它</b>的欄位：
+    /// 「導覽選單與頁尾」畫面存得進資料庫，但這支公開端點沒有回傳它，
+    /// 前台 <c>navigation.ts</c> 寫死兩筆 Facebook —— 院方改了半天，網站上什麼都不會變。
+    /// </para>
+    ///
+    /// <para>⚠️ 值在資料庫裡是一段 JSON 字串；解析失敗時回空清單，<b>不要讓頁尾害整頁算繪失敗</b>。</para>
+    /// </summary>
+    public List<PublicSocialLinkDto> SocialLinks { get; set; } = [];
+
+    /// <summary>頁尾版權文案（設定鍵 <c>footer.copyright</c>）。同上，2026-09-18 之前前台是寫死的。</summary>
+    public string FooterCopyright { get; set; } = string.Empty;
 }
+
+/// <summary>頁尾社群連結的一筆。<c>Label</c> 同時是無障礙標籤，<c>Url</c> 決定要套哪個圖示。</summary>
+public sealed record PublicSocialLinkDto(string Label, string Url);
 
 /// <summary>後台設定畫面的單一鍵值（docs/10-api.md §3.4）。</summary>
 public sealed class SiteSettingAdminItemDto

@@ -117,7 +117,7 @@ SSR 之後那個位置給了 Nuxt。它負責的 1000 條 301 改由前台的 `p
 | `GET /menu` | 導覽選單與頁尾。`linkKind=1` 的網址由 `ContentItems.UrlPath` 決定，不另存一份 |
 | `GET /redirects/resolve?path=…` | 舊網址解析。**單筆 seek**，命中回 `{ toPath, statusCode }`，未命中 404 |
 | `GET /search?q=` | 站內搜尋。回 `[{ t, u, ti, ex }]`（型別標籤／網址／標題／摘要）。對**已核准版本快照**做 `LIKE` 子字串比對，標題命中排前面。🔴 **不設筆數上限** —— 前台有型別篩選 tab 的筆數，任何上限都會讓那些數字變成謊話，而排序讓截斷變成整類整類地砍掉（[09](09-frontend.md) §4）。上限是語料本身（約 1228 筆／309 KB） |
-| `GET /site-settings/public` | 只回前台需要的鍵：站名、描述、**AI FAQ 啟用開關**、面板文案、轉真人出口。🔴 **收件信箱、追蹤碼等內部設定一律不外露** —— 這一區加東西等於對全世界公開 |
+| `GET /site-settings/public` | 只回前台需要的鍵：站名、描述、**AI FAQ 啟用開關**、面板文案、轉真人出口、GA4／GTM 識別碼、**頁尾社群連結（`footer.social.json`）與版權文案（`footer.copyright`）**。🔴 **收件信箱等內部設定一律不外露** —— 這一區加東西等於對全世界公開。⚠️ 頁尾那兩個鍵 2026-09-18 才補上：在那之前它們是**後台編得動、前台不理它**的欄位（前台 `navigation.ts` 寫死兩筆 Facebook、版權是字面值），院方改了不會有任何反應。⚠️ `footer.social.json` 解析失敗一律回空陣列 —— 它出現在每一頁的頁尾，不可以讓它有機會把整站算繪成 500 |
 
 ⚠️ **回傳的是版本快照本身，不另外定義一組公開 DTO。** 那是刻意的：
 `tools/content-export` 產出的形狀就是前台 `app/data/_content.ts` 的契約（`ContentRecord`）。

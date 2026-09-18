@@ -19,13 +19,29 @@ export interface Image {
   height: number
 }
 
+export interface CaseFilterOption {
+  slug: string
+  label: string
+}
+
 export interface CaseListItem {
   slug: string | null
   title: string
   ageGender: string
   sessions: string
+  /** 卡片上的標籤文字＝`concerns` 的名稱，兩者同源。 */
   tags: string[]
-  concernSlug?: string
+  /**
+   * 這則案例處理的困擾。
+   *
+   * 🔴 **來源是「對應療程」的困擾關聯，不是案例自己的。** 案例在後台只有
+   *    「對應療程」一個關聯（`apps/admin/src/units/case.ts`），沒有困擾欄位 ——
+   *    2026-09-18 之前這裡寫的是 `relationsOf(案例, REL.treatmentToConcern)`，
+   *    而型別 2 是**療程**→困擾，案例身上永遠不會有，所以卡片標籤一直是空的。
+   */
+  concerns: CaseFilterOption[]
+  /** 對應療程所屬的療程分類（「分類與標籤」裡的 term）。 */
+  category: CaseFilterOption | null
 }
 
 export interface CaseTimelineItem {
@@ -110,34 +126,68 @@ const narrativeOf = (record: ContentRecord) =>
   })
 
 export async function getCaseList(): Promise<CaseListItem[]> {
-  const cases = await loadUnit(UNIT.case)
+  // ⚠️ 這一頁因此從「取一個單元」變成三個（療程 ＋ 分類與標籤，後者 406 筆／約 210 KB）。
+  //    不做快取（決策 14），所以每個請求都是真的往返 —— 但 `/treatments/`、`/concerns/`、
+  //    `/faq/`、`/blog/` 早就都是這樣取的（`loadUnit(UNIT.term)`），這裡跟著同一個做法，
+  //    不另外發明一條「只在有兩筆以上案例時才載」的捷徑：那會讓 `category` 的有無取決於
+  //    資料筆數，是「在 dev 用一筆資料測都對、上線才壞」的那種陷阱。
+  const [cases, treatments, terms] = await Promise.all([
+    loadUnit(UNIT.case),
+    loadUnit(UNIT.treatment),
+    loadUnit(UNIT.term),
+  ])
+
   return cases
   .slice()
   .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
   .map((record) => {
     const n = narrativeOf(record)
+    // 案例 →（對應療程）→ 困擾與療程分類。兩段都經過療程，案例自己沒有這些欄位。
+    const treatment = treatments.find((t) => t.id === record.fields.treatmentId)
+    const term = terms.find((x) => x.id === treatment?.fields.categoryTermId)
+    const concerns = relationsOf(treatment, REL.treatmentToConcern)
+      .map((r) => ({ slug: r.toSlug as string, label: r.toTitle as string }))
+
     return {
       slug: record.slug,
       title: record.title,
       ageGender: n.facts?.condition ?? '',
       sessions: (record.fields.sessionsText as string) ?? '',
-      tags: relationsOf(record, REL.treatmentToConcern).map((r) => r.toTitle as string),
+      tags: concerns.map((c) => c.label),
+      concerns,
+      category: term ? { slug: term.slug as string, label: term.title } : null,
     }
   })
 }
 
-export const CASE_FILTER_CONCERNS = [
-  { label: '痘痘・粉刺', href: null },
-  { label: '斑點・色素沉澱', href: null },
-  { label: '抗老・緊緻', href: null },
-  { label: '敏感肌', href: null },
-]
+/**
+ * 列表上方兩排篩選的選項 —— **由實際存在的案例推導**。
+ *
+ * 🔴 2026-09-18 之前這兩排是照抄 mockup 的字面值，七顆按鈕裡六顆的 `href` 是 `null`
+ *    （渲染成 `#`），按下去毫無反應；而且那些名稱與後台的困擾／療程分類各存一份，
+ *    改了後台不會跟。同一類問題在醫師列表已於 2026-09-16 修過（用查詢字串做篩選）。
+ *
+ * 🔴 **少於兩個選項就回空清單** —— 只有一個選項的篩選列不是篩選，是裝飾：
+ *    按下去結果與「全部」一模一樣。案例只有一則時兩排都會整個不出現，這是刻意的。
+ *
+ * ⚠️ 順序＝在案例清單裡第一次出現的順序（案例本身已依 `sortOrder` 排好），
+ *    不另外去對困擾或分類的排序 —— 這排東西描述的是「現在有哪些案例」。
+ */
+export function caseFilters(list: CaseListItem[]): {
+  concerns: CaseFilterOption[]
+  treatments: CaseFilterOption[]
+} {
+  const dedupe = (options: CaseFilterOption[]) =>
+    [...new Map(options.map((o) => [o.slug, o])).values()]
 
-export const CASE_FILTER_TREATMENTS = [
-  { label: '光療美顏', href: '/treatments/laser/' },
-  { label: '光電美容', href: null },
-  { label: '微針美容', href: null },
-]
+  const concerns = dedupe(list.flatMap((c) => c.concerns))
+  const categories = dedupe(list.map((c) => c.category).filter((c) => c !== null))
+
+  const usable = (options: CaseFilterOption[]) =>
+    list.length >= 2 && options.length >= 2 ? options : []
+
+  return { concerns: usable(concerns), treatments: usable(categories) }
+}
 
 export const CASE_HOW_TO_READ = [
   { title: '一、個案條件', text: '年齡層、性別與起點膚況不同，能參考的程度就不同。' },

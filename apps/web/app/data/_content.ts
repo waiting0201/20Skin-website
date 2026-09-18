@@ -126,6 +126,14 @@ export interface PublicSiteSettings {
    *    一段任意的 `<script>`。理由見 API 的 `PublicSiteSettingsDto.TrackingIds`。
    */
   trackingIds: string
+  /**
+   * 頁尾社群連結。
+   * ⚠️ 2026-09-18 接上。在那之前這一欄是「後台編得動、前台不理它」——
+   *    `navigation.ts` 寫死兩筆 Facebook，院方在後台怎麼改都不會變。
+   */
+  socialLinks: { label: string, url: string }[]
+  /** 頁尾版權文案。同上，2026-09-18 之前前台是寫死的字串。 */
+  footerCopyright: string
 }
 
 const EMPTY_SETTINGS: PublicSiteSettings = {
@@ -137,6 +145,10 @@ const EMPTY_SETTINGS: PublicSiteSettings = {
   aiFaqHandoffBookingUrl: '',
   aiFaqHandoffLineUrl: '',
   trackingIds: '',
+  // ⚠️ 退回值刻意留空：連不上 API 時頁尾少兩樣東西，比顯示一份可能已經被院方改掉的
+  //    舊資料好。版權那一行由 SiteFooter 自己補上不帶年份的退路。
+  socialLinks: [],
+  footerCopyright: '',
 }
 
 /** 全站設定。同樣是每個請求取一次。取不到時回預設值，不讓整頁算繪失敗。 */
