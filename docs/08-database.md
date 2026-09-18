@@ -560,6 +560,8 @@ hero  specialties  featured-treatments  latest-articles  doctors  clinics  brand
 
 `HomeSectionItems`：`Id`, `HomeSectionId` FK, `ContentItemId` FK, `SortOrder`
 
+🔴 **`doctors` 與 `clinics` 兩個版位的名單不從這張表讀**（2026-09-18，決策 30）。前台 `GET /home` 對這兩個 `SectionKey` 改成算繪當下取整個單元、依單元自己的 `ContentItems.SortOrder` 排（`PublicContentHandler.AutoSections`）—— 它們原本挑的就是整個單元（14/14、2/2），留著等於同一批內容有兩份順序。⚠️ **既有的列不刪**（切回手挑時還在，理由同 §G-3 的自動子項目），只是沒有人讀。
+
 ⚠️ **這張表只有 `ContentItemId`，沒有任何 `Title` 或 `Text` 欄位，是刻意的。** [02](02-backend-cms.md) §3：「每個版位只能挑選已存在的內容，不能另打一份文案」—— 舊站 `index2.php` 的病根就是首頁自成一份資料、與內頁長期不同步。**在 schema 裡不給文案欄位，這件事就不可能再發生。**
 
 唯一例外是 `hero` 主視覺輪播（沒有對應的站內內容），放在 `HomeSections.Settings` 的 JSON 裡：

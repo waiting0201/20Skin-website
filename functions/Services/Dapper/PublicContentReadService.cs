@@ -24,7 +24,9 @@ public sealed record PublicContentRow(
 /// 選單用後者 —— 名稱留空的節點是靠它顯示的，用即時值等於「在後台改了名稱、還沒發布，
 /// 全站每一頁的選單當場就換掉」（決策 14）。
 /// </para>
-/// <para>⚠️ 其餘呼叫端（關聯卡片、FAQ 分類）維持用 <c>Title</c>，那是既有行為，這次不一起改。</para>
+/// <para>🔴 <b>2026-09-18 起關聯卡片也改用 <c>SnapshotTitle</c></b>（決策 30）——
+/// 首頁版位、選單、關聯卡片三處現在是同一條規則。
+/// ⚠️ FAQ 分類那一處（<c>SearchHandler</c>）只拿 <c>UrlPath</c>，沒有用到標題。</para>
 /// </summary>
 public sealed record RelationTargetRow(
     int Id, byte ContentType, string? Slug, string? UrlPath, string Title, bool IsVisible,
@@ -187,6 +189,23 @@ public interface IPublicContentReadService
     Task<IReadOnlyList<MenuAutoChildRow>> GetMenuAutoChildrenAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// 「自動列出全部」的首頁版位成員（2026-09-18，決策 30）。
+    ///
+    /// <para>
+    /// 🔴 <b>醫師與據點兩個版位的名單與順序都跟著單元走，不吃首頁快照裡那份名單。</b>
+    /// 在此之前那兩個版位是把整個單元逐筆「挑」進 <c>HomeSectionItems</c>
+    /// （正式資料是 14/14 與 2/2），於是同一批內容有兩份順序 ——
+    /// 在「內容 → 醫師」拖一次，首頁不會跟，而且兩邊都沒有任何徵兆。
+    /// 這與選單 2026-09-18 那次（<see cref="GetMenuAutoChildrenAsync"/>）是同一條理由。
+    /// </para>
+    ///
+    /// <para>⚠️ 條件與其他公開讀取一致：<c>可見性 ＋ UrlPath IS NOT NULL</c>，
+    /// 順序一律該單元的 <c>SortOrder</c>（＝內容清單拖曳的那一個，即時值）。</para>
+    /// </summary>
+    Task<IReadOnlyList<HomeAutoItemRow>> GetHomeAutoItemsAsync(
+        IReadOnlyCollection<byte> contentTypes, CancellationToken ct = default);
+
+    /// <summary>
     /// sitemap 要收的網址。條件與 docs/08 §H 末段一致：
     /// <c>可見性 ＋ IncludeInSitemap = 1 ＋ UrlPath IS NOT NULL</c>。
     /// <para>⚠️ FAQ 沒有獨立網址（<c>UrlPath</c> 為 NULL），標籤頁 <c>IncludeInSitemap = 0</c>。</para>
@@ -209,6 +228,13 @@ public sealed record PublicMenuRow(
 
 /// <summary>「自動帶入單元」的一列。<c>Source</c> 是 <see cref="MenuAutoChildren"/>。</summary>
 public sealed record MenuAutoChildRow(byte Source, string Title, string UrlPath, int SortOrder, int Id);
+
+/// <summary>
+/// 「自動列出全部」的首頁版位成員一列。
+/// <para>⚠️ <c>Title</c> 已經是<b>已發布快照</b>裡的（見 <c>SnapshotTitle</c>），不是工作副本。</para>
+/// </summary>
+public sealed record HomeAutoItemRow(
+    int Id, byte ContentType, string? Slug, string UrlPath, string Title, int SortOrder);
 
 /// <summary>
 /// sitemap 的一列。<c>LastModified</c> 給 <c>&lt;lastmod&gt;</c> 用。
@@ -492,6 +518,30 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
             ArticleCategoryTerm = (byte)TermType.ArticleCategory,
         }, cancellationToken: ct));
 
+        return rows.AsList();
+    }
+
+    public async Task<IReadOnlyList<HomeAutoItemRow>> GetHomeAutoItemsAsync(
+        IReadOnlyCollection<byte> contentTypes, CancellationToken ct = default)
+    {
+        if (contentTypes.Count == 0) return [];
+
+        using var connection = factory.Create();
+
+        // 🔴 標題取「已發布快照」的（{SnapshotTitle}），與選單、ShapeAsync 同一條規則 ——
+        //    用 ci.Title 等於「在後台改了名稱、還沒發布，首頁那張卡片當場就換掉」。
+        // ⚠️ UrlPath IS NOT NULL：沒有網址的內容渲染出來就是一張連到 # 的卡片。
+        var sql = $"""
+            SELECT ci.Id, ci.ContentType, ci.Slug, ci.UrlPath, {SnapshotTitle}, ci.SortOrder
+            {FromPublished}
+            WHERE {Visibility.PublicFilter}
+              AND ci.ContentType IN @ContentTypes
+              AND ci.UrlPath IS NOT NULL
+            ORDER BY ci.ContentType, ci.SortOrder, ci.Id
+            """;
+
+        var rows = await connection.QueryAsync<HomeAutoItemRow>(new CommandDefinition(
+            sql, new { ContentTypes = contentTypes, Now = Clock.UtcNow }, cancellationToken: ct));
         return rows.AsList();
     }
 

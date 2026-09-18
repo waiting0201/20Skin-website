@@ -1,11 +1,14 @@
 <script setup lang="ts">
 // 首頁版位編排（/home-sections）—— 規格見 docs/02 §3、docs/08 §G-2。
 //
-// 七個版位為種子資料，可停用、可排序，不可新增刪除。除了 hero（主視覺輪播，
-// 沒有對應的站內內容，存在 Settings JSON）之外，每個版位都只能
-// 從既有內容裡「挑選」，不能另打文案——這裡刻意重用 RelationPicker（跟九個
-// 內容模型編輯畫面的「關聯」欄位同一顆元件），選項一律來自 adminApi.taxonomy
-// .unitOptions()，UI 上沒有任何自由文字輸入欄位可以填內容本文。
+// 七個版位為種子資料，不可新增刪除。可以「挑選」的版位一律只能挑既有內容、
+// 不能另打文案——這裡刻意重用 RelationPicker（跟九個內容模型編輯畫面的「關聯」
+// 欄位同一顆元件），UI 上沒有任何自由文字輸入欄位可以填內容本文。
+//
+// 🔴 **這一頁真正編得動的只有三個半版位**（2026-09-18 起）：
+//    精選療程、最新文章、品牌理念摘要（挑選），加上 hero（輪播圖）。
+//    醫師與據點是**自動列出全部**（決策 30），八大專科入口的挑選器 2026-09-17 拿掉
+//    （決策 23）—— 三者都是「後台編得動、前台不理它」或「兩份順序」的來源。
 //
 // 🔴 **2026-09-17：主視覺的輪播圖改成在這裡維護**（Tim 指定）。在此之前這一區
 //    是一段「要換圖請洽工程」的警告 —— 因為舊的表單假設 `hero.settings` 是
@@ -80,8 +83,8 @@ const sortedSections = computed(() => [...sections].sort((a, b) => a.sortOrder -
 
 /**
  * 🔴 **主視覺自己一欄**（Tim 指定 2026-09-18：「把主視覺輪播放過去」右邊那片空白）。
- *    它是七個版位裡唯一「有東西可以編」的（輪播圖 ＋ 圖說），其餘六個只有一個
- *    開關加一個挑選器 —— 主欄因此短、右欄因此有內容，空白就被填掉了。
+ *    它是七個版位裡唯一「有表單可以填」的（輪播圖 ＋ 圖說），其餘六個最多只有
+ *    一個挑選器 —— 主欄因此短、右欄因此有內容，空白就被填掉了。
  * ⚠️ 判斷用 `schemaOf()` 而不是寫死 `'hero'`：哪天再有第二個版位長出設定表單，
  *    它會自己跟著搬過去，而不是靜悄悄地留在主欄底下。
  */
@@ -314,7 +317,10 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
                 <p class="adm-card__title" style="margin-bottom: 0; display: flex; align-items: center; gap: var(--sp-2)">
                   {{ section.title }}
                 </p>
-                <p v-if="section.targetUnit" class="adm-field__hint">
+                <p v-if="section.autoAll && section.targetUnit" class="adm-field__hint">
+                  這一區會自動列出全部的{{ UNIT_REGISTRY[section.targetUnit].label }}，順序跟著清單走。
+                </p>
+                <p v-else-if="section.targetUnit" class="adm-field__hint">
                   內容來源：{{ UNIT_REGISTRY[section.targetUnit].label }}——只能從既有的{{ UNIT_REGISTRY[section.targetUnit].label }}挑選，不能另打文案。
                 </p>
                 <p v-else class="adm-field__hint">
@@ -332,11 +338,22 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
                     前台會留下一塊只有標題與英文小標的空白區，比「關掉」更糟。
                  ⚠️ `isEnabled` 仍然照讀照送（原值原樣回去），只是畫面上沒有入口可以改它。 -->
 
-            <!-- 五個版位：只能挑選既有內容
-                 ⚠️ **是五個不是六個** —— specialties 的挑選器已於 2026-09-17 拿掉
-                 （它存進 HomeSectionItems，而前台讀的是 settings，見 api/site.ts 的
-                 HOME_SECTION_META）。 -->
-            <div v-if="section.targetUnit">
+            <!-- 🔴 **自動列出全部的版位（醫師、據點）沒有挑選器**（Tim 指定 2026-09-18，
+                 決策 30）。它們原本挑的就是整個單元（14/14、2/2），等於同一批內容
+                 有兩份順序 —— 在「內容 → 醫師」拖一次，首頁不會跟，而且兩邊都沒有
+                 任何徵兆。現在名單與順序都由那個清單決定，**改完立刻生效，
+                 不必回這一頁按發布**（前台走即時值，見 PublicContentHandler.AutoSections）。 -->
+            <p v-if="section.autoAll && section.targetUnit" class="adm-field__hint">
+              要增減或調整順序，請到
+              <RouterLink :to="`/${section.targetUnit}`">{{ UNIT_REGISTRY[section.targetUnit].label }}</RouterLink>
+              的清單拖曳排序、或發布／取消發布那一筆。在那裡改完前台立刻就會變，不用回到這一頁按發布。
+            </p>
+
+            <!-- 兩個版位：只能挑選既有內容（精選療程 4/28、最新文章 4/1100，真的是策展）
+                 ⚠️ specialties 的挑選器 2026-09-17 拿掉（它存進 HomeSectionItems，
+                 而前台讀的是 settings，見 api/site.ts 的 HOME_SECTION_META）；
+                 醫師與據點 2026-09-18 拿掉（上面那一段）。 -->
+            <div v-else-if="section.targetUnit">
               <RelationPicker
                 v-if="canEdit"
                 :field="relationFieldFor(section)"
@@ -359,6 +376,9 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
               八大專科入口的標題、連結與圖示存在版位設定裡，儲存時會原樣保留。
               要增刪或換圖請洽工程端。
             </p>
+            <!-- ⚠️ 自動版位的 `items` **仍然原樣往返**（`toRelationItems` 沒有被呼叫，
+                 但 `section.items` 原封不動跟著 putSections 送回去）——
+                 切回手挑時那份名單還在，與選單那次同一條（決策 29）。 -->
           </div>
 
           <div v-if="canEdit" class="adm-form-actions">

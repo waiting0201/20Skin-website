@@ -191,9 +191,15 @@ public sealed class PublicContentHandler(
     /// </para>
     ///
     /// <para>
-    /// ⚠️ <b>版位「引用了哪幾筆」來自快照，但每一筆的顯示欄位用的是現在的值。</b>
-    /// 快照裡的標題是核准當下那一份；內容後來改了標題、改了網址（會自動補 301）
-    /// 都必須跟著走，否則首頁會出現連到舊網址的卡片。
+    /// 🔴 <b>醫師與據點兩個版位不吃快照裡的名單，改成自動列出整個單元</b>
+    /// （2026-09-18，決策 30；<see cref="AutoSections"/>）。名單與順序都跟著單元走。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ <b>其餘版位「引用了哪幾筆」來自快照，網址用現在的值、標題用已發布的快照。</b>
+    /// 網址改了要跟著走（否則首頁會連到舊網址），而標題是內容性欄位 ——
+    /// 用 <c>ContentItems.Title</c> 等於「在後台改了標題、還沒發布，首頁卡片當場就換掉」
+    /// （決策 14 的同一條，選單 2026-09-18 才修過一次）。
     /// </para>
     ///
     /// <para>
@@ -205,27 +211,65 @@ public sealed class PublicContentHandler(
         var snapshotJson = await content.GetHomeSnapshotAsync();
         var sections = ReadHomeSections(snapshotJson);
 
-        var referencedIds = sections.SelectMany(s => s.ItemIds).Distinct().ToArray();
+        // 手挑的版位：快照裡的那份名單。⚠️ 自動版位的 id 不要一起撈 —— 它們的名單
+        //    根本不看快照，撈了只是白跑一趟（而且快照那份遲早會過期）。
+        var referencedIds = sections
+            .Where(s => !AutoSections.ContainsKey(s.SectionKey))
+            .SelectMany(s => s.ItemIds)
+            .Distinct()
+            .ToArray();
         var referenced = (await content.GetRelationTargetsAsync(referencedIds))
             .ToDictionary(t => t.Id);
+
+        // 自動版位：整個單元，依單元自己的 SortOrder。⚠️ 只有真的有自動版位時才查。
+        var autoTypes = sections
+            .Select(s => AutoSections.TryGetValue(s.SectionKey, out var t) ? (byte)t : (byte)0)
+            .Where(t => t != 0)
+            .Distinct()
+            .ToArray();
+        var autoItems = autoTypes.Length == 0
+            ? []
+            : (await content.GetHomeAutoItemsAsync(autoTypes))
+                .GroupBy(r => r.ContentType)
+                .ToDictionary(g => g.Key, g => g.ToList());
 
         var result = new JsonArray();
         foreach (var section in sections)
         {
             var items = new JsonArray();
             var sortOrder = 0;
-            foreach (var id in section.ItemIds)
+
+            if (AutoSections.TryGetValue(section.SectionKey, out var autoType))
             {
-                if (!referenced.TryGetValue(id, out var item) || !item.IsVisible) continue;
-                items.Add(new JsonObject
+                foreach (var row in autoItems.GetValueOrDefault((byte)autoType, []))
                 {
-                    ["contentItemId"] = item.Id,
-                    ["contentType"] = item.ContentType,
-                    ["slug"] = item.Slug,
-                    ["urlPath"] = item.UrlPath,
-                    ["title"] = item.Title,
-                    ["sortOrder"] = sortOrder++,
-                });
+                    items.Add(new JsonObject
+                    {
+                        ["contentItemId"] = row.Id,
+                        ["contentType"] = row.ContentType,
+                        ["slug"] = row.Slug,
+                        ["urlPath"] = row.UrlPath,
+                        ["title"] = row.Title,
+                        ["sortOrder"] = sortOrder++,
+                    });
+                }
+            }
+            else
+            {
+                foreach (var id in section.ItemIds)
+                {
+                    if (!referenced.TryGetValue(id, out var item) || !item.IsVisible) continue;
+                    items.Add(new JsonObject
+                    {
+                        ["contentItemId"] = item.Id,
+                        ["contentType"] = item.ContentType,
+                        ["slug"] = item.Slug,
+                        ["urlPath"] = item.UrlPath,
+                        // ⚠️ 快照的標題優先，即時值只是快照壞掉時的保底（同 MenuAsync／ShapeAsync）。
+                        ["title"] = string.IsNullOrWhiteSpace(item.SnapshotTitle) ? item.Title : item.SnapshotTitle,
+                        ["sortOrder"] = sortOrder++,
+                    });
+                }
             }
 
             result.Add(new JsonObject
@@ -322,6 +366,34 @@ public sealed class PublicContentHandler(
             ["footer"] = Build("footer", null),
         }));
     }
+
+    /// <summary>
+    /// 「自動列出全部」的版位 → 它列的單元（2026-09-18，決策 30）。
+    ///
+    /// <para>
+    /// 🔴 <b>這兩個版位在後台不再逐筆挑選。</b> 正式資料裡它們挑的本來就是整個單元
+    /// （醫師 14/14、據點 2/2）—— 那不是策展，是同一批內容的<b>第二份順序</b>：
+    /// 在「內容 → 醫師」拖一次，首頁不會跟，而且兩邊都沒有任何徵兆
+    /// （選單 2026-09-18 才因為同一個形狀分岔過，症狀是名稱不一致）。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ <b>精選療程（4/28）與最新文章（4/1100）不在這裡</b>，它們是真的挑選 ——
+    /// 順序自己一份是對的。<b>品牌理念摘要也不在</b>：它指向 <c>Page</c>，
+    /// 「自動列出全部頁面」沒有意義。
+    /// </para>
+    ///
+    /// <para>
+    /// ⚠️ 自動版位的成員與順序是<b>即時值</b>，所以內容清單拖完立刻生效、
+    /// 不必再回首頁按一次發布（與選單的自動子項目一致）。
+    /// 版位自己的<c>快照名單</c>仍原樣留在資料庫裡，切回手挑時還在。
+    /// </para>
+    /// </summary>
+    private static readonly Dictionary<string, ContentType> AutoSections = new()
+    {
+        ["doctors"] = ContentType.Doctor,
+        ["clinics"] = ContentType.Clinic,
+    };
 
     /// <summary>從首頁快照裡讀出版位。快照沒有 <c>homeSections</c> 時回空清單。</summary>
     private static List<HomeSectionShape> ReadHomeSections(string? snapshotJson)
@@ -450,7 +522,11 @@ public sealed class PublicContentHandler(
 
                 relation["toSlug"] = target.Slug;
                 relation["toUrlPath"] = target.UrlPath;
-                relation["toTitle"] = target.Title;
+                // ⚠️ 標題用已發布的快照，即時值只是保底 —— 關聯卡片（困擾頁的建議療程、
+                //    療程頁的相關文章）與首頁、選單同一條規則（決策 14／30）。
+                relation["toTitle"] = string.IsNullOrWhiteSpace(target.SnapshotTitle)
+                    ? target.Title
+                    : target.SnapshotTitle;
                 // ⚠️「已發布」的意思是**前台看得到**，不是 Status=3。工作副本回到草稿的
                 //    頁面仍然在線上（看的是已核准的那一版，docs/11 §6.4）。
                 relation["toIsPublished"] = target.IsVisible;

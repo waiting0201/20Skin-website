@@ -285,7 +285,7 @@ await step('🔴 新增按鈕只有一顆，型別在對話框裡問', async () 
 /** ImageField 那句「換圖會真的刪掉舊檔」的警告，用一小段夠獨特的原文比對。 */
 const DELETE_WARNING = '舊的圖片檔會在存檔時真的刪掉'
 
-section('首頁版位編排：兩欄版面與那三個被拿掉的東西')
+section('首頁版位編排：兩欄版面與那些被拿掉的東西')
 await step('開得起來，而且是兩欄（右欄＝主視覺）', async () => {
   await navigate(page, '/admin/home-sections')
   await page.waitForSelector('.adm-editor-side--hero', { timeout: 30000 })
@@ -307,6 +307,21 @@ await step('🔴 沒有「在首頁顯示這個版位」（關掉只會留下空
   const n = await page.locator('.adm-checkbox').filter({ hasText: '在首頁顯示' }).count()
   if (n) throw new Error(`還有 ${n} 個`)
   return '0 個'
+})
+await step('🔴 醫師與據點沒有挑選器（自動列出全部，順序跟著內容清單）', async () => {
+  // 決策 30：那兩個版位挑的本來就是整個單元（14/14、2/2）—— 等於同一批內容
+  // 有兩份順序，在「內容 → 醫師」拖一次首頁不會跟，而且兩邊都沒有任何徵兆。
+  // 🔴 精選療程（4/28）與最新文章（4/1100）**必須還有**挑選器，它們是真的策展。
+  const cardOf = (title) => page.locator('.adm-card').filter({ hasText: title }).first()
+  for (const title of ['醫師團隊', '據點資訊']) {
+    const card = cardOf(title)
+    if (await card.locator('.adm-relation').count()) throw new Error(`「${title}」還有挑選器`)
+    if (!(await card.innerText()).includes('自動列出全部')) throw new Error(`「${title}」沒有說明它是自動的`)
+  }
+  for (const title of ['精選療程', '最新文章']) {
+    if (!(await cardOf(title).locator('.adm-relation').count())) throw new Error(`「${title}」的挑選器不見了`)
+  }
+  return '醫師／據點 0 個，精選療程／最新文章各 1 個'
 })
 await step('🔴 主視覺的圖片欄位不談刪檔，只給建議尺寸', async () => {
   // 版位設定的圖換掉**不會**被刪（沒走發布那條清 blob 的路），

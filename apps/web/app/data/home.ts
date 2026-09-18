@@ -103,6 +103,14 @@ interface HomeSection {
 /**
  * 首頁的七個版位，一次取齊。
  *
+ * 🔴 **醫師與據點兩個版位是「自動列出全部」**（2026-09-18，決策 30）——
+ *    API 不看首頁快照裡那份名單，改成算繪當下取整個單元、依單元自己的
+ *    `SortOrder` 排（`PublicContentHandler.AutoSections`）。在此之前那兩個版位
+ *    是逐筆挑選的，而挑的就是整個單元（14/14、2/2）＝同一批內容有兩份順序：
+ *    在後台「內容 → 醫師」拖一次，首頁不會跟，兩邊都沒有任何徵兆。
+ *    ⚠️ 前台這裡**不必分辨哪個版位是自動的** —— 兩種都是 `items[]`，
+ *    差別只在名單哪裡來。精選療程與最新文章仍是手挑（4/28、4/1100）。
+ *
  * 🔴 **2026-09-15：由建置期內聯的 content/home.json 改成執行期取 `GET /home`。**
  *    那支端點讀的是「首頁那筆 Page **已核准版本**的快照」，不是 HomeSections 即時表
  *    —— 直接讀即時表等於「編輯者拖一拖版位、還沒送審就上線」，核准這關被繞過
@@ -241,12 +249,15 @@ export async function getHomeData() {
   })
 
   const homeClinics: HomeClinic[] = itemsOf('clinics').map((item) => {
-    // ⚠️ `Clinic` 是**前台的形狀**（clinics.ts），它的識別是 slug／name，沒有帶資料庫 id ——
-    //    所以用名稱比對，與下一行的 NAP 一致。兩者的名稱同源（都是該筆內容的 title）。
-    const c = clinics.find((x) => x.name === item.title)
-    const n = nap.find((x) => x.name === item.title)
+    // ⚠️ `Clinic` 是**前台的形狀**（clinics.ts），沒有帶資料庫 id —— 但它有 slug，
+    //    而版位項目也帶 slug，所以比對 slug。
+    // 🔴 **不要退回用 `item.title` 比名稱**：標題是院方改得動的欄位，一改就比不到，
+    //    而症狀是首頁那張據點卡的電話、地址、看診時段**整組變空**，沒有任何錯誤訊息。
+    const c = clinics.find((x) => x.slug === item.slug) ?? clinics.find((x) => x.name === item.title)
+    // NAP 只有名稱可以認（它是全站設定裡的一份字串資料，見 navigation.ts）。
+    const n = nap.find((x) => x.name === (c?.name ?? item.title))
     return {
-      name: item.title,
+      name: c?.name ?? item.title,
       urlPath: item.urlPath ?? '#',
       phone: c?.phone ?? n?.phone ?? '',
       address: c?.address ?? n?.address ?? '',

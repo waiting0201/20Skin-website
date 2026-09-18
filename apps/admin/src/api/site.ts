@@ -224,6 +224,14 @@ export interface HomeSection {
   sortOrder: number
   /** 這個版位可以挑哪個單元的內容；hero 為 null（沒有內容項目，圖在 settingsValue）。 */
   targetUnit: UnitKey | null
+  /**
+   * 🔴 **自動列出整個單元的版位**（醫師、據點；2026-09-18 決策 30）。
+   *    這兩個版位在後台沒有挑選器 —— 名單與順序都由 `targetUnit` 那個單元決定，
+   *    前台不看這裡存的名單（`GET /home` 的 `AutoSections`）。
+   * ⚠️ `items` 仍然照讀照送（原值原樣回去），切回手挑時那份名單還在 ——
+   *    與選單「切成自動之後自存的子項目列不刪」同一條（決策 29）。
+   */
+  autoAll: boolean
   items: HomeSectionItemRef[]
   /**
    * 版位設定的**表單值**（只有 `HOME_SECTION_SETTINGS_SCHEMA` 有宣告的版位才有）。
@@ -282,7 +290,10 @@ export interface HomeSectionsState {
  *    也來自 `app/data/_presentation.ts`。`title` 現在只用在卡片標題與錯誤訊息，
  *    `subtitle` 純粹留作「這個版位在前台長什麼樣」的備註。
  */
-const HOME_SECTION_META: Record<HomeSectionKey, { title: string; subtitle: string; targetUnit: UnitKey | null }> = {
+const HOME_SECTION_META: Record<
+  HomeSectionKey,
+  { title: string; subtitle: string; targetUnit: UnitKey | null; autoAll?: true }
+> = {
   hero: { title: '主視覺', subtitle: 'WELCOME TO 20SKIN', targetUnit: null },
   // 🔴 **`specialties` 的 targetUnit 是 null，不是 'concern'**（Tim 指定 2026-09-17）。
   //    在此之前這個版位在後台長出一個困擾挑選器，而**前台根本不讀它** ——
@@ -294,8 +305,13 @@ const HOME_SECTION_META: Record<HomeSectionKey, { title: string; subtitle: strin
   specialties: { title: '看皮膚　找四季', subtitle: 'SKIN CONCERNS', targetUnit: null },
   'featured-treatments': { title: '精選療程', subtitle: 'FEATURED TREATMENTS', targetUnit: 'treatment' },
   'latest-articles': { title: '最新文章', subtitle: 'LATEST ARTICLES', targetUnit: 'article' },
-  doctors: { title: '醫師團隊', subtitle: 'OUR DOCTORS', targetUnit: 'doctor' },
-  clinics: { title: '據點資訊', subtitle: 'OUR CLINICS', targetUnit: 'clinic' },
+  // 🔴 **醫師與據點是「自動列出全部」，沒有挑選器**（Tim 指定 2026-09-18，決策 30）。
+  //    在此之前它們是逐筆挑選的，而正式資料挑的就是**整個單元**（14/14 與 2/2）——
+  //    那不是策展，是同一批內容的第二份順序：在「內容 → 醫師」拖一次，首頁不會跟，
+  //    兩邊都沒有任何徵兆（選單 2026-09-18 才因為同一個形狀分岔過）。
+  //    ⚠️ **不要因為「精選療程也有挑選器」就加回去** —— 那一個挑 4/28，是真的策展。
+  doctors: { title: '醫師團隊', subtitle: 'OUR DOCTORS', targetUnit: 'doctor', autoAll: true },
+  clinics: { title: '據點資訊', subtitle: 'OUR CLINICS', targetUnit: 'clinic', autoAll: true },
   'brand-story': { title: '品牌理念摘要', subtitle: '新中式美學', targetUnit: 'page' },
 }
 
@@ -328,6 +344,7 @@ function toHomeSection(row: ServerHomeSection): HomeSection {
     isEnabled: row.isEnabled,
     sortOrder: row.sortOrder,
     targetUnit: meta?.targetUnit ?? null,
+    autoAll: meta?.autoAll ?? false,
     items: row.items
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
