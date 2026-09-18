@@ -178,7 +178,9 @@ const fieldPath = (key: string) => (props.path ? `${props.path}.${key}` : key)
 <template>
   <!-- 物件 -->
   <div v-if="node.kind === 'object'" class="adm-struct__object">
-    <div v-for="f in node.fields" :key="f.key" class="adm-field" :class="{ 'adm-field--span2': f.node.kind === 'array' || f.node.kind === 'object' || (f.node.kind === 'string' && f.node.multiline) }">
+    <!-- ⚠️ `data-error-key` 是給 src/scroll-to-error.ts 找的錨點，值＝錯誤鍵本身。
+         少了它，這一格的紅字仍然會顯示，只是「按下儲存自動捲過去」會退回上一層。 -->
+    <div v-for="f in node.fields" :key="f.key" class="adm-field" :data-error-key="fieldPath(f.key)" :class="{ 'adm-field--span2': f.node.kind === 'array' || f.node.kind === 'object' || (f.node.kind === 'string' && f.node.multiline) }">
       <label class="adm-field__label">
         {{ f.label }}<span v-if="f.required" class="adm-field__required">＊</span>
       </label>
@@ -228,7 +230,7 @@ const fieldPath = (key: string) => (props.path ? `${props.path}.${key}` : key)
 
   <!-- 陣列：一般（物件列、union 列）-->
   <div v-else-if="node.kind === 'array'" class="adm-struct__list">
-    <div v-for="(row, index) in arrayValue" :key="index" class="adm-struct__row">
+    <div v-for="(row, index) in arrayValue" :key="index" class="adm-struct__row" :data-error-key="rowKey(index)">
       <div class="adm-struct__row-head">
         <button type="button" class="adm-struct__toggle" :aria-expanded="isOpen(index)" @click="toggleRow(index)">
           <span class="adm-struct__caret">{{ isOpen(index) ? '▾' : '▸' }}</span>

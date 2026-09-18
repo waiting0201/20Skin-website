@@ -393,6 +393,87 @@ await step('而且那一欄真的渲染成表單（不是空的）', async () =>
   return `${inputs} 個輸入框`
 })
 
+section('必填沒填：紅字在那一格，畫面跳到那一格')
+// Tim 指定 2026-09-18：「如果有必填沒填，紅色警訊要顯示在那個欄位下，然後畫面要跳到那邊」。
+//
+// 🔴 **typecheck 與 build 都看不到這一件事**：紅字有沒有渲染、畫面有沒有捲過去、
+//    摺疊起來的那一列有沒有自己展開，全都只發生在真的瀏覽器裡。
+// ⚠️ 這一段會動**表單**，但不寫任何資料 —— `saveBody()` 的順序是
+//    「驗證 → 上傳圖片 → 送出」，驗證沒過在第一步就 return，一個請求都不會發出去。
+// ⚠️ 因此離開編輯頁時會跳出「有尚未儲存的變更」的確認框，這裡一律接受。
+page.on('dialog', (d) => d.accept());
+
+await step('標題清空後按儲存：捲回標題欄、紅字在它下面、游標也在裡面', async () => {
+  await openEdit(page, 'treatment', ids.treatment)
+  const titleField = page.locator('[data-error-key="title"]')
+  await titleField.waitFor({ timeout: 20000 })
+  const input = titleField.locator('input')
+  const original = await input.inputValue()
+  await input.fill('')
+
+  // 先捲到最底讓標題欄離開畫面——不這樣做的話「有沒有捲過去」根本驗不到。
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+  await page.waitForTimeout(500)
+  const before = await titleField.boundingBox()
+  if (before && before.y > 0) throw new Error(`捲到底之後標題欄還在畫面裡（y=${Math.round(before.y)}），這一條驗不到東西`)
+
+  // 釘在標題列上的那顆「儲存本文」（長表單捲到一半時按得到的就是它）。
+  await page.locator('.adm-page__head button[form="adm-body-form"]').click()
+  await page.waitForTimeout(1500)
+
+  const err = titleField.locator('.adm-field__error')
+  if (!(await err.count())) throw new Error('標題欄下面沒有紅字')
+  const box = await err.boundingBox()
+  const vh = page.viewportSize().height
+  if (!box || box.y < 0 || box.y + box.height > vh) {
+    throw new Error(`紅字沒有進到畫面裡（y=${Math.round(box?.y ?? -1)}、視窗高 ${vh}）`)
+  }
+  // 🔴 釘住的標題列不可以蓋住它——那看起來就像「跳過去了，但什麼都沒有」。
+  const head = await page.locator('.adm-editor > .adm-page__head').boundingBox()
+  if (box.y < head.y + head.height) throw new Error('紅字被釘住的標題列蓋住了')
+  if (!(await input.evaluate((el) => el === document.activeElement))) throw new Error('游標沒有落在那一格裡')
+
+  await input.fill(original) // 還原（沒有存過，所以只是把表單改回去）
+  return `${JSON.stringify((await err.innerText()).slice(0, 12))}　y=${Math.round(box.y)}`
+})
+
+await step('🔴 摺疊起來的區塊會自己展開（不然紅字根本沒有渲染）', async () => {
+  // 摺疊列是 `v-if` 不是 `v-show`（長文章唯一的效能措施）——收起來的那一列
+  // 裡面的紅字**不存在於 DOM**。使用者看到的會是「說有欄位沒填，但整頁找不到紅字」。
+  await openEdit(page, 'article', ids.article)
+  const body = fieldByLabel(page, '內文')
+  const row = body
+    .locator('.adm-struct__row')
+    .filter({ has: page.locator('.adm-struct__summary', { hasText: '段落' }) })
+    .first()
+  if (!(await row.count())) return '（這一篇沒有段落區塊，跳過）'
+
+  await row.locator('.adm-struct__toggle').click()
+  await page.waitForTimeout(600)
+  const text = row.locator('[data-error-key$=".text"]').locator('textarea, input').first()
+  const original = await text.inputValue()
+  await text.fill('')
+
+  await page.locator('button', { hasText: '全部收合' }).first().click()
+  await page.waitForTimeout(600)
+  if (await body.locator('.adm-struct__row-body').count()) throw new Error('收合沒有生效，這一條驗不到東西')
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.waitForTimeout(300)
+
+  await page.locator('.adm-page__head button[form="adm-body-form"]').click()
+  await page.waitForTimeout(1800)
+
+  const err = body.locator('.adm-struct__row-body .adm-field__error').first()
+  if (!(await err.count())) throw new Error('出錯的那一列沒有自己展開（紅字沒有渲染出來）')
+  const box = await err.boundingBox()
+  const vh = page.viewportSize().height
+  if (!box || box.y < 0 || box.y + box.height > vh) {
+    throw new Error(`紅字沒有進到畫面裡（y=${Math.round(box?.y ?? -1)}、視窗高 ${vh}）`)
+  }
+  await text.fill(original) // 還原表單
+  return `${JSON.stringify((await err.innerText()).slice(0, 12))}　y=${Math.round(box.y)}`
+})
+
 section('瀏覽器')
 await step('console 沒有錯誤、沒有 404', async () => {
   // 🔴 這一條擋的是③：dev 的 /assets/base.css 與 logo 曾經一律 404，

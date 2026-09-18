@@ -343,6 +343,22 @@ AND (UnpublishAt IS NULL OR UnpublishAt >  @now)
 - 🔴 **標題列 sticky**（`.adm-editor > .adm-page__head`），發布與儲存捲不走。`>` 不可省：`.adm-page__head` 也被當成卡片內的標題列用
 - 🔴 右欄的 sticky 頂端要讓開標題列，而標題列高度會變 —— `src/sticky-head.ts` 量測後寫進 `--adm-page-head-h`，不要改回寫死的數字
 
+### 送出前的驗證：紅字在欄位下，畫面跳過去
+
+規則在 `apps/admin/src/validation.ts`（與 API 逐條對應），**呈現**分成兩件事，缺一不可：
+
+- **紅字在那一格下面**（`.adm-field__error`，`role="alert"`）—— 頂端那句總結只說「有幾個」，說不出「錯在哪一格」
+- **畫面捲到第一個出錯的欄位並把游標放進去**（`apps/admin/src/scroll-to-error.ts`）—— 儲存按鈕釘在頂端，按下去的那一刻出錯的欄位幾乎一定在畫面外
+
+🔴 **錨點是欄位外框上的 `data-error-key`，值＝錯誤鍵本身**（含 `bodyBlocks[3].image` 這種路徑）。
+忘了加不會壞掉，只會退回「捲不過去」——`scroll-to-error.ts` 會逐段退到父層找。
+
+🔴 **摺疊起來的區塊要先自己展開**（`StructuredField.vue` 的 watch）：摺疊列是 `v-if` 不是
+`v-show`，收起來的那一列裡面的紅字**根本沒有渲染** —— 症狀是「說有欄位沒填，但整頁找不到紅字」。
+
+⚠️ 捲動要讓開兩層 sticky（頂列 ＋ 編輯頁標題列），高度**現場量**，理由同 `sticky-head.ts`。
+⚠️ 由 `tools/admin-e2e/check.mjs` 把關 —— typecheck 與 build 都看不到捲動與展開。
+
 ### 九個內容模型共用一組清單／編輯畫面
 
 九個模型的 CRUD 形狀完全一樣（列表／編輯／排序／上下架／送審／版本／SEO 區塊），差別只在欄位。**做成一組通用的 `ListPage`／`EditPage` ＋ 一份「單元宣告」**，各模型只宣告自己的欄位、清單欄與上傳提示：

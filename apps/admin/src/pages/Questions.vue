@@ -15,6 +15,7 @@ import { hasPermission } from '@/permissions'
 import type { QuestionInboxRecord, QuestionSource, QuestionStatus } from '@/api/question'
 import { QUESTION_STATUS_LABEL, SOURCE_LABEL } from '@/api/question'
 import { validateSlug } from '@/validation'
+import { revealFirstError } from '@/scroll-to-error'
 
 const router = useRouter()
 const user = currentUser()
@@ -118,7 +119,11 @@ async function createFaqDraft() {
   if (slugProblem) errors.slug = slugProblem
   else if (!draftForm.slug.trim()) errors.slug = 'slug 為必填。'
   draftErrors.value = errors
-  if (Object.keys(errors).length) return
+  if (Object.keys(errors).length) {
+    // 紅字在欄位下方，畫面同時捲到第一個出錯的那一格（src/scroll-to-error.ts）。
+    await revealFirstError(errors)
+    return
+  }
 
   creatingId.value = item.id
   actionError.value = ''
@@ -293,7 +298,8 @@ async function remove(item: QuestionInboxRecord) {
               <td colspan="7">
                 <form class="adm-form" style="padding: var(--sp-3) 0" @submit.prevent="createFaqDraft">
                   <div class="adm-field-grid">
-                    <div class="adm-field">
+                    <!-- ⚠️ `data-error-key` ＝ 上面那三條驗證用的鍵，給 src/scroll-to-error.ts 找。 -->
+                    <div class="adm-field" data-error-key="categoryTermId">
                       <label class="adm-field__label">FAQ 分類<span class="adm-field__required">＊</span></label>
                       <select v-model="draftForm.categoryTermId" class="adm-select" :class="{ 'is-invalid': draftErrors.categoryTermId }">
                         <option value="">請選擇…</option>
@@ -301,13 +307,13 @@ async function remove(item: QuestionInboxRecord) {
                       </select>
                       <p v-if="draftErrors.categoryTermId" class="adm-field__error" role="alert">{{ draftErrors.categoryTermId }}</p>
                     </div>
-                    <div class="adm-field">
+                    <div class="adm-field" data-error-key="slug">
                       <label class="adm-field__label">網址代稱（Slug）<span class="adm-field__required">＊</span></label>
                       <input v-model="draftForm.slug" class="adm-input" :class="{ 'is-invalid': draftErrors.slug }" type="text" maxlength="160">
                       <p v-if="draftErrors.slug" class="adm-field__error" role="alert">{{ draftErrors.slug }}</p>
                       <p class="adm-field__hint">FAQ 沒有自己的獨立網頁，這一格是常見問題頁上的定位用代稱，但仍是必填。</p>
                     </div>
-                    <div class="adm-field adm-field--span2">
+                    <div class="adm-field adm-field--span2" data-error-key="webAnswer">
                       <label class="adm-field__label">網頁版答案<span class="adm-field__required">＊</span></label>
                       <textarea v-model="draftForm.webAnswer" class="adm-textarea" :class="{ 'is-invalid': draftErrors.webAnswer }" />
                       <p v-if="draftErrors.webAnswer" class="adm-field__error" role="alert">{{ draftErrors.webAnswer }}</p>

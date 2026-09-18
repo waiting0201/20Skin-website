@@ -30,6 +30,7 @@ import type { RoleCode } from '@/types'
 import { ROLE_LABEL } from '@/types'
 import type { AccountRecord } from '@/api/account'
 import { MIN_PASSWORD_LENGTH, validatePassword, validateUserName } from '@/validation'
+import { revealFirstError } from '@/scroll-to-error'
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
@@ -135,6 +136,8 @@ function validateForm(): boolean {
   }
 
   fieldErrors.value = errors
+  // 紅字顯示在欄位下方，畫面同時捲到第一個出錯的那一格（src/scroll-to-error.ts）。
+  if (Object.keys(errors).length) void revealFirstError(errors)
   return Object.keys(errors).length === 0
 }
 
@@ -355,18 +358,19 @@ function fmtDate(iso: string | null): string {
       <h2 class="adm-card__title">{{ formMode === 'create' ? '新增帳號' : `編輯帳號：${form.userName}` }}</h2>
       <form class="adm-form" @submit.prevent="submitForm">
         <div class="adm-field-grid">
-          <div class="adm-field">
+          <!-- ⚠️ `data-error-key` ＝ `validateForm()` 用的鍵，給 src/scroll-to-error.ts 找。 -->
+          <div class="adm-field" data-error-key="userName">
             <label class="adm-field__label">帳號名稱<span class="adm-field__required">＊</span></label>
             <input v-model="form.userName" class="adm-input" :class="{ 'is-invalid': fieldErrors.userName }" :disabled="formMode === 'edit'" placeholder="例如 editor2" maxlength="100">
             <p v-if="fieldErrors.userName" class="adm-field__error" role="alert">{{ fieldErrors.userName }}</p>
             <p class="adm-field__hint">登入識別，不是 email。僅可使用英數字與 . _ - @，建立後不可更改。</p>
           </div>
-          <div class="adm-field">
+          <div class="adm-field" data-error-key="displayName">
             <label class="adm-field__label">顯示名稱<span class="adm-field__required">＊</span></label>
             <input v-model="form.displayName" class="adm-input" :class="{ 'is-invalid': fieldErrors.displayName }" placeholder="後台顯示用" maxlength="100">
             <p v-if="fieldErrors.displayName" class="adm-field__error" role="alert">{{ fieldErrors.displayName }}</p>
           </div>
-          <div class="adm-field">
+          <div class="adm-field" data-error-key="notifyEmail">
             <label class="adm-field__label">通知信箱</label>
             <input v-model="form.notifyEmail" class="adm-input" :class="{ 'is-invalid': fieldErrors.notifyEmail }" type="email" placeholder="選填，僅供通知，非登入用途">
             <p v-if="fieldErrors.notifyEmail" class="adm-field__error" role="alert">{{ fieldErrors.notifyEmail }}</p>
@@ -380,7 +384,7 @@ function fmtDate(iso: string | null): string {
             </select>
             <p class="adm-field__hint">「醫師」角色要對上自己的個人頁，才能判斷「自己的內容」。</p>
           </div>
-          <div class="adm-field adm-field--span2">
+          <div class="adm-field adm-field--span2" data-error-key="roles">
             <label class="adm-field__label">角色<span class="adm-field__required">＊</span></label>
             <div class="users-role-checks">
               <label v-for="code in ALL_ROLE_CODES" :key="code" class="adm-checkbox">
@@ -389,7 +393,7 @@ function fmtDate(iso: string | null): string {
             </div>
             <p v-if="fieldErrors.roles" class="adm-field__error" role="alert">{{ fieldErrors.roles }}</p>
           </div>
-          <div v-if="formMode === 'create'" class="adm-field adm-field--span2">
+          <div v-if="formMode === 'create'" class="adm-field adm-field--span2" data-error-key="password">
             <label class="adm-field__label">初始密碼<span class="adm-field__required">＊</span></label>
             <input v-model="form.password" type="text" class="adm-input" :class="{ 'is-invalid': fieldErrors.password }" :placeholder="`至少 ${MIN_PASSWORD_LENGTH} 碼，需同時包含英文字母與數字`">
             <p v-if="fieldErrors.password" class="adm-field__error" role="alert">{{ fieldErrors.password }}</p>

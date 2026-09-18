@@ -12,7 +12,7 @@
 // ⚠️ 模式旗標就是值的型別本身（見 structured-schema.ts）：字串＝原始模式、
 //    物件／陣列＝結構化模式。不要另外加一個 `mode` 狀態 —— 兩份狀態一定會不同步。
 
-import { computed, reactive } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import StructuredNode from './StructuredNode.vue'
 import { collectUndeclared, isRawMode, type StructuredSchema } from '../structured-schema'
 
@@ -29,6 +29,25 @@ const emit = defineEmits<{ 'update:modelValue': [unknown] }>()
 
 /** 摺疊狀態掛在這一層：換一筆內容時整個元件重建，狀態自然重置。 */
 const openRows = reactive<Record<string, boolean>>({})
+
+/**
+ * 🔴 **出錯的那一列一定要先展開。** 摺疊起來的列是 `v-if` 不是 `v-show`
+ *    （StructuredNode.vue：長文章唯一的效能措施），所以裡面的紅字**根本沒有渲染**——
+ *    使用者看到的是「頂端說有欄位沒填，但整頁一個紅字都找不到」。
+ *
+ * ⚠️ 路徑裡每一個 `[n]` 前綴就是一列的摺疊鍵（＝ StructuredNode 的 `rowKey`），
+ *    所以巢狀的陣列會一路展開到最裡面那一列。
+ * ⚠️ 只認自己這一欄的錯誤（`path` 前綴）—— 同一頁有好幾個結構化欄位共用同一份
+ *    errors 物件。
+ */
+watch(() => props.errors, (errors) => {
+  for (const key of Object.keys(errors)) {
+    if (key !== props.path && !key.startsWith(`${props.path}.`) && !key.startsWith(`${props.path}[`)) continue
+    for (const m of key.matchAll(/\[\d+\]/g)) openRows[key.slice(0, m.index! + m[0].length)] = true
+  }
+// 🔴 `deep` 不可省：首頁版位那一頁的 errors 是**就地改寫**的 reactive 物件
+//    （EditPage 是整個換掉一份）。少了它，那一頁的摺疊列永遠不會自動展開。
+}, { immediate: true, deep: true })
 
 const raw = computed(() => isRawMode(props.modelValue))
 

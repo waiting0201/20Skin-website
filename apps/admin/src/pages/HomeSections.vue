@@ -42,6 +42,7 @@ import type { RelationItem, UnitKey } from '@/types'
 import type { RelationField } from '@/unit-schema'
 import { UNIT_REGISTRY } from '@/units'
 import { validateStructured } from '@/validation'
+import { revealFirstError } from '@/scroll-to-error'
 import RelationPicker from '@/components/RelationPicker.vue'
 import StructuredField from '@/components/StructuredField.vue'
 import { useStickyHead } from '@/sticky-head'
@@ -195,6 +196,8 @@ async function saveDraft(): Promise<boolean> {
   actionError.value = ''
   if (!validateSettings()) {
     actionError.value = '版位設定有欄位沒填完，紅字標在那一格旁邊。修好之後再存一次。'
+    // 摺疊起來的那一列會先被展開（StructuredField.vue），再捲到那一格。
+    await revealFirstError(settingsErrors)
     return false
   }
   saving.value = true
@@ -417,7 +420,9 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
           </p>
 
 
-          <div class="adm-field">
+          <!-- ⚠️ `data-error-key` ＝ 錯誤鍵的最外層（版位鍵），給
+               src/scroll-to-error.ts 當退路：深層路徑找不到時至少帶到這一欄。 -->
+          <div class="adm-field" :data-error-key="heroSection.sectionKey">
             <label class="adm-field__label">主視覺輪播</label>
             <StructuredField
               :schema="schemaOf(heroSection)"

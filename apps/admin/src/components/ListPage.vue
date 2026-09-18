@@ -32,6 +32,7 @@ import { STATUS_LABEL } from '@/types'
 import type { UnitField } from '@/unit-schema'
 import { UNIT_REGISTRY } from '@/units'
 import { validateSlug } from '@/validation'
+import { revealFirstError } from '@/scroll-to-error'
 import { useDragSort } from '@/drag-sort'
 import { rememberListView, recallListView } from '@/list-state'
 import DragHandle from './DragHandle.vue'
@@ -404,6 +405,8 @@ function validateCreate(): boolean {
   }
 
   createErrors.value = errors
+  // 紅字在欄位下方，畫面同時捲到第一個出錯的那一格（src/scroll-to-error.ts）。
+  if (Object.keys(errors).length) void revealFirstError(errors)
   return Object.keys(errors).length === 0
 }
 
@@ -463,12 +466,13 @@ async function createDraft(overrideFields: Record<string, unknown> = {}, title =
       <h2 class="adm-card__title">新增{{ def.labelSingular }}</h2>
       <form class="adm-form" @submit.prevent="submitCreate">
         <div class="adm-field-grid">
-          <div class="adm-field adm-field--span2">
+          <!-- ⚠️ `data-error-key` ＝ `validateCreate()` 用的鍵，給 src/scroll-to-error.ts 找。 -->
+          <div class="adm-field adm-field--span2" data-error-key="title">
             <label class="adm-field__label">標題<span class="adm-field__required">＊</span></label>
             <input v-model="createForm.title" class="adm-input" :class="{ 'is-invalid': createErrors.title }" type="text" maxlength="200">
             <p v-if="createErrors.title" class="adm-field__error" role="alert">{{ createErrors.title }}</p>
           </div>
-          <div class="adm-field adm-field--span2">
+          <div class="adm-field adm-field--span2" data-error-key="slug">
             <label class="adm-field__label">網址代稱（Slug）<span class="adm-field__required">＊</span></label>
             <input v-model="createForm.slug" class="adm-input" :class="{ 'is-invalid': createErrors.slug }" type="text" maxlength="160">
             <p v-if="createErrors.slug" class="adm-field__error" role="alert">{{ createErrors.slug }}</p>
@@ -482,6 +486,7 @@ async function createDraft(overrideFields: Record<string, unknown> = {}, title =
             v-for="field in createFields"
             :key="field.key"
             class="adm-field"
+            :data-error-key="field.key"
             :class="{ 'adm-field--span2': field.type === 'textarea' || field.type === 'longtext' }"
           >
             <label class="adm-field__label">{{ field.label }}<span class="adm-field__required">＊</span></label>

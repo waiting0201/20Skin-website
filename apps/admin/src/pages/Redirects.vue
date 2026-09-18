@@ -15,6 +15,7 @@ import { UNIT_KEYS } from '@/types'
 import { REDIRECT_SOURCE_LABEL, REDIRECT_STATUS_CODES } from '@/api/redirect'
 import type { RedirectImportPreview, RedirectImportRow, RedirectRecord, RedirectSource, RedirectStatusCode } from '@/api/redirect'
 import { validateRedirectPath } from '@/validation'
+import { revealFirstError } from '@/scroll-to-error'
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
@@ -155,6 +156,8 @@ function validateForm(): boolean {
     errors.toPath = '來源與目標不能是同一個路徑——那會變成無限轉址迴圈。'
   }
   formErrors.value = errors
+  // 紅字在欄位下方，畫面同時捲到第一個出錯的那一格（src/scroll-to-error.ts）。
+  if (Object.keys(errors).length) void revealFirstError(errors)
   return Object.keys(errors).length === 0
 }
 
@@ -360,13 +363,14 @@ const previewRowsToShow = computed(() => importPreview.value?.rows.slice(0, PREV
         <p v-if="formError" class="adm-alert adm-alert--danger" role="alert" style="margin-bottom: var(--sp-3)">{{ formError }}</p>
         <form class="adm-form" @submit.prevent="submitForm">
           <div class="adm-field-grid">
-            <div class="adm-field adm-field--span2">
+            <!-- ⚠️ `data-error-key` ＝ `validateForm()` 用的鍵，給 src/scroll-to-error.ts 找。 -->
+            <div class="adm-field adm-field--span2" data-error-key="fromPath">
               <label class="adm-field__label">來源路徑<span class="adm-field__required">＊</span></label>
               <input v-model="form.fromPath" class="adm-input" :class="{ 'is-invalid': formErrors.fromPath }" placeholder="/share.php?class=醫美新知">
               <p v-if="formErrors.fromPath" class="adm-field__error" role="alert">{{ formErrors.fromPath }}</p>
               <p class="adm-field__hint">可以帶 <code>?</code> 後面的參數，儲存時會自動整理成標準寫法。不可使用萬用字元。</p>
             </div>
-            <div class="adm-field adm-field--span2">
+            <div class="adm-field adm-field--span2" data-error-key="toPath">
               <label class="adm-field__label">目標路徑<span class="adm-field__required">＊</span></label>
               <input v-model="form.toPath" class="adm-input" :class="{ 'is-invalid': formErrors.toPath }" placeholder="/blog/medical-aesthetics/">
               <p v-if="formErrors.toPath" class="adm-field__error" role="alert">{{ formErrors.toPath }}</p>

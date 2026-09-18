@@ -23,6 +23,7 @@ import type { AdminRecord, RelationItem, SeoDraft, SeoMeta, UnitKey } from '@/ty
 import { emptySeo } from '@/types'
 import { countPendingImages, resolveImage, uploadPendingImages, type ImageValue } from '@/image-value'
 import { firstError, hasErrors, validateBody, validateSchedule, validateSeo, type FieldErrors } from '@/validation'
+import { revealFirstError } from '@/scroll-to-error'
 import type { UnitField } from '@/unit-schema'
 import { UNIT_REGISTRY } from '@/units'
 import StatusBadge from './StatusBadge.vue'
@@ -297,10 +298,15 @@ async function saveBody(): Promise<boolean> {
 
   bodyErrors.value = validateBody(def.value, bodyForm, slugRequired.value, { slug: record.value?.slug ?? null })
   if (hasErrors(bodyErrors.value)) {
+    // 🔴 頂端這句總結**不能省**，有了捲動也一樣：它說的是「總共幾個要修」，
+    //    而欄位旁邊的紅字一次只看得到一個。捲動解決的是「找不到」，
+    //    不是「還有幾個沒修」。
     const count = Object.keys(bodyErrors.value).length
     actionError.value = count > 1
       ? `有 ${count} 個欄位需要修正，第一個是：${firstError(bodyErrors.value)}`
       : String(firstError(bodyErrors.value))
+    // 紅字在那一格下面（各欄位自己的 .adm-field__error），畫面捲到第一個出錯的欄位。
+    await revealFirstError(bodyErrors.value)
     return false
   }
 
@@ -334,6 +340,7 @@ async function saveSeo(): Promise<boolean> {
   seoErrors.value = validateSeo(seoForm)
   if (hasErrors(seoErrors.value)) {
     actionError.value = String(firstError(seoErrors.value))
+    await revealFirstError(seoErrors.value)
     return false
   }
 
@@ -449,7 +456,10 @@ watch(record, (r) => {
 async function saveSchedule() {
   // `ContentHandler`：「下架時間必須晚於發布時間」。先在這裡擋，錯誤才指得到欄位。
   scheduleError.value = validateSchedule(scheduleForm.publishAt, scheduleForm.unpublishAt) ?? ''
-  if (scheduleError.value) return
+  if (scheduleError.value) {
+    await revealFirstError({ unpublishAt: scheduleError.value })
+    return
+  }
 
   await runWorkflow('排程儲存失敗。', async () => {
   record.value = await adminApi.content.schedule(
@@ -594,14 +604,17 @@ async function removeRecord() {
           <div class="adm-fieldset">
             <p class="adm-fieldset__legend">基本資料</p>
             <div class="adm-field-grid">
-              <div class="adm-field adm-field--span2">
+              <!-- ⚠️ `data-error-key` 是 src/scroll-to-error.ts 的錨點，值＝
+                   `validateBody` 回傳的那個鍵。改了鍵名就要一起改這裡，
+                   否則只是「捲不過去」——不會有任何錯誤訊息。 -->
+              <div class="adm-field adm-field--span2" data-error-key="title">
                 <label class="adm-field__label">標題<span class="adm-field__required">＊</span></label>
                 <input v-model="bodyForm.title" class="adm-input" :class="{ 'is-invalid': bodyErrors.title }" type="text" :disabled="!canEditBody" maxlength="200">
                 <p v-if="bodyErrors.title" class="adm-field__error" role="alert">{{ bodyErrors.title }}</p>
               </div>
               <!-- ⚠️ 這裡刻意**不再**用 `v-if="def.producesUrl"` 把 FAQ 的 slug 藏起來，
                    理由見 <script> 裡 slugRequired 的註解：藏起來的結果是 FAQ 永遠存不起來。 -->
-              <div class="adm-field">
+              <div class="adm-field" data-error-key="slug">
                 <label class="adm-field__label">網址代稱（Slug）<span v-if="slugRequired" class="adm-field__required">＊</span></label>
                 <input v-model="bodyForm.slug" class="adm-input" :class="{ 'is-invalid': bodyErrors.slug }" type="text" :disabled="!canEditBody || slugLocked" maxlength="160">
                 <p v-if="bodyErrors.slug" class="adm-field__error" role="alert">{{ bodyErrors.slug }}</p>
@@ -644,6 +657,7 @@ async function removeRecord() {
                 v-for="field in def.fields.filter((f) => (f.group || '內容') === group)"
                 :key="field.key"
                 class="adm-field"
+                :data-error-key="field.key"
                 :class="{ 'adm-field--span2': ['textarea', 'longtext', 'structured', 'repeater', 'gallery', 'hours', 'tags'].includes(field.type) }"
               >
                 <label class="adm-field__label">
@@ -861,18 +875,18 @@ async function removeRecord() {
       <form id="adm-seo-form" class="adm-card" @submit.prevent="saveSeo">
         <p class="adm-fieldset__legend">SEO（共用區塊）</p>
         <div class="adm-field-grid">
-          <div class="adm-field adm-field--span2">
+          <div class="adm-field adm-field--span2" data-error-key="seoTitle">
             <label class="adm-field__label">搜尋結果標題</label>
             <input v-model="seoForm.seoTitle" class="adm-input" :class="{ 'is-invalid': seoErrors.seoTitle }" type="text" :disabled="!canEditSeo" placeholder="留空則由內容自動組出" maxlength="200">
             <p v-if="seoErrors.seoTitle" class="adm-field__error" role="alert">{{ seoErrors.seoTitle }}</p>
           </div>
-          <div class="adm-field adm-field--span2">
+          <div class="adm-field adm-field--span2" data-error-key="metaDescription">
             <label class="adm-field__label">搜尋結果摘要（Meta Description）</label>
             <textarea v-model="seoForm.metaDescription" class="adm-textarea" :class="{ 'is-invalid': seoErrors.metaDescription }" :disabled="!canEditSeo" maxlength="400" />
             <p v-if="seoErrors.metaDescription" class="adm-field__error" role="alert">{{ seoErrors.metaDescription }}</p>
             <p class="adm-field__count">{{ (seoForm.metaDescription ?? '').length }} ／ 400 字</p>
           </div>
-          <div class="adm-field adm-field--span2">
+          <div class="adm-field adm-field--span2" data-error-key="aiSummary">
             <label class="adm-field__label">AI 摘要（40–60 字，直接回答問題的一段話）</label>
             <textarea v-model="seoForm.aiSummary" class="adm-textarea" :class="{ 'is-invalid': seoErrors.aiSummary }" :disabled="!canEditSeo" maxlength="300" />
             <p v-if="seoErrors.aiSummary" class="adm-field__error" role="alert">{{ seoErrors.aiSummary }}</p>
@@ -894,7 +908,7 @@ async function removeRecord() {
               @update:model-value="(v) => (seoForm.ogImage = v)"
             />
           </div>
-          <div class="adm-field">
+          <div class="adm-field" data-error-key="canonicalOverride">
             <label class="adm-field__label">指定主要網址（Canonical）</label>
             <input v-model="seoForm.canonicalOverride" class="adm-input" :class="{ 'is-invalid': seoErrors.canonicalOverride }" type="text" :disabled="!canEditSeo" placeholder="留空＝用這一頁自己的網址">
             <p class="adm-field__hint">同樣內容有兩個網址時，用來告訴搜尋引擎哪一個才是正本。正常情況留空。</p>
@@ -906,7 +920,7 @@ async function removeRecord() {
           </div>
           <!-- ⚠️ 只有「這一筆已經有覆寫值」時才出現，見 script 的 showStructuredData。
                正常情況下客戶看不到這一格，也就不會有人對著它填 JSON。 -->
-          <div v-if="showStructuredData" class="adm-field adm-field--span2">
+          <div v-if="showStructuredData" class="adm-field adm-field--span2" data-error-key="structuredDataOverride">
             <label class="adm-field__label">結構化資料覆寫（進階，JSON）</label>
             <textarea v-model="seoForm.structuredDataOverride" class="adm-textarea" :class="{ 'is-invalid': seoErrors.structuredDataOverride }" :disabled="!canEditSeo" placeholder="留空由系統自動產生" />
             <p v-if="seoErrors.structuredDataOverride" class="adm-field__error" role="alert">{{ seoErrors.structuredDataOverride }}</p>
@@ -955,7 +969,7 @@ async function removeRecord() {
                    那是靜態版的事實，SSR 之後已經不對，而且是**低估**了實際行為。 -->
               <p class="adm-field__hint">到這個時間點，前台就會看得到（不需要重新建置）。留空＝按下「發布」就立即上線。</p>
             </div>
-            <div class="adm-field">
+            <div class="adm-field" data-error-key="unpublishAt">
               <label class="adm-field__label">下架時間</label>
               <input v-model="scheduleForm.unpublishAt" class="adm-input" :class="{ 'is-invalid': scheduleError }" type="datetime-local">
               <p v-if="scheduleError" class="adm-field__error" role="alert">{{ scheduleError }}</p>
