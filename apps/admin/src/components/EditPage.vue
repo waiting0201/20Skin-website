@@ -33,6 +33,10 @@ import ImageField from './ImageField.vue'
 import StructuredField from './StructuredField.vue'
 import { resolveSchema } from '@/api/content-fields'
 import { listPathFor } from '@/list-state'
+import { useStickyHead } from '@/sticky-head'
+
+// 標題列釘在頂端（發布／儲存捲不走）——高度量給右欄讓位，見 src/sticky-head.ts。
+const { headRef } = useStickyHead()
 
 const props = defineProps<{ unit: UnitKey; id: number }>()
 const router = useRouter()
@@ -518,7 +522,10 @@ async function removeRecord() {
     <p class="adm-page__back">
       <RouterLink class="btn btn--line btn--sm" :to="listPathFor(unit)">← 回到{{ def.label }}列表</RouterLink>
     </p>
-    <div class="adm-page__head">
+    <!-- ⚠️ `ref="headRef"` 不是裝飾：標題列是 sticky 的（admin.css §14），
+         右欄的 sticky 頂端要讓開它，而它的高度會隨標題換行與視窗寬度變 ——
+         量出來寫進 `--adm-page-head-h`，見 src/sticky-head.ts。 -->
+    <div ref="headRef" class="adm-page__head">
       <div>
         <h1 class="adm-page__title">{{ record.title || `（未命名${def.labelSingular}）` }}</h1>
         <p class="adm-page__desc">

@@ -6,7 +6,7 @@
 // 可選的推薦理由欄位（docs/02-backend-cms.md §1：困擾「建議療程」的唯一
 // 用途）。docs/08-database.md §D：雙向關聯一律單向存——`field.editable`
 // 為 false 時代表這裡只是唯讀顯示，真正的編輯入口在對方的編輯畫面。
-import { onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { adminApi } from '@/api/client'
 import type { RelationItem } from '@/types'
 import type { RelationField } from '@/unit-schema'
@@ -16,11 +16,58 @@ const props = defineProps<{ field: RelationField; modelValue: RelationItem[] }>(
 const emit = defineEmits<{ 'update:modelValue': [RelationItem[]] }>()
 
 const options = ref<{ value: string; label: string }[]>([])
+const totalCount = ref(0)
 const pickerValue = ref('')
+const keyword = ref('')
+const loading = ref(false)
+const loadError = ref('')
+/** 載過了沒有。⚠️ 不能用 `options.length` 判斷 —— 空單元（0 筆）會變成每次都重載。 */
+const loaded = ref(false)
 
-onMounted(async () => {
-  options.value = await adminApi.taxonomy.unitOptions(props.field.targetUnit)
-})
+/**
+ * 🔴 **選項是「打開挑選器才載」，不是掛載就載**（2026-09-18）。
+ *
+ * 原本寫在 `onMounted`：一進編輯頁，每一個關聯欄位都把**整個目標單元**抓回來
+ * （`unitOptions()` 會翻頁抓完），而使用者十次有九次根本不會動那個欄位。
+ * 首頁版位編排最慘 —— 五個挑選器裡有一個指向文章（1100 筆，12 趟往返），
+ * 實測整頁 35 次請求裡有 24 次是它。
+ *
+ * ⚠️ `@focus` 與 `@mousedown` 都要掛：鍵盤 Tab 進來只有 focus，滑鼠點下去
+ *    有些瀏覽器是先開清單才給 focus。重複呼叫由 `loaded`／`loading` 擋掉。
+ */
+async function ensureOptions() {
+  if (loaded.value || loading.value) return
+  await fetchOptions()
+}
+
+async function fetchOptions(kw = '') {
+  loading.value = true
+  loadError.value = ''
+  try {
+    const res = await adminApi.taxonomy.unitOptionsPage(props.field.targetUnit, kw)
+    options.value = res.options
+    totalCount.value = res.totalCount
+    loaded.value = true
+  } catch {
+    // ⚠️ 選項載不回來要**說出來**。原本這裡連 try 都沒有，症狀是一個空的下拉選單 ——
+    //    使用者會把它讀成「沒有東西可以選」，而不是「沒載到」。
+    loadError.value = '選項沒有載回來，請再點一次或重新載入這一頁。'
+    loaded.value = false
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 超過一頁就沒辦法用「整份列出來」那一招，改用關鍵字搜尋。 */
+const needsSearch = computed(() => loaded.value && totalCount.value > options.value.length)
+
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+function onSearchInput() {
+  clearTimeout(searchTimer)
+  // ⚠️ 打字要 debounce：每一個字元打一次 API，在正式環境（Azure SQL Basic）
+  //    就是一串互相追著跑的請求，而且回來的順序不保證。
+  searchTimer = setTimeout(() => void fetchOptions(keyword.value.trim()), 300)
+}
 
 function availableOptions() {
   const pickedIds = new Set(props.modelValue.map((i) => i.id))
@@ -84,11 +131,28 @@ function updateNote(id: number, note: string) {
     </div>
 
     <div v-if="field.editable" class="adm-relation__add">
-      <select v-model="pickerValue" class="adm-select">
-        <option value="">選擇要加入的{{ UNIT_REGISTRY[field.targetUnit].label }}…</option>
+      <!-- ⚠️ 搜尋框只在「一頁列不完」時出現（needsSearch）——
+           28 筆的療程不需要先搜尋才選得到。 -->
+      <input
+        v-if="needsSearch"
+        v-model="keyword"
+        type="search"
+        class="adm-input adm-relation__search"
+        :placeholder="`搜尋${UNIT_REGISTRY[field.targetUnit].label}…`"
+        @input="onSearchInput"
+      >
+      <select v-model="pickerValue" class="adm-select" @focus="ensureOptions" @mousedown="ensureOptions">
+        <option value="">
+          <template v-if="loading">載入中…</template>
+          <template v-else>選擇要加入的{{ UNIT_REGISTRY[field.targetUnit].label }}…</template>
+        </option>
         <option v-for="opt in availableOptions()" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
       <button type="button" class="btn btn--ghost btn--sm" @click="add">加入</button>
     </div>
+    <p v-if="loadError" class="adm-field__error">{{ loadError }}</p>
+    <p v-else-if="needsSearch" class="adm-field__hint">
+      共 {{ totalCount }} 筆，這裡只列出前 {{ options.length }} 筆 —— 要找的不在清單裡就用上面的搜尋框。
+    </p>
   </div>
 </template>

@@ -192,10 +192,22 @@ export const HOME_SECTION_KEYS: HomeSectionKey[] = [
 ]
 
 /** 每個版位只能挑選已存在的內容，不能另打文案——這裡只存 ContentItemId ＋ SortOrder，
- * 沒有 Title／Text 欄位（docs/08 §G-2）。顯示用的標題由呼叫端拿到 id 之後另外查。 */
+ * 沒有 Title／Text 欄位（docs/08 §G-2）。 */
 export interface HomeSectionItemRef {
   contentItemId: number
   sortOrder: number
+  /**
+   * 顯示用的標題，**由 API 一起帶回來**（`HomeSectionItemDto.ContentTitle`）。
+   *
+   * 🔴 **不要再拿 id 去把整個單元的清單抓回來配標題。** 2026-09-18 之前的做法是
+   *    對每一個 `targetUnit` 呼叫 `taxonomy.unitOptions()`，而那支會把該單元
+   *    **整份**翻頁抓回來 —— `latest-articles` 指向文章（1100 筆）就是 12 趟往返，
+   *    而畫面上真正要顯示的只有被引用的那三、四筆。實測光這一項就佔掉整頁
+   *    35 次請求中的 12 次，而且是**擋在畫面算繪之前**的 await。
+   * ⚠️ 送回 API 時不送它（`putSections` 只送 `contentItemId`／`sortOrder`）——
+   *    標題是既有內容的欄位，不是版位自己的資料。
+   */
+  title: string
 }
 
 /**
@@ -319,7 +331,7 @@ function toHomeSection(row: ServerHomeSection): HomeSection {
     items: row.items
       .slice()
       .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((i) => ({ contentItemId: i.contentItemId, sortOrder: i.sortOrder })),
+      .map((i) => ({ contentItemId: i.contentItemId, sortOrder: i.sortOrder, title: i.contentTitle })),
     settingsValue: schema ? parseStructured(schema, row.settings) : undefined,
     rawSettings: row.settings,
   }
@@ -438,13 +450,9 @@ const home = {
     return loadHomeState()
   },
 
-  async reorderSections(orderedKeys: HomeSectionKey[], _userId: number): Promise<HomeSectionsState> {
-    const state = await loadHomeState()
-    const byKey = new Map(state.sections.map((s) => [s.sectionKey, s]))
-    const ordered = orderedKeys.map((k) => byKey.get(k)).filter((s): s is HomeSection => Boolean(s))
-    await putSections(ordered)
-    return loadHomeState()
-  },
+  // ⚠️ `reorderSections()` 2026-09-18 刪除 —— 那一頁的拖曳把手拿掉了（決策 23：
+  //    前台不讀版位順序），它從此沒有呼叫端。順序仍然隨 `saveDraft()` 一起送出
+  //    （`putSections` 用陣列位置當 sortOrder），不需要一支專門的端點。
 
   /**
    * 發布。走的是**首頁那筆 Page** 的發布端點 —— 版位編排會隨版本快照一起帶走

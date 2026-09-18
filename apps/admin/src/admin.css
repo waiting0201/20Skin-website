@@ -687,25 +687,47 @@
 }
 .adm-relation__row-title { flex: 1; font-weight: 600; }
 .adm-relation__row-note { flex: 1.4; }
-.adm-relation__add { display: flex; gap: var(--sp-2); }
-.adm-relation__add select { flex: 1; }
+.adm-relation__add { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.adm-relation__add select { flex: 1; min-width: 0; }
+/* 搜尋框只在「一頁列不完」的單元出現（文章 1100 筆、標籤 406 筆）。
+   ⚠️ 給它一個基準寬度並允許換行 —— 與下拉並排時兩個都被壓到 100px，
+   兩邊都看不出在打什麼、選什麼。 */
+.adm-relation__search { flex: 1 1 14rem; min-width: 0; }
 
 
 /* =========================================================================
    14. 編輯畫面
    -------------------------------------------------------------------------
-   兩種版面，共用 `.adm-editor`（寬度上限）＋ `.adm-editor-main`（段落節奏）：
+   兩種版面，共用 `.adm-editor`（寬度上限）＋ `.adm-editor-main`（段落節奏），
+   **兩邊都是兩欄**：
 
-   單欄　　首頁版位編排（HomeSections.vue）。960px，右邊留白。
-   兩欄　　內容編輯頁（EditPage.vue）：`.adm-editor--aside` 放寬寬度上限，
-   　　　　內層 `.adm-editor-layout` 切成主欄 ＋ `.adm-editor-side`（sticky）。
+   內容編輯頁（EditPage.vue）　　主欄（本文／關聯／SEO）＋ 300px 右欄（排程／危險區，sticky）
+   首頁版位編排（HomeSections.vue）主欄（六個挑選版位）＋ 400px 右欄（主視覺輪播，**不 sticky**）
 
    ⚠️ 沿革：2026-09-17 由「主欄 ＋ 右側工作流側欄」改成單欄（送審那一層拿掉）；
-      2026-09-18 Tim 指定把排程與危險區搬回右欄 —— 主欄壓在 960px 之後，
-      右邊本來就空著一整條。
+      2026-09-18 Tim 指定把排程與危險區搬回編輯頁右欄，同日再指定把首頁版位的
+      主視覺輪播也搬到右欄 —— 主欄壓在 960px 之後，右邊本來就空著一整條。
    🔴 回來的是**版面**，不是工作流：右欄沒有送審、沒有審核、沒有版本歷程，
       也不要往裡面加。`.adm-workflow*` 那組 class 沒有復活。
    ========================================================================= */
+
+/* 標題列釘在頂端：長表單捲到一半時，發布與儲存還在原地
+   （Tim 指定 2026-09-18：「不要跟著被滑走」）。
+   🔴 **`>` 不可省。** `.adm-page__head` 在首頁版位那一頁還被拿來當**卡片內**的
+      標題列用了七次 —— 少了直接子選擇器，那七張卡片的標題會各自變成 sticky。
+   ⚠️ 底色一定要給（`--surface-alt` ＝ body 底色）：sticky 元素預設透明，
+      捲到它底下的卡片會直接透出來疊在按鈕上。
+   ⚠️ `top` 就是 topbar 的高度，不留空隙 —— 留了空隙，卷動的內容會從那一條縫裡
+      穿過去，看起來像是破圖。 */
+.adm-editor > .adm-page__head {
+  position: sticky;
+  top: var(--adm-topbar-h);
+  /* topbar 是 10；這裡要蓋住捲上來的卡片（無 z-index），但不能蓋住 topbar。 */
+  z-index: 5;
+  background: var(--surface-alt);
+  padding-block: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
 /* 🔴 寬度上限掛在最外層（含標題列與訊息框），不是只掛內容欄 ——
    只掛內容欄的話，標題列右側的「發布」會被推到內容上限的右緣，
    與下方卡片的右緣對不齊，看起來像是浮在旁邊的另一個東西。 */
@@ -729,7 +751,10 @@
    等於沒搬。頂端讓開固定的 topbar，不然卡片上緣會被它蓋住。 */
 .adm-editor-side {
   position: sticky;
-  top: calc(var(--adm-topbar-h) + var(--sp-5));
+  /* 🔴 讓開釘住的標題列。`--adm-page-head-h` 由 src/sticky-head.ts 量測後寫入
+     最近的 `.adm-editor` 上 —— 寫死數字的話，標題一換行右欄上緣就被蓋掉一截。
+     後備值 104px 是單行標題 ＋ 一行狀態的實測高度（量不到時至少不會疊在一起）。 */
+  top: calc(var(--adm-topbar-h) + var(--adm-page-head-h, 104px) + var(--sp-4));
   display: flex;
   flex-direction: column;
   gap: var(--sp-6);
@@ -757,6 +782,15 @@
   .adm-editor-side { position: static; }
   .adm-editor--aside { max-width: 960px; }
 }
+
+/* 首頁版位編排的右欄：主視覺輪播。
+   🔴 **比編輯頁的右欄寬**（400 vs 300）：它裝的是圖片上傳 ＋ 圖說，300px 之下
+      預覽縮圖與檔名擠成一團。主欄因此約 792px —— 那六張卡片只有一個核取方塊
+      加一個挑選器，收得下。
+   🔴 **不 sticky**：這是整頁最高的一張卡片（一列一張輪播圖），sticky 在比視窗
+      還高的元素上只會把下半截釘在畫面外，捲不到也點不到。 */
+.adm-editor-layout--hero { --adm-editor-side-w: 400px; }
+.adm-editor-side--hero { position: static; }
 
 /* 🔴 `.adm-workflow`（那個裝著送審／審核／版本歷程的右側側欄）2026-09-17 刪除，
    **沒有隨著 `.adm-editor-layout` 一起回來** —— 2026-09-18 回來的是兩欄版面，

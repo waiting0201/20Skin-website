@@ -39,10 +39,11 @@ import type { RelationItem, UnitKey } from '@/types'
 import type { RelationField } from '@/unit-schema'
 import { UNIT_REGISTRY } from '@/units'
 import { validateStructured } from '@/validation'
-import DragHandle from '@/components/DragHandle.vue'
 import RelationPicker from '@/components/RelationPicker.vue'
 import StructuredField from '@/components/StructuredField.vue'
-import { useDragSort } from '@/drag-sort'
+import { useStickyHead } from '@/sticky-head'
+
+const { headRef } = useStickyHead()
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
@@ -67,16 +68,25 @@ const sections = reactive<HomeSection[]>([])
 const isLocked = computed(() => state.value?.status === 2)
 const canEdit = computed(() => canEditBase.value && !isLocked.value)
 
+/**
+ * 🔴 **版位不給拖曳排序**（Tim 定案 2026-09-18：「拿掉把手」）。
+ *    理由與「文章不給拖」同一條（決策 21）：**前台根本不讀這個順序** ——
+ *    `apps/web/app/pages/index.vue` 的七個 `<section>` 是寫死的先後，
+ *    `sortOrder` 只有後台自己看得到。給把手等於給一個拖了也不會有事情發生的假功能。
+ * ⚠️ 排序值仍然照讀照送（`putSections` 用陣列位置當 sortOrder，所以這裡一定要
+ *    用排好的那一份送出，不是 `sections` 的載入順序）。
+ */
 const sortedSections = computed(() => [...sections].sort((a, b) => a.sortOrder - b.sortOrder))
 
-const drag = useDragSort<HomeSectionKey>({
-  keys: () => sortedSections.value.map((s) => s.sectionKey),
-  onReorder: (_group, orderedKeys) => reorderSections(orderedKeys),
-  enabled: () => canEdit.value,
-})
-
-// 內容標題快取：{ unit: { id: label } }，畫面上把 ContentItemId 換成可讀標題。
-const titleCache = reactive<Record<string, Record<number, string>>>({})
+/**
+ * 🔴 **主視覺自己一欄**（Tim 指定 2026-09-18：「把主視覺輪播放過去」右邊那片空白）。
+ *    它是七個版位裡唯一「有東西可以編」的（輪播圖 ＋ 圖說），其餘六個只有一個
+ *    開關加一個挑選器 —— 主欄因此短、右欄因此有內容，空白就被填掉了。
+ * ⚠️ 判斷用 `schemaOf()` 而不是寫死 `'hero'`：哪天再有第二個版位長出設定表單，
+ *    它會自己跟著搬過去，而不是靜悄悄地留在主欄底下。
+ */
+const heroSection = computed(() => sortedSections.value.find((x) => schemaOf(x)) ?? null)
+const mainSections = computed(() => sortedSections.value.filter((x) => x !== heroSection.value))
 
 function messageOf(e: unknown, fallback: string): string {
   if (e instanceof ApiError) return e.details.length ? `${e.message}（${e.details.join('、')}）` : e.message
@@ -84,31 +94,22 @@ function messageOf(e: unknown, fallback: string): string {
   return fallback
 }
 
-async function loadTitleCache(unit: UnitKey) {
-  if (titleCache[unit]) return
-  try {
-    const options = await adminApi.taxonomy.unitOptions(unit)
-    titleCache[unit] = Object.fromEntries(options.map((o) => [Number(o.value), o.label]))
-  } catch (e) {
-    // 取不到只是版位裡的項目顯示成 `#12` 而不是標題，不該擋住整個畫面。
-    titleCache[unit] = {}
-    console.error(`載入 ${unit} 標題快取失敗`, e)
-  }
-}
-
-function titleFor(unit: UnitKey, id: number): string {
-  return titleCache[unit]?.[id] ?? `#${id}`
-}
-
+/**
+ * 版位裡的項目 → RelationPicker 的形狀。
+ *
+ * 🔴 **標題直接用 API 帶回來的那一份**（`HomeSectionItemRef.title`）。
+ *    2026-09-18 之前這裡查的是一份「把整個單元抓回來」建出來的快取 ——
+ *    `latest-articles` 指向文章（1100 筆）就是 12 趟往返，只為了配三、四個標題。
+ */
 function toRelationItems(section: HomeSection): RelationItem[] {
   if (!section.targetUnit) return []
   return [...section.items]
     .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((i) => ({ id: i.contentItemId, title: titleFor(section.targetUnit as UnitKey, i.contentItemId), sortOrder: i.sortOrder }))
+    .map((i) => ({ id: i.contentItemId, title: i.title, sortOrder: i.sortOrder }))
 }
 
 function fromRelationItems(items: RelationItem[]): HomeSectionItemRef[] {
-  return items.map((i, index) => ({ contentItemId: i.id, sortOrder: index }))
+  return items.map((i, index) => ({ contentItemId: i.id, sortOrder: index, title: i.title }))
 }
 
 /** 給 RelationPicker 用的假關聯欄位宣告——relationType 只是滿足型別，這裡
@@ -141,11 +142,9 @@ async function load() {
   loading.value = true
   loadError.value = ''
   try {
-    const current = await adminApi.site.home.get()
-    const targetUnits = new Set<UnitKey>()
-    for (const s of current.sections) if (s.targetUnit) targetUnits.add(s.targetUnit)
-    await Promise.all([...targetUnits].map(loadTitleCache))
-    applyState(current)
+    // ⚠️ 只有這一趟。項目的標題 API 已經一起回來了，挑選器的選項則是
+    //    **打開才載**（RelationPicker）—— 兩者加起來原本要 30 幾次請求。
+    applyState(await adminApi.site.home.get())
   } catch (e) {
     loadError.value = messageOf(e, '載入首頁版位失敗。')
   } finally {
@@ -154,16 +153,6 @@ async function load() {
 }
 
 onMounted(load)
-
-// 拖曳排序（2026-09-17 取代上／下移動按鈕）。
-// ⚠️ 這裡只改本地的 sortOrder，**不打 API** —— 版位編排是「改完一次存草稿、
-//    再發布」，跟清單頁那種「動一下就即時寫回」不一樣。存檔仍走 saveDraft()。
-function reorderSections(orderedKeys: HomeSectionKey[]) {
-  orderedKeys.forEach((key, index) => {
-    const section = sections.find((s) => s.sectionKey === key)
-    if (section) section.sortOrder = index
-  })
-}
 
 // ── 版位設定（目前只有 hero 的輪播圖）─────────────────────────────────
 //
@@ -212,7 +201,11 @@ async function saveDraft(): Promise<boolean> {
     //    所以它同時取代了原本那行 `JSON.parse(JSON.stringify(s))` 的深拷貝。
     //    ⚠️ 不可以退回 JSON 深拷貝：`File` 與 object URL 都活不過序列化，
     //    一張待上傳的圖會被寫成 `{"pending":true,"alt":null}` 存進資料庫。
-    const payload = await uploadPendingImages(sections.map((s) => ({ ...s })))
+    // 🔴 送 `sortedSections` 而不是 `sections`：`putSections` 用**陣列位置**當
+    //    sortOrder（`sortOrder: index`），而 `sections` 是載入時的順序、拖曳只改
+    //    了每一筆的 `sortOrder` 欄位。送未排序的那一份＝畫面上排好了、存下去
+    //    卻還是原來的順序，而且不會有任何錯誤。
+    const payload = await uploadPendingImages(sortedSections.value.map((x) => ({ ...x })))
     const next = await adminApi.site.home.saveDraft(payload, user!.id)
     applyState(next)
     actionNotice.value = '草稿已儲存。還沒發布，前台不會有任何變化。'
@@ -264,11 +257,14 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
 </script>
 
 <template>
-  <!-- ⚠️ 版面對齊九個內容模型的編輯畫面（Tim 指定 2026-09-17）：
-       單欄 `.adm-editor` ＋ 960px 上限、動作在標題列、綠色儲存靠右且在卡片外。
-       原本是 `.adm-editor-layout` 兩欄 ＋ 右側 sticky 側欄，與其他表單頁長得不一樣。 -->
-  <section class="adm-page adm-editor">
-    <header class="adm-page__head">
+  <!-- ⚠️ 版面對齊九個內容模型的編輯畫面（Tim 指定 2026-09-17）：動作在標題列、
+       綠色儲存靠右且在卡片外。
+       ⚠️ 2026-09-18 由單欄改回兩欄（Tim：「首頁版位編排的右側也是有一片空白」）——
+       右欄放的是**主視覺輪播**，不是編輯頁那個排程／危險區側欄。
+       🔴 右欄不 sticky，理由見 admin.css 的 `.adm-editor-side--hero`。 -->
+  <section class="adm-page adm-editor adm-editor--aside">
+    <!-- ⚠️ `ref="headRef"`：標題列 sticky，高度量出來給右欄讓位（src/sticky-head.ts）。 -->
+    <header ref="headRef" class="adm-page__head">
       <div>
         <h1 class="adm-page__title">首頁版位編排</h1>
         <p class="adm-page__desc">
@@ -305,26 +301,22 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
       <p v-if="actionNotice" class="adm-alert" :class="`adm-alert--${actionNoticeVariant}`" role="status">{{ actionNotice }}</p>
       <p v-if="actionError" class="adm-alert adm-alert--danger" role="alert">{{ actionError }}</p>
 
+      <!-- 兩欄：主欄是六個「挑選既有內容」的版位，右欄是主視覺輪播
+           （Tim 指定 2026-09-18：右邊那一整片空白拿來放主視覺）。
+           ⚠️ 右欄**不 sticky**：它裝的是這一頁最高的那張卡片（輪播圖一列一張），
+           sticky 在比視窗還高的元素上只會把下半截釘在畫面外，捲不到。
+           編輯頁的右欄（排程／危險區）很矮，那裡 sticky 才有意義。 -->
+      <div class="adm-editor-layout adm-editor-layout--hero">
       <div class="adm-editor-main">
-          <div
-            v-for="section in sortedSections"
-            :key="section.sectionKey"
-            class="adm-card"
-            v-bind="drag.itemProps('sections', section.sectionKey)"
-            :class="drag.itemClass('sections', section.sectionKey)"
-          >
+          <div v-for="section in mainSections" :key="section.sectionKey" class="adm-card">
             <div class="adm-page__head" style="margin-bottom: var(--sp-3)">
               <div>
                 <p class="adm-card__title" style="margin-bottom: 0; display: flex; align-items: center; gap: var(--sp-2)">
-                  <DragHandle v-if="canEdit" v-bind="drag.handleProps(section.sectionKey)" />
                   {{ section.title }}
                   <span class="adm-muted" style="font-weight: 400; font-size: var(--fs-xs)">（{{ section.sectionKey }}）</span>
                 </p>
                 <p v-if="section.targetUnit" class="adm-field__hint">
                   內容來源：{{ UNIT_REGISTRY[section.targetUnit].label }}——只能從既有的{{ UNIT_REGISTRY[section.targetUnit].label }}挑選，不能另打文案。
-                </p>
-                <p v-else-if="schemaOf(section)" class="adm-field__hint">
-                  唯一例外：沒有對應的內容模型，圖與圖說直接存在版位設定裡。
                 </p>
                 <p v-else class="adm-field__hint">
                   這一區的內容存在版位設定裡，不在這個畫面編輯——這裡只能開關與調整順序。
@@ -332,50 +324,20 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
               </div>
             </div>
 
-            <!-- 🔴 **這裡沒有「版位標題」與「副標／Eyebrow」兩格**（Tim 指定 2026-09-17）。
-                 兩個理由，缺一都不夠：
-                 ① `putSections` 只送 `sectionKey／isEnabled／sortOrder／settings／items`，
-                    **標題與副標根本沒有被送上去** —— 打了字、按了儲存、什麼都沒發生；
-                 ② 就算送上去也沒有用：前台那兩行字來自 `app/data/_presentation.ts`
-                    （決策 14：版面留前台），資料庫的 `HomeSections.Title` 只給匯出用。
-                 ⚠️ 版位叫什麼名字看卡片標題那一行就好，它來自 `HOME_SECTION_META`。 -->
-            <div class="adm-field-grid" style="margin-bottom: var(--sp-4)">
-              <div class="adm-field">
-                <label class="adm-checkbox">
-                  <input v-model="section.isEnabled" type="checkbox" :disabled="!canEdit">
-                  在首頁顯示這個版位
-                </label>
-              </div>
-            </div>
+            <!-- 🔴 **這張卡片沒有「版位標題」「副標／Eyebrow」，也沒有「在首頁顯示這個版位」**
+                 —— 三個都是 Tim 指定拿掉的「編了不生效」欄位：
+                 ① 標題與副標（2026-09-17）：`putSections` 根本沒送它們，而前台那兩行字
+                    來自 `app/data/_presentation.ts`（決策 14：版面留前台）；
+                 ② 顯示開關（2026-09-18）：關掉**只會讓那一區變空**，區塊本身照樣渲染 ——
+                    `apps/web/app/pages/index.vue` 的 `<section>` 沒有 `v-if`，
+                    前台會留下一塊只有標題與英文小標的空白區，比「關掉」更糟。
+                 ⚠️ `isEnabled` 仍然照讀照送（原值原樣回去），只是畫面上沒有入口可以改它。 -->
 
-            <!-- 版位設定（目前只有 hero 的輪播圖）——形狀宣告在 units/schemas/home.ts，
-                 用九個內容模型同一套 StructuredField 渲染，含上傳與「進階：直接編輯 JSON」。
-                 🔴 圖是**按下儲存才上傳**（src/image-value.ts），所以 saveDraft 一定要
-                    先跑 uploadPendingImages()。 -->
-            <div v-if="schemaOf(section)" class="adm-field">
-              <label class="adm-field__label">主視覺輪播</label>
-              <StructuredField
-                :schema="schemaOf(section)"
-                :model-value="section.settingsValue"
-                :disabled="!canEdit"
-                :path="section.sectionKey"
-                :errors="settingsErrors"
-                @update:model-value="(v) => (section.settingsValue = v)"
-              />
-              <!-- ⚠️ 換圖之後**舊檔不會被刪**：內容模型的圖是由發布流程清掉上一版
-                   獨有的 blob（ContentHandler），版位設定沒有走那條路。留下來的
-                   孤兒檔靠 tools/blob-reconcile 離線對帳 —— 寧可多留幾個檔案，
-                   也不要刪到已發布快照還指著的那一張（那是線上破圖）。 -->
-              <p class="adm-field__hint">
-                ⚠️ 換掉或移除的舊圖會留在儲存體裡（不會自動刪除），不影響前台顯示。
-              </p>
-            </div>
-
-            <!-- 其餘五個版位：只能挑選既有內容
+            <!-- 五個版位：只能挑選既有內容
                  ⚠️ **是五個不是六個** —— specialties 的挑選器已於 2026-09-17 拿掉
                  （它存進 HomeSectionItems，而前台讀的是 settings，見 api/site.ts 的
                  HOME_SECTION_META）。 -->
-            <div v-else-if="section.targetUnit">
+            <div v-if="section.targetUnit">
               <RelationPicker
                 v-if="canEdit"
                 :field="relationFieldFor(section)"
@@ -416,7 +378,45 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
           <p v-if="!canPublish" class="adm-muted">
             目前沒有發布首頁的權限，排好之後請找有權限的人按「發布」。
           </p>
-      </div>
+      </div><!-- /.adm-editor-main -->
+
+      <!-- 右欄：主視覺輪播。
+           🔴 **它不在拖曳清單裡**（drag.keys 只收主欄那六個），所以沒有把手 ——
+              排序值原封不動，見 reorderSections。
+           ⚠️ 版位設定的形狀宣告在 units/schemas/home.ts，用九個內容模型同一套
+              StructuredField 渲染（含上傳與「進階：直接編輯 JSON」）。
+           🔴 圖是**按下儲存才上傳**（src/image-value.ts），所以 saveDraft 一定要
+              先跑 uploadPendingImages()。 -->
+      <aside v-if="heroSection" class="adm-editor-side adm-editor-side--hero">
+        <div class="adm-card">
+          <p class="adm-card__title" style="margin-bottom: var(--sp-1)">
+            {{ heroSection.title }}
+            <span class="adm-muted" style="font-weight: 400; font-size: var(--fs-xs)">（{{ heroSection.sectionKey }}）</span>
+          </p>
+          <p class="adm-field__hint">
+            唯一例外：沒有對應的內容模型，圖與圖說直接存在版位設定裡。
+          </p>
+
+
+          <div class="adm-field">
+            <label class="adm-field__label">主視覺輪播</label>
+            <StructuredField
+              :schema="schemaOf(heroSection)"
+              :model-value="heroSection.settingsValue"
+              :disabled="!canEdit"
+              :path="heroSection.sectionKey"
+              :errors="settingsErrors"
+              @update:model-value="(v) => (heroSection!.settingsValue = v)"
+            />
+            <!-- ⚠️ **這裡不寫「舊檔會不會被刪」**（Tim 指定 2026-09-18：「不用寫，
+                 只要有建議尺寸就好」）。事實仍然是：版位設定的圖換掉不會刪舊檔，
+                 孤兒檔靠 tools/blob-reconcile 離線對帳 —— 所以 schema 的圖片節點
+                 帶 `deletesOldFile: false`，ImageField 那句「會被刪」的警告不會出現。
+                 建議尺寸留在 schema 的 hint 上。 -->
+          </div>
+        </div>
+      </aside>
+      </div><!-- /.adm-editor-layout -->
     </template>
   </section>
 </template>

@@ -27,7 +27,7 @@ export type StructuredNode =
    * `block.level === 2` 永遠不成立，那個標題就會掉到 H3 的分支去。
    */
   | { kind: 'enum'; options: SelectOption[]; numeric?: boolean }
-  | { kind: 'image'; shape: ImageShape }
+  | { kind: 'image'; shape: ImageShape; /** 換圖／移除會不會真的刪掉舊檔（預設 true）。見 ImageField 的同名 prop。 */ deletesOldFile?: boolean }
   | { kind: 'object'; fields: StructuredField[] }
   | { kind: 'array'; item: StructuredNode; itemLabel: string; summaryKeys?: string[]; collapsible?: boolean }
   | { kind: 'union'; discriminator: string; variants: StructuredVariant[] }

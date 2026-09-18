@@ -38,7 +38,11 @@ export const heroSlidesSchema: StructuredSchema = {
         {
           key: 'image',
           label: '圖片',
-          node: { kind: 'image', shape: 'content-image' },
+          // 🔴 `deletesOldFile: false` —— 版位設定的圖**不會**在存檔時被刪掉
+          //    （沒有走內容模型那條「發布時清掉上一版獨有 blob」的路，孤兒檔靠
+          //    tools/blob-reconcile 離線對帳）。少了這個旗標，ImageField 會顯示
+          //    一句與事實相反的警告。
+          node: { kind: 'image', shape: 'content-image', deletesOldFile: false },
           required: true,
           hint: '建議橫幅比例（現有四張是 320×220）。替代文字在圖片下方那一欄填。',
         },

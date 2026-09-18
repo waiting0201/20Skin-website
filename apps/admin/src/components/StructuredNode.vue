@@ -299,10 +299,13 @@ const fieldPath = (key: string) => (props.path ? `${props.path}.${key}` : key)
   </div>
 
   <!-- 圖片 -->
+  <!-- ⚠️ `deletesOldFile` 由 schema 宣告：首頁版位設定的圖不會被刪（沒有走發布
+       流程那條清 blob 的路），在那裡顯示「會被刪」的警告就是說謊。 -->
   <ImageField
     v-else-if="node.kind === 'image'"
     :model-value="imageValue"
     :disabled="disabled"
+    :deletes-old-file="node.deletesOldFile !== false"
     @update:model-value="setImage"
   />
 

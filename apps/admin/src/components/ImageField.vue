@@ -30,10 +30,26 @@ import {
   type ImageValue,
 } from '../image-value'
 
-const props = defineProps<{
+// 🔴 **`withDefaults` 不是可有可無的。** Vue 對宣告成 boolean 的 prop 有「缺席即 false」
+//    的轉型規則 —— 沒傳 `deletes-old-file` 時 `props.deletesOldFile` 是 **false**，
+//    不是 undefined。所以「沒指定就當成 true」必須在這裡明講，
+//    不能寫成 `props.deletesOldFile !== false` 之類的防呆（那樣九個內容模型那邊
+//    **每一個圖片欄位的刪檔警告都會靜默消失**，而畫面上完全看不出來 ——
+//    2026-09-18 實際踩到，靠端到端檢查才發現）。
+const props = withDefaults(defineProps<{
   modelValue: ImageValue | null
   disabled?: boolean
-}>()
+  /**
+   * 換圖／移除之後，舊檔案會不會真的被刪掉。
+   *
+   * 🔴 **這是事實的兩種版本，不是文案偏好。** 九個內容模型的圖走發布流程，
+   *    發布時會清掉上一版獨有的 blob（`ContentHandler`）—— 那裡要照實警告。
+   *    首頁版位設定的圖**沒有走那條路**（孤兒檔靠 `tools/blob-reconcile` 離線對帳），
+   *    在那裡顯示同一句話就是**對使用者說謊**。
+   * ⚠️ 預設 true：新的使用處若忘了指定，寧可多一句警告，不要少一句。
+   */
+  deletesOldFile?: boolean
+}>(), { deletesOldFile: true })
 
 const emit = defineEmits<{ 'update:modelValue': [ImageValue | null] }>()
 
@@ -123,7 +139,7 @@ onBeforeUnmount(() => releasePendingImage(props.modelValue))
       {{ pending.file.name }}（{{ sizeText(pending.file.size) }}<template v-if="pending.width">・{{ pending.width }}×{{ pending.height }}</template>）
       —— 目前只是瀏覽器裡的預覽，<strong>按下表單的儲存按鈕才會真的上傳</strong>。
     </p>
-    <p v-else-if="modelValue" class="adm-upload__todo">
+    <p v-else-if="modelValue && props.deletesOldFile" class="adm-upload__todo">
       ⚠️ 移除或換圖之後，舊檔案會在存檔時從 Blob 刪除，版本還原不會把它變回來。
     </p>
   </div>

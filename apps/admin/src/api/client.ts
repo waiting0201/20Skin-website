@@ -33,6 +33,7 @@ import {
   clearStoredRefreshToken,
   currentRefreshToken,
   fetchAllPages,
+  MAX_PAGE_SIZE,
   normalizePaged,
   request,
   setTokens,
@@ -389,6 +390,29 @@ const taxonomy = {
    * ⚠️ 有關鍵字就交給 API 在 SQL 層過濾（docs/10 §2）。沒有關鍵字時才整份抓 ——
    * 文章有約 800 筆，那是 8 趟往返，所以關聯選擇器一律應該帶關鍵字進來。
    */
+  /**
+   * 選項的**第一頁**（最多 100 筆）＋ 全部有幾筆。
+   *
+   * 🔴 **挑選器要用這一支，不要用下面那支 `unitOptions()`。** 那一支會把整個單元
+   *    翻頁抓回來 —— 文章 1100 筆就是 12 趟往返，而且 `<select>` 裡塞 1100 個
+   *    `<option>` 本來就不是能用的介面。超過一頁時改用關鍵字搜尋（同一支，帶
+   *    `keyword`）才是正解。
+   * ⚠️ `totalCount` 是**伺服器給的總數**，不是 `options.length` —— 呼叫端要靠
+   *    兩者不相等來判斷「還有沒被列出來的」。
+   */
+  async unitOptionsPage(unit: UnitKey, keyword?: string): Promise<{ options: { value: string; label: string }[]; totalCount: number }> {
+    assertUnit(unit)
+    const paged = normalizePaged(
+      await request<ServerPaged<ServerListItem>>(`/admin/${unit}`, {
+        query: { keyword: keyword || undefined, page: 1, pageSize: MAX_PAGE_SIZE },
+      }),
+    )
+    return {
+      options: paged.items.map((r) => ({ value: String(r.id), label: r.title })),
+      totalCount: paged.totalCount,
+    }
+  },
+
   async unitOptions(unit: UnitKey, keyword?: string): Promise<{ value: string; label: string }[]> {
     assertUnit(unit)
     if (keyword) {

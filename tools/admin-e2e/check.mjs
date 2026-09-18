@@ -282,6 +282,46 @@ await step('🔴 新增按鈕只有一顆，型別在對話框裡問', async () 
   return `一顆「${buttons[0].trim()}」，型別在對話框裡`
 })
 
+section('首頁版位編排：兩欄版面與那三個被拿掉的東西')
+await step('開得起來，而且是兩欄（右欄＝主視覺）', async () => {
+  await navigate(page, '/admin/home-sections')
+  await page.waitForSelector('.adm-editor-side--hero', { timeout: 30000 })
+  await page.waitForTimeout(1200)
+  const main = await page.locator('.adm-editor-main').first().boundingBox()
+  const side = await page.locator('.adm-editor-side--hero').boundingBox()
+  if (!side || side.x < main.x) throw new Error('右欄不在主欄右邊')
+  return `主欄 ${Math.round(main.width)}px ／ 右欄 ${Math.round(side.width)}px`
+})
+await step('🔴 沒有拖曳把手（前台不讀版位順序）', async () => {
+  // 決策 23：給把手等於給一個「拖了不會有事情發生」的假功能。
+  const n = await page.locator('.adm-drag-handle').count()
+  if (n) throw new Error(`還有 ${n} 個把手`)
+  return '0 個'
+})
+await step('🔴 沒有「在首頁顯示這個版位」（關掉只會留下空區塊）', async () => {
+  // 決策 23：關掉只讓那一區變空，前台那個 <section> 沒有 v-if，會留下一塊
+  // 只有標題與英文小標的空白區 —— 比關不掉更糟。
+  const n = await page.locator('.adm-checkbox').filter({ hasText: '在首頁顯示' }).count()
+  if (n) throw new Error(`還有 ${n} 個`)
+  return '0 個'
+})
+await step('🔴 主視覺的圖片欄位不談刪檔，只給建議尺寸', async () => {
+  // 版位設定的圖換掉**不會**被刪（沒走發布那條清 blob 的路），
+  // 顯示 ImageField 那句通用警告等於說謊 —— schema 用 deletesOldFile: false 關掉它。
+  const txt = await page.locator('.adm-editor-side--hero').innerText()
+  if (txt.includes('從 Blob 刪除')) throw new Error('顯示了「舊檔會被刪」——那在這一頁是錯的')
+  if (!txt.includes('建議橫幅比例')) throw new Error('建議尺寸不見了')
+  return '只剩建議尺寸'
+})
+await step('🔴 但九個內容模型那邊的刪檔警告還在', async () => {
+  // Vue 對 boolean prop 有「缺席即 false」的轉型 —— 用 `!== false` 寫防呆的話，
+  // 這裡**每一個圖片欄位的警告都會靜默消失**（2026-09-18 實際踩到）。
+  await openEdit(page, 'doctor', (await api('/admin/doctor?page=1&pageSize=1')).data.items[0].id)
+  const txt = await page.locator('.adm-editor-main').innerText()
+  if (!txt.includes('從 Blob 刪除')) throw new Error('那裡的警告也跟著不見了（多半是 withDefaults 被拿掉）')
+  return '還在'
+})
+
 section('模式切換：選中的那顆要看得出來')
 await step('表單／進階 JSON 的選中狀態沒有反過來', async () => {
   // 🔴 這一條擋的是「亮的是沒被選中的那一顆」（2026-09-17 修）：base.css 的
