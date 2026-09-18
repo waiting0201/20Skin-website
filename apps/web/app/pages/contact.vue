@@ -48,6 +48,85 @@ type SubmitStatus = 'idle' | 'sending' | 'sent' | 'error'
 const status = ref<SubmitStatus>('idle')
 const errorMessage = ref('')
 
+// ── 前端驗證 ──────────────────────────────────────────────────────────────
+//
+// 🔴 **這一關不是安全邊界，是可用性。** 真正的驗證在 API（`FormHandler.SubmitContactAsync`），
+//    前端只是讓人**當場**知道哪一格不對 —— 少了它，送出之後看到的是一行小字
+//    「有欄位未填或格式不正確」，而畫面上沒有任何東西指出是哪一格。
+//
+// ⚠️ **規則要比 API 嚴一點是刻意的**：API 只要求「電話與 Email 至少擇一」，
+//    但畫面上「聯絡電話」標了 ＊。以畫面說的為準 —— 標了必填卻能送出去，
+//    比多填一格更難理解。改動這裡時記得**兩邊一起看**：
+//    放寬前端而畫面還標著 ＊，或收緊前端而 API 放行，都會變成「說一套做一套」。
+type FieldKey = 'name' | 'phone' | 'email' | 'topic' | 'message' | 'consent'
+
+/** 順序＝畫面上由上而下，決定「跳到第一個沒過的欄位」跳去哪裡。 */
+const FIELD_ORDER = ['name', 'phone', 'email', 'topic', 'message', 'consent'] as const
+const FIELD_IDS: Record<FieldKey, string> = {
+  name: 'cfName',
+  phone: 'cfPhone',
+  email: 'cfEmail',
+  topic: 'cfTopic',
+  message: 'cfMessage',
+  consent: 'cfConsent',
+}
+
+// ⚠️ 電話**不做國碼／位數的嚴格比對**：市話、分機、手機、外籍病人的號碼寫法差異很大，
+//    擋錯一個真的號碼的代價遠大於收到一個怪格式。這裡只擋「明顯不是電話」的輸入。
+const PHONE_RE = /^[0-9+\-()#\s]{8,}$/
+// ⚠️ 與 API 的 `MailAddress` 解析不會完全一致，這裡只擋最常見的手誤（少了 @、少了網域）。
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+
+const errors = reactive<Record<FieldKey, string>>({
+  name: '', phone: '', email: '', topic: '', message: '', consent: '',
+})
+
+/**
+ * 🔴 **送出過一次之前不標紅。** 一進頁面就滿江紅、或打到一半被標記，
+ *    比沒有提示更惱人。送出之後才切成「即時修正」模式（下面的 watch）。
+ */
+const validated = ref(false)
+const invalidCount = computed(() => FIELD_ORDER.filter((k) => errors[k]).length)
+
+function validate(): boolean {
+  const name = form.name.trim()
+  const phone = form.phone.trim()
+  const emailAddress = form.email.trim()
+  const message = form.message.trim()
+
+  errors.name = name ? '' : '請填寫姓名。'
+  errors.phone = !phone
+    ? '請填寫聯絡電話，我們需要它才能回覆你。'
+    : PHONE_RE.test(phone) ? '' : '電話格式不正確，請只填數字與 + - ( ) 等符號，例如 0912-345-678。'
+  errors.email = !emailAddress || EMAIL_RE.test(emailAddress)
+    ? ''
+    : 'Email 格式不正確，正確的寫法像 name@example.com。'
+  errors.topic = form.topic ? '' : '請選擇諮詢主題。'
+  errors.message = message ? '' : '請填寫問題內容。'
+  errors.consent = form.consent ? '' : '請先閱讀並勾選同意隱私權政策，我們才能處理你的資料。'
+
+  return invalidCount.value === 0
+}
+
+// 送出被擋下之後改成即時驗證：使用者一改對，紅色就消失，不必再按一次送出才知道。
+watch(form, () => { if (validated.value) validate() }, { deep: true })
+
+/**
+ * 跳到第一個沒過的欄位。
+ *
+ * 🔴 **只顯示訊息是不夠的** —— 表單有 6 格，送出鈕在最下面，沒填的那一格常常
+ *    已經捲出畫面外。捲動用 `block: 'center'` 而不是預設的 `'start'`：
+ *    頂欄是固定的（`--header-h` 88px），對齊到頂等於把欄位藏到頂欄底下。
+ */
+async function focusFirstInvalid() {
+  await nextTick()
+  const first = FIELD_ORDER.find((k) => errors[k])
+  if (!first) return
+  const el = document.getElementById(FIELD_IDS[first])
+  el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  el?.focus({ preventScroll: true })
+}
+
 /**
  * `POST /contact`（docs/10-api.md §3.1）。
  *
@@ -125,7 +204,31 @@ function errorTextFor(code: string | null, message: string | null): string {
   }
 }
 
+/**
+ * 「清除重填」。
+ *
+ * ⚠️ `type="reset"` 只清 DOM 裡的值，**清不掉 Vue 的狀態** —— 少了這一支，
+ *    按清除之後欄位空了、紅字與紅框卻還在，而且 v-model 的值也還留著舊資料。
+ */
+function handleReset() {
+  validated.value = false
+  for (const key of FIELD_ORDER) errors[key] = ''
+  status.value = 'idle'
+  errorMessage.value = ''
+  Object.assign(form, { name: '', phone: '', email: '', site: '', topic: '', message: '', consent: false })
+}
+
 async function handleSubmit() {
+  // 🔴 先擋在前端，不要拿沒填完的表單去打 API —— 那會白白吃掉一次頻率限制的額度
+  //    （`EnsurePublicQuotaAsync`，以來源 IP 計數），院內共用同一個對外 IP 時特別有感。
+  validated.value = true
+  if (!validate()) {
+    status.value = 'idle'
+    errorMessage.value = ''
+    await focusFirstInvalid()
+    return
+  }
+
   status.value = 'sending'
   errorMessage.value = ''
   try {
@@ -133,6 +236,10 @@ async function handleSubmit() {
     status.value = 'sent'
     // 送出成功後清空，避免使用者重複按送出又送一次同樣的內容。
     Object.assign(form, { name: '', phone: '', email: '', site: '', topic: '', message: '', consent: false })
+    // ⚠️ 清空會讓必填欄位全部變成空的 —— 驗證模式要跟著關掉，否則成功訊息旁邊
+    //    會立刻冒出一整排紅字，看起來像送出失敗。
+    validated.value = false
+    for (const key of FIELD_ORDER) errors[key] = ''
   } catch (e) {
     status.value = 'error'
     errorMessage.value = e instanceof Error ? e.message : '送出失敗，請稍後再試。'
@@ -183,17 +290,32 @@ async function handleSubmit() {
         <div class="contact-form__grid">
           <div class="contact-field">
             <label class="contact-field__label" for="cfName">姓名<span class="contact-field__req">＊</span></label>
-            <input class="contact-input" id="cfName" v-model="form.name" name="name" type="text" autocomplete="name" placeholder="王小明">
+            <input
+              class="contact-input" :class="{ 'is-invalid': errors.name }"
+              id="cfName" v-model="form.name" name="name" type="text" autocomplete="name" placeholder="王小明"
+              :aria-invalid="errors.name ? 'true' : undefined"
+              :aria-describedby="errors.name ? 'cfNameError' : undefined">
+            <p v-if="errors.name" id="cfNameError" class="contact-field__error">{{ errors.name }}</p>
           </div>
 
           <div class="contact-field">
             <label class="contact-field__label" for="cfPhone">聯絡電話<span class="contact-field__req">＊</span></label>
-            <input class="contact-input" id="cfPhone" v-model="form.phone" name="phone" type="tel" autocomplete="tel" placeholder="09XX-XXX-XXX">
+            <input
+              class="contact-input" :class="{ 'is-invalid': errors.phone }"
+              id="cfPhone" v-model="form.phone" name="phone" type="tel" autocomplete="tel" placeholder="09XX-XXX-XXX"
+              :aria-invalid="errors.phone ? 'true' : undefined"
+              :aria-describedby="errors.phone ? 'cfPhoneError' : undefined">
+            <p v-if="errors.phone" id="cfPhoneError" class="contact-field__error">{{ errors.phone }}</p>
           </div>
 
           <div class="contact-field">
             <label class="contact-field__label" for="cfEmail">電子郵件</label>
-            <input class="contact-input" id="cfEmail" v-model="form.email" name="email" type="email" autocomplete="email" placeholder="name@example.com">
+            <input
+              class="contact-input" :class="{ 'is-invalid': errors.email }"
+              id="cfEmail" v-model="form.email" name="email" type="email" autocomplete="email" placeholder="name@example.com"
+              :aria-invalid="errors.email ? 'true' : undefined"
+              :aria-describedby="errors.email ? 'cfEmailError' : undefined">
+            <p v-if="errors.email" id="cfEmailError" class="contact-field__error">{{ errors.email }}</p>
           </div>
 
           <div class="contact-field">
@@ -207,7 +329,11 @@ async function handleSubmit() {
 
           <div class="contact-field contact-field--full">
             <label class="contact-field__label" for="cfTopic">諮詢主題<span class="contact-field__req">＊</span></label>
-            <select class="contact-select" id="cfTopic" v-model="form.topic" name="topic">
+            <select
+              class="contact-select" :class="{ 'is-invalid': errors.topic }"
+              id="cfTopic" v-model="form.topic" name="topic"
+              :aria-invalid="errors.topic ? 'true' : undefined"
+              :aria-describedby="errors.topic ? 'cfTopicError' : undefined">
               <option value="">請選擇</option>
               <option value="treatment">療程相關</option>
               <option value="booking">預約與看診流程</option>
@@ -215,19 +341,30 @@ async function handleSubmit() {
               <option value="media">媒體與合作</option>
               <option value="other">其他</option>
             </select>
+            <p v-if="errors.topic" id="cfTopicError" class="contact-field__error">{{ errors.topic }}</p>
           </div>
 
           <div class="contact-field contact-field--full">
             <label class="contact-field__label" for="cfMessage">問題內容<span class="contact-field__req">＊</span></label>
-            <textarea class="contact-textarea" id="cfMessage" v-model="form.message" name="message" placeholder="請簡述你想詢問的內容。涉及個人膚況的判斷需由醫師面診，表單無法提供診斷或治療建議。"></textarea>
-            <span class="contact-field__hint">請勿在表單中填寫病歷號、身分證字號等個人敏感資料。</span>
+            <textarea
+              class="contact-textarea" :class="{ 'is-invalid': errors.message }"
+              id="cfMessage" v-model="form.message" name="message"
+              placeholder="請簡述你想詢問的內容。涉及個人膚況的判斷需由醫師面診，表單無法提供診斷或治療建議。"
+              :aria-invalid="errors.message ? 'true' : undefined"
+              :aria-describedby="errors.message ? 'cfMessageError cfMessageHint' : 'cfMessageHint'"></textarea>
+            <p v-if="errors.message" id="cfMessageError" class="contact-field__error">{{ errors.message }}</p>
+            <span id="cfMessageHint" class="contact-field__hint">請勿在表單中填寫病歷號、身分證字號等個人敏感資料。</span>
           </div>
         </div>
 
-        <label class="contact-consent" for="cfConsent">
-          <input id="cfConsent" v-model="form.consent" name="consent" type="checkbox">
+        <label class="contact-consent" :class="{ 'is-invalid': errors.consent }" for="cfConsent">
+          <input
+            id="cfConsent" v-model="form.consent" name="consent" type="checkbox"
+            :aria-invalid="errors.consent ? 'true' : undefined"
+            :aria-describedby="errors.consent ? 'cfConsentError' : undefined">
           <span>我已閱讀並同意<a href="/privacy/">隱私權政策</a>，同意 20SKIN 美醫集團為回覆本次詢問之目的蒐集與處理上述個人資料。</span>
         </label>
+        <p v-if="errors.consent" id="cfConsentError" class="contact-field__error">{{ errors.consent }}</p>
 
         <!-- 🔴 Google 的條款：隱藏浮動徽章就**必須**顯示這段聲明，而且要留著這兩個連結。
              徽章之所以隱藏，是因為它與右下角的浮動諮詢鈕（c-consult）會疊在一起。
@@ -238,18 +375,28 @@ async function handleSubmit() {
           <a href="https://policies.google.com/terms" target="_blank" rel="noopener external">服務條款</a>。
         </p>
 
-        <p v-if="status === 'sent'" class="c-note">
+        <p v-if="status === 'sent'" class="c-note" role="status">
           <span class="c-note__icon" aria-hidden="true">&#10003;</span>
           已送出，我們會盡快與您聯繫。若是急事請直接致電院所。
         </p>
-        <p v-if="status === 'error'" class="c-note c-note--warn">
+        <p v-if="status === 'error'" class="c-note c-note--warn" role="alert">
           <span class="c-note__icon" aria-hidden="true">&#9888;</span>
           {{ errorMessage }}
         </p>
 
+        <!-- 送出被前端擋下時的總結。
+             🔴 **位置刻意貼著送出鈕** —— 按下去沒反應的那一刻，視線就在這裡；
+                把它放到表單最上面，使用者根本看不到。真正指出「是哪一格」的是
+                欄位自己的紅字，這一行只負責「你按了，但沒送出去」。
+             ⚠️ role="alert" 不可省：不然讀螢幕的人按下送出之後完全沒有回饋。 -->
+        <p v-if="validated && invalidCount > 0" class="contact-alert" role="alert">
+          <span class="c-note__icon" aria-hidden="true">&#9888;</span>
+          還有 {{ invalidCount }} 個欄位需要修正，請看上方標成紅色的欄位。
+        </p>
+
         <div class="contact-actions">
           <button class="btn btn--primary" type="submit" :disabled="status === 'sending'">{{ status === 'sending' ? '送出中…' : '送出表單' }}</button>
-          <button class="btn btn--line" type="reset">清除重填</button>
+          <button class="btn btn--line" type="reset" @click="handleReset">清除重填</button>
         </div>
 
       </form>

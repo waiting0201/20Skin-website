@@ -63,6 +63,11 @@
 }
 .contact-field__req { color: var(--brand-600); margin-inline-start: .2em; }
 .contact-field__hint { font-size: var(--fs-xs); color: var(--ink-50); }
+/* 🔴 reCAPTCHA 的聲明文字就長在這個 class 上，而 Google 的條款要求那兩個連結
+   **留著** —— base.css 全域把 a 設成 color: inherit + 無底線，於是連結留著卻
+   看不出是連結，整段讀起來只是一句免責文案。
+   ⚠️ 與 .contact-consent a 同一組值，那一段（隱私權政策）本來就是這樣處理的。 */
+.contact-field__hint a { color: var(--brand-600); text-decoration: underline; text-underline-offset: 2px; }
 
 .contact-input,
 .contact-select,
@@ -110,6 +115,61 @@
 .contact-consent a { color: var(--brand-600); text-decoration: underline; text-underline-offset: 2px; }
 
 .contact-actions { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-top: var(--sp-6); }
+
+/* -- 3-1. 驗證錯誤 --------------------------------------------------------
+   全站唯一用到紅色的地方。本設計語彙刻意「不加色不加框」（見 base.css 的
+   .c-note），但驗證是例外：使用者按了送出卻沒送出去，必須一眼看出是哪一格、
+   為什麼。只靠一行灰字＝使用者以為表單壞了。
+   ⚠️ --danger 只宣告在這一頁的表單裡，不進 base.css 的設計代幣 ——
+      它不是設計語彙的一部分，是功能性狀態色，不要拿去裝飾別的東西。 */
+.contact-form { --danger: #B3261E; --danger-bg: #FDF5F4; }
+
+/* 邊框加底色，兩個一起 —— 只換邊框的話，1px 的線在長表單裡掃視時看不見。
+   ⚠️ 用 box-shadow 把線加粗到 2px，不用 border-width：後者會讓欄位長寬跳動。 */
+.contact-input.is-invalid,
+.contact-select.is-invalid,
+.contact-textarea.is-invalid {
+  border-color: var(--danger);
+  box-shadow: inset 0 0 0 1px var(--danger);
+  background-color: var(--danger-bg);
+}
+.contact-input.is-invalid:hover,
+.contact-select.is-invalid:hover,
+.contact-textarea.is-invalid:hover,
+.contact-input.is-invalid:focus,
+.contact-select.is-invalid:focus,
+.contact-textarea.is-invalid:focus { border-color: var(--danger); }
+
+/* 同意框沒有邊框可以染色（原生 checkbox），改用 outline 圈起來。
+   ⚠️ 不要只靠下面那行紅字 —— 16px 的方框在一整段條款文字旁邊，
+      不圈起來就看不出「要點的是它」。 */
+.contact-consent.is-invalid input { outline: 2px solid var(--danger); outline-offset: 2px; }
+
+/* 欄位自己的訊息。字級與 .contact-field__hint 相同，但改色加粗 ——
+   兩者會出現在同一格（問題內容那一欄），要分得出哪一行是提醒、哪一行是錯誤。 */
+.contact-field__error {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1.7;
+  color: var(--danger);
+}
+
+/* 送出鈕旁的總結。位置刻意貼著按鈕：按下去沒有反應的那一刻，視線就在這裡。 */
+.contact-alert {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: baseline;
+  margin-top: var(--sp-6);
+  padding: var(--sp-4) var(--sp-5);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--danger);
+}
+.contact-alert .c-note__icon { color: var(--danger); }
+.contact-alert + .contact-actions { margin-top: var(--sp-4); }
 
 /* -- 4. 側欄 -------------------------------------------------------------- */
 .contact-aside { display: flex; flex-direction: column; gap: var(--sp-7); }

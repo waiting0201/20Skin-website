@@ -169,7 +169,7 @@ Nuxt 3 純靜態，21 個模板 → **1846 頁 HTML、59.1 MB**（2026-09-15 重
 | **7 個困擾頁只有一句話簡述** | AI 摘要 30–38 字（規範 40–60），沒有為了湊字數編醫療內容 |
 | **服務條款、醫療免責聲明無條文** | 「待院方法務提供」骨架 ＋ `noIndex` |
 | ~~站內搜尋~~ | ✅ **2026-09-16 改成 `GET /search`**（原為建置期 `search-index.json`，1228 筆／564 KB）。伺服器端對已核准快照做 `LIKE` 比對，前端只排版；型別篩選 ＋ 關鍵字標記 ＋ 查無結果回寫 `POST /questions/miss` 都保留。**不設筆數上限**（理由見 docs/09 §4）。與舊索引逐一比對 11 個關鍵字，**涵蓋率 100%**，且因為舊索引只比對前 600 字，新做法找得更多（「皮秒雷射」71 → 309 筆） |
-| ~~`/contact/` 表單~~ | ✅ **2026-09-12 已接上 `POST /contact`**。只寄通知信、不落庫；失敗照實顯示錯誤碼（429／機器人驗證／欄位），不吞錯 |
+| ~~`/contact/` 表單~~ | ✅ **2026-09-12 已接上 `POST /contact`**。只寄通知信、不落庫；失敗照實顯示錯誤碼（429／機器人驗證／欄位），不吞錯。<br>✅ **2026-09-18 補上前端驗證**（Tim 指出「驗證很不明顯」）——在此之前表單是 `novalidate` 且**一個 `required` 都沒有**，沒填就按送出的唯一回饋是 API 回來的一行灰字，畫面上沒有任何東西指出是哪一格。現在是：欄位標紅框＋紅底、欄位下方寫出原因、送出鈕旁一行總結（`role="alert"`）、焦點跳到第一個沒過的欄位（`block: 'center'`，避開固定頂欄），送出過一次之後改成即時修正。⚠️ 前端**刻意比 API 嚴**：API 只要求「電話與 Email 至少擇一」，但畫面上電話標了 ＊，以畫面為準。⚠️ 樣式在 `mockup/assets/pages/18-contact.css`（`--danger` 只宣告在 `.contact-form` 裡，不進 base.css 的設計代幣），`mockup/18-contact.html` 留了 `hidden` 的參考標記（`.contact-field__error`／`.contact-alert`／`is-invalid`），**刪掉它 `verify:css` 第 4 項會當場擋下前台**。🔴 **那份標記不在版控裡**（`.gitignore` 的 `mockup/*` 只放行 `assets/`）—— CSS 進得去、HTML 進不去，所以哪天設計稿資料夾是從別處還原的，這一關會抓不到詞彙而失敗，要把那兩段 `hidden` 標記補回去。本來就只有有設計稿的機器跑得動這道閘（見 §八），這條只是又多一個受害者 |
 | ~~`sitemap.xml`／`llms.txt`／`faq.json`~~ | ✅ **2026-09-12 完成**，連同 `robots.txt` 一起由 `tools/content-export` 產生（詳見 [07](docs/07-deployment.md) §4）。sitemap **1161 個網址 ÷ 5 個分檔**（blog 1124／頁面 14／醫師 14／困擾 8／療程 1，2026-09-15 實計）。⚠️ 匯出產的是 1192 條，postbuild 再濾掉 31 條指向 `noindex` 或不存在頁面的網址（見 §八）；robots.txt 改成從 `SiteSettings.seo.robotsTxt` 產生，後台改得動了 |
 | **4691 個 `href="#"`** | mockup 遺留的佔位連結，`verify:links` 會列出數量，不會無聲增加。數字隨頁數等比長大（每頁外框都有幾個），不是新缺口 |
 
@@ -1351,10 +1351,18 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
       **剩下的是把正式網域加進 reCAPTCHA 後台的清單**（下一條）
 - [ ] **reCAPTCHA 的分數分佈**（App Insights）—— 上線頭幾天看一次真實分數，
       再決定 `BotCheck__MinimumScore` 要不要動。**預設 0.5 不要先調高**
-- [ ] **確認 reCAPTCHA 的聲明文字有顯示**（`/contact/` 與 `/admin/` 登入頁）——
+- [x] ~~**確認 reCAPTCHA 的聲明文字有顯示**（`/contact/` 與 `/admin/` 登入頁）~~ ——
       徽章是隱藏的，Google 的條款要求顯示那段文字與兩個連結，拿掉聲明就不可以隱藏徽章。
-      🟡 **2026-09-15：`/contact/` 有**（HTML 裡找得到「受 reCAPTCHA 保護，適用 Google 的…」）。
-      **`/admin/` 還沒驗** —— 它是 SPA，登入頁是 client 端算出來的，抓 HTML 看不到，要開瀏覽器
+      ✅ **2026-09-18 兩處都驗完**：`/contact/` 2026-09-15 以 HTML 確認；
+      `/admin/` 2026-09-18 用**真的瀏覽器**打已部署的 `20skin.4webdemo.com/admin/`
+      （SPA，抓 HTML 看不到，只能這樣驗）—— 文字在、兩個連結都在、console 零錯誤。
+      🔴 **同時抓到兩處的連結「留著卻看不出是連結」**：`base.css` 全域把 `a` 設成
+      `color: inherit` ＋ 無底線，那段聲明因此整句都是灰字，Google 要求的兩個連結
+      在畫面上等於不存在。已補 `.contact-field__hint a`（`mockup/assets/pages/18-contact.css`）
+      與 `.adm-login__hint a`（`apps/admin/src/admin.css`），與旁邊的
+      `.contact-consent a`（隱私權政策）同一組值。
+      ⚠️ 徽章是「取 token 的那一刻才載入」，所以登入頁**平時看不到徽章** ——
+      那不是壞掉，是 `useBotCheck` 刻意延後載入（前台約 1845 個網址，只有兩處要驗證）
 - [x] AI 爬蟲以實際 UA 逐一驗證 —— ✅ **Azure 原站正常**（2026-09-16 實測：
       `GPTBot/1.0`、`ClaudeBot/1.0`、`Python-urllib` 對 `*.azurestaticapps.net` 全部 **200**）。
       🔴 **但測試網域 `20skin.4webdemo.com` 前面的 Cloudflare 對 GPTBot 與 ClaudeBot 回 403**

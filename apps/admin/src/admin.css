@@ -927,6 +927,11 @@
 .adm-login__title { font-family: var(--font-serif); font-size: var(--fs-lg); font-weight: 700; color: var(--ink); }
 .adm-login__subtitle { font-size: var(--fs-sm); color: var(--ink-50); margin-top: var(--sp-1); margin-bottom: var(--sp-6); }
 .adm-login__hint { margin-top: var(--sp-5); font-size: var(--fs-xs); color: var(--ink-50); line-height: 1.7; border-top: 1px solid var(--line); padding-top: var(--sp-4); }
+/* 🔴 Google 的條款要求那兩個連結**留著**，而不是留著卻看不出來 ——
+   繼承下來的灰字沒有底線也沒有色差，整段讀起來就是一句免責文案。
+   ⚠️ 前台 /contact/ 的同一段聲明是有底線的（base.css 的 .contact-consent a），
+      這裡補上是為了對齊，不是新的裝飾。 */
+.adm-login__hint a { color: var(--brand-600); text-decoration: underline; text-underline-offset: 2px; }
 
 @media (max-width: 840px) {
   .adm-login { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
