@@ -27,14 +27,14 @@ export const doctorBioSchema: StructuredSchema = {
   },
 }
 
-/** `{title, meta}[]` —— 著作與演講清單。 */
+/** `{title, meta}[]` —— 醫師個人頁「著作與演講」那一區。 */
 export const doctorPublicationsSchema: StructuredSchema = {
   wire: 'json-string',
   emptyIsNull: true,
   preview: '醫師個人頁的著作／演講清單。',
   root: {
     kind: 'array',
-    itemLabel: '著作',
+    itemLabel: '著作／演講',
     summaryKeys: ['title'],
     item: {
       kind: 'object',

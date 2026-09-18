@@ -57,7 +57,10 @@ export const doctorUnit: UnitDefinition = {
     { key: 'tags', label: '專長標籤', type: 'tags', group: '學經歷', hint: '醫師列表卡片上顯示的標籤，直接打字即可，不必先到「分類與標籤」建立。' },
     { key: 'expertiseTags', label: '擅長項目', type: 'tags', group: '學經歷', hint: '個人頁的「擅長項目」區塊，與上面的專長標籤是兩個不同的區塊。' },
     { key: 'bio', label: '簡介', type: 'structured', group: '簡介', structured: doctorBioSchema },
-    { key: 'publications', label: '著作', type: 'structured', group: '簡介', structured: doctorPublicationsSchema },
+    // ⚠️ 名稱要與前台那一區的標題一致（`apps/web/app/pages/team/[slug].vue` 的
+    //    「著作與演講」）。2026-09-18 之前後台叫「著作」、前台叫「媒體報導與演講授課」
+    //    —— 同一份資料兩個名字，院方看不出它會出現在哪裡。**改一邊就要改另一邊。**
+    { key: 'publications', label: '著作與演講', type: 'structured', group: '簡介', structured: doctorPublicationsSchema, hint: '顯示在醫師個人頁的「著作與演講」區。' },
     {
       key: 'schedules',
       label: '看診時段',

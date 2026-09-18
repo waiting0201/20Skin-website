@@ -357,14 +357,19 @@ usePageHead({
   </section>
 
   <!-- =====================================================================
-       10. 第三方提及／媒體報導與演講授課
+       10. 第三方提及／著作與演講
+       ⚠️ 標題 2026-09-18 由「媒體報導與演講授課」改成「著作與演講」（Tim 指定）——
+       後台那個欄位叫「著作」，兩邊講的是同一份資料卻不同名。後台同步改成
+       「著作與演講」（`apps/admin/src/units/doctor.ts`），**兩邊要一起改**。
+       ⚠️ 與臻美分享的「媒體報導」「演講授課」兩個文章分類**沒有關係** ——
+       那是文章的分類，這一區是醫師自己那筆內容的欄位。
        ===================================================================== -->
   <section v-if="doctor.media?.length" class="section section--alt">
     <div class="container">
       <div class="c-sechead">
         <div class="c-sechead__text">
-          <span class="u-eyebrow">MEDIA &amp; TALKS</span>
-          <h2>媒體報導與演講授課</h2>
+          <span class="u-eyebrow">PUBLICATIONS &amp; TALKS</span>
+          <h2>著作與演講</h2>
         </div>
       </div>
 
