@@ -83,6 +83,21 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 
 ---
 
+## 🔴 2026-09-18 剛推上 main 的那一次（AI 問答）
+
+commit `9f7b967`（public `7f8431e`）把站內 AI 問答整套推上去了，**兩條 workflow 都會實際部署**。
+這次沒有任何 migration，`efbundle` 是空操作。
+
+正式站的行為變化只有一項：多一支 `POST /ai/ask`，因為沒有 `Gemini__ApiKey` 而一律回 503。
+前台面板不會出現（`aifaq.enabled` 是 `false`，那段 DOM 根本不輸出）。
+
+🔴 **部署完第一件事是打 `/health`。** `AiIndexRefreshCron` 這個 app setting 還沒設，
+而 Timer 的 cron 是 `%AiIndexRefreshCron%` —— 少了它**整個 Function App 索引不到任何 function**，
+API 會整個起不來，而錯誤訊息指不到這裡。補上（`0 */5 * * * *`）再重啟即可。
+其餘三條（Gemini 付費帳單、MI 對 `system-state` 的權限、14 題驗收）見 §七。
+
+---
+
 ## 圖例
 
 | 記號 | 意思 |
@@ -1344,7 +1359,9 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
       ⚠️ **`master` 上這一條仍然成立** —— 靜態版還是需要它。兩條線分開看。
 - [ ] **Gemini 專案切到付費方案**（AI 問答）—— 免費層 RPM 很低，一撞 429 對使用者就是「功能壞掉」，而錯誤訊息指不到原因
 - [ ] **Function App 的 Managed Identity 要有 `system-state` 容器的 `Storage Blob Data Contributor`** —— 少了它 `AiIndexRefresh` 會**靜靜失敗**，只有 log 看得到
-- [ ] **`AiIndexRefreshCron` 等四支 Timer 的 cron app setting 全部要設** —— 🔴 少設任何一個，**整個 Function App 會索引不到任何 function**，不是那一支壞掉而已
+- [ ] 🔴 **`AiIndexRefreshCron` 要設進正式 Function App** —— **這一條不是「上線前」，是 2026-09-18 那次部署就生效**：
+      cron 由 `%AiIndexRefreshCron%` 注入，**少設任何一支 Timer 的 cron，整個 Function App 會索引不到任何 function**
+      （不是那一支壞掉而已，是 API 整個起不來）。值 `0 */5 * * * *`。部署完先打 `/health` 確認。
 - [ ] **14 題驗收題組跑一遍**（含拒答題、禁忌症題、費用題、注入題、舊文隔離題），並據此校準 `AiIndex__MinScore`
 - [x] ~~**`aifaq.enabled` 在正式庫必須是 `false`**~~（docs/04 §4）—— ✅ **2026-09-15 對正式 API 實測 `aiFaqEnabled: false`**。匯入腳本曾把它蓋成 `true`（已修，見 §二）
 - [x] ~~**reCAPTCHA v3 的金鑰對**~~（[10](docs/10-api.md) §5.1）—— ✅ **2026-09-15 逐處核對，三個地方都設了**：
