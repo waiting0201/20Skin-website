@@ -305,8 +305,8 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 
 ⚠️ **`IsPhysician` 不是可有可無的欄位。** 14 位團隊成員是 **13 位醫師 ＋ 1 位藝術總監**（安喬／許媖琄，兼執行長與「新中式美學」創始人）。資料層若預設全部是醫師，前台的「本文由 ○○ 醫師審閱」與 `Physician` schema 就會掛錯人。
 
-- `DoctorTags`（`Id`, `DoctorId`, **`Type` tinyint〔1 專長標籤／2 擅長項目〕**, `Tag` nvarchar(40), `SortOrder`）—— **刻意不走 `Terms`**：專長標籤不產生 URL、不需要 SEO 欄位，塞進 `Terms` 會破壞「每一筆 Term 都是 ContentItem、都可能有頁面」這條規則。
-  ⚠️ **`Type` 不是可有可無的**：個人頁上「列表卡片的專長標籤」與「擅長項目」是兩個不同的區塊，少了這一欄兩組會混成同一串（2026-09-11 內容搬遷時發現）。
+- `DoctorTags`（`Id`, `DoctorId`, **`Type` tinyint〔1 專長標籤／2 專長領域〕**, `Tag` nvarchar(40), `SortOrder`）—— **刻意不走 `Terms`**：專長標籤不產生 URL、不需要 SEO 欄位，塞進 `Terms` 會破壞「每一筆 Term 都是 ContentItem、都可能有頁面」這條規則。
+  ⚠️ **`Type` 不是可有可無的**：「醫師列表卡片的專長標籤」與「個人頁的專長領域」是兩個不同的區塊（後台 2026-09-18 之前把後者叫「擅長項目」，已改為與前台同名），少了這一欄兩組會混成同一串（2026-09-11 內容搬遷時發現）。
 - `DoctorCredentials`（`Id`, `DoctorId`, `Type` tinyint〔1 學歷／2 經歷／3 證照與學會資格／**4 現職**〕, `Text` nvarchar(300), `SortOrder`）—— [02](02-backend-cms.md) §1 的「可重複欄位」
   ⚠️ **「現職」與「經歷」分開是刻意的**：個人頁時間軸把兩者當成不同標籤渲染，併成一種畫面上的標籤就變了（2026-09-11 內容搬遷時發現）。
 - `DoctorSchedules`（`Id`, `DoctorId`, `ClinicId` FK, `DayOfWeek` tinyint 0–6, `StartTime` time(0), `EndTime` time(0), `Note`）—— 看診時段

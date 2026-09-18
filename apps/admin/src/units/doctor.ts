@@ -54,8 +54,13 @@ export const doctorUnit: UnitDefinition = {
         { key: 'text', label: '內容', type: 'text' },
       ],
     },
-    { key: 'tags', label: '專長標籤', type: 'tags', group: '學經歷', hint: '醫師列表卡片上顯示的標籤，直接打字即可，不必先到「分類與標籤」建立。' },
-    { key: 'expertiseTags', label: '擅長項目', type: 'tags', group: '學經歷', hint: '個人頁的「擅長項目」區塊，與上面的專長標籤是兩個不同的區塊。' },
+    // ⚠️ 兩個欄位的名稱要與前台對得上（`apps/web/app/pages/team/`）：
+    //    專長標籤＝醫師列表頁的卡片標籤與篩選按鈕，擅長項目那一欄在前台的標題是
+    //    **「專長領域」**，2026-09-18 起後台跟著改名。**改一邊就要改另一邊。**
+    // 🔴 篩選按鈕那四個詞是寫死在前台的（index.vue 的 `FOCUS_TABS`），
+    //    標籤打錯字不會有任何錯誤，只是那位醫師從該分頁消失 —— hint 要講這件事。
+    { key: 'tags', label: '專長標籤', type: 'tags', group: '學經歷', hint: '顯示在醫師列表頁的卡片上，也是列表頁上方「皮膚疾病／雷射光電／注射微整／體態管理」四個篩選按鈕的依據 —— 要被篩到，用字必須與按鈕完全相同。直接打字即可，不必先到「分類與標籤」建立。' },
+    { key: 'expertiseTags', label: '專長領域', type: 'tags', group: '學經歷', hint: '顯示在醫師個人頁的「專長領域」區，與上面的專長標籤是兩組不同的標籤。這裡留空的話，那一區會改為顯示上面的專長標籤。' },
     { key: 'bio', label: '簡介', type: 'structured', group: '簡介', structured: doctorBioSchema },
     // ⚠️ 名稱要與前台那一區的標題一致（`apps/web/app/pages/team/[slug].vue` 的
     //    「著作與演講」）。2026-09-18 之前後台叫「著作」、前台叫「媒體報導與演講授課」

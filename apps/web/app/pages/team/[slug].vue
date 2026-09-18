@@ -194,6 +194,9 @@ usePageHead({
 
   <!-- =====================================================================
        5. 專長領域
+       ⚠️ 這個標題與後台的欄位名「專長領域」（`apps/admin/src/units/doctor.ts` 的
+          `expertiseTags`）是同一份資料，**改一邊就要改另一邊** —— 2026-09-18 之前
+          後台叫「擅長項目」，院方照著後台的名字在前台找不到這一區。
        ===================================================================== -->
   <section v-if="displayTags.length" class="section section--alt section--tight">
     <div class="container">

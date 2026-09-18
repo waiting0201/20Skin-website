@@ -233,7 +233,7 @@ r = await call('POST', '/admin/doctor', {
     publications: '',
     credentials: [{ type: 4, text: '現職測試', sortOrder: 0 }],
     schedules: [],
-    // content-fields.ts 的 mergeDoctorTags 輸出：type 1＝專長標籤、type 2＝擅長項目
+    // content-fields.ts 的 mergeDoctorTags 輸出：type 1＝專長標籤、type 2＝專長領域
     tags: [
       { type: 1, tag: '專長A', sortOrder: 0 },
       { type: 1, tag: '專長B', sortOrder: 1 },
