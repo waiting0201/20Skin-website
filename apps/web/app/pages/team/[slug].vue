@@ -246,31 +246,14 @@ usePageHead({
   </section>
 
   <!-- =====================================================================
-       7. 專長困擾
-       ===================================================================== -->
-  <section v-if="doctor.concerns?.length" class="section section--tight">
-    <div class="container">
-      <div class="c-sechead">
-        <div class="c-sechead__text">
-          <span class="u-eyebrow">SKIN CONCERNS</span>
-          <h2>專長困擾</h2>
-        </div>
-      </div>
-      <div class="doc-concerns">
-        <a v-for="concern in doctor.concerns" :key="concern.slug" class="c-tag" :href="`/concerns/${concern.slug}/`">{{ concern.label }}</a>
-      </div>
-    </div>
-  </section>
-
-  <!-- =====================================================================
-       8. 具名／審閱文章
+       7. 具名／審閱文章
        ===================================================================== -->
   <section v-if="doctor.articles?.length" class="section">
     <div class="container">
       <div class="c-sechead">
         <div class="c-sechead__text">
           <span class="u-eyebrow">ARTICLES</span>
-          <h2>{{ doctor.name }}的文章</h2>
+          <h2>精選文章</h2>
           <p>由{{ doctor.name }}{{ doctor.isPhysician ? '醫師' : '' }}撰寫或審閱的醫美新知與皮膚新知。</p>
         </div>
         <a class="c-sechead__more" href="/blog/">查看全部文章 →</a>
@@ -303,7 +286,7 @@ usePageHead({
   </section>
 
   <!-- =====================================================================
-       9. 看診據點與時段（顯示各院區的一般門診時段，非此醫師的個人專屬時段）
+       8. 看診據點與時段（顯示各院區的一般門診時段，非此醫師的個人專屬時段）
        ===================================================================== -->
   <section class="section section--alt">
     <div class="container">
@@ -357,7 +340,7 @@ usePageHead({
   </section>
 
   <!-- =====================================================================
-       10. 第三方提及／著作與演講
+       9. 第三方提及／著作與演講
        ⚠️ 標題 2026-09-18 由「媒體報導與演講授課」改成「著作與演講」（Tim 指定）——
        後台那個欄位叫「著作」，兩邊講的是同一份資料卻不同名。後台同步改成
        「著作與演講」（`apps/admin/src/units/doctor.ts`），**兩邊要一起改**。
@@ -383,7 +366,7 @@ usePageHead({
   </section>
 
   <!-- =====================================================================
-       11. 同院區其他醫師
+       10. 同院區其他醫師
        ===================================================================== -->
   <section v-if="colleagues.length" class="section">
     <div class="container">
@@ -418,7 +401,7 @@ usePageHead({
   </section>
 
   <!-- =====================================================================
-       12. 頁尾 CTA
+       11. 頁尾 CTA
        ===================================================================== -->
   <section class="section section--alt doc-cta">
     <div class="container doc-cta__inner">
