@@ -282,6 +282,9 @@ await step('🔴 新增按鈕只有一顆，型別在對話框裡問', async () 
   return `一顆「${buttons[0].trim()}」，型別在對話框裡`
 })
 
+/** ImageField 那句「換圖會真的刪掉舊檔」的警告，用一小段夠獨特的原文比對。 */
+const DELETE_WARNING = '舊的圖片檔會在存檔時真的刪掉'
+
 section('首頁版位編排：兩欄版面與那三個被拿掉的東西')
 await step('開得起來，而且是兩欄（右欄＝主視覺）', async () => {
   await navigate(page, '/admin/home-sections')
@@ -309,7 +312,10 @@ await step('🔴 主視覺的圖片欄位不談刪檔，只給建議尺寸', asy
   // 版位設定的圖換掉**不會**被刪（沒走發布那條清 blob 的路），
   // 顯示 ImageField 那句通用警告等於說謊 —— schema 用 deletesOldFile: false 關掉它。
   const txt = await page.locator('.adm-editor-side--hero').innerText()
-  if (txt.includes('從 Blob 刪除')) throw new Error('顯示了「舊檔會被刪」——那在這一頁是錯的')
+  // ⚠️ 比對的字串**要跟著 ImageField 的文案走**。2026-09-18 踩到一次：決策 27 把
+  //    「從 Blob 刪除」改成中文說法之後，這裡還在找舊字串 —— 這一條因此變成
+  //    「永遠通過」（要找的字本來就不可能出現），下面那一條則變成永遠失敗。
+  if (txt.includes(DELETE_WARNING)) throw new Error('顯示了「舊檔會被刪」——那在這一頁是錯的')
   if (!txt.includes('建議橫幅比例')) throw new Error('建議尺寸不見了')
   return '只剩建議尺寸'
 })
@@ -318,7 +324,7 @@ await step('🔴 但九個內容模型那邊的刪檔警告還在', async () => 
   // 這裡**每一個圖片欄位的警告都會靜默消失**（2026-09-18 實際踩到）。
   await openEdit(page, 'doctor', (await api('/admin/doctor?page=1&pageSize=1')).data.items[0].id)
   const txt = await page.locator('.adm-editor-main').innerText()
-  if (!txt.includes('從 Blob 刪除')) throw new Error('那裡的警告也跟著不見了（多半是 withDefaults 被拿掉）')
+  if (!txt.includes(DELETE_WARNING)) throw new Error('那裡的警告也跟著不見了（多半是 withDefaults 被拿掉）')
   return '還在'
 })
 

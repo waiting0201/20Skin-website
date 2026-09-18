@@ -192,6 +192,34 @@ public enum MenuLinkKind : byte
     ExternalUrl = 3,
 }
 
+/// <summary>
+/// 選單節點的「子項目從哪裡來」（docs/08 §G-3）。
+///
+/// <para>
+/// 🔴 <b>2026-09-18 新增，為的是拿掉「兩份資料」。</b> 在那之前選單的 48 個節點
+/// 全部是手打的名稱與路徑，也就是每一個療程分類、困擾、據點在資料庫裡都有兩份：
+/// 一份在它自己的單元，一份在選單。改了單元那份，選單不會跟 —— 正式站實際發生過：
+/// 同一個 <c>skincare</c> 分類，「分類與標籤」叫「膚質改善」、選單叫「醫美保養」，
+/// 而兩邊的排序也各是一份。
+/// </para>
+///
+/// <para>
+/// 設成 <see cref="None"/> 以外的值時，這個節點<b>自己存的子項目會被忽略</b>，
+/// 前台改成算繪當下去取該單元的全部項目（名稱、網址、順序都跟著單元走）。
+/// </para>
+///
+/// <para>⚠️ 值只加「前台真的有列表頁可以連過去」的單元 —— 沒有網址的東西放進選單就是死連結。</para>
+/// </summary>
+public enum MenuAutoChildren : byte
+{
+    /// <summary>子項目由院方自己一列一列維護（原本的行為）。</summary>
+    None = 0,
+    Concern = 1,
+    TreatmentCategory = 2,
+    ArticleCategory = 3,
+    Clinic = 4,
+}
+
 /// <summary>全站設定的值型別（docs/08 §G-1）。</summary>
 public enum SettingValueType : byte
 {

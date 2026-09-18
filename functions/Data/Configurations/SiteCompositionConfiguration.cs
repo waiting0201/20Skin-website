@@ -82,6 +82,7 @@ public sealed class MenuItemConfiguration : IEntityTypeConfiguration<MenuItem>
             // 純靠 ParentId 無法在 SQL 表達深度上限，Depth 冗餘欄位讓約束可執行。
             t.HasCheckConstraint("CK_MenuItems_Depth", "[Depth] IN (1, 2)");
             t.HasCheckConstraint("CK_MenuItems_LinkKind", "[LinkKind] BETWEEN 1 AND 3");
+            t.HasCheckConstraint("CK_MenuItems_AutoChildren", "[AutoChildren] BETWEEN 0 AND 4");
         });
 
         b.HasKey(x => x.Id).HasName("PK_MenuItems");
@@ -89,6 +90,8 @@ public sealed class MenuItemConfiguration : IEntityTypeConfiguration<MenuItem>
         b.Property(x => x.MenuKey).HasMaxLength(20).IsRequired();
         b.Property(x => x.Label).HasMaxLength(100).IsRequired();
         b.Property(x => x.LinkKind).HasColumnType("tinyint");
+        // ⚠️ 預設 0（＝子項目自己維護），舊資料升級時因此不會改變行為。
+        b.Property(x => x.AutoChildren).HasColumnType("tinyint").HasDefaultValue(MenuAutoChildren.None);
         b.Property(x => x.Url).HasMaxLength(400);
         b.Property(x => x.RelAttr).HasMaxLength(60);
         b.Property(x => x.IsExternal).HasDefaultValue(false);

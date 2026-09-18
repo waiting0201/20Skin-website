@@ -17,9 +17,18 @@ public sealed record PublicContentRow(
     DateTime UpdatedAt,
     string Snapshot);
 
-/// <summary>關聯目標的基本資料，用來補齊快照裡 <c>relations[]</c> 的顯示欄位。</summary>
+/// <summary>
+/// 關聯目標的基本資料，用來補齊快照裡 <c>relations[]</c> 的顯示欄位。
+/// <para>
+/// ⚠️ <c>Title</c> 是 <c>ContentItems</c> 的即時值（工作副本），<c>SnapshotTitle</c> 是已發布快照裡的。
+/// 選單用後者 —— 名稱留空的節點是靠它顯示的，用即時值等於「在後台改了名稱、還沒發布，
+/// 全站每一頁的選單當場就換掉」（決策 14）。
+/// </para>
+/// <para>⚠️ 其餘呼叫端（關聯卡片、FAQ 分類）維持用 <c>Title</c>，那是既有行為，這次不一起改。</para>
+/// </summary>
 public sealed record RelationTargetRow(
-    int Id, byte ContentType, string? Slug, string? UrlPath, string Title, bool IsVisible);
+    int Id, byte ContentType, string? Slug, string? UrlPath, string Title, bool IsVisible,
+    string? SnapshotTitle = null);
 
 /// <summary>
 /// 前台（SSR）的內容讀取路徑。
@@ -169,6 +178,15 @@ public interface IPublicContentReadService
     Task<IReadOnlyList<PublicMenuRow>> GetMenuItemsAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// 「自動帶入單元」的選單子項目（<see cref="MenuAutoChildren"/>，2026-09-18）。
+    /// <para>一次把四種來源全部取回來，呼叫端自己分組 —— 選單一頁最多也就四個自動群組，
+    /// 分開查等於四次往返，而正式庫是 Azure SQL Basic／5 DTU。</para>
+    /// <para>⚠️ 條件與其他公開讀取一致：<c>可見性 ＋ UrlPath IS NOT NULL</c> ——
+    /// 沒有網址的項目放進選單就是死連結。順序一律該單元的 <c>SortOrder</c>。</para>
+    /// </summary>
+    Task<IReadOnlyList<MenuAutoChildRow>> GetMenuAutoChildrenAsync(CancellationToken ct = default);
+
+    /// <summary>
     /// sitemap 要收的網址。條件與 docs/08 §H 末段一致：
     /// <c>可見性 ＋ IncludeInSitemap = 1 ＋ UrlPath IS NOT NULL</c>。
     /// <para>⚠️ FAQ 沒有獨立網址（<c>UrlPath</c> 為 NULL），標籤頁 <c>IncludeInSitemap = 0</c>。</para>
@@ -186,7 +204,11 @@ public sealed record SearchHitRow(
 /// <summary>選單一列。<c>Url</c> 為 NULL 時表示指向內容，網址由該內容的 UrlPath 決定。</summary>
 public sealed record PublicMenuRow(
     int Id, string MenuKey, int? ParentId, string Label, byte LinkKind,
-    int? ContentItemId, string? Url, string? RelAttr, bool OpenInNewTab, int SortOrder);
+    int? ContentItemId, string? Url, string? RelAttr, bool OpenInNewTab, int SortOrder,
+    byte AutoChildren);
+
+/// <summary>「自動帶入單元」的一列。<c>Source</c> 是 <see cref="MenuAutoChildren"/>。</summary>
+public sealed record MenuAutoChildRow(byte Source, string Title, string UrlPath, int SortOrder, int Id);
 
 /// <summary>
 /// sitemap 的一列。<c>LastModified</c> 給 <c>&lt;lastmod&gt;</c> 用。
@@ -211,6 +233,10 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
         FROM ContentItems ci
         INNER JOIN ContentVersions cv ON cv.Id = ci.PublishedVersionId
         """;
+
+    /// <summary>已發布快照裡的標題，壞掉時退回即時值。用在只要標題、不需要整份快照的查詢。</summary>
+    private const string SnapshotTitle =
+        "COALESCE(NULLIF(JSON_VALUE(cv.Snapshot, '$.title'), ''), ci.Title) AS Title";
 
     public async Task<IReadOnlyList<PublicContentRow>> ListAsync(
         byte contentType, CancellationToken ct = default)
@@ -409,7 +435,8 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
         using var connection = factory.Create();
 
         const string sql = """
-            SELECT Id, MenuKey, ParentId, Label, LinkKind, ContentItemId, Url, RelAttr, OpenInNewTab, SortOrder
+            SELECT Id, MenuKey, ParentId, Label, LinkKind, ContentItemId, Url, RelAttr, OpenInNewTab,
+                   SortOrder, AutoChildren
             FROM MenuItems
             ORDER BY SortOrder, Id
             """;
@@ -417,6 +444,55 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
         var items = await connection.QueryAsync<PublicMenuRow>(
             new CommandDefinition(sql, cancellationToken: ct));
         return items.AsList();
+    }
+
+    public async Task<IReadOnlyList<MenuAutoChildRow>> GetMenuAutoChildrenAsync(CancellationToken ct = default)
+    {
+        using var connection = factory.Create();
+
+        // 🔴 **名稱取「已發布快照」的，不是 `ContentItems.Title`。** 後者是工作副本 ——
+        //    用它等於「在後台改了名稱、還沒發布，選單當場就換掉了」，也就是
+        //    決策 14 明列的災難之一（2026-09-16 在 ShapeAsync 真的踩過一次）。
+        //    ⚠️ 快照真的沒有標題時才退回即時值，那是資料壞掉的保底，不是常態
+        //    —— 與 `PublicContentHandler.ShapeAsync` 的規則逐字一致。
+        // ⚠️ 分類與標籤是 TPT（`Terms` 另一張表），所以型別要 join 出來；
+        //    困擾與據點自己就是一個 ContentType，不必 join。
+        // 🔴 `Source` 一定要 CAST 成 tinyint —— SQL 裡的 1／2／3／4 是 int，而這裡收它的是
+        //    `byte`，Dapper 會在**執行期**丟「找不到相符建構子」的 InvalidOperationException
+        //    （整個 /menu 回 500，也就是全站的選單）。編譯期完全看不出來，實際踩到過。
+        var sql = $"""
+            SELECT CAST({(byte)MenuAutoChildren.Concern} AS tinyint) AS Source, {SnapshotTitle}, ci.UrlPath, ci.SortOrder, ci.Id
+            {FromPublished}
+            WHERE {Visibility.PublicFilter} AND ci.ContentType = @Concern AND ci.UrlPath IS NOT NULL
+
+            UNION ALL
+            SELECT CAST({(byte)MenuAutoChildren.Clinic} AS tinyint), {SnapshotTitle}, ci.UrlPath, ci.SortOrder, ci.Id
+            {FromPublished}
+            WHERE {Visibility.PublicFilter} AND ci.ContentType = @Clinic AND ci.UrlPath IS NOT NULL
+
+            UNION ALL
+            SELECT CAST(CASE t.TermType WHEN @TreatmentCategoryTerm THEN {(byte)MenuAutoChildren.TreatmentCategory}
+                                        ELSE {(byte)MenuAutoChildren.ArticleCategory} END AS tinyint),
+                   {SnapshotTitle}, ci.UrlPath, ci.SortOrder, ci.Id
+            {FromPublished}
+            INNER JOIN Terms t ON t.Id = ci.Id
+            WHERE {Visibility.PublicFilter} AND ci.ContentType = @Term AND ci.UrlPath IS NOT NULL
+              AND t.TermType IN (@TreatmentCategoryTerm, @ArticleCategoryTerm)
+
+            ORDER BY Source, SortOrder, Id
+            """;
+
+        var rows = await connection.QueryAsync<MenuAutoChildRow>(new CommandDefinition(sql, new
+        {
+            Now = Clock.UtcNow,
+            Concern = (byte)ContentType.Concern,
+            Clinic = (byte)ContentType.Clinic,
+            Term = (byte)ContentType.Term,
+            TreatmentCategoryTerm = (byte)TermType.TreatmentCategory,
+            ArticleCategoryTerm = (byte)TermType.ArticleCategory,
+        }, cancellationToken: ct));
+
+        return rows.AsList();
     }
 
     public async Task<IReadOnlyList<SitemapUrlRow>> GetSitemapEntriesAsync(CancellationToken ct = default)
@@ -447,9 +523,12 @@ public sealed class PublicContentReadService(ISqlConnectionFactory factory) : IP
         // 「這一筆前台看得到嗎」用的是同一段 PublicFilter，只是包成一個 bit 欄位。
         var visibleExpr = $"CAST(CASE WHEN {Visibility.PublicFilter} THEN 1 ELSE 0 END AS bit)";
 
+        // ⚠️ LEFT JOIN：這支刻意也回「還沒發布」的目標（IsVisible 自己算），所以不能用 INNER。
         var sql = $"""
-            SELECT ci.Id, ci.ContentType, ci.Slug, ci.UrlPath, ci.Title, {visibleExpr} AS IsVisible
+            SELECT ci.Id, ci.ContentType, ci.Slug, ci.UrlPath, ci.Title, {visibleExpr} AS IsVisible,
+                   JSON_VALUE(cv.Snapshot, '$.title') AS SnapshotTitle
             FROM ContentItems ci
+            LEFT JOIN ContentVersions cv ON cv.Id = ci.PublishedVersionId
             WHERE ci.Id IN @Ids
             """;
 

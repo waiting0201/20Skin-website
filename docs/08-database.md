@@ -580,9 +580,23 @@ hero  specialties  featured-treatments  latest-articles  doctors  clinics  brand
 
 ### G-3 `MenuItems`
 
-`Id`, `MenuKey` nvarchar(20)（`main`／`footer`）, `ParentId` int NULL FK self, `Depth` tinyint, `Label` nvarchar(100), `LinkKind` tinyint（1 站內內容／2 站內路徑／3 外部網址）, `ContentItemId` int NULL FK, `Url` nvarchar(400) NULL, `IsExternal` bit, `RelAttr` nvarchar(60) NULL, `OpenInNewTab` bit, `SortOrder`
+`Id`, `MenuKey` nvarchar(20)（`main`／`footer`）, `ParentId` int NULL FK self, `Depth` tinyint, `Label` nvarchar(100), `LinkKind` tinyint（1 站內內容／2 站內路徑／3 外部網址）, **`AutoChildren` tinyint NOT NULL DEFAULT 0**, `ContentItemId` int NULL FK, `Url` nvarchar(400) NULL, `IsExternal` bit, `RelAttr` nvarchar(60) NULL, `OpenInNewTab` bit, `SortOrder`
 
 `CHECK (Depth IN (1, 2))` —— 最多兩層。純靠 `ParentId` 無法在 SQL 表達深度上限，`Depth` 冗餘欄位讓約束可執行。
+`CHECK (AutoChildren BETWEEN 0 AND 4)`。
+
+🔴 **選單不存第二份資料**（2026-09-18，CLAUDE.md 決策 29）。兩個機制：
+
+| | 規則 |
+|---|---|
+| **`Label` 留空** | `LinkKind=1` 時代表「顯示被指到那筆內容的標題」。填了值就是覆寫（頁尾的「關於 20SKIN」指向的是標題為「品牌理念」的那一頁）。`LinkKind=2／3` 不可留空 —— 沒有可以跟的對象 |
+| **`AutoChildren`** | 0 自己維護／1 肌膚困擾／2 療程分類／3 文章分類／4 據點。不是 0 時，**這個節點自存的子項目前台一律忽略**，改成算繪當下取該單元的全部項目（名稱、網址、順序都跟著單元） |
+
+⚠️ 自動帶入的來源條件與其他公開讀取一致：**可見性 ＋ `UrlPath IS NOT NULL`**，順序用該單元的 `SortOrder`。沒有網址的項目放進選單就是死連結。
+
+⚠️ **名稱取「已發布快照」裡的標題，不是 `ContentItems.Title`。** 後者是工作副本 —— 用它等於「在後台改了名稱、還沒發布，全站每一頁的選單當場就換掉」（§B-1 與決策 14 的同一條規則）。排序則用即時值，與內容清單的拖曳排序一致。
+
+⚠️ **切成自動之後，自存的子項目列不會被刪掉**，切回 0 就會再出現。遷移 `MenuFollowsContentUnits` 也刻意不刪 —— CI 是先遷移後部署，中間那一段是新 schema 配舊程式，刪了會讓前台子選單短暫消失。
 
 ⚠️ **`booking.20skin.tw` 與 `20skinshop.com` 在這裡，而且只在這裡。** 兩個外部網域在整個 schema 的唯一落點就是本表的兩筆 `LinkKind=3` ＋ `IsExternal=1` 記錄。它們**不進內容表、不進 sitemap、不進 301 對照表**（CLAUDE.md 決策 4）。任何人想在別的表放這兩個網域，就是在把已排除的範圍偷渡回來。
 

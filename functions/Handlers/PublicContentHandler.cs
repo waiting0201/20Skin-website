@@ -249,8 +249,20 @@ public sealed class PublicContentHandler(
 
     /// <summary>
     /// <c>GET /menu</c>：導覽選單與頁尾（docs/08 §G-3）。
+    ///
     /// <para>⚠️ <c>linkKind=1</c>（指向內容）的網址由 <c>ContentItems.UrlPath</c> 決定，
     /// <b>不在選單裡另存一份</b> —— 內容改網址時選單要跟著走。</para>
+    ///
+    /// <para>
+    /// 🔴 <b>2026-09-18 起選單不再是第二份資料。</b> 兩件事在這裡發生：
+    /// ① <c>label</c> 留空時用被指到那筆內容的標題；
+    /// ② <c>autoChildren</c> 不是 0 的節點，子項目改成算繪當下取該單元的全部項目
+    /// （名稱、網址、順序都跟著單元走，<b>自存的子項目一律忽略</b>）。
+    /// 在那之前 48 個節點全是手打副本，正式站因此出現過同一個分類在選單叫「醫美保養」、
+    /// 在「分類與標籤」叫「膚質改善」，而兩邊的順序也各是一份。
+    /// </para>
+    ///
+    /// <para>⚠️ 自動子項目<b>沒有</b> <c>relAttr</c>／<c>openInNewTab</c>：它們都是站內網址。</para>
     /// </summary>
     public async Task<IActionResult> MenuAsync(HttpRequest req)
     {
@@ -260,17 +272,46 @@ public sealed class PublicContentHandler(
             .Select(r => r.ContentItemId!.Value).Distinct().ToArray();
         var targets = (await content.GetRelationTargetsAsync(targetIds)).ToDictionary(t => t.Id);
 
+        // ⚠️ 只有真的有節點在用時才去查 —— 全部改回手動維護時不該多一次往返。
+        var autoChildren = rows.Any(m => m.AutoChildren != 0)
+            ? (await content.GetMenuAutoChildrenAsync()).GroupBy(c => c.Source)
+                .ToDictionary(g => g.Key, g => g.ToList())
+            : [];
+
+        JsonArray AutoBuild(byte source) =>
+            new(autoChildren.GetValueOrDefault(source, [])
+                .Select(c => (JsonNode)new JsonObject
+                {
+                    ["label"] = c.Title,
+                    ["linkKind"] = (byte)MenuLinkKind.ContentItem,
+                    ["url"] = c.UrlPath,
+                    ["external"] = false,
+                    ["relAttr"] = null,
+                    ["openInNewTab"] = false,
+                    ["children"] = new JsonArray(),
+                })
+                .ToArray());
+
         JsonArray Build(string menuKey, int? parentId) =>
             new(rows.Where(m => m.MenuKey == menuKey && m.ParentId == parentId)
-                .Select(m => (JsonNode)new JsonObject
+                .Select(m =>
                 {
-                    ["label"] = m.Label,
-                    ["linkKind"] = m.LinkKind,
-                    ["url"] = m.Url ?? targets.GetValueOrDefault(m.ContentItemId ?? 0)?.UrlPath,
-                    ["external"] = m.LinkKind == 3,
-                    ["relAttr"] = m.RelAttr,
-                    ["openInNewTab"] = m.OpenInNewTab,
-                    ["children"] = Build(menuKey, m.Id),
+                    var target = targets.GetValueOrDefault(m.ContentItemId ?? 0);
+                    return (JsonNode)new JsonObject
+                    {
+                        // 留空＝跟著內容的標題走。⚠️ 退路是空字串而不是省略這個鍵：
+                        //    前台 `toNavItem` 直接讀 label，少了鍵會渲染成 undefined。
+                        // ⚠️ 快照的標題優先，即時值只是快照壞掉時的保底（同 ShapeAsync 的規則）。
+                        ["label"] = string.IsNullOrWhiteSpace(m.Label)
+                            ? (string.IsNullOrWhiteSpace(target?.SnapshotTitle) ? target?.Title : target.SnapshotTitle) ?? string.Empty
+                            : m.Label,
+                        ["linkKind"] = m.LinkKind,
+                        ["url"] = m.Url ?? target?.UrlPath,
+                        ["external"] = m.LinkKind == 3,
+                        ["relAttr"] = m.RelAttr,
+                        ["openInNewTab"] = m.OpenInNewTab,
+                        ["children"] = m.AutoChildren != 0 ? AutoBuild(m.AutoChildren) : Build(menuKey, m.Id),
+                    };
                 })
                 .ToArray());
 

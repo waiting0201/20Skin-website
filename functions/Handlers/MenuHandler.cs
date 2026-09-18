@@ -101,10 +101,21 @@ public sealed class MenuHandler(Skin20DbContext db, ISqlConnectionFactory sqlFac
 
     private static MenuItem BuildNode(string menuKey, MenuNodeDto node, byte depth, int sortOrder)
     {
-        if (string.IsNullOrWhiteSpace(node.Label))
+        // ⚠️ 名稱**只有在「指向內容」時可以留空**（＝跟著那筆內容的標題走，2026-09-18）。
+        //    站內路徑與外部網址沒有可以跟的對象，留空會在選單上留一個按不到的空白。
+        if (string.IsNullOrWhiteSpace(node.Label) && node.LinkKind != MenuLinkKind.ContentItem)
             throw AppException.BadRequest(ErrorCodes.ValidationRequired, "選單項目缺少名稱。");
 
         ValidateLinkTarget(node);
+
+        if (!Enum.IsDefined(node.AutoChildren))
+            throw AppException.BadRequest(ErrorCodes.ValidationFormat, "子項目來源不是認得的值。");
+
+        // 🔴 第二層不可以設自動帶入 —— 選單只有兩層（CHECK Depth IN (1,2)），
+        //    在第二層展開等於長出第三層，而那是資料庫層擋不到的（自動子項目不進資料表）。
+        if (node.AutoChildren != MenuAutoChildren.None && depth >= 2)
+            throw AppException.BadRequest(
+                ErrorCodes.ValidationFormat, $"「{node.Label}」已經是選單最深層，不能再自動帶入子項目。");
 
         // 🔴 強制標記為外部連結：新分頁、rel 設定（docs/02 §3）——不管前端有沒有勾選。
         var isExternal = node.LinkKind == MenuLinkKind.ExternalUrl;
@@ -113,8 +124,9 @@ public sealed class MenuHandler(Skin20DbContext db, ISqlConnectionFactory sqlFac
         {
             MenuKey = menuKey,
             Depth = depth,
-            Label = node.Label,
+            Label = node.Label?.Trim() ?? string.Empty,
             LinkKind = node.LinkKind,
+            AutoChildren = node.AutoChildren,
             ContentItemId = node.LinkKind == MenuLinkKind.ContentItem ? node.ContentItemId : null,
             Url = node.LinkKind == MenuLinkKind.ContentItem ? null : node.Url,
             IsExternal = isExternal,
@@ -141,12 +153,15 @@ public sealed class MenuHandler(Skin20DbContext db, ISqlConnectionFactory sqlFac
 
     private static void ValidateLinkTarget(MenuNodeDto node)
     {
+        // ⚠️ 名稱現在可以留空，所以錯誤訊息不能只靠它 —— 空的話會變成「「」缺少…」。
+        var name = string.IsNullOrWhiteSpace(node.Label) ? "未命名的選單項目" : $"「{node.Label}」";
+
         switch (node.LinkKind)
         {
             case MenuLinkKind.ContentItem when node.ContentItemId is null:
-                throw AppException.BadRequest(ErrorCodes.ValidationRequired, $"「{node.Label}」缺少要連結的內容。");
+                throw AppException.BadRequest(ErrorCodes.ValidationRequired, $"{name}缺少要連結的內容。");
             case MenuLinkKind.InternalPath or MenuLinkKind.ExternalUrl when string.IsNullOrWhiteSpace(node.Url):
-                throw AppException.BadRequest(ErrorCodes.ValidationRequired, $"「{node.Label}」缺少連結網址。");
+                throw AppException.BadRequest(ErrorCodes.ValidationRequired, $"{name}缺少連結網址。");
         }
     }
 

@@ -480,17 +480,40 @@ export type MenuKey = 'main' | 'footer'
 /** 1 站內內容（指到某個 ContentItem）／2 站內路徑（固定字串，例如系統列表頁的網址）／3 外部網址。 */
 export type LinkKind = 1 | 2 | 3
 
+/**
+ * 子項目從哪裡來（API 的 `MenuAutoChildren`，2026-09-18）。
+ *
+ * 🔴 不是 0 時，**這個節點自存的子項目前台一律不看**，改成算繪當下取該單元的全部項目
+ *    （名稱、網址、順序都跟著單元走）。加這個東西是為了拿掉「同一份資料存兩次」——
+ *    正式站曾經同一個分類在選單叫「醫美保養」、在「分類與標籤」叫「膚質改善」。
+ * ⚠️ 自存的子項目**不會被刪掉**，切回 0 就會再出現。
+ */
+export type AutoChildren = 0 | 1 | 2 | 3 | 4
+
 export interface MenuItem {
   id: number
   menuKey: MenuKey
   parentId: number | null
   /** 冗餘欄位，讓「最多兩層」這個約束可執行（docs/08 §G-3：純靠 ParentId 在 SQL 表達不出深度上限）。 */
   depth: 1 | 2
+  /**
+   * 顯示名稱。
+   * ⚠️ **linkKind=1 時可以是空字串**＝跟著那筆內容的標題走（2026-09-18 起）。
+   *    填了就是覆寫（頁尾的「關於 20SKIN」指向的是標題為「品牌理念」的那一頁）。
+   */
   label: string
   linkKind: LinkKind
+  /** 子項目來源。0＝自己維護。 */
+  autoChildren: AutoChildren
   /** linkKind=1 時用來知道去哪個單元找 contentItemId。 */
   contentUnit: UnitKey | null
   contentItemId: number | null
+  /**
+   * linkKind=1 時，被指到那筆內容的標題（唯讀，API join 出來的）。
+   * ⚠️ 名稱留空時畫面要顯示「自動：○○」，靠的就是它 —— **不要為了拿這個標題
+   *    再去把整個單元抓回來**（決策 26 那次就是這樣多打了 24 次請求）。
+   */
+  contentTitle: string | null
   /** linkKind=2／3 時使用。 */
   url: string | null
   isExternal: boolean
@@ -503,7 +526,7 @@ export type NewMenuItemInput = Pick<MenuItem, 'menuKey' | 'label' | 'linkKind'> 
   Partial<Pick<MenuItem, 'parentId' | 'contentUnit' | 'contentItemId' | 'url' | 'relAttr' | 'openInNewTab'>>
 
 export type MenuItemPatch = Partial<
-  Pick<MenuItem, 'label' | 'linkKind' | 'contentUnit' | 'contentItemId' | 'url' | 'relAttr' | 'openInNewTab'>
+  Pick<MenuItem, 'label' | 'linkKind' | 'autoChildren' | 'contentUnit' | 'contentItemId' | 'url' | 'relAttr' | 'openInNewTab'>
 >
 
 /** `booking.20skin.tw` 與 `20skinshop.com` 在這裡，而且只在這裡（docs/08 §G-3；
@@ -519,6 +542,7 @@ interface ServerMenuNode {
   relAttr: string | null
   openInNewTab: boolean
   children: ServerMenuNode[]
+  autoChildren: number
   /** 唯讀，由 API join 出來（MenuItems 沒有這兩欄）。 */
   contentType: number | null
   contentTitle: string | null
@@ -565,8 +589,10 @@ function flattenMenu(nodes: ServerMenuNode[], menuKey: MenuKey): MenuItem[] {
         depth,
         label: node.label,
         linkKind: node.linkKind as LinkKind,
+        autoChildren: (node.autoChildren ?? 0) as AutoChildren,
         contentUnit: node.contentType !== null ? CONTENT_TYPE_TO_UNIT[node.contentType] ?? null : null,
         contentItemId: node.contentItemId,
+        contentTitle: node.contentTitle,
         url: node.url,
         isExternal,
         relAttr: node.relAttr,
@@ -593,10 +619,14 @@ function nestMenu(items: MenuItem[], menuKey: MenuKey): unknown[] {
         id: i.id > 0 ? i.id : null,
         label: i.label,
         linkKind: i.linkKind,
+        // ⚠️ 第二層一律 0：自動帶入只能掛在頂層，否則會長出第三層（API 也會擋）。
+        autoChildren: parentId === null ? i.autoChildren : 0,
         contentItemId: i.linkKind === 1 ? i.contentItemId : null,
         url: i.linkKind === 1 ? null : i.url,
         relAttr: i.relAttr,
         openInNewTab: i.openInNewTab,
+        // 🔴 **自動帶入時仍然把自存的子項目送回去。** 這支是整批替換，漏送就是刪掉 ——
+        //    而那幾列正是院方切回「自己維護」時要拿回來的東西。前台不會顯示它們。
         children: parentId === null ? build(i.id) : [],
       }))
   return build(null)
@@ -659,8 +689,10 @@ const menu = {
       depth,
       label: input.label,
       linkKind: input.linkKind,
+      autoChildren: 0,
       contentUnit: input.linkKind === 1 ? input.contentUnit ?? null : null,
       contentItemId: input.linkKind === 1 ? input.contentItemId ?? null : null,
+      contentTitle: null,
       url: input.linkKind === 1 ? null : input.url ?? null,
       isExternal,
       relAttr: isExternal ? input.relAttr ?? 'noopener external' : null,

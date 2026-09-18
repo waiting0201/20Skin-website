@@ -96,8 +96,19 @@ public sealed class MenuItem
     /// <summary>最多兩層，<c>CHECK (Depth IN (1, 2))</c>。純靠 <see cref="ParentId"/> 無法在 SQL 表達深度上限。</summary>
     public byte Depth { get; set; }
 
+    /// <summary>
+    /// 顯示名稱。
+    /// <para>
+    /// ⚠️ <b>留空且 <see cref="LinkKind"/> 是 <see cref="MenuLinkKind.ContentItem"/> 時＝自動用那筆內容的標題</b>
+    /// （2026-09-18 起）。院方在單元裡改名，選單就跟著改，不必兩個地方各改一次。
+    /// 填了值就是覆寫（頁尾的「關於 20SKIN」指向的是標題為「品牌理念」的那一頁）。
+    /// </para>
+    /// </summary>
     public string Label { get; set; } = string.Empty;
     public MenuLinkKind LinkKind { get; set; }
+
+    /// <summary>子項目的來源。<see cref="MenuAutoChildren.None"/> 以外的值會讓自存的子項目被忽略。</summary>
+    public MenuAutoChildren AutoChildren { get; set; }
     public int? ContentItemId { get; set; }
     public string? Url { get; set; }
     public bool IsExternal { get; set; }

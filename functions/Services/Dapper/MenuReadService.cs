@@ -20,7 +20,7 @@ public sealed class MenuReadService(ISqlConnectionFactory factory)
 
         const string sql = """
             SELECT m.Id, m.MenuKey, m.ParentId, m.Depth, m.Label, m.LinkKind, m.ContentItemId, m.Url,
-                   m.IsExternal, m.RelAttr, m.OpenInNewTab, m.SortOrder,
+                   m.IsExternal, m.RelAttr, m.OpenInNewTab, m.SortOrder, m.AutoChildren,
                    ci.ContentType, ci.Title AS ContentTitle
             FROM MenuItems m
             LEFT JOIN ContentItems ci ON ci.Id = m.ContentItemId
@@ -43,7 +43,7 @@ public sealed class MenuReadService(ISqlConnectionFactory factory)
             .OrderBy(r => r.SortOrder)
             .Select(r => new MenuNodeDto(
                 r.Id, r.Label, (MenuLinkKind)r.LinkKind, r.ContentItemId, r.Url, r.RelAttr, r.OpenInNewTab,
-                BuildChildren(r.Id), r.ContentType, r.ContentTitle))
+                BuildChildren(r.Id), r.ContentType, r.ContentTitle, (MenuAutoChildren)r.AutoChildren))
             .ToList();
 
         return BuildChildren(null);
@@ -67,5 +67,5 @@ public sealed class MenuReadService(ISqlConnectionFactory factory)
     private sealed record Row(
         int Id, string MenuKey, int? ParentId, byte Depth, string Label, byte LinkKind,
         int? ContentItemId, string? Url, bool IsExternal, string? RelAttr, bool OpenInNewTab, int SortOrder,
-        byte? ContentType, string? ContentTitle);
+        byte AutoChildren, byte? ContentType, string? ContentTitle);
 }

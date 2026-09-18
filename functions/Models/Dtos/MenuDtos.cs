@@ -9,6 +9,10 @@ namespace Skin20.Api.Models.Dtos;
 /// 前端新增節點時還沒有資料庫 Id，用巢狀 JSON 才能表達「這個新節點是誰的子節點」。
 /// </para>
 /// <para><c>Id</c> 在讀取時一定有值；寫入時 <c>null</c> 代表新增。</para>
+/// <para>
+/// ⚠️ <c>Label</c> <b>可以留空</b>（2026-09-18 起）—— <c>LinkKind=1</c> 時代表
+/// 「跟著被指到那筆內容的標題走」，前台算繪當下才決定顯示什麼。
+/// </para>
 /// </summary>
 public sealed record MenuNodeDto(
     int? Id,
@@ -28,7 +32,13 @@ public sealed record MenuNodeDto(
     /// </para>
     /// </summary>
     byte? ContentType = null,
-    string? ContentTitle = null);
+    string? ContentTitle = null,
+    /// <summary>
+    /// 子項目的來源（<see cref="MenuAutoChildren"/>，2026-09-18）。
+    /// <para>不是 0 時，<see cref="Children"/> 在<b>前台</b>會被忽略，改成算繪當下去取該單元的全部項目。
+    /// 後台仍然收得下自存的子項目（切回「自己維護」時就會再出現），但畫面上不給編輯入口。</para>
+    /// </summary>
+    MenuAutoChildren AutoChildren = MenuAutoChildren.None);
 
 /// <summary>
 /// <c>GET|PUT /admin/menu</c> 的形狀。<see cref="Main"/>／<see cref="Footer"/> 各自獨立，

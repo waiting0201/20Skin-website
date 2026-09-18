@@ -27,7 +27,7 @@
 // 社群連結與版權文案才是這個畫面自己的編輯範圍。
 import { computed, onMounted, reactive, ref } from 'vue'
 import { adminApi, ApiError } from '@/api/client'
-import type { LinkKind, MenuItem, MenuKey, NewMenuItemInput, SiteSettingsData } from '@/api/site'
+import type { AutoChildren, LinkKind, MenuItem, MenuKey, NewMenuItemInput, SiteSettingsData } from '@/api/site'
 import { currentUser } from '@/auth'
 import DragHandle from '@/components/DragHandle.vue'
 import { useDragSort } from '@/drag-sort'
@@ -89,17 +89,38 @@ function childrenOf(items: MenuItem[], parentId: number) {
 interface Draft {
   label: string
   linkKind: LinkKind
+  autoChildren: AutoChildren
   contentUnit: UnitKey | ''
   contentItemId: string
   url: string
 }
+
+/**
+ * 「子項目從哪裡來」的選項（2026-09-18）。
+ *
+ * 🔴 這是把「同一份資料存兩次」拿掉的入口。在這之前，選單的每個療程分類、困擾、
+ *    據點都是手打的名稱與路徑，改了單元那邊不會跟 —— 正式站真的分岔過
+ *    （同一個分類在選單叫「醫美保養」、在「分類與標籤」叫「膚質改善」）。
+ * ⚠️ 文案不提資料表與欄位名（決策 27），只講院方會看到的結果。
+ */
+const AUTO_CHILDREN_OPTIONS: { value: AutoChildren, label: string }[] = [
+  { value: 0, label: '自己一項一項維護' },
+  { value: 1, label: '自動列出全部「肌膚困擾」' },
+  { value: 2, label: '自動列出全部「療程分類」' },
+  { value: 3, label: '自動列出全部「文章分類」' },
+  { value: 4, label: '自動列出全部「診所據點」' },
+]
+
+const autoChildrenLabel = (v: AutoChildren) =>
+  AUTO_CHILDREN_OPTIONS.find((o) => o.value === v)?.label ?? ''
 function emptyDraft(): Draft {
-  return { label: '', linkKind: 2, contentUnit: '', contentItemId: '', url: '' }
+  return { label: '', linkKind: 2, autoChildren: 0, contentUnit: '', contentItemId: '', url: '' }
 }
 function bufferFrom(item: MenuItem): Draft {
   return {
     label: item.label,
     linkKind: item.linkKind,
+    autoChildren: item.autoChildren,
     contentUnit: item.contentUnit ?? '',
     contentItemId: item.contentItemId != null ? String(item.contentItemId) : '',
     url: item.url ?? '',
@@ -115,6 +136,7 @@ function isDirty(item: MenuItem): boolean {
   return (
     b.label !== item.label ||
     b.linkKind !== item.linkKind ||
+    b.autoChildren !== item.autoChildren ||
     b.contentUnit !== (item.contentUnit ?? '') ||
     b.contentItemId !== (item.contentItemId != null ? String(item.contentItemId) : '') ||
     b.url !== (item.url ?? '')
@@ -154,9 +176,17 @@ async function load() {
 onMounted(load)
 
 function contentLabel(item: MenuItem): string {
-  if (item.linkKind !== 1 || !item.contentUnit || !item.contentItemId) return ''
-  const opt = (contentOptions[item.contentUnit] ?? []).find((o) => o.value === String(item.contentItemId))
+  if (item.linkKind !== 1 || !item.contentItemId) return ''
+  // ⚠️ 先用 API 一起回來的標題（決策 26：標題早就在那筆資料裡，不要為了它再抓整個單元）；
+  //    只有在使用者剛剛換過選擇、還沒儲存時才會落到候選清單那一份。
+  if (item.contentTitle) return item.contentTitle
+  const opt = (contentOptions[item.contentUnit ?? ''] ?? []).find((o) => o.value === String(item.contentItemId))
   return opt?.label ?? `#${item.contentItemId}`
+}
+
+/** 名稱留空時畫面上要顯示的「自動名稱」。 */
+function autoLabelOf(item: MenuItem): string {
+  return item.label.trim() ? '' : contentLabel(item)
 }
 
 function messageOf(e: unknown, fallback: string): string {
@@ -177,8 +207,10 @@ async function withErrorHandling(fn: () => Promise<void>) {
 /** 列末「儲存」：把該列的編輯緩衝一次送出，不是逐欄位即時送出（見檔頭註解）。 */
 async function commitRow(item: MenuItem) {
   const b = rowBuffers[item.id]
-  if (!b.label.trim()) {
-    actionError.value = '項目名稱為必填。'
+  // ⚠️ 名稱只有在「連到站內內容」時可以留空 —— 那代表跟著那筆內容的名稱走。
+  //    站內路徑與外部網址沒有可以跟的對象，留空會在選單上留一個按不到的空白。
+  if (!b.label.trim() && b.linkKind !== 1) {
+    actionError.value = '項目名稱為必填（只有連到站內內容時可以留空，代表跟著內容的名稱）。'
     return
   }
   await withErrorHandling(async () => {
@@ -187,6 +219,7 @@ async function commitRow(item: MenuItem) {
       {
         label: b.label,
         linkKind: b.linkKind,
+        autoChildren: item.depth === 1 ? b.autoChildren : 0,
         contentUnit: b.linkKind === 1 ? b.contentUnit || null : null,
         contentItemId: b.linkKind === 1 && b.contentItemId ? Number(b.contentItemId) : null,
         url: b.linkKind === 1 ? null : b.url || null,
@@ -350,7 +383,16 @@ function removeSocialLink(index: number) {
             <div class="adm-repeater__fields">
               <div class="adm-field">
                 <label class="adm-field__label">項目名稱</label>
-                <input class="adm-input" type="text" v-model="rowBuffers[top.id].label" :disabled="!canEdit">
+                <input
+                  class="adm-input"
+                  type="text"
+                  v-model="rowBuffers[top.id].label"
+                  :disabled="!canEdit"
+                  :placeholder="autoLabelOf(top) || '選單上顯示的文字'"
+                >
+                <p v-if="autoLabelOf(top)" class="adm-field__hint">
+                  留空＝跟著內容的名稱走，目前是「{{ autoLabelOf(top) }}」。要顯示別的字再填。
+                </p>
               </div>
               <div class="adm-field">
                 <label class="adm-field__label">
@@ -385,17 +427,33 @@ function removeSocialLink(index: number) {
                 <input class="adm-input" type="text" v-model="rowBuffers[top.id].url" :disabled="!canEdit" placeholder="/concerns/ 或 https://…">
                 <p v-if="rowBuffers[top.id].linkKind === 3" class="adm-field__hint">外部連結強制新分頁開啟、帶 rel="noopener external"，不可關閉。</p>
               </div>
+              <div class="adm-field adm-field--span2">
+                <label class="adm-field__label">子項目</label>
+                <select class="adm-select" v-model.number="rowBuffers[top.id].autoChildren" :disabled="!canEdit">
+                  <option v-for="opt in AUTO_CHILDREN_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
+                <p class="adm-field__hint">
+                  選「自動列出」之後，名稱與順序都跟著那個單元走 —— 在單元裡改名、調順序、
+                  新增一筆，選單就一起變，不必再來這裡改一次。
+                </p>
+              </div>
             </div>
             <div class="adm-inline-actions">
               <button type="button" class="btn btn--primary btn--sm" :disabled="!canEdit || !isDirty(top)" @click="commitRow(top)">{{ isDirty(top) ? '儲存＊' : '儲存' }}</button>
-              <button type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="toggleChildForm(top.id)">＋子項目</button>
+              <button v-if="top.autoChildren === 0" type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="toggleChildForm(top.id)">＋子項目</button>
               <button type="button" class="btn btn--line btn--sm" :disabled="!canEdit" @click="removeItem(top)">刪除</button>
             </div>
           </div>
 
+          <!-- 自動列出時：這一段不給編輯。⚠️ 自存的子項目沒有被刪掉，切回「自己維護」就會再出現。 -->
+          <p v-if="top.autoChildren !== 0" class="adm-field__hint" style="margin-left: var(--sp-6)">
+            這一項的子選單是<strong>{{ autoChildrenLabel(top.autoChildren) }}</strong>，
+            名稱與順序都跟著那個單元走，這裡不需要（也不能）一項一項維護。
+          </p>
+
           <!-- 子項目（最多兩層，這一層不可再有子項目） -->
           <div
-            v-for="child in childrenOf(items, top.id)"
+            v-for="child in (top.autoChildren === 0 ? childrenOf(items, top.id) : [])"
             :key="child.id"
             class="adm-repeater__row"
             style="margin-left: var(--sp-6)"
@@ -406,7 +464,16 @@ function removeSocialLink(index: number) {
             <div class="adm-repeater__fields">
               <div class="adm-field">
                 <label class="adm-field__label">項目名稱</label>
-                <input class="adm-input" type="text" v-model="rowBuffers[child.id].label" :disabled="!canEdit">
+                <input
+                  class="adm-input"
+                  type="text"
+                  v-model="rowBuffers[child.id].label"
+                  :disabled="!canEdit"
+                  :placeholder="autoLabelOf(child) || '選單上顯示的文字'"
+                >
+                <p v-if="autoLabelOf(child)" class="adm-field__hint">
+                  留空＝跟著內容的名稱走，目前是「{{ autoLabelOf(child) }}」。
+                </p>
               </div>
               <div class="adm-field">
                 <label class="adm-field__label">
@@ -450,7 +517,8 @@ function removeSocialLink(index: number) {
           </div>
 
           <!-- 新增子項目表單：欄位標籤比照上面既有項目列，不要因為是「新增」就少了層級 -->
-          <div v-if="openChildForm[top.id]" class="adm-repeater__row" style="margin-left: var(--sp-6); background: var(--surface-alt)">
+          <!-- ⚠️ 切成「自動列出」時這張表單要一起收掉：按鈕已經不見了，但先前展開的表單會留著。 -->
+          <div v-if="openChildForm[top.id] && top.autoChildren === 0" class="adm-repeater__row" style="margin-left: var(--sp-6); background: var(--surface-alt)">
             <div class="adm-repeater__fields">
               <div class="adm-field">
                 <label class="adm-field__label">子項目名稱</label>
