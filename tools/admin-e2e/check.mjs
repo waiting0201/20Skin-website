@@ -322,28 +322,54 @@ await step('🔴 但九個內容模型那邊的刪檔警告還在', async () => 
   return '還在'
 })
 
-section('模式切換：選中的那顆要看得出來')
-await step('表單／進階 JSON 的選中狀態沒有反過來', async () => {
-  // 🔴 這一條擋的是「亮的是沒被選中的那一顆」（2026-09-17 修）：base.css 的
-  //    btn--ghost 是藍框藍字、比中性的 btn--line 重，早先卻拿它當「未選」。
-  //    typecheck 與 build 看不到 class 的輕重關係，只有真的看一眼才知道。
-  // ⚠️ 刻意放在最後：切換模式會讓表單變成「有未儲存的變更」，之後再換頁會跳
-  //    confirm，而 Playwright 預設會取消它 —— 後面的檢查就全部卡住了。
+section('編輯畫面的標題列：分隔線不黏著下方的白卡片')
+await step('🔴 線畫在 ::after 上，線的下面還有一段同色留白', async () => {
+  // Tim 指出 2026-09-18：「表單上方那條灰線跟下方白色表單區塊會黏在一起」。
+  // 🔴 用 border-bottom 的話，線的正下方立刻就是卡片的白色，看起來像卡片自己
+  //    多了一道邊；而標題列是 sticky 的，改用 margin 也沒有用（margin 不跟著釘住）。
+  //    所以留白要在標題列**自己的 padding 裡**，線畫在 ::after 上。
+  await openEdit(page, 'doctor', (await api('/admin/doctor?page=1&pageSize=1')).data.items[0].id)
+  const head = page.locator('.adm-editor > .adm-page__head')
+  await head.waitFor({ timeout: 20000 })
+  const m = await head.evaluate((el) => {
+    const own = getComputedStyle(el)
+    const after = getComputedStyle(el, '::after')
+    return {
+      top: parseFloat(own.paddingTop),
+      bottom: parseFloat(own.paddingBottom),
+      border: parseFloat(own.borderBottomWidth),
+      line: parseFloat(after.borderTopWidth),
+    }
+  })
+  if (m.border > 0) throw new Error('又改回 border-bottom 了——線會貼著卡片')
+  if (!(m.line >= 1)) throw new Error('::after 那條線不見了')
+  if (!(m.bottom - m.top >= 12)) throw new Error(`線下面沒有留白（上 ${m.top} / 下 ${m.bottom}）`)
+  return `上 ${m.top}px ／ 下 ${m.bottom}px（差 ${m.bottom - m.top}px 是線下的留白）`
+})
+
+section('區塊 JSON 欄位：只有表單，沒有 JSON 逃生口')
+await step('🔴 沒有「表單／進階：直接編輯 JSON」的切換鈕', async () => {
+  // Tim 指定 2026-09-18：「只接顯示表單的部分就好，進階直接編輯 JSON 客戶不會用」。
+  // ⚠️ 擋的是「哪天有人覺得少了逃生口又把它加回來」——切換鈕一回來，
+  //    客戶就有機會在 JSON 模式裡把表單沒顯示的鍵（例如文章段落的 runs）順手清掉。
   await openEdit(page, 'treatment', ids.treatment)
-  const modes = fieldByLabel(page, '適應症').locator('.adm-struct__modes')
-  await modes.waitFor({ timeout: 20000 })
-  const formBtn = modes.locator('button', { hasText: '表單' })
-  const rawBtn = modes.locator('button', { hasText: '進階' })
-  const lit = async (b) => /btn--primary/.test((await b.getAttribute('class')) ?? '')
-
-  if (!(await lit(formBtn))) throw new Error('表單模式下，「表單」那顆不是實心（btn--primary）')
-  if (await lit(rawBtn)) throw new Error('沒被選中的「進階」那顆是實心的 —— 選中狀態反了')
-
-  await rawBtn.click()
-  await page.waitForTimeout(400)
-  if (!(await lit(rawBtn))) throw new Error('切到 JSON 模式後，「進階」那顆不是實心')
-  if (await lit(formBtn)) throw new Error('切到 JSON 模式後，「表單」那顆還是實心 —— 選中狀態反了')
-  return '選中＝實心藍、未選＝灰線框'
+  const field = fieldByLabel(page, '適應症')
+  await field.locator('.adm-struct').waitFor({ timeout: 20000 })
+  const n = await field.locator('.adm-struct__modes').count()
+  if (n) throw new Error('切換鈕又回來了')
+  return '0 顆'
+})
+await step('而且那一欄真的渲染成表單（不是空的）', async () => {
+  // 🔴 沒有這一條，上面那條「切換鈕不見了」也可以靠「整個元件壞掉」通過。
+  //    原始 JSON 模式的 textarea **刻意留著**（資料形狀對不上時的唯一入口），
+  //    但正常資料不該落到那裡。
+  const field = fieldByLabel(page, '適應症')
+  if (await field.locator('.adm-struct__raw').count()) {
+    throw new Error('掉進原始 JSON 模式了——多半是 schema 與正式資料的形狀對不上')
+  }
+  const inputs = await field.locator('.adm-struct input, .adm-struct textarea, .adm-struct select').count()
+  if (!inputs) throw new Error('表單裡一個輸入框都沒有')
+  return `${inputs} 個輸入框`
 })
 
 section('瀏覽器')

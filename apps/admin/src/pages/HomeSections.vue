@@ -384,7 +384,8 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
            🔴 **它不在拖曳清單裡**（drag.keys 只收主欄那六個），所以沒有把手 ——
               排序值原封不動，見 reorderSections。
            ⚠️ 版位設定的形狀宣告在 units/schemas/home.ts，用九個內容模型同一套
-              StructuredField 渲染（含上傳與「進階：直接編輯 JSON」）。
+              StructuredField 渲染（含上傳）。「進階：直接編輯 JSON」的切換鈕
+              2026-09-18 拿掉了，見 StructuredField.vue 檔頭。
            🔴 圖是**按下儲存才上傳**（src/image-value.ts），所以 saveDraft 一定要
               先跑 uploadPendingImages()。 -->
       <aside v-if="heroSection" class="adm-editor-side adm-editor-side--hero">

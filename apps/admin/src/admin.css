@@ -725,8 +725,26 @@
   /* topbar 是 10；這裡要蓋住捲上來的卡片（無 z-index），但不能蓋住 topbar。 */
   z-index: 5;
   background: var(--surface-alt);
-  padding-block: var(--sp-3);
-  border-bottom: 1px solid var(--line);
+  /* 🔴 **下緣比上緣多留一段**（sp-3 ＋ sp-4）：那條分隔線畫在 ::after 上，
+     線的下面還要有一段與頁面同色的留白，而留白必須屬於**標題列自己的盒子**。
+     ⚠️ 不要改回 `border-bottom`：border 只有一個像素，線的正下方立刻就是白色
+        卡片，兩者黏成一條，看起來像卡片自己多了一道邊
+        （Tim 指出 2026-09-18：「一條灰線跟下方白色表單區塊黏在一起」）。
+     ⚠️ 也不要改成 `margin-bottom`：margin 留在原本的位置、不跟著釘住，
+        標題列一被捲上去釘在頂端，卡片就又貼回線的下面了。 */
+  padding-top: var(--sp-3);
+  padding-bottom: calc(var(--sp-3) + var(--sp-4));
+}
+/* 分隔線本身：畫在「上緣留白結束、下緣留白開始」的那個位置。
+   ⚠️ 用 ::after 而不是多包一個 <div>：這個標題列在 EditPage 與 HomeSections
+      兩處各有一份 DOM，樣式解得掉的事不要去動兩份模板。 */
+.adm-editor > .adm-page__head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--sp-4);
+  border-top: 1px solid var(--line);
 }
 /* 🔴 寬度上限掛在最外層（含標題列與訊息框），不是只掛內容欄 ——
    只掛內容欄的話，標題列右側的「發布」會被推到內容上限的右緣，
@@ -753,8 +771,11 @@
   position: sticky;
   /* 🔴 讓開釘住的標題列。`--adm-page-head-h` 由 src/sticky-head.ts 量測後寫入
      最近的 `.adm-editor` 上 —— 寫死數字的話，標題一換行右欄上緣就被蓋掉一截。
-     後備值 104px 是單行標題 ＋ 一行狀態的實測高度（量不到時至少不會疊在一起）。 */
-  top: calc(var(--adm-topbar-h) + var(--adm-page-head-h, 104px) + var(--sp-4));
+     後備值 120px 是單行標題 ＋ 一行狀態的實測高度（量不到時至少不會疊在一起）。
+     ⚠️ 這裡**不再另外加 sp-4**：分隔線下方那段留白已經算在標題列自己的
+        padding-bottom 裡（見上面 `.adm-editor > .adm-page__head`），
+        再加一次右欄就會比主欄低下去一截。 */
+  top: calc(var(--adm-topbar-h) + var(--adm-page-head-h, 120px));
   display: flex;
   flex-direction: column;
   gap: var(--sp-6);
@@ -815,10 +836,11 @@
 }
 
 /* 🔴 儲存＝綠色，不是品牌藍。
-   結構化欄位的「表單／原始 JSON」切換用的就是 `.btn--primary` 的實心藍
-   （StructuredField.vue），兩者同時出現在畫面上時分不出哪一顆是「存檔」、
-   哪一顆只是切換檢視。綠色沿用狀態色 --adm-ok（＝徽章「已發布」的綠），
-   不引入新色票。
+   ⚠️ 原本的理由是「結構化欄位的『表單／原始 JSON』切換鈕也是實心藍，分不出
+      哪一顆是存檔」——那組切換鈕 2026-09-18 拿掉了（見 StructuredField.vue），
+      但**顏色不要改回藍色**：現在的分工是「綠＝留在後台、藍＝對外（發布）」，
+      而那兩顆按鈕就並排在標題列上。綠色沿用狀態色 --adm-ok（＝徽章「已發布」
+      的綠），不引入新色票。
    ⚠️ 標題列的「發布」維持品牌藍：儲存是留在後台，發布是對外，兩件事不同色。 */
 .btn--save { background: var(--adm-ok); color: #fff; border-color: var(--adm-ok); }
 .btn--save:hover:not(:disabled) { background: #25543C; border-color: #25543C; }
