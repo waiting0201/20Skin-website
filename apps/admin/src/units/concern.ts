@@ -20,7 +20,9 @@ export const concernUnit: UnitDefinition = {
     { key: 'updatedAt', label: '更新時間', render: 'date' },
   ],
   fields: [
-    { key: 'symptoms', label: '症狀描述', type: 'structured', required: true, group: '內容', structured: concernSymptomsSchema },
+    // ⚠️ 不是必填（2026-09-18，同療程那兩欄）：正式資料 8 筆裡 7 筆是空的，
+    //    而必填會讓那 7 筆連換圖都存不了，紅字卻指著這一欄。
+    { key: 'symptoms', label: '症狀描述', type: 'structured', group: '內容', hint: '建議填寫：空著的話，困擾頁不會出現這一區。', structured: concernSymptomsSchema },
     { key: 'causes', label: '成因', type: 'structured', group: '內容', structured: concernCausesSchema },
     { key: 'selfCheckGuide', label: '自我判斷指引', type: 'structured', group: '內容', structured: concernSelfCheckSchema },
     { key: 'whenToSeeDoctor', label: '何時該就醫', type: 'structured', group: '內容', structured: concernWhenToSeeDoctorSchema },
