@@ -1,14 +1,9 @@
 using System.Net.Mail;
-using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skin20.Api.Common;
-using Skin20.Api.Data;
 using Skin20.Api.Models.Dtos;
 using Skin20.Api.Models.Entities;
 using Skin20.Api.Services;
@@ -34,17 +29,15 @@ namespace Skin20.Api.Handlers;
 /// </para>
 /// </summary>
 public sealed class FormHandler(
-    Skin20DbContext db,
     ISiteSettingReadService settingsRead,
     IEmailService email,
     IBotCheckService botCheck,
     IRateLimitService rateLimit,
+    IQuestionInboxWriter questionInbox,
     ILogger<FormHandler> logger)
 {
     /// <summary>對齊 <c>QuestionInbox.QuestionText</c> 的欄位長度（docs/08 §F：nvarchar(500)）。</summary>
-    private const int MaxQuestionTextLength = 500;
-
-    private static readonly Regex WhitespaceRun = new(@"\s+", RegexOptions.Compiled);
+    private const int MaxQuestionTextLength = QuestionInboxWriter.MaxQuestionTextLength;
 
     public async Task<IActionResult> SubmitContactAsync(HttpRequest req)
     {
@@ -76,7 +69,7 @@ public sealed class FormHandler(
         await SendContactNotificationAsync(name, phone, emailAddress, body.Site?.Trim(), body.Topic?.Trim(), message);
 
         // 🔴 只取問題文字本身寫入題庫成長清單，姓名／電話／Email 絕不進 DB（docs/08 §F）。
-        await RecordQuestionInboxAsync(message, QuestionSource.ContactForm);
+        await questionInbox.RecordAsync(message, QuestionSource.ContactForm);
 
         // 回應不帶任何內部 Id（docs/10 §3.1）——本來就沒有落庫，這裡再次確保回應形狀乾淨。
         return new OkObjectResult(ApiResponse.Ok("已送出，我們會盡快與您聯繫。"));
@@ -105,7 +98,7 @@ public sealed class FormHandler(
         await botCheck.EnsureHumanAsync(body.BotCheckToken, "questions_miss");
         await rateLimit.EnsurePublicQuotaAsync("questions-miss", ip);
 
-        await RecordQuestionInboxAsync(questionText, source);
+        await questionInbox.RecordAsync(questionText, source);
 
         return new OkObjectResult(ApiResponse.Ok("已記錄。"));
     }
@@ -144,72 +137,6 @@ public sealed class FormHandler(
         await email.SendAsync(recipient, subject, content);
     }
 
-    /// <summary>
-    /// 寫入 <c>QuestionInbox</c>（docs/08 §F）。🔴 只收問題文字本身——呼叫端必須自行
-    /// 保證傳進來的字串不含姓名、電話、email 等可回連送出者的資訊。
-    /// </summary>
-    private async Task RecordQuestionInboxAsync(string rawText, QuestionSource source)
-    {
-        var trimmed = rawText.Length > MaxQuestionTextLength ? rawText[..MaxQuestionTextLength] : rawText;
-        var normalized = NormalizeQuestionText(trimmed);
-        if (normalized.Length == 0) return;
-
-        var now = Clock.UtcNow;
-
-        var existing = await db.QuestionInboxItems.SingleOrDefaultAsync(q => q.NormalizedText == normalized);
-        if (existing is not null)
-        {
-            existing.HitCount++;
-            existing.LastSeenAt = now;
-            await db.SaveChangesAsync();
-            return;
-        }
-
-        var row = new QuestionInbox
-        {
-            QuestionText = trimmed,
-            NormalizedText = normalized,
-            Source = source,
-            HitCount = 1,
-            FirstSeenAt = now,
-            LastSeenAt = now,
-            Status = QuestionStatus.Pending,
-        };
-        db.QuestionInboxItems.Add(row);
-
-        try
-        {
-            await db.SaveChangesAsync();
-        }
-        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
-        {
-            // 高流量情境下兩個人同時問了完全一樣的問題會撞到 UQ_QuestionInbox_NormalizedText。
-            // 這不是錯誤，是預期中的併發——退回做一次「找到就加值」，不讓公開端點的使用者
-            // 看到一句技術性的 409（docs/08 §F：同一句話只有一列，重複只累加 HitCount）。
-            db.Entry(row).State = EntityState.Detached;
-
-            var raced = await db.QuestionInboxItems.SingleAsync(q => q.NormalizedText == normalized);
-            raced.HitCount++;
-            raced.LastSeenAt = now;
-            await db.SaveChangesAsync();
-        }
-    }
-
-    /// <summary>去空白、轉小寫、全形轉半形（docs/08 §F：<c>NormalizedText</c> 的比對鍵規則）。</summary>
-    private static string NormalizeQuestionText(string raw)
-    {
-        var sb = new StringBuilder(raw.Length);
-        foreach (var ch in raw)
-        {
-            if (ch == '　') { sb.Append(' '); continue; }
-            if (ch is >= '！' and <= '～') { sb.Append((char)(ch - 0xFEE0)); continue; }
-            sb.Append(ch);
-        }
-
-        var collapsed = WhitespaceRun.Replace(sb.ToString().Trim(), " ");
-        return collapsed.ToLowerInvariant();
-    }
-
     private static QuestionSource ParseSource(string? raw) => raw switch
     {
         "search" => QuestionSource.SiteSearchNoResult,
@@ -230,8 +157,6 @@ public sealed class FormHandler(
         }
     }
 
-    private static bool IsUniqueViolation(DbUpdateException ex)
-        => ex.InnerException is SqlException { Number: 2601 or 2627 };
 
     private static async Task<T> ReadBodyAsync<T>(HttpRequest req) where T : class
     {

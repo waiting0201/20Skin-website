@@ -16,7 +16,7 @@ namespace Skin20.Api.Routing;
 /// </para>
 /// <para>
 /// 路由表拆成兩個 partial：<see cref="RoutePublicAsync"/>（<c>AppRouter.Public.cs</c>，
-/// 前台四支公開端點）與 <see cref="RouteAdminAsync"/>（<c>AppRouter.Admin.cs</c>，後台端點與權限對照）。
+/// 前台的公開端點）與 <see cref="RouteAdminAsync"/>（<c>AppRouter.Admin.cs</c>，後台端點與權限對照）。
 /// </para>
 /// </summary>
 public sealed partial class AppRouter(
@@ -30,6 +30,7 @@ public sealed partial class AppRouter(
     PublicContentHandler publicContent,
     SeoHandler seo,
     SearchHandler search,
+    AiHandler ai,
     // ── 後台（docs/10 §3.3、§3.4）──────────────────────────────────
     DashboardHandler dashboard,
     ContentHandler content,

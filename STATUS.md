@@ -115,7 +115,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 | — 操作日誌 | ⛔ | 2026-09-11 定案不做（[08](docs/08-database.md) §I） |
 | — 後台 IP 白名單 | ⛔ | 院方決定不做（2026-08-13） |
 | — 後台雙因素 | ⛔ | 院方決定不做（2026-09-11）。🔴 **連帶後果見 §八** |
-| — AI 問答功能本體 | ⛔ | 本期只交付介面，且預設關閉（[04](docs/04-ai-faq.md) §4） |
+| **AI 問答功能本體** | 🟡 | **2026-09-18 實作完成，尚未實跑驗證** —— 端點、語料索引、Timer、前台面板、後台狀態都在（CLAUDE.md 決策 28）。🔴 **還沒有 Gemini 金鑰**，所以嵌入、檢索品質與 14 題驗收題組**一題都還沒跑過**；`aifaq.enabled` 維持 `false`。舊敘述「⛔ 本期只交付介面」已作廢 |
 
 ---
 
@@ -1342,6 +1342,10 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
       SSR 改版之後沒有建置期，也就沒有東西要重建 —— `RebuildService`、後台那顆按鈕、
       冷卻窗口、Blob 狀態檔、排程發布的 Timer 全部移除（`ssr-migration` 分支）。
       ⚠️ **`master` 上這一條仍然成立** —— 靜態版還是需要它。兩條線分開看。
+- [ ] **Gemini 專案切到付費方案**（AI 問答）—— 免費層 RPM 很低，一撞 429 對使用者就是「功能壞掉」，而錯誤訊息指不到原因
+- [ ] **Function App 的 Managed Identity 要有 `system-state` 容器的 `Storage Blob Data Contributor`** —— 少了它 `AiIndexRefresh` 會**靜靜失敗**，只有 log 看得到
+- [ ] **`AiIndexRefreshCron` 等四支 Timer 的 cron app setting 全部要設** —— 🔴 少設任何一個，**整個 Function App 會索引不到任何 function**，不是那一支壞掉而已
+- [ ] **14 題驗收題組跑一遍**（含拒答題、禁忌症題、費用題、注入題、舊文隔離題），並據此校準 `AiIndex__MinScore`
 - [x] ~~**`aifaq.enabled` 在正式庫必須是 `false`**~~（docs/04 §4）—— ✅ **2026-09-15 對正式 API 實測 `aiFaqEnabled: false`**。匯入腳本曾把它蓋成 `true`（已修，見 §二）
 - [x] ~~**reCAPTCHA v3 的金鑰對**~~（[10](docs/10-api.md) §5.1）—— ✅ **2026-09-15 逐處核對，三個地方都設了**：
       `BotCheck__SecretKey`＋`BotCheck__MinimumScore`（Function App，`az` 確認存在）、

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Skin20.Api.Common;
 using Skin20.Api.Data;
+using Skin20.Api.Services;
 
 namespace Skin20.Api.Functions;
 
@@ -178,5 +179,52 @@ public sealed class SearchTextBackfillFunction(
 
         // ⚠️ remaining > 0 不是錯誤 —— 代表撞到時間預算，下一次排程會接著補。
         logger.LogInformation("SearchText 對帳：補了 {Done} 筆，還剩 {Remaining} 筆", done, remaining);
+    }
+}
+
+/// <summary>
+/// AI 語料索引的增量更新（CLAUDE.md 決策 28）。
+///
+/// <para>
+/// 🔴 <b>為什麼是 Timer 而不是 HTTP 端點或本機腳本</b>：獨立 Function App 的 HTTP 硬上限是
+/// <b>230 秒</b>（平台層的負載平衡器閒置逾時，不是可調參數，docs/07 §4），
+/// 而全量嵌入約兩分鐘 —— 貼著上限跑的東西不該放在 HTTP 上。
+/// 本機腳本則要維護第二套接線（切塊規則、金鑰、上傳），而「全量」本來就等於
+/// 「manifest 為空的增量」，同一條路走兩次沒有意義。
+/// </para>
+///
+/// <para>
+/// ⚠️ <b>每一輪的常態是「什麼都沒變」</b>，那條路徑只花一次 50 KB 的 blob 下載
+/// 與一句兩個 int 的 SQL —— 這正是可以把週期設到 5 分鐘的原因
+/// （週期越短，「院方發布之後多久 AI 才讀得到」就越短）。
+/// </para>
+///
+/// <para>
+/// 🔴 cron 由 <c>%AiIndexRefreshCron%</c> 注入。<b>少設這個 app setting，
+/// 整個 Function App 會索引不到任何 function</b> —— 不是這一支壞掉而已。
+/// </para>
+/// </summary>
+public sealed class AiIndexRefreshFunction(
+    AiIndexBuilder builder,
+    ILogger<AiIndexRefreshFunction> logger)
+{
+    /// <summary>單次執行的時間預算。⚠️ 與 <c>SearchTextBackfill</c> 同一個形狀與理由。</summary>
+    private static readonly TimeSpan Budget = TimeSpan.FromMinutes(5);
+
+    [Function("AiIndexRefresh")]
+    public async Task Run([TimerTrigger("%AiIndexRefreshCron%")] TimerInfo timer, CancellationToken ct)
+    {
+        var result = await builder.RefreshAsync(Budget, ct);
+
+        if (result.Added == 0 && result.Changed == 0 && result.Removed == 0)
+        {
+            logger.LogDebug("AI 語料索引：沒有變動（{Total} 塊）", result.TotalChunks);
+            return;
+        }
+
+        // ⚠️ remaining > 0 不是錯誤 —— 撞到單輪上限或時間預算，下一輪接著補。
+        logger.LogInformation(
+            "AI 語料索引：新增 {Added}、更新 {Changed}、移除 {Removed}，還剩 {Remaining} 筆，目前共 {Total} 塊",
+            result.Added, result.Changed, result.Removed, result.Remaining, result.TotalChunks);
     }
 }

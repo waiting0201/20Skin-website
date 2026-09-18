@@ -92,8 +92,21 @@ builder.Services.AddSingleton<IEmailService, EmailService>();
 builder.Services.AddSingleton<IBlobStorageService, BlobStorageService>();
 builder.Services.AddSingleton<IBotCheckService, BotCheckService>();
 
+// ⚠️ Gemini 同時實作嵌入與生成兩個介面，但**要註冊成同一個 Singleton 實例**——
+//    分開 AddSingleton 兩次會建出兩份，設定讀兩遍、HttpClient 也各拿一份。
+builder.Services.AddSingleton<GeminiService>();
+builder.Services.AddSingleton<IAiEmbeddingService>(sp => sp.GetRequiredService<GeminiService>());
+builder.Services.AddSingleton<IAiChatService>(sp => sp.GetRequiredService<GeminiService>());
+
+// AI 語料索引：載入 Blob 上的索引並放在記憶體裡（沒有 per-request 狀態、不碰 DbContext）。
+builder.Services.AddSingleton<AiIndexService>();
+
 // Scoped：碰 Skin20DbContext 或連線的一切
 builder.Services.AddScoped<IRateLimitService, RateLimitService>();
+
+// ⚠️ 索引的**建置**是 Scoped：它經由 ReadService 讀資料庫（AiIndexService 只負責讀 Blob）。
+builder.Services.AddScoped<AiIndexBuilder>();
+builder.Services.AddScoped<IQuestionInboxWriter, QuestionInboxWriter>();
 
 // ── Handler（docs/10 §3）──────────────────────────────────
 // ⚠️ 全部 Scoped。把碰 DB 的東西設成 Singleton 會捕獲已釋放的 DbContext，
@@ -114,6 +127,7 @@ builder.Services.AddScoped<RedirectHandler>();
 builder.Services.AddScoped<ExportHandler>();
 builder.Services.AddScoped<QuestionHandler>();
 builder.Services.AddScoped<AccountHandler>();
+builder.Services.AddScoped<AiHandler>();
 
 // ── Dapper ReadService（純讀，docs/11 §2）────────────────
 // ⚠️ 全部 Scoped：它們持有 ISqlConnectionFactory，而連線本身不是執行緒安全的。
@@ -124,6 +138,7 @@ builder.Services.AddScoped<IQuestionReadService, QuestionReadService>();
 builder.Services.AddScoped<IRedirectReadService, RedirectReadService>();
 builder.Services.AddScoped<IExportReadService, ExportReadService>();
 builder.Services.AddScoped<IPublicContentReadService, PublicContentReadService>();
+builder.Services.AddScoped<IAiIndexReadService, AiIndexReadService>();
 
 builder.Services.AddScoped<AppRouter>();
 builder.Services.AddHttpContextAccessor();

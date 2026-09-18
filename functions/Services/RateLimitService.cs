@@ -52,6 +52,29 @@ public sealed class RateLimitService(
     private readonly TimeSpan _publicQuotaWindow =
         TimeSpan.FromMinutes(ParseInt(configuration["RateLimit:PublicQuota:WindowMinutes"], 10));
 
+    /// <summary>
+    /// 某個 bucket 的配額：先找它自己的設定，沒有才落回全域。
+    ///
+    /// <para>
+    /// 🔴 <b>加這一層是因為配額原本是全域的</b>（兩個 readonly 欄位，所有 bucket 共用）——
+    /// 而聊天與表單的合理值差很多：一段對話 3–8 輪，表單那組「5 次／10 分」會在第一段
+    /// 對話中途就把使用者鎖住。直接調全域的話，<c>/contact</c> 與 <c>/questions/miss</c>
+    /// 會跟著一起放寬。
+    /// </para>
+    /// <para>
+    /// 設定鍵：<c>RateLimit__PublicQuota__{bucket}__MaxRequests</c>／<c>__WindowMinutes</c>。
+    /// ⚠️ bucket 名帶連字號（<c>ai-ask</c>）在 app setting 裡是合法的，不要為此改 bucket 名 ——
+    /// 那會把 <c>LoginThrottles</c> 裡已經累積的計數丟掉。
+    /// </para>
+    /// </summary>
+    private (int MaxRequests, TimeSpan Window) QuotaFor(string bucket)
+    {
+        var max = ParseInt(configuration[$"RateLimit:PublicQuota:{bucket}:MaxRequests"], _publicQuotaMaxRequests);
+        var minutes = ParseInt(
+            configuration[$"RateLimit:PublicQuota:{bucket}:WindowMinutes"], (int)_publicQuotaWindow.TotalMinutes);
+        return (max, TimeSpan.FromMinutes(minutes));
+    }
+
     private readonly string? _lockoutAlertEmail = configuration["Alerts:LoginLockoutEmail"];
 
     public async Task EnsureNotLockedAsync(string userName, CancellationToken ct = default)
@@ -99,6 +122,7 @@ public sealed class RateLimitService(
         }
 
         var key = $"{bucket}:{ipAddress}";
+        var (maxRequests, window) = QuotaFor(bucket);
         var now = Clock.UtcNow;
         var exceeded = false;
 
@@ -121,7 +145,7 @@ public sealed class RateLimitService(
                 };
                 db.LoginThrottles.Add(row);
             }
-            else if (now - row.FirstFailedAt > _publicQuotaWindow)
+            else if (now - row.FirstFailedAt > window)
             {
                 // 視窗過期，重新起算。
                 row.FailedCount = 0;
@@ -137,9 +161,11 @@ public sealed class RateLimitService(
             {
                 row.FailedCount++;
                 row.LastFailedAt = now;
-                if (row.FailedCount > _publicQuotaMaxRequests)
+                if (row.FailedCount > maxRequests)
                 {
-                    row.LockedUntil = now.Add(_publicQuotaWindow);
+                    // ⚠️ 超限後鎖一整個視窗（不是「等下一次就好」）。對聊天偏兇，
+                    //    但改它會連 /contact 一起改 —— 前台的文案要把「約幾分鐘後可再試」講清楚。
+                    row.LockedUntil = now.Add(window);
                     exceeded = true;
                 }
             }

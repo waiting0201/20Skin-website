@@ -125,8 +125,8 @@ const settings = {
       socialLinks: settingJson<SocialLink[]>(map, KEYS.socialLinks, []),
       footerCopyright: settingText(map, KEYS.footerCopyright),
       aiFaq: {
-        // 🔴 預設關閉（docs/04 §4）：AI 未串接前不對外顯示 ——
-        //    一顆點下去沒反應的常駐按鈕比沒有按鈕更糟。
+        // 🔴 預設關閉（docs/04 §4）。⚠️ 2026-09-18 起面板已經接上 AI，
+        //    維持關閉的理由換成內容：知識庫還不夠實在（27/28 個療程頁仍是「建置中」）。
         enabled: settingBool(map, KEYS.aiFaqEnabled, false),
         panelTitle: settingText(map, KEYS.aiFaqPanelTitle),
         welcomeMessage: settingText(map, KEYS.aiFaqWelcome),
@@ -780,6 +780,33 @@ const menu = {
 }
 
 // =============================================================================
+// AI 語料索引（唯讀狀態）
+// =============================================================================
+
+/**
+ * `GET /admin/ai-index`。
+ *
+ * 🔴 **為什麼要有這一格**：院方發布內容之後，唯一能回答「AI 讀到了嗎」的人本來是工程師。
+ *    每次更新都要問人，院方就會乾脆不更新 —— 而 AI 回答的品質完全取決於內容的品質。
+ *
+ * ⚠️ 權限沿用 `settings.edit`，沒有新增權限碼。
+ */
+export interface AiIndexStatus {
+  builtAt: string | null
+  chunkCount: number
+  indexedItemCount: number
+  ready: boolean
+}
+
+const aiIndex = {
+  async status(): Promise<AiIndexStatus> {
+    return (await request<AiIndexStatus>('/admin/ai-index')) ?? {
+      builtAt: null, chunkCount: 0, indexedItemCount: 0, ready: false,
+    }
+  },
+}
+
+// =============================================================================
 // 對外門面
 // =============================================================================
 
@@ -787,4 +814,5 @@ export const siteApi = {
   settings,
   home,
   menu,
+  aiIndex,
 }

@@ -419,13 +419,15 @@ SAS 以 **Managed Identity 取 user delegation key** 簽發，系統內不存放
 
 Azure SQL 沒有 Agent Job，排程一律走 Functions Timer（獨立 Function App 支援，Managed Functions 不支援）。cron 由 app setting 注入。
 
-⚠️ **2026-09-16 起只剩兩支**（原本三支）。
+⚠️ **2026-09-16 起只剩兩支**（原本三支），**2026-09-18 起是四支**（多了 `SearchTextBackfill` 與 `AiIndexRefresh`）。
 
 | Function | 工作 |
 |---|---|
 | ~~`ScheduledPublish`~~ | 🔴 **2026-09-16 刪除。** 它的工作是「掃到期的 `PublishAt`／`UnpublishAt`，有異動就觸發重建」—— 而現在沒有重建。<br>✅ **排程發布因此變成即時的**：`Visibility.PublicFilter` 用的是**查詢當下的 `@Now`**，時間一到，下一個請求自然就看得到。<br>舊路徑是「最多等 15 分鐘輪詢 ＋ 約 4 分鐘建置」。 |
 | `VersionPrune` | 每筆內容保留最近 30 版，其餘刪除（§8） |
 | `ThrottleSweep` | 清掉 `LoginThrottles` 的過期計數列 |
+| `SearchTextBackfill` | 補算 `ContentItems.SearchText`（每批 100 筆、單次 5 分鐘預算） |
+| `AiIndexRefresh` | AI 語料索引的增量更新（CLAUDE.md 決策 28）。比對 Blob 上的 manifest 與資料庫的 `(Id, PublishedVersionId)`，只對新增／變更的內容重新嵌入。<br>⚠️ **每一輪的常態是「什麼都沒變」**，那條路徑只花一次 50 KB 的 blob 讀與一句兩個 int 的 SQL —— 所以週期可以設到 5 分鐘。<br>🔴 **為什麼不是 HTTP 端點**：全量嵌入約兩分鐘，而 HTTP 上限是 230 秒（[07](07-deployment.md) §4），貼著上限跑的東西不該放在 HTTP 上。 |
 
 三條共通規則：
 

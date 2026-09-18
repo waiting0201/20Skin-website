@@ -33,6 +33,16 @@ public static class ErrorCodes
     public const string RateLimited = "RATE_LIMITED";
     public const string BotCheckFailed = "BOT_CHECK_FAILED";
 
+    /// <summary>
+    /// AI 問答暫時不能用：模型服務連不上、逾時、金鑰未設定，或語料索引還沒建立（503）。
+    /// <para>
+    /// 🔴 <b>「答不出來」不是這一個。</b> 檢索不到夠相關的內容是正常的問答結果，
+    /// 回 200 配 <c>answered: false</c>（docs/10 §3.1）—— 用 4xx／5xx 表達會讓前台
+    /// 顯示成錯誤紅字，而那不是錯誤。
+    /// </para>
+    /// </summary>
+    public const string AiUnavailable = "AI_UNAVAILABLE";
+
     /// <summary>未預期例外。⚠️ <b>不得洩漏堆疊</b>，細節只進 Application Insights。</summary>
     public const string Internal = "INTERNAL";
 }

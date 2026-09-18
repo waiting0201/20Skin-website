@@ -44,9 +44,10 @@ public sealed partial class AppRouter
             ("POST", ["auth", "login"]) => true,
             ("POST", ["auth", "refresh"]) => true,
 
-            // 前台的三個執行期例外（docs/09 §4）
+            // 前台的四個執行期例外（docs/09 §4）。⚠️ `ai` 這個字段不與九個單元代號重疊。
             ("POST", ["contact"]) => true,
             ("POST", ["questions", "miss"]) => true,
+            ("POST", ["ai", "ask"]) => true,
             ("GET", ["site-settings", "public"]) => true,
 
             // 前台內容（SSR）。⚠️ `content` 這個字段刻意不與九個單元代號重疊，
@@ -85,6 +86,7 @@ public sealed partial class AppRouter
 
             ("POST", ["contact"]) => Wrap(forms.SubmitContactAsync(req)),
             ("POST", ["questions", "miss"]) => Wrap(forms.RecordMissedQuestionAsync(req)),
+            ("POST", ["ai", "ask"]) => Wrap(ai.AskAsync(req)),
             ("GET", ["site-settings", "public"]) => Wrap(settings.GetPublicAsync()),
 
             ("GET", ["content"]) => Wrap(publicContent.GetByPathAsync(req)),

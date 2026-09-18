@@ -64,6 +64,11 @@ public sealed partial class AppRouter
             ("GET" or "PUT", ["admin", "menu"]) => PermissionCodes.MenuEdit,
             ("GET" or "PUT", ["admin", "setting"]) => PermissionCodes.SettingsEdit,
 
+            // AI 語料索引的唯讀狀態。⚠️ **沿用 settings.edit，不新增權限碼** ——
+            // 新增一個碼要改 28 列種子與 RolePermissions，而這一格只是「語料更新到哪了」，
+            // 與全站設定那一頁本來就在一起（docs/04 §4：AI 的設定併入全站設定，不新增畫面）。
+            ("GET", ["admin", "ai-index"]) => PermissionCodes.SettingsEdit,
+
             // ── SEO 與 301 ───────────────────────────────────────────
             ("GET" or "POST", ["admin", "redirect", "export" or "import" or "stats"])
                 => PermissionCodes.RedirectManage,
@@ -121,6 +126,7 @@ public sealed partial class AppRouter
             ("PUT", ["admin", "home-section"]) => Wrap(homeSection.UpdateAsync(req)),
             ("GET", ["admin", "menu"]) => Wrap(menu.GetAsync()),
             ("PUT", ["admin", "menu"]) => Wrap(menu.UpdateAsync(req)),
+            ("GET", ["admin", "ai-index"]) => Wrap(ai.IndexStatusAsync()),
             ("GET", ["admin", "setting"]) => Wrap(settings.GetAdminAsync()),
             ("PUT", ["admin", "setting"]) => Wrap(settings.UpdateAsync(req)),
 

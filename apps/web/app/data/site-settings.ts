@@ -12,9 +12,11 @@ export type SiteSettings = PublicSiteSettings
 /**
  * 全站設定。
  *
- * ⚠️ `aiFaqEnabled` 的正式環境種子值是 **false**（docs/08 §J-4 步驟 7）——
- *    Phase 1 只交付介面，AI 未串接前不對外顯示。這個值由資料庫決定，
- *    院方在後台按一下就生效。
+ * ⚠️ `aiFaqEnabled` 的正式環境種子值是 **false**（docs/08 §J-4 步驟 7）。
+ *    ⚠️ 2026-09-18 起面板<b>已經接上 `POST /ai/ask`</b>（CLAUDE.md 決策 28），
+ *    開關維持關閉的理由換成<b>內容</b>：27/28 個療程頁還是「建置中」，
+ *    知識庫不夠實在就開，等於讓 AI 對著半份資料回答（docs/04 §4）。
+ *    這個值由資料庫決定，院方在後台按一下就生效，不必重新部署。
  *
  * ⚠️ 執行期取值之後，`~/composables/usePublicSiteSettings` 那層「client 端再覆蓋一次」
  *    已經沒有存在的理由 —— 算繪當下讀到的就是最新值。它仍留著是為了

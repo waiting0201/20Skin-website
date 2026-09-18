@@ -34,22 +34,6 @@ public sealed class SearchHandler(
     IHttpContextAccessor httpContextAccessor)
 {
     /// <summary>
-    /// 型別 → 顯示標籤。⚠️ 與 mockup 19-search 的篩選 tab 一致。
-    /// </summary>
-    private static readonly Dictionary<ContentType, string> Labels = new()
-    {
-        [ContentType.Treatment] = "療程",
-        [ContentType.Concern] = "肌膚困擾",
-        [ContentType.Article] = "文章",
-        [ContentType.Doctor] = "醫師",
-        [ContentType.Clinic] = "據點",
-        [ContentType.Case] = "案例",
-        [ContentType.Faq] = "常見問題",
-        [ContentType.Page] = "頁面",
-        [ContentType.Term] = "分類",
-    };
-
-    /// <summary>
     /// <c>GET /search?q=…</c>
     ///
     /// <para>⚠️ 關鍵字空白時回空陣列，不是回全站 —— 那會變成一個任何人都打得到的
@@ -103,7 +87,7 @@ public sealed class SearchHandler(
 
             results.Add(new
             {
-                t = Labels.GetValueOrDefault(type, ""),
+                t = ContentTypeLabels.Of(type),
                 u = url,
                 ti = hit.Title,
                 ex = ExcerptOf(hit.Snapshot),

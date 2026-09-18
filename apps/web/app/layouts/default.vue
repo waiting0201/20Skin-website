@@ -30,6 +30,7 @@ defineProps<{ section?: string }>()
       :panel-title="siteSettings.aiFaqPanelTitle"
       :welcome-text="siteSettings.aiFaqWelcomeText"
       :booking-url="siteSettings.aiFaqHandoffBookingUrl"
+      :line-url="siteSettings.aiFaqHandoffLineUrl"
     />
   </div>
 </template>

@@ -17,7 +17,7 @@
 // 講清楚，避免有人誤以為改壞了還能像九個內容模型一樣一鍵還原。
 import { computed, onMounted, reactive, ref } from 'vue'
 import { adminApi, ApiError } from '@/api/client'
-import type { SiteSettingsData, SiteSettingsDraft } from '@/api/site'
+import type { AiIndexStatus, SiteSettingsData, SiteSettingsDraft } from '@/api/site'
 import { countPendingImages, resolveImage } from '@/image-value'
 import { currentUser } from '@/auth'
 import { hasPermission } from '@/permissions'
@@ -81,6 +81,16 @@ function messageOf(e: unknown, fallback: string): string {
 
 // ⚠️ 原本只有 try/finally 沒有 catch：API 一掛掉就是 spinner 轉完之後一個
 //    「什麼都沒有」的畫面，加上一個沒有人接的 promise rejection。
+const aiIndex = ref<AiIndexStatus | null>(null)
+
+/** 顯示用的時間。⚠️ 後端給的是 UTC，畫面一律台北時間。 */
+const aiIndexUpdatedAt = computed(() => {
+  const value = aiIndex.value?.builtAt
+  if (!value) return '—'
+  const utc = value.endsWith('Z') ? value : `${value}Z`
+  return new Date(utc).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false })
+})
+
 async function load() {
   loading.value = true
   loadError.value = ''
@@ -91,6 +101,9 @@ async function load() {
     ])
     Object.assign(form, settings)
     clinics.value = clinicList.items
+
+    // ⚠️ 語料狀態失敗不該讓整頁設定載不進來 —— 它只是一行說明文字。
+    aiIndex.value = await adminApi.site.aiIndex.status().catch(() => null)
   } catch (e) {
     loadError.value = messageOf(e, '載入設定失敗。')
   } finally {
@@ -294,7 +307,8 @@ async function save() {
                 啟用浮動 AI 問答入口
               </label>
               <p class="adm-field__hint">
-                ⚠️ 預設為「關閉」——AI 還沒串接前不對外顯示，面板文案可以先設定好放著。
+                ⚠️ 目前預設關閉。等療程與常見問題的內容補得夠完整再打開——
+                內容不夠時線上諮詢會常常答不出來，比沒有這個按鈕更糟。打開不需要重新上版。
               </p>
             </div>
             <div class="adm-field">
@@ -314,6 +328,16 @@ async function save() {
               <input v-model="form.aiFaq.lineUrl" class="adm-input" type="text" :disabled="!canEdit">
             </div>
           </div>
+
+          <p class="adm-field__hint" style="margin-top: var(--sp-3)">
+            <template v-if="aiIndex?.ready">
+              目前可回答的內容：{{ aiIndex.indexedItemCount }} 筆、{{ aiIndex.chunkCount }} 段（最後更新 {{ aiIndexUpdatedAt }}）。
+              內容發布後約五分鐘內，線上諮詢就會讀到新版本。
+            </template>
+            <template v-else>
+              內容還在整理中，線上諮詢暫時沒有可回答的資料。
+            </template>
+          </p>
         </div>
 
         <div v-if="canEdit" class="adm-inline-actions">

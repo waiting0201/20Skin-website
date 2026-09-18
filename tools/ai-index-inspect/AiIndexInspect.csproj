@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    AI 語料切塊的**唯讀**檢查工具（CLAUDE.md 決策 28、docs/04-ai-faq.md §4）。
+
+    ⚠️ 它刻意**不建索引**。索引一律由 API 的 AiIndexRefresh Timer 建
+       —— 全量 2,300 塊分 24 批嵌入約兩分鐘，放得進 Timer 的 5 分鐘預算，
+       而「全量」就是「manifest 為空的增量」，沒有理由維護第二套接線。
+
+    這支只做兩件事，兩件都不花錢：
+      「dry-run」  只連唯讀 SQL、只切塊，倒成人看得懂的文字檔（不碰 Gemini、不碰 Blob）
+      「dump」     下載既有索引倒成同樣格式，回答「AI 到底看到了什麼」
+
+    🔴 切壞了不會有任何錯誤訊息（症狀是「AI 答非所問」），所以乾跑檢查是必跑的驗收。
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Skin20.AiIndexInspect</RootNamespace>
+    <AssemblyName>ai-index-inspect</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
+    <PackageReference Include="Azure.Identity" Version="1.13.1" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.23.0" />
+  </ItemGroup>
+
+  <!--
+    🔴 與 API **共用同一份原始碼**，不是抄一份（同 ContentExport.csproj 的理由）。
+       切塊規則若在這裡分岔，這支工具就會「檢查一份 API 根本不會產生的語料」，
+       而那種錯誤看起來完全正常。
+
+    ⚠️ 被連結的檔案的相依上限是 Models/Entities/Enums.cs（它本身無相依）。
+  -->
+  <ItemGroup>
+    <Compile Include="../../functions/Common/Visibility.cs" Link="Shared/Visibility.cs" />
+    <Compile Include="../../functions/Common/Indexability.cs" Link="Shared/Indexability.cs" />
+    <Compile Include="../../functions/Common/SearchTextBuilder.cs" Link="Shared/SearchTextBuilder.cs" />
+    <Compile Include="../../functions/Common/ContentTypeLabels.cs" Link="Shared/ContentTypeLabels.cs" />
+    <Compile Include="../../functions/Common/AiChunker.cs" Link="Shared/AiChunker.cs" />
+    <Compile Include="../../functions/Common/AiIndexFormat.cs" Link="Shared/AiIndexFormat.cs" />
+    <Compile Include="../../functions/Models/Entities/Enums.cs" Link="Shared/Enums.cs" />
+  </ItemGroup>
+
+</Project>

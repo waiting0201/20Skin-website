@@ -75,6 +75,48 @@ public interface IBotCheckService
 }
 
 /// <summary>
+/// AI 語料的嵌入（CLAUDE.md 決策 28）。
+/// <para>
+/// ⚠️ <b>介面刻意不帶供應商名稱</b>，理由與 <see cref="IBotCheckService"/> 逐字相同 ——
+/// 請不要讓 <c>gemini</c> 這個字漏到 Handler 或 DTO 裡。
+/// </para>
+/// <para>
+/// 🔴 <b>一塊一個向量。</b> 實作必須把每一段文字包成各自獨立的請求項目 ——
+/// 把多段塞進同一個 <c>content</c> 的多個 <c>part</c>，回來的是<b>一個聚合向量</b>，
+/// 而且<b>不會報錯</b>。症狀是「索引建完、API 全部 200、檢索結果卻像亂數」。
+/// </para>
+/// <para>未設定金鑰或服務連不上時丟 <c>AppException</c>（<c>AI_UNAVAILABLE</c>）——
+/// 這裡<b>沒有「放行」這個選項</b>，與機器人驗證相反。</para>
+/// </summary>
+public interface IAiEmbeddingService
+{
+    /// <summary>向量維度（由設定決定，索引與查詢必須一致）。</summary>
+    int Dimensions { get; }
+
+    /// <summary>模型代號，寫進 manifest 供比對 —— 換模型就得整批重建。</summary>
+    string ModelId { get; }
+
+    /// <summary>語料端：一次一批，回傳與輸入同順序、已 L2 正規化的向量。</summary>
+    Task<IReadOnlyList<float[]>> EmbedDocumentsAsync(IReadOnlyList<string> texts, CancellationToken ct = default);
+
+    /// <summary>查詢端：使用者那一句話。</summary>
+    Task<float[]> EmbedQueryAsync(string text, CancellationToken ct = default);
+}
+
+/// <summary>
+/// AI 生成（CLAUDE.md 決策 28）。介面同樣不帶供應商名稱。
+/// <para>
+/// 🔴 回答<b>只能</b>來自傳進去的片段（docs/04 §4：「不使用模型的一般知識回答醫療問題」）。
+/// 那是 <c>systemInstruction</c> 的責任，寫在實作裡並受驗收題組把關。
+/// </para>
+/// </summary>
+public interface IAiChatService
+{
+    /// <summary>回傳模型輸出的原始文字（含最後一行的 <c>SOURCES:</c>）。連不上時丟 <c>AI_UNAVAILABLE</c>。</summary>
+    Task<string> CompleteAsync(string systemInstruction, string userMessage, CancellationToken ct = default);
+}
+
+/// <summary>
 /// Blob 儲存（docs/09 §9、docs/11 §9）。
 /// <para>
 /// ⚠️ 檔案<b>不經過 API 的 request body</b>：後台向這裡取短效寫入 SAS，瀏覽器直傳。

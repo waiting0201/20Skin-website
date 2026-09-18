@@ -79,6 +79,7 @@ SSR 之後那個位置給了 Nuxt。它負責的 1000 條 301 改由前台的 `p
 | `UPLOAD_TYPE` / `UPLOAD_SIZE` | 400 | 副檔名或大小不在白名單 |
 | `RATE_LIMITED` | 429 | 公開端點或登入頻率限制 |
 | `BOT_CHECK_FAILED` | 400 | 機器人驗證未通過（供應商見 §5 待確認） |
+| `AI_UNAVAILABLE` | 503 | AI 問答暫時不能用：模型服務連不上／逾時／金鑰未設定／語料索引尚未建立。🔴 **「答不出來」不是這一個** —— 那是 200 配 `answered: false`（見 §3.1 的 `POST /ai/ask`） |
 | `INTERNAL` | 500 | 未預期例外，**不得洩漏堆疊** |
 
 新增錯誤碼時同步本表與 `Common/ErrorCodes.cs`。
@@ -98,7 +99,8 @@ SSR 之後那個位置給了 Nuxt。它負責的 1000 條 301 改由前台的 `p
 |---|---|
 | `GET /health` | 冒煙測試用。兩條 workflow 的部署後檢查都打它 |
 | `POST /contact` | `/contact/` 表單。**只寄通知信，不落庫**（[02](02-backend-cms.md) §2）。回應不帶任何內部 Id |
-| `POST /questions/miss` | 站內搜尋查無結果時回寫一筆到 `QuestionInbox`（[08](08-database.md) §F）。去重由伺服器端做。🔴 **只有 `GET /search` 正常回應、而且真的零筆時才送** —— 連不上時送出等於把故障寫成一堆假問題，而去重會讓它們留下來 |
+| `POST /questions/miss` | 站內搜尋查無結果時回寫一筆到 `QuestionInbox`（[08](08-database.md) §F）。去重由伺服器端做。🔴 **只有 `GET /search` 正常回應、而且真的零筆時才送** —— 連不上時送出等於把故障寫成一堆假問題，而去重會讓它們留下來。⚠️ **AI 問答不走這一支**：那邊伺服器自己就知道有沒有命中，回寫在 `AiHandler` 內完成（讓前台再打一次等於多一次機器人驗證與一次頻率限制計數，而且內容可被偽造） |
+| `POST /ai/ask` | 站內 AI 問答（[04](04-ai-faq.md) §4、CLAUDE.md 決策 28）。請求 `{ question(1–300 字), history?[{role,text}], botCheckToken }`；回應 `{ answer, answered, sources[{title,url,kind}], handoff{needed,reason}, disclaimer }`。<br>🔴 **`answered: false` 也是 200** —— 答不出來是一個成功的回答，用 4xx 表達會讓前台顯示成錯誤。<br>🔴 **模型看不到任何網址**：片段在 prompt 裡是 `[S1]`、`[S2]`，模型回一行 `SOURCES: S1,S3`，由伺服器對映回 `urlPath` —— 它不可能捏造連結。<br>⚠️ **不存對話**（[08](08-database.md) §I），多輪由前台帶 `history`，伺服器只取最後 4 則且明確標注「不得作為事實來源」。<br>⚠️ 前台一律依 `handoff.reason` 分支文案（`no_match`／`out_of_scope`／`needs_doctor`／`upstream_error`），不比對 `message` |
 
 ⚠️ **這兩支是對公網開放的寫入端點**，必須有 rate limit ＋ 機器人驗證（§5）。
 `/contact` 另須記錄隱私同意時間 —— 但**只在寄出的通知信裡帶，不入庫**。
@@ -315,7 +317,7 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 |---|---|
 | ~~**機器人驗證供應商**~~ | ✅ **已定案（2026-09-12）：reCAPTCHA v3。** 規格見下方 §5.1 |
 | **`RefreshTokens` vs 短效 JWT ＋ `SecurityStamp`** | [08](08-database.md) §L 已列為二選一。建議 `RefreshTokens` ＋ rotation（撤銷重用即撤銷該使用者全部 token），因為後台要能「停用帳號後立刻踢下線」 |
-| **AI FAQ 的問答端點** | **本期不做。** AI 的實作方式與時程都未定（[04-ai-faq.md](04-ai-faq.md) §4），**不要先在契約裡留 `/ai/chat`**，也不要為它加 schema 欄位（[08](08-database.md) §0 決策二） |
+| ~~**AI FAQ 的問答端點**~~ | ✅ **已定案（2026-09-18）：`POST /ai/ask`**，契約見 §3.1。舊敘述「本期不做、不要先在契約裡留 `/ai/chat`」**已作廢**。⚠️ 但「不為它加 schema 欄位」那半仍然成立 —— 索引狀態存在 Blob 的 manifest，**整套 0 支 migration**（CLAUDE.md 決策 28） |
 | **`GET /site-settings/public` 是否必要** | 見 [09](09-frontend.md) §13 —— 與「開關烤進 build」取捨 |
 
 ---
@@ -323,7 +325,7 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 ## 5.1 機器人驗證：reCAPTCHA v3（2026-09-12 定案）
 
 套用於三支對公網開放的寫入端點：`POST /contact`、`POST /questions/miss`、`POST /auth/login`。
-請求欄位一律是 **`botCheckToken`**，前端動作名稱一律是 **`contact`／`questions_miss`／`login`**。
+請求欄位一律是 **`botCheckToken`**，前端動作名稱一律是 **`contact`／`questions_miss`／`login`／`ai_ask`**。
 
 🔴 **action 名稱只能包含 `A-Za-z/_`** —— 不可有連字號或數字。帶了不合法的字元時
 `grecaptcha.execute` **不會丟例外**，只在 console 印一行 `Invalid action name` 然後
@@ -332,6 +334,11 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 前端兩支取 token 的模組已加上格式檢查，不合法會當場丟例外。
 ⚠️ `/questions/miss` 的**速率限制鍵**仍是 `questions-miss`（`LoginThrottles` 裡的既有資料列），
 與 action 名稱刻意不同名 —— 改它等於把已累積的計數丟掉。
+
+⚠️ **AI 問答有自己的配額**：bucket `ai-ask`，預設 **20 次／10 分鐘**
+（`RateLimit__PublicQuota__ai-ask__MaxRequests`／`__WindowMinutes`）。
+表單那組「5 次／10 分」會在第一段對話中途就把使用者鎖住 —— 一段真實對話是 3–8 輪。
+🔴 **超限後鎖一整個視窗**（不是「等下一次就好」），所以前台的文案要寫「約 10 分鐘後可再試」。
 
 ⚠️ **介面與欄位命名不帶供應商名稱**（`IBotCheckService`、`botCheckToken`）——
 換成 Turnstile 時只有 `functions/Services/BotCheckService.cs` 與前端那兩支

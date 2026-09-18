@@ -56,6 +56,10 @@ tools/content-export/  🔴 **前台已完全不使用它**（2026-09-16）。�
                        （<Compile Include>，不是抄一份）
 tools/content-roundtrip/ 區塊 JSON schema 的回歸測試（決策 17）——正式資料整批往返比對
                        🔴 改了 apps/admin/src/units/schemas/ 就要跑
+tools/ai-index-inspect/ AI 語料切塊的**唯讀**檢查（決策 28）。`--dry-run` 不碰 Gemini、不碰 Blob，
+                       零成本；`--dump` 倒出線上索引，回答「AI 到底看到了什麼」
+                       🔴 **它不建索引** —— 索引由 API 的 `AiIndexRefresh` Timer 建
+                       ⚠️ 與 API 共用 AiChunker.cs 等七個檔（<Compile Include>，不是抄一份）
 tools/content-audit/   九個內容單元那 21 個區塊 JSON 欄位的**唯讀**稽核（不含首頁版位設定）：
                        非法 JSON、雙重編碼、
                        schema 沒描述到的鍵（那些鍵不可以在改版時被吃掉）
@@ -180,6 +184,11 @@ node --experimental-strip-types --import ./tools/content-roundtrip/register.mjs 
 
 # 九個內容單元那 21 個區塊 JSON 欄位的唯讀稽核（非法 JSON／雙重編碼／schema 沒描述的鍵）
 node tools/content-audit/audit-json-fields.mjs
+
+# 改了 AI 語料的切塊規則（functions/Common/AiChunker.cs）一定要跑（決策 28）——
+# 零成本：只連唯讀 SQL、只切塊，不碰 Gemini、不碰 Blob。
+# 🔴 切壞了不會有任何錯誤訊息，症狀是「AI 答非所問」或「站上明明有寫卻說不知道」。
+SKIN20_EXPORT_SQL='…' dotnet run --project tools/ai-index-inspect -- --dry-run --out /tmp/chunks.txt
 
 # 🔴 verify:links 需要一個**跑著的站台**（而站台需要跑得動的 API）——
 #    SSR 之下頁面是算繪當下才存在的，沒有 API 就沒有 HTML 可檢查。
@@ -662,6 +671,37 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    （`taxonomy.unitOptionsPage`，單次 100 筆）—— 塞 1100 個 `<option>` 的下拉本來就不是能用的介面。
    ⚠️ 打字要 debounce（300ms）：每個字元打一次 API，在 Azure SQL Basic 上就是一串互相追著跑的請求。
    ⚠️ 選項載不回來要**說出來**（原本連 try 都沒有）—— 空的下拉會被讀成「沒有東西可選」。
+
+28. **站內 AI 問答＝Gemini ＋ Blob 單檔向量索引 ＋ Function 記憶體比對**（Tim 定案 2026-09-18）。
+   端點 `POST /ai/ask`（公開，reCAPTCHA action `ai_ask` ＋ 頻率限制 bucket `ai-ask`，20 次／10 分）。
+   **舊敘述「AI 本身實作方式與時程未定、不要先在契約裡留端點」（docs/04 §4、docs/10 §5）已作廢。**
+   🔴 **整套 0 支 migration。** 「索引到哪了」的狀態存在 Blob 的 manifest（`system-state/ai-index/`），
+   不是資料庫欄位 —— docs/08 §0 決策二「不預留未定案的欄位」因此不必動，
+   `QuestionInbox`／`QuestionSource.AiFaqMiss`／五個 `aifaq.*` 設定鍵／`LoginThrottles` 全部沿用既有的。
+   🔴 **不建 AI 對話紀錄表**（docs/08 §I）。代價是無法逐則抽查品質，替代是 App Insights 的結構化事件。
+   ⚠️ **語料涵蓋全站九類內容**，不是原本的三類。主站舊文（`sourceSite=1`，692 篇社群行銷貼文）
+   **納入檢索但降權 0.75、且不得出現在來源清單** —— 那批是「無恢復期」「立即有感」的廣告語氣，
+   讓 AI 拿它當衛教依據附連結出去是醫療廣告面的曝險（請以主管機關函釋及院方法務意見為準）。
+   要改回不收是一個 app setting（`AiIndex__IncludeMainSiteArticles`），不必改程式。
+   🔴 **命中判定只看「可引用」的塊** —— 否則會出現「答得頭頭是道卻一個來源都列不出來」。
+   🔴 **模型永遠拿不到任何網址**：prompt 裡是 `[S1]`、`[S2]`，模型回一行 `SOURCES: S1,S3`，
+   由伺服器對映回 `urlPath`，所以它不可能捏造連結。
+   🔴 **「答不出來」是 200 配 `answered:false`**，不是 4xx。只有模型／索引真的不能用才回 `AI_UNAVAILABLE` 503，
+   而且**絕不可退回用模型的一般知識回答醫療問題**（與 `IBotCheckService`「連不上就放行」相反）。
+   ⚠️ 護欄是機率性的，所以輸出後再過一次**確定性**的掃描：沿用後台既有的 `RiskTerms`
+   （只取「療效保證」與「最高級」兩類，第三、四類含「免費」「推薦」會誤殺）＋ 金額樣式，命中就改用未命中文案。
+   ⚠️ 介面命名不帶供應商名（`IAiEmbeddingService`／`IAiChatService`），`gemini` 這個字不得漏進 Handler 或 DTO。
+   ⚠️ **切塊器不可以用 `SearchTextBuilder.Build()` 代替**（那是給搜尋用的：整份 fields 壓一行、截 4000 字，結構全丟）。
+   🔴 **嵌入時一塊一個 request 項目** —— 多段塞進同一個 content 的多個 part 會回**單一聚合向量**且不報錯，
+   症狀是「索引建完、API 全部 200、檢索結果卻像亂數」。
+   ⚠️ 前台面板的行為寫在 `SiteConsult.vue`，**`public/assets/app.js` 一個 byte 都不能動**（verify:css 斷言 1）——
+   靠「不再輸出 `data-consult-toggle`」讓 app.js §6 自然 no-op。
+   🔴 面板的 `c-chat__msg--user`／`--pending` **只存在 base.css、不在任何 mockup HTML 裡**，
+   靜態 class 會被 verify:css 斷言 4 擋下，一律用 `:class` 綁定。
+   ⚠️ **後台不新增畫面**（29 不變），只在全站設定的 AI 那一區加一行唯讀狀態（權限沿用 `settings.edit`）。
+   ⚠️ 上線前置：Gemini 專案要**切到付費**（免費層 RPM 一撞就是 429，體感等於功能壞掉）、
+   Function App 的 MI 要有 `system-state` 容器的 `Storage Blob Data Contributor`、
+   **`AiIndexRefreshCron` 少設會讓整個 Function App 索引不到任何 function**。
 
 ---
 
