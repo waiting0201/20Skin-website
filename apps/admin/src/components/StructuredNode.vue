@@ -270,7 +270,7 @@ const fieldPath = (key: string) => (props.path ? `${props.path}.${key}` : key)
   <!-- union -->
   <div v-else-if="node.kind === 'union'" class="adm-struct__object">
     <div class="adm-field">
-      <label class="adm-field__label">型別<span class="adm-field__required">＊</span></label>
+      <label class="adm-field__label">區塊種類<span class="adm-field__required">＊</span></label>
       <select
         class="adm-select"
         :value="String(objectValue[node.discriminator] ?? '')"
@@ -284,7 +284,8 @@ const fieldPath = (key: string) => (props.path ? `${props.path}.${key}` : key)
     <!-- 前台不認識的型別：看得到、搬得動、刪得掉，但不給編輯 ——
          我們不懂它的形狀，給一個半調子的表單只會把它改壞。 -->
     <p v-if="objectValue[node.discriminator] && !unionVariant" class="adm-alert adm-alert--warn">
-      未知的區塊型別「{{ String(objectValue[node.discriminator]) }}」。這個區塊會原樣保留，但無法在這裡編輯。
+      這個區塊的種類「{{ String(objectValue[node.discriminator]) }}」目前沒有對應的表單。
+      它會原樣保留在頁面上，但不能在這裡修改——需要調整請告知工程端。
     </p>
     <StructuredNode
       v-else-if="unionVariant"

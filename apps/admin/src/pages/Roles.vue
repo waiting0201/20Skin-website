@@ -127,7 +127,21 @@ const termSpecialRules = computed(() =>
 
 // ── 三條「畫面上要看得出來」的規則，對著目前 draft 即時驗證 ─────────────
 // docs/02 §4：內容編輯沒有任何 {unit}.publish。
-const editorHasPublish = computed(() => [...(draft.Editor ?? [])].some((c) => c.endsWith('.publish')))
+/**
+ * 🔴 **這條規則 2026-09-18 整個反過來。**
+ *    原本檢查的是「內容編輯被勾了發布權 → 警告，請移除」（三段式工作流要求兩權分離）。
+ *    但送審與審核者整層已於 2026-09-17 移除（CLAUDE.md 決策 20），發布權改由
+ *    「內容編輯」持有 —— 也就是說，**正確的設定會被舊規則標成紅字**，
+ *    而照著它按下「移除」的結果是：全院只剩超級管理員能讓任何一筆內容上線。
+ *    ⚠️ 要警告的是相反的情況：內容編輯**少了**發布權。
+ */
+const publishCodes = computed(() =>
+  groups.value.flatMap((g) => g.cells.map((c) => c.code)).filter((c) => c.endsWith('.publish')),
+)
+const editorMissingPublish = computed(() => {
+  const held = draft.Editor
+  return publishCodes.value.filter((c) => !held?.has(c))
+})
 // docs/02 §4：行銷只有 {unit}.seo，沒有其他 edit（除了 faq.edit）。
 const marketingHasExtraEdit = computed(() =>
   [...(draft.Marketing ?? [])].some((c) => c.endsWith('.edit') && c !== 'content.faq.edit' && c !== 'seo.edit'),
@@ -139,16 +153,16 @@ const marketingHasExtraEdit = computed(() =>
     <div class="adm-page__head">
       <div>
         <h1 class="adm-page__title">角色權限設定</h1>
-        <p class="adm-page__desc">五個角色為系統種子（<code>IsSystem=1</code>），不可刪除，這裡只調整每個角色的權限碼。</p>
+        <p class="adm-page__desc">{{ ALL_ROLES.length }} 個角色是系統內建的，不能新增也不能刪除，這裡只調整每個角色能做哪些事。</p>
       </div>
     </div>
 
     <p class="adm-alert adm-alert--info">
-      ⚠️ 儲存後<strong>後端的授權立即生效</strong>，但<strong>目前登入中的人要重新登入</strong>，
-      畫面上的選單與按鈕才會跟著變 —— 權限是登入當下發下來的。
+      ⚠️ 儲存後<strong>立即生效</strong>，但<strong>目前正在線上的人要重新登入一次</strong>，
+      他畫面上的選單與按鈕才會跟著變。
     </p>
 
-    <p v-if="!canEditRoles" class="adm-alert adm-alert--info">沒有編輯角色權限的權限，以下為唯讀檢視。</p>
+    <p v-if="!canEditRoles" class="adm-alert adm-alert--info">你的角色不能調整權限設定，以下為唯讀檢視。</p>
 
     <div v-if="loading" class="adm-loading">
       <span class="adm-spinner" aria-hidden="true"></span>
@@ -182,16 +196,18 @@ const marketingHasExtraEdit = computed(() =>
       </div>
 
       <div class="roles-rules">
-        <p :class="editorHasPublish ? 'roles-rules__bad' : 'roles-rules__ok'">
-          {{ editorHasPublish ? '⚠️ 內容編輯目前被勾選了發布權——三段式工作流要求發布權與編輯權分離，請移除。' : '✓ 內容編輯沒有任何 {unit}.publish（發布權與編輯權分離）。' }}
+        <p :class="editorMissingPublish.length ? 'roles-rules__bad' : 'roles-rules__ok'">
+          {{ editorMissingPublish.length
+            ? `⚠️ 內容編輯目前有 ${editorMissingPublish.length} 種內容沒有發布權——這個網站沒有送審流程，內容編輯發不了的東西就只有超級管理員能讓它上線。`
+            : '✓ 內容編輯可以自行發布所有內容。' }}
         </p>
         <p :class="marketingHasExtraEdit ? 'roles-rules__bad' : 'roles-rules__ok'">
-          {{ marketingHasExtraEdit ? '⚠️ 行銷目前被勾選了 SEO 以外的編輯權——行銷只該能改 SEO 區塊與 FAQ。' : '✓ 行銷只有 {unit}.seo（與 faq.edit），沒有其他編輯權。' }}
+          {{ marketingHasExtraEdit ? '⚠️ 行銷目前被勾選了 SEO 以外的編輯權——行銷只該能改 SEO 區塊與常見問題。' : '✓ 行銷只能改 SEO 與常見問題，改不到其他內容。' }}
         </p>
         <p class="roles-rules__note">
-          ℹ️ 醫師的 <code>doctor.edit</code>／<code>article.edit</code> 受資料列層級限制（只能改
-          <code>OwnerUserId</code> 是自己的那一筆）——這條規則權限碼本身表達不了，矩陣上打勾只代表
-          「醫師角色有機會編輯這個單元」，實際能不能動某一筆由 API 的 <code>RequireOwnership</code> 判定。
+          ℹ️ 醫師的「醫師個人頁」與「文章」打勾，只代表<strong>有機會</strong>編輯這兩種內容——
+          實際上他只改得動自己的那一筆（自己的個人頁、自己署名的文章），這是系統另外把關的，
+          不是這張表上的勾選能表達的。
         </p>
       </div>
 
@@ -231,10 +247,10 @@ const marketingHasExtraEdit = computed(() =>
       </div>
 
       <div class="adm-card roles-term-card">
-        <h2 class="adm-card__title">分類與標籤的新增／刪除（term 特例）</h2>
+        <h2 class="adm-card__title">分類與標籤的新增／刪除</h2>
         <p class="adm-field__hint">
-          動到 URL 結構與 301 對照表，權限碼本身表達不了，由 <code>canCreateTerm()</code>／<code>canDeleteTerm()</code>
-          兩個函式逐角色判定（不受上方矩陣的 <code>term.edit</code> 勾選影響）。
+          新增或刪除分類、標籤會改變網址結構，也連帶影響舊網址的轉址規則，
+          所以<strong>不跟著上面的表格走</strong>，由系統逐角色固定如下，這裡不能調整。
         </p>
         <div class="adm-table-wrap">
           <table class="adm-table">

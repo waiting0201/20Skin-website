@@ -29,14 +29,14 @@ export const caseUnit: UnitDefinition = {
       hint: '必填——沒有這一欄，案例存不起來。',
     },
     { key: 'hasWrittenConsent', label: '當事人書面同意', type: 'boolean', required: true, group: '法規揭露（必填）', requiredOnCreate: true },
-    { key: 'consentReference', label: '同意書編號／存放位置', type: 'text', required: true, group: '法規揭露（必填）', hint: '只存索引，同意書本身不進系統。', requiredOnCreate: true },
+    { key: 'consentReference', label: '同意書編號／存放位置', type: 'text', required: true, group: '法規揭露（必填）', hint: '只記錄編號或存放位置，同意書本身不上傳到系統。', requiredOnCreate: true },
     { key: 'shootingConditions', label: '拍攝條件', type: 'textarea', required: true, group: '法規揭露（必填）', requiredOnCreate: true },
     {
       key: 'images',
       label: '案例圖片',
       type: 'gallery',
       group: '圖片',
-      hint: '對應 CaseImages：術前／術後，可各自標記拍攝日期與排序。',
+      hint: '術前／術後圖片，每張可各自標記拍攝日期與順序。',
       // 🔴 phase 在 API 是必填（docs/08 §C-5）—— 少了它整筆存檔會被退回，
       //    所以它不是「可以之後再補」的欄位。
       galleryItemFields: [

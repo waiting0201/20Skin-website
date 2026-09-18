@@ -31,7 +31,7 @@ export const articleUnit: UnitDefinition = {
       type: 'date',
       required: true,
       group: '基本資料',
-      hint: '⚠️ 與右側的「上線時間」是兩回事——這一欄是 datePublished 的來源，遷移文章時要帶入舊站原始日期。',
+      hint: '⚠️ 與右欄的「上線時間」是兩回事——這一欄是文章對外顯示與告訴搜尋引擎的日期，舊站搬過來的文章要填原本的發布日。',
     },
     { key: 'cover', label: '封面圖', type: 'image', group: '圖片', hint: '建議尺寸 1600×1000（16:10）。' },
     { key: 'summary', label: '摘要', type: 'textarea', required: true, group: '內容' },
@@ -47,7 +47,7 @@ export const articleUnit: UnitDefinition = {
         { value: '1', label: '主站 share.php' },
         { value: '2', label: '20skinblog.com' },
       ],
-      hint: '唯讀。標示這篇文章是從哪個舊站搬過來的，供日後篩選使用。',
+      hint: '不可編輯。標示這篇文章是從哪個舊站搬過來的，供日後篩選使用。',
     },
   ],
   relations: [

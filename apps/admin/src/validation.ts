@@ -60,11 +60,11 @@ function isBlank(value: unknown): boolean {
 export function validateSlug(raw: string): string | null {
   const slug = raw.trim().toLowerCase()
   if (!slug) return null
-  if (slug.length > SLUG_MAX) return `slug 長度不可超過 ${SLUG_MAX} 字（目前 ${slug.length} 字）。`
+  if (slug.length > SLUG_MAX) return `網址代稱不可超過 ${SLUG_MAX} 字（目前 ${slug.length} 字）。`
   if (!SLUG_PATTERN.test(slug)) {
     // ⚠️ 底線是最常踩的一個：blog 站搬過來的 71 篇原始 slug 用底線，
     //    API 只收連字號（CLAUDE.md 決策 2）。訊息裡直接點名它。
-    return 'slug 只能用小寫英數字與連字號（-），不可有底線、空白、中文，也不可以連字號開頭或結尾。'
+    return '網址代稱只能用小寫英文、數字與連字號（-），不可有底線、空白、中文，也不可以用連字號開頭或結尾。'
   }
   return null
 }
@@ -280,7 +280,7 @@ export function validateBody(
   const slugProblem = validateSlug(form.slug)
   if (slugProblem) errors.slug = slugProblem
   else if (slugRequired && isBlank(form.slug)) {
-    errors.slug = def.producesUrl ? 'slug 為必填——它決定這一頁的網址。' : 'slug 為必填——它是 /faq/ 的頁內錨點。'
+    errors.slug = def.producesUrl ? '網址代稱為必填——它決定這一頁的網址。' : '網址代稱為必填——它是常見問題頁上的定位用代稱。'
   }
 
   for (const field of def.fields) {

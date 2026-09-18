@@ -140,7 +140,7 @@ onBeforeUnmount(() => releasePendingImage(props.modelValue))
       —— 目前只是瀏覽器裡的預覽，<strong>按下表單的儲存按鈕才會真的上傳</strong>。
     </p>
     <p v-else-if="modelValue && props.deletesOldFile" class="adm-upload__todo">
-      ⚠️ 移除或換圖之後，舊檔案會在存檔時從 Blob 刪除，版本還原不會把它變回來。
+      ⚠️ 移除或換圖之後，舊的圖片檔會在存檔時真的刪掉，還原成舊版本也救不回來。
     </p>
   </div>
 </template>

@@ -216,8 +216,8 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
   <section class="adm-page">
     <div class="adm-page__head">
       <div>
-        <h1 class="adm-page__title">sitemap 設定</h1>
-        <p class="adm-page__desc">sitemap index ＋ 5 個分檔、robots.txt 的可編輯區塊</p>
+        <h1 class="adm-page__title">網站地圖設定</h1>
+        <p class="adm-page__desc">送給搜尋引擎的網址清單（sitemap），以及爬蟲規則檔 robots.txt</p>
       </div>
     </div>
 
@@ -226,11 +226,11 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
 
     <template v-else>
       <div class="adm-card">
-        <h2 class="adm-card__title">分檔設定</h2>
+        <h2 class="adm-card__title">分類清單</h2>
         <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
-          每個分檔實際收錄哪些內容，在建置期由「內容型別 ＋ 個別項目的 IncludeInSitemap ＋ 已發布 ＋ 有網址」算出來
-          （sitemap 本身不建表）。這裡設定的是分檔要不要整個納入 sitemap index，
-          以及該分檔預設的 changefreq／priority。
+          每個分檔收錄哪些內容是<strong>當下算出來的</strong>：已發布、有網址、而且該筆自己的
+          「列入網站地圖」是開著的，就會收進來——內容一發布，搜尋引擎下一次來抓就看得到，
+          不需要有人按按鈕。這張表只設定「整個分檔要不要納入」與該分檔的更新頻率／權重預設值。
         </p>
 
         <div v-if="filesLoading" class="adm-loading">
@@ -241,13 +241,13 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
           <table class="adm-table">
             <thead>
               <tr>
-                <th>分檔</th>
+                <th>分類</th>
                 <th>檔名</th>
-                <th>來源內容型別</th>
-                <th>目前符合條件筆數</th>
-                <th>納入 sitemap index</th>
-                <th>預設 changefreq</th>
-                <th>預設 priority</th>
+                <th>內容來源</th>
+                <th>目前收錄筆數</th>
+                <th>送給搜尋引擎</th>
+                <th>預設更新頻率</th>
+                <th>預設重要性（0–1）</th>
               </tr>
             </thead>
             <tbody>
@@ -280,12 +280,12 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
       </div>
 
       <div class="adm-card">
-        <h2 class="adm-card__title">NoIndex 與 IncludeInSitemap 一致性檢查</h2>
+        <h2 class="adm-card__title">設定互相矛盾的頁面</h2>
         <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
-          這兩個是兩件不同的事：<strong>IncludeInSitemap</strong> 決定要不要把這頁寫進
-          sitemap.xml「主動告訴」搜尋引擎；<strong>NoIndex</strong>（在各單元編輯畫面的 SEO 區塊）是告訴搜尋引擎
-          「不要收錄這頁」。兩者反過來搭配是常見且正確的（例如標籤頁通常兩者都關——不主動送出、也不希望被收錄）；
-          <strong>但兩者都開會自相矛盾</strong>——sitemap 把頁面送出去了，同一頁卻標著不要收錄。下面只列出這種矛盾組合。
+          每一筆內容有兩格設定，是兩件不同的事：編輯畫面上方的<strong>「列入網站地圖」</strong>
+          決定要不要主動把這一頁送給搜尋引擎；SEO 區塊的<strong>「不要被搜尋引擎收錄」</strong>
+          則是叫搜尋引擎別收它。兩格都關是常見且正確的（例如標籤頁：不主動送、也不希望被收）；
+          <strong>但兩格都開就自相矛盾</strong>——送出去了，同一頁卻又標著別收。下面只列這種矛盾的組合。
         </p>
         <div v-if="snapshotLoading" class="adm-loading">
           <span class="adm-spinner" aria-hidden="true"></span>
@@ -296,7 +296,7 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8 12.5l2.5 2.5L16 9.5" /></svg>
           </div>
           <p class="adm-empty__title">沒有發現矛盾的設定</p>
-          <p class="adm-empty__desc">目前所有內容的 IncludeInSitemap 與 NoIndex 設定彼此一致，不需要處理。</p>
+          <p class="adm-empty__desc">目前所有內容的這兩格設定都彼此一致，不需要處理。</p>
         </div>
         <div v-else class="adm-table-wrap">
           <table class="adm-table">
@@ -317,10 +317,10 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
       <div class="adm-card">
         <h2 class="adm-card__title">robots.txt</h2>
         <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
+          這個檔案是給搜尋引擎與 AI 爬蟲看的規則，網址是 <code>/robots.txt</code>，任何人都看得到。
           最後更新：{{ robotsUpdatedAt ? new Date(robotsUpdatedAt).toLocaleString('zh-TW') : '—' }}。
-          ⚠️ <strong>不要加 <code>Disallow: /admin</code></strong>——後台位置寫進這個公開檔案等於主動標示給人看，
-          擋索引已經由後台路由的 <code>X-Robots-Tag: noindex, nofollow</code> 處理。
-          也不要用這裡擋 AI 爬蟲（GPTBot／ClaudeBot…）——GEO 策略的先決條件就是讓它們進得來。
+          ⚠️ 兩件事<strong>不要做</strong>：不要在這裡寫後台網址（等於公告後台在哪，後台本來就已經擋住了）；
+          不要擋 AI 爬蟲，讓 AI 讀得到本來就是這次改版要的。不確定就別改，先問工程端。
         </p>
         <textarea v-model="robotsText" class="adm-textarea adm-textarea--tall" :readonly="!canEdit" spellcheck="false"></textarea>
 

@@ -469,11 +469,12 @@ async function createDraft(overrideFields: Record<string, unknown> = {}, title =
             <p v-if="createErrors.title" class="adm-field__error" role="alert">{{ createErrors.title }}</p>
           </div>
           <div class="adm-field adm-field--span2">
-            <label class="adm-field__label">Slug<span class="adm-field__required">＊</span></label>
+            <label class="adm-field__label">網址代稱（Slug）<span class="adm-field__required">＊</span></label>
             <input v-model="createForm.slug" class="adm-input" :class="{ 'is-invalid': createErrors.slug }" type="text" maxlength="160">
             <p v-if="createErrors.slug" class="adm-field__error" role="alert">{{ createErrors.slug }}</p>
             <p class="adm-field__hint">
-              小寫英數字與連字號。預設值是一個佔位字串（標題是中文，推導不出網址），建立後仍可以改。
+              這一頁網址的最後一段，只能用小寫英文、數字與連字號（-）。
+              預設先給一組暫用的（中文標題推不出英文網址），建立後可以再改。
             </p>
           </div>
 
@@ -543,7 +544,7 @@ async function createDraft(overrideFields: Record<string, unknown> = {}, title =
         </div>
 
         <p v-if="createFields.length" class="adm-field__hint">
-          這幾欄是資料庫層的必填（NOT NULL），<strong>建立當下就要有值</strong>，不是之後再補。
+          這幾欄<strong>建立當下就要有值</strong>，不能之後再補。
           其餘欄位建立完成後在編輯畫面慢慢填。
         </p>
 

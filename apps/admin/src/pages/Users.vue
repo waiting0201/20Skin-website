@@ -423,7 +423,7 @@ function fmtDate(iso: string | null): string {
         <p v-if="resetError" class="adm-field__error">{{ resetError }}</p>
         <p class="adm-field__hint">
           重設後<strong>這組就是對方的密碼</strong>，不會再要求他登入後自己改一次，請直接告知本人。
-          沒有雙因素，這組密碼就是這個帳號唯一的憑證，請避免使用常見字串。
+          請避免使用生日、電話這類猜得到的字串。
         </p>
         <div class="adm-workflow__actions">
           <button type="submit" class="btn btn--primary" :disabled="resetSubmitting">重設</button>

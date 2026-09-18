@@ -207,12 +207,12 @@ async function save() {
               </p>
             </div>
             <div class="adm-field">
-              <label class="adm-field__label">預設 OG 分享圖</label>
+              <label class="adm-field__label">預設分享縮圖（貼到 LINE、Facebook 時顯示）</label>
               <ImageField :model-value="form.defaultOgImage" :disabled="!canEdit" @update:model-value="(v) => (form.defaultOgImage = v)" />
-              <p class="adm-field__hint">個別內容頁的 SEO 區塊若沒設定 OG 圖，退回用這張。</p>
+              <p class="adm-field__hint">個別頁面的 SEO 區塊沒有自己設定分享縮圖時，就用這一張。</p>
             </div>
             <div class="adm-field">
-              <label class="adm-field__label">`/contact/` 表單收件信箱</label>
+              <label class="adm-field__label">「聯絡我們」表單的收件信箱</label>
               <input v-model="form.contactEmail" class="adm-input" type="email" :disabled="!canEdit">
               <p class="adm-field__hint">表單只寄通知信，後台不留存收件紀錄。</p>
             </div>
@@ -243,9 +243,10 @@ async function save() {
         </div>
 
         <div class="adm-card">
-          <p class="adm-fieldset__legend">全站 NAP 主資料</p>
+          <p class="adm-fieldset__legend">全站院所資訊（名稱／電話／地址）</p>
           <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
-            必須與各據點頁、頁尾逐字一致——AI 靠交叉比對建立實體信心，任何不一致都會降低確信度。
+            必須與各據點頁、頁尾<strong>逐字一致</strong>——Google 與 AI 會比對這幾處是否相同，
+            任何一個字不一樣（例如「台」與「臺」、電話有沒有加括號）都會降低它們對診所資訊的信任。
           </p>
 
           <div v-for="(entry, idx) in form.nap" :key="idx" class="adm-repeater__row" style="flex-direction: column; align-items: stretch; gap: var(--sp-2)">
@@ -276,15 +277,15 @@ async function save() {
             </p>
             <p v-else class="adm-field__hint" style="color: var(--adm-ok)">✓ 與據點頁「{{ napChecks[idx].matched!.title }}」一致。</p>
 
-            <button v-if="canEdit" type="button" class="btn btn--line btn--sm" style="align-self: flex-start" @click="removeNapEntry(idx)">移除這筆 NAP</button>
+            <button v-if="canEdit" type="button" class="btn btn--line btn--sm" style="align-self: flex-start" @click="removeNapEntry(idx)">移除這一筆</button>
           </div>
-          <button v-if="canEdit" type="button" class="btn btn--ghost btn--sm" style="margin-top: var(--sp-2)" @click="addNapEntry">＋ 新增 NAP</button>
+          <button v-if="canEdit" type="button" class="btn btn--ghost btn--sm" style="margin-top: var(--sp-2)" @click="addNapEntry">＋ 新增院所</button>
         </div>
 
         <div class="adm-card">
-          <p class="adm-fieldset__legend">AI 問答面板（浮動 CTA）</p>
+          <p class="adm-fieldset__legend">AI 問答面板（網頁右下角的浮動按鈕）</p>
           <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
-            FAQ 題目不在這裡挑選——面板內容由 AI 依站內語料生成，這裡只管開關與面板文案。
+            面板要回答什麼不在這裡挑——AI 是讀整個網站的內容自己組出答案的，這裡只管開關與面板上的文案。
           </p>
           <div class="adm-field-grid">
             <div class="adm-field">
@@ -305,11 +306,11 @@ async function save() {
               <textarea v-model="form.aiFaq.welcomeMessage" class="adm-textarea" :disabled="!canEdit" />
             </div>
             <div class="adm-field">
-              <label class="adm-field__label">轉真人出口：預約網址</label>
+              <label class="adm-field__label">轉接真人：預約網址</label>
               <input v-model="form.aiFaq.bookingUrl" class="adm-input" type="text" :disabled="!canEdit">
             </div>
             <div class="adm-field">
-              <label class="adm-field__label">轉真人出口：LINE 連結</label>
+              <label class="adm-field__label">轉接真人：LINE 連結</label>
               <input v-model="form.aiFaq.lineUrl" class="adm-input" type="text" :disabled="!canEdit">
             </div>
           </div>
@@ -323,10 +324,6 @@ async function save() {
           </button>
           <span class="adm-muted">最後修改：{{ form.updatedAt ? new Date(form.updatedAt).toLocaleString('zh-TW') : '尚無紀錄' }}</span>
         </div>
-        <p class="adm-workflow__note">
-          ⚠️ 這裡沒有版本歷程——設定類不留痕，上面的「最後修改時間」
-          只是顯示用，查不到是誰、從什麼值改成什麼值。控管手段只剩「限超級管理員」這道權限門檻。
-        </p>
       </form>
     </template>
   </section>

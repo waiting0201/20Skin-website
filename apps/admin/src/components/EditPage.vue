@@ -87,6 +87,18 @@ const canEditBody = computed(() => {
   return true
 })
 const canEditSeo = computed(() => can(permCtx, props.unit, 'seo'))
+
+/**
+ * 🔴 **結構化資料覆寫預設不顯示**（Tim 指定 2026-09-18：「JSON 客戶肯定不會輸入」）。
+ *    拿掉的是**入口**，不是機制 —— 前台 `usePageHead` 的覆寫分支、API 欄位、
+ *    `validateSeo` 的語法檢查全部留著（同決策 17 對區塊 JSON textarea 的處理）。
+ *    ⚠️ **這一筆已經有值時仍然要顯示**：它會整段蓋掉那一頁自動產生的
+ *    MedicalWebPage 與麵包屑，藏起來等於「看得到症狀、找不到也改不掉來源」。
+ *    🔴 判斷來源是 `record`（伺服器版本）**不是 `seoForm`** —— 綁表單的話，
+ *    使用者把內容選起來刪掉的那一刻整格欄位就消失，人還在編輯中。
+ *    清空後按儲存，`record` 換新，欄位才收起來，那是預期行為。
+ */
+const showStructuredData = computed(() => Boolean(record.value?.seo.structuredDataOverride?.trim()))
 const canPublish = computed(() => can(permCtx, props.unit, 'publish'))
 const canDelete = computed(() => {
   if (record.value?.isSystemLocked) return false
@@ -590,12 +602,12 @@ async function removeRecord() {
               <!-- ⚠️ 這裡刻意**不再**用 `v-if="def.producesUrl"` 把 FAQ 的 slug 藏起來，
                    理由見 <script> 裡 slugRequired 的註解：藏起來的結果是 FAQ 永遠存不起來。 -->
               <div class="adm-field">
-                <label class="adm-field__label">Slug<span v-if="slugRequired" class="adm-field__required">＊</span></label>
+                <label class="adm-field__label">網址代稱（Slug）<span v-if="slugRequired" class="adm-field__required">＊</span></label>
                 <input v-model="bodyForm.slug" class="adm-input" :class="{ 'is-invalid': bodyErrors.slug }" type="text" :disabled="!canEditBody || slugLocked" maxlength="160">
                 <p v-if="bodyErrors.slug" class="adm-field__error" role="alert">{{ bodyErrors.slug }}</p>
-                <p v-if="slugLocked" class="adm-field__hint">系統頁／系統分類不可改 slug（IsSystemLocked）。</p>
-                <p v-else-if="!def.producesUrl" class="adm-field__hint">FAQ 不輸出獨立網址，這個 slug 是 <code>/faq/</code> 頁內的錨點，但仍是必填。</p>
-                <p v-else class="adm-field__hint">小寫英數字與連字號，決定這一頁的網址。</p>
+                <p v-if="slugLocked" class="adm-field__hint">這是系統內建的項目，網址不能更動。</p>
+                <p v-else-if="!def.producesUrl" class="adm-field__hint">FAQ 沒有自己的獨立網頁，這一格是常見問題頁上的定位用代稱，但仍是必填。</p>
+                <p v-else class="adm-field__hint">這一頁網址的最後一段，只能用小寫英文、數字與連字號（-）。</p>
               </div>
               <div class="adm-field">
                 <label class="adm-field__label">排序值</label>
@@ -604,9 +616,12 @@ async function removeRecord() {
               <div class="adm-field">
                 <label class="adm-checkbox">
                   <input v-model="bodyForm.includeInSitemap" type="checkbox" :disabled="!canEditBody">
-                  輸出至 sitemap
+                  列入網站地圖
                 </label>
-                <p class="adm-field__hint">與 SEO 區塊的 noIndex 是兩件事，兩者都要設才不會自相矛盾。</p>
+                <p class="adm-field__hint">
+                  網站地圖是主動送給搜尋引擎的網址清單。
+                  這一格與下方 SEO 區塊的「不要被搜尋引擎收錄」是兩件事，兩格要一致才不會自相矛盾。
+                </p>
               </div>
             </div>
           </div>
@@ -847,18 +862,18 @@ async function removeRecord() {
         <p class="adm-fieldset__legend">SEO（共用區塊）</p>
         <div class="adm-field-grid">
           <div class="adm-field adm-field--span2">
-            <label class="adm-field__label">SEO 標題</label>
+            <label class="adm-field__label">搜尋結果標題</label>
             <input v-model="seoForm.seoTitle" class="adm-input" :class="{ 'is-invalid': seoErrors.seoTitle }" type="text" :disabled="!canEditSeo" placeholder="留空則由內容自動組出" maxlength="200">
             <p v-if="seoErrors.seoTitle" class="adm-field__error" role="alert">{{ seoErrors.seoTitle }}</p>
           </div>
           <div class="adm-field adm-field--span2">
-            <label class="adm-field__label">Meta Description</label>
+            <label class="adm-field__label">搜尋結果摘要（Meta Description）</label>
             <textarea v-model="seoForm.metaDescription" class="adm-textarea" :class="{ 'is-invalid': seoErrors.metaDescription }" :disabled="!canEditSeo" maxlength="400" />
             <p v-if="seoErrors.metaDescription" class="adm-field__error" role="alert">{{ seoErrors.metaDescription }}</p>
             <p class="adm-field__count">{{ (seoForm.metaDescription ?? '').length }} ／ 400 字</p>
           </div>
           <div class="adm-field adm-field--span2">
-            <label class="adm-field__label">AI 摘要（40–60 字直答式段落）</label>
+            <label class="adm-field__label">AI 摘要（40–60 字，直接回答問題的一段話）</label>
             <textarea v-model="seoForm.aiSummary" class="adm-textarea" :class="{ 'is-invalid': seoErrors.aiSummary }" :disabled="!canEditSeo" maxlength="300" />
             <p v-if="seoErrors.aiSummary" class="adm-field__error" role="alert">{{ seoErrors.aiSummary }}</p>
             <p class="adm-field__hint">
@@ -872,7 +887,7 @@ async function removeRecord() {
             </p>
           </div>
           <div class="adm-field">
-            <label class="adm-field__label">OG 分享圖</label>
+            <label class="adm-field__label">分享縮圖（貼到 LINE、Facebook 時顯示）</label>
             <ImageField
               :model-value="seoForm.ogImage"
               :disabled="!canEditSeo"
@@ -880,14 +895,18 @@ async function removeRecord() {
             />
           </div>
           <div class="adm-field">
-            <label class="adm-field__label">Canonical 覆寫</label>
+            <label class="adm-field__label">指定主要網址（Canonical）</label>
             <input v-model="seoForm.canonicalOverride" class="adm-input" :class="{ 'is-invalid': seoErrors.canonicalOverride }" type="text" :disabled="!canEditSeo" placeholder="留空＝用這一頁自己的網址">
+            <p class="adm-field__hint">同樣內容有兩個網址時，用來告訴搜尋引擎哪一個才是正本。正常情況留空。</p>
             <p v-if="seoErrors.canonicalOverride" class="adm-field__error" role="alert">{{ seoErrors.canonicalOverride }}</p>
           </div>
           <div class="adm-field">
-            <label class="adm-checkbox"><input v-model="seoForm.noIndex" type="checkbox" :disabled="!canEditSeo"> noindex</label>
+            <label class="adm-checkbox"><input v-model="seoForm.noIndex" type="checkbox" :disabled="!canEditSeo"> 不要被搜尋引擎收錄</label>
+            <p class="adm-field__hint">勾選後這一頁不會出現在 Google 搜尋結果，但網址仍然打得開。</p>
           </div>
-          <div class="adm-field adm-field--span2">
+          <!-- ⚠️ 只有「這一筆已經有覆寫值」時才出現，見 script 的 showStructuredData。
+               正常情況下客戶看不到這一格，也就不會有人對著它填 JSON。 -->
+          <div v-if="showStructuredData" class="adm-field adm-field--span2">
             <label class="adm-field__label">結構化資料覆寫（進階，JSON）</label>
             <textarea v-model="seoForm.structuredDataOverride" class="adm-textarea" :class="{ 'is-invalid': seoErrors.structuredDataOverride }" :disabled="!canEditSeo" placeholder="留空由系統自動產生" />
             <p v-if="seoErrors.structuredDataOverride" class="adm-field__error" role="alert">{{ seoErrors.structuredDataOverride }}</p>
@@ -897,6 +916,7 @@ async function removeRecord() {
             </p>
             <p class="adm-field__hint">
               JSON 打錯一個逗號，那一頁的結構化資料就整段失效，所以格式檢查在這裡做，沒過就不讓存。
+              <strong>清空後儲存，這一格就會收起來</strong>，之後由系統自動產生。
               ⚠️ 這一區存檔後要<strong>重新按一次「發布」</strong>前台才會套用——前台讀的是已核准的版本快照。
             </p>
           </div>
@@ -908,7 +928,7 @@ async function removeRecord() {
         <span v-if="seoDirty" class="adm-muted">有尚未儲存的變更</span>
         <button type="submit" form="adm-seo-form" class="btn btn--save" :disabled="savingSeo">
           <template v-if="savingSeo">儲存中…</template>
-          <template v-else-if="pendingSeoImages">上傳 OG 圖並儲存 SEO</template>
+          <template v-else-if="pendingSeoImages">上傳分享縮圖並儲存 SEO</template>
           <template v-else>儲存 SEO</template>
         </button>
       </div>

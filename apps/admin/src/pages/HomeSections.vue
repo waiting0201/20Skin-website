@@ -313,13 +313,12 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
               <div>
                 <p class="adm-card__title" style="margin-bottom: 0; display: flex; align-items: center; gap: var(--sp-2)">
                   {{ section.title }}
-                  <span class="adm-muted" style="font-weight: 400; font-size: var(--fs-xs)">（{{ section.sectionKey }}）</span>
                 </p>
                 <p v-if="section.targetUnit" class="adm-field__hint">
                   內容來源：{{ UNIT_REGISTRY[section.targetUnit].label }}——只能從既有的{{ UNIT_REGISTRY[section.targetUnit].label }}挑選，不能另打文案。
                 </p>
                 <p v-else class="adm-field__hint">
-                  這一區的內容存在版位設定裡，不在這個畫面編輯——這裡只能開關與調整順序。
+                  這一區的內容不在這個畫面編輯，下面只是列出目前的設定。
                 </p>
               </div>
             </div>
@@ -392,10 +391,9 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
         <div class="adm-card">
           <p class="adm-card__title" style="margin-bottom: var(--sp-1)">
             {{ heroSection.title }}
-            <span class="adm-muted" style="font-weight: 400; font-size: var(--fs-xs)">（{{ heroSection.sectionKey }}）</span>
           </p>
           <p class="adm-field__hint">
-            唯一例外：沒有對應的內容模型，圖與圖說直接存在版位設定裡。
+            唯一不是從既有內容挑選的版位——圖與圖說直接在這裡編輯。
           </p>
 
 

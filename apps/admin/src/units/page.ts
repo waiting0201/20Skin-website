@@ -31,7 +31,7 @@ export const pageUnit: UnitDefinition = {
         { value: '2', label: '系統頁' },
       ],
     },
-    { key: 'systemKey', label: '系統鍵值', type: 'text', readOnly: true, group: '基本資料', hint: '系統頁專用識別碼，種子建立，不可編輯。' },
+    { key: 'systemKey', label: '系統鍵值', type: 'text', readOnly: true, group: '基本資料', hint: '系統內建頁面的識別碼，不可編輯。' },
     { key: 'lead', label: '導言', type: 'textarea', group: '內容' },
     {
       key: 'bodyBlocks',
@@ -58,7 +58,7 @@ export const pageUnit: UnitDefinition = {
       hint: '僅系統頁使用。',
     },
     { key: 'pageSize', label: '每頁筆數', type: 'number', group: '系統頁設定', hint: '僅系統頁使用。' },
-    { key: 'superAdminOnly', label: '限超級管理員編輯', type: 'boolean', readOnly: true, group: '權限', hint: '法務三頁固定為是；由 permissions.ts 的 canEditLegalPage() 在畫面上落實鎖定。' },
+    { key: 'superAdminOnly', label: '限超級管理員編輯', type: 'boolean', readOnly: true, group: '權限', hint: '隱私權政策等三個法務頁固定為是，只有超級管理員能編輯。' },
   ],
   relations: [
     // RelationType=12「頁面→精選項目」。docs/08 §D 的 To 端可以是任何內容單元，

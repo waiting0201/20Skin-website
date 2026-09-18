@@ -198,9 +198,9 @@ async function remove(item: QuestionInboxRecord) {
     </div>
 
     <p class="adm-workflow__note">
-      來源涵蓋站內搜尋無結果、AI FAQ 未命中的提問、聯絡表單提問（僅問題文字，不含任何送出者資訊）與手動輸入。
-      目的是讓 FAQ 題庫隨真實提問成長——處理完的題目建議直接「建立為 FAQ 草稿」，回填後兩個出口
-      （<code>/faq/</code> 頁面與 AI FAQ 面板）會同時受惠。
+      這裡收的是<strong>民眾問了、站上卻沒有答案</strong>的題目：站內搜尋找不到結果、AI 問答答不出來、
+      聯絡表單裡的提問（只留問題文字，不含任何送出者資料），以及手動加進來的。
+      處理方式是直接「建立為 FAQ 草稿」，補好答案之後，常見問題頁與 AI 問答面板會同時用得到。
     </p>
 
     <div class="adm-filters">
@@ -302,10 +302,10 @@ async function remove(item: QuestionInboxRecord) {
                       <p v-if="draftErrors.categoryTermId" class="adm-field__error" role="alert">{{ draftErrors.categoryTermId }}</p>
                     </div>
                     <div class="adm-field">
-                      <label class="adm-field__label">Slug<span class="adm-field__required">＊</span></label>
+                      <label class="adm-field__label">網址代稱（Slug）<span class="adm-field__required">＊</span></label>
                       <input v-model="draftForm.slug" class="adm-input" :class="{ 'is-invalid': draftErrors.slug }" type="text" maxlength="160">
                       <p v-if="draftErrors.slug" class="adm-field__error" role="alert">{{ draftErrors.slug }}</p>
-                      <p class="adm-field__hint">FAQ 不輸出獨立網址，這是 <code>/faq/</code> 的頁內錨點，但仍是必填。</p>
+                      <p class="adm-field__hint">FAQ 沒有自己的獨立網頁，這一格是常見問題頁上的定位用代稱，但仍是必填。</p>
                     </div>
                     <div class="adm-field adm-field--span2">
                       <label class="adm-field__label">網頁版答案<span class="adm-field__required">＊</span></label>

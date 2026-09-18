@@ -77,7 +77,7 @@ function download(key: TabKey) {
     <div class="adm-page__head">
       <div>
         <h1 class="adm-page__title">FAQ／語料匯出</h1>
-        <p class="adm-page__desc">預覽 faq.json／llms.txt／llms-full.txt，內容即時取自目前已發布的資料</p>
+        <p class="adm-page__desc">預覽網站自動提供給 AI 的三個檔案，內容即時取自目前已發布的資料</p>
       </div>
       <div class="adm-page__actions">
         <button type="button" class="btn btn--ghost" :disabled="loading" @click="loadAll">重新整理</button>
@@ -89,11 +89,10 @@ function download(key: TabKey) {
     <template v-else>
       <div class="adm-card">
         <p class="ex-note">
-          <strong>這個畫面只做預覽與下載。</strong>
-          正式的 <code>faq.json</code>／<code>llms.txt</code>／<code>llms-full.txt</code> 是前台在
-          <strong>每一個請求當下</strong>向同一支 API 取的——內容核准之後就是新的，
-          不需要有人按按鈕，也不需要重新建置。
-          這裡的用途是讓你在核准之前，先看到「這些語料檔現在長什麼樣子」。
+          <strong>這個畫面只做預覽，不用按任何按鈕。</strong>
+          網站會自動整理三個檔案給 ChatGPT、Claude 這類 AI 讀：常見問題清單、網站重點索引、
+          以及完整的內容全文。它們<strong>隨時都是最新的</strong>——只要內容發布了，
+          AI 下一次來讀就是新的版本。這裡的用途，是讓你在發布之前先看看「AI 現在會讀到什麼」。
         </p>
       </div>
 

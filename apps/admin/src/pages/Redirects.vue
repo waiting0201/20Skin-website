@@ -314,34 +314,32 @@ const previewRowsToShow = computed(() => importPreview.value?.rows.slice(0, PREV
 
     <template v-else>
       <div class="adm-card">
+        <!-- ⚠️ 這張卡片 2026-09-18 由「為什麼要有這個畫面」改寫（Tim 指定：後台不要放
+             工程原理）。原文講的是 staticwebapp.config.json 的 20 KB 上限、catch-all
+             路由與 GET /redirects/resolve、Application Insights ——
+             那些是 CLAUDE.md 決策 5／7 與 docs/07 的事，院方看了也不會因此做任何決定。
+             🔴 **留下來的兩條是可行動的**：不可用萬用字元、帶 # 的網址建不了規則。
+             那不是原理，是「你在這個表單裡會踩到什麼」。 -->
         <p class="r-note">
-          <strong>為什麼要有這個畫面：</strong>
-          <code>staticwebapp.config.json</code> 放不下 1000 條規則（20 KB 上限約只放得下 200 條），
-          且它<strong>不比對 query string</strong>——舊網址像
-          <code>share.php?class=醫美新知</code> 這類帶中文參數的頁面，只有靠查這張表才做得到。
-          <!-- ⚠️ 2026-09-16 起查表的是**前台的 catch-all 路由**（pages/[...slug].vue 打
-               GET /redirects/resolve），不是 /api/fallback —— 那支 SWA managed function
-               已整支刪除（CLAUDE.md 決策 7），它與 Nuxt 的 SSR function 互斥。
-               這段文字原本還在講 /api/fallback 與 x-ms-original-url。 -->
-          目前是由前台的 catch-all 路由打 <code>GET /redirects/resolve</code> 查詢。
-          <strong>最高流量的十幾條</strong>已直接寫進設定檔走最快路徑，不必查表，下面列出目前是哪幾條。
+          舊網站的網址改版後就失效了，這張表負責把它們一條一條送到新頁面——
+          搜尋引擎排名與別人貼在外面的連結才不會斷掉。
+          <strong>一條舊網址對一條新網址</strong>，不可以用萬用字元一次倒進分類頁（會被 Google 判定成假頁面）。
         </p>
         <p class="r-note">
-          <strong>已知限制（不是這個畫面的錯）：</strong>
-          <code>/contact.php#20</code> 這類錨點無法在伺服器端轉址——瀏覽器不會把 <code>#</code> 之後的內容送給伺服器，
-          正確做法是 <code>/contact.php</code> 轉到 <code>/clinics/</code>，再由前台 JS 讀 <code>location.hash</code> 二次導向，
-          不需要（也不應該）在這張表裡硬湊一條規則。萬用字元一律禁止——每個舊網址要一對一對應，不可以全部倒進分類頁（會被 Google 判定為軟性 404）。
+          <strong>帶 <code>#</code> 的網址建不了規則</strong>（例如 <code>/contact.php#20</code>）——
+          <code>#</code> 後面的內容瀏覽器不會送給伺服器，伺服器看不到就無從轉起。
+          這種網址只建到 <code>#</code> 之前那一段（<code>/contact.php</code>）即可。
         </p>
       </div>
 
       <div v-if="promoted.length" class="adm-card">
-        <h2 class="adm-card__title">已寫進 staticwebapp.config.json 的規則（走最快路徑）</h2>
+        <h2 class="adm-card__title">走最快路徑的規則</h2>
         <!-- ⚠️ 這裡原本多一欄「命中次數」表頭，但底下完全沒有對應的 <td>——
              Redirects 表沒有這個欄位（見 api/redirect.ts 的說明，命中數要靠
              Application Insights 離線彙總），表頭是量測不到的欄位，拿掉比留一個
              永遠空白、還讓其他欄位對不齊的欄位好。 -->
         <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
-          命中次數不在這張表裡——<code>Redirects</code> 沒有這個欄位，要看流量得走 Application Insights 離線彙總。
+          這幾條流量最高，直接寫在網站設定裡、不必查表，所以轉得最快。要增減請告知工程端。
         </p>
         <div class="adm-table-wrap">
           <table class="adm-table">
@@ -366,7 +364,7 @@ const previewRowsToShow = computed(() => importPreview.value?.rows.slice(0, PREV
               <label class="adm-field__label">來源路徑<span class="adm-field__required">＊</span></label>
               <input v-model="form.fromPath" class="adm-input" :class="{ 'is-invalid': formErrors.fromPath }" placeholder="/share.php?class=醫美新知">
               <p v-if="formErrors.fromPath" class="adm-field__error" role="alert">{{ formErrors.fromPath }}</p>
-              <p class="adm-field__hint">可以帶 query string；儲存時會自動正規化（補開頭斜線、query 依字母排序）。不可使用萬用字元。</p>
+              <p class="adm-field__hint">可以帶 <code>?</code> 後面的參數，儲存時會自動整理成標準寫法。不可使用萬用字元。</p>
             </div>
             <div class="adm-field adm-field--span2">
               <label class="adm-field__label">目標路徑<span class="adm-field__required">＊</span></label>

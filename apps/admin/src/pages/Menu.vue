@@ -533,7 +533,7 @@ function removeSocialLink(index: number) {
       <div v-if="settings" class="adm-card">
         <p class="adm-card__title">頁尾：社群連結與版權文案</p>
         <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
-          NAP 主資料的編輯入口在「全站設定」（一致性檢查也在那裡），這裡只管社群連結與版權文案。
+          院所名稱、電話、地址在「全站設定」編輯（一致性檢查也在那裡），這裡只管社群連結與版權文案。
         </p>
 
         <div class="adm-repeater">
@@ -554,7 +554,7 @@ function removeSocialLink(index: number) {
 
         <div class="adm-field-grid" style="margin-top: var(--sp-4)">
           <div v-for="(nap, idx) in settings.nap" :key="idx" class="adm-field">
-            <label class="adm-field__label">{{ nap.name }}（NAP 預覽，唯讀）</label>
+            <label class="adm-field__label">{{ nap.name }}（頁尾顯示，唯讀）</label>
             <p class="adm-field__hint">{{ nap.phone }}・{{ nap.address }}</p>
           </div>
         </div>

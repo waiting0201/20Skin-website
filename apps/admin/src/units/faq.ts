@@ -26,7 +26,7 @@ export const faqUnit: UnitDefinition = {
       requiredOnCreate: true,
       optionsFromTermType: 3,
       group: '基本資料',
-      hint: '引用「分類與標籤」模型，不自行維護第二份清單。',
+      hint: '從「分類與標籤」裡挑，不在這裡另外建一份清單。',
     },
     {
       key: 'webAnswer',
@@ -47,12 +47,12 @@ export const faqUnit: UnitDefinition = {
       required: true,
       group: '答案',
       riskScan: true,
-      hint: '60–100 字，語意需自足——這是 FAQPage JSON-LD、faq.json、llms-full.txt 的唯一來源，缺一則該題無法輸出。',
+      hint: '60–100 字，要能單獨看懂（不能寫「如上所述」）——搜尋引擎與 AI 只讀這一段，沒填這一題就不會被它們取用。',
       minLength: 60,
       maxLength: 100,
     },
-    { key: 'lastReviewedOn', label: '最後更新日', type: 'date', required: true, group: '基本資料', hint: '人工可控的時效標記，改個錯字不該讓它跳動（不等同 UpdatedAt）。' },
-    { key: 'reviewedBy', label: '審閱者', type: 'text', group: '基本資料', hint: '對外顯示「這則答案由誰確認過」，例如「黃勇學 醫師」。自由文字不是外鍵——審閱者未必是站內有個人頁的醫師。' },
+    { key: 'lastReviewedOn', label: '最後更新日', type: 'date', required: true, group: '基本資料', hint: '對外顯示的「最後更新日」，由你自己決定何時更新——改個錯字不需要動它，系統也不會自動改。' },
+    { key: 'reviewedBy', label: '審閱者', type: 'text', group: '基本資料', hint: '對外顯示「這則答案由誰確認過」，例如「黃勇學 醫師」。直接打字即可，不必是站上有個人頁的醫師。' },
   ],
   relations: [
     // RelationType 4／6／10 皆從對方端維護（療程／困擾／據點 → FAQ），這裡是唯讀反向顯示。

@@ -29,7 +29,7 @@ export const doctorUnit: UnitDefinition = {
       required: true,
       requiredOnCreate: true,
       group: '基本資料',
-      hint: '⚠️ 14 位團隊成員是 13 醫師 ＋ 1 藝術總監（安喬／許媖琄，兼執行長，非醫師）。這一欄決定前台「本文由 ○○ 醫師審閱」與 Physician JSON-LD 會不會掛錯人，不是預設全開。',
+      hint: '⚠️ 團隊 14 位成員裡有 1 位不是醫師（藝術總監安喬／許媖琄，兼執行長）。這一欄決定前台會不會出現「本文由 ○○ 醫師審閱」，也會告訴搜尋引擎這個人是醫師，不是預設全開。',
     },
     { key: 'specialty', label: '專科', type: 'text', group: '基本資料' },
     { key: 'photo', label: '大頭照', type: 'image', group: '基本資料', hint: '建議尺寸 900×1200（3:4 直式），對齊頭部裁切。' },
@@ -38,7 +38,7 @@ export const doctorUnit: UnitDefinition = {
       label: '學歷與經歷',
       type: 'repeater',
       group: '學經歷',
-      hint: '可重複欄位。型別：現職／學歷／經歷／證照與學會資格。⚠️ 「現職」與「經歷」是個人頁時間軸上兩種不同的標籤，不要混用。',
+      hint: '可以新增多筆，每筆選一種：現職／學歷／經歷／證照與學會資格。⚠️ 「現職」與「經歷」在個人頁上是時間軸的兩種不同標籤，不要混用。',
       repeaterFields: [
         {
           key: 'type',
@@ -54,8 +54,8 @@ export const doctorUnit: UnitDefinition = {
         { key: 'text', label: '內容', type: 'text' },
       ],
     },
-    { key: 'tags', label: '專長標籤', type: 'tags', group: '學經歷', hint: '列表卡片上的標籤。刻意不走「分類與標籤」模型——專長標籤不產生 URL、不需要 SEO 欄位。' },
-    { key: 'expertiseTags', label: '擅長項目', type: 'tags', group: '學經歷', hint: '個人頁的「擅長項目」區塊，與上面的專長標籤是兩個不同的區塊（DoctorTags.Type）。' },
+    { key: 'tags', label: '專長標籤', type: 'tags', group: '學經歷', hint: '醫師列表卡片上顯示的標籤，直接打字即可，不必先到「分類與標籤」建立。' },
+    { key: 'expertiseTags', label: '擅長項目', type: 'tags', group: '學經歷', hint: '個人頁的「擅長項目」區塊，與上面的專長標籤是兩個不同的區塊。' },
     { key: 'bio', label: '簡介', type: 'structured', group: '簡介', structured: doctorBioSchema },
     { key: 'publications', label: '著作', type: 'structured', group: '簡介', structured: doctorPublicationsSchema },
     {
@@ -63,7 +63,7 @@ export const doctorUnit: UnitDefinition = {
       label: '看診時段',
       type: 'repeater',
       group: '看診資訊',
-      hint: '對應 DoctorSchedules：據點 × 星期 × 時段。',
+      hint: '這位醫師在各據點的看診時段。',
       repeaterFields: [
         { key: 'clinicId', label: '看診據點', type: 'relation-single', relationUnit: 'clinic' },
         {

@@ -43,7 +43,7 @@ export const termUnit: UnitDefinition = {
       type: 'number',
       readOnly: true,
       group: '基本資料',
-      hint: '刪除前 API 會回報這個數字；仍有引用時刪除會被擋下（409 CONFLICT_STATE）。',
+      hint: '還有多少內容正在使用這個分類／標籤。只要不是 0，就不能刪除。',
     },
   ],
 }

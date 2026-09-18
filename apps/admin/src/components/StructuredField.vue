@@ -46,14 +46,14 @@ const undeclared = computed(() => {
     <!-- 沒有 schema：只有原始模式。⚠️ 不要硬套一份 schema —— 套錯的結果是
          「表單看起來正常、填了、前台什麼都沒變」，比一個坦白的 JSON 框糟得多。 -->
     <p v-if="!schema" class="adm-alert adm-alert--info">
-      這個項目沒有對應的表單，以原始 JSON 編輯。
+      這個項目沒有對應的表單，內容以原始格式顯示。需要調整請告知工程端。
     </p>
 
     <!-- 有 schema 卻讀不成表單 ＝ 這一筆資料的形狀本身對不上（雙重編碼、手改壞的
          JSON）。⚠️ 這不是使用者切過來的，所以要說清楚發生了什麼、怎麼回到表單。 -->
     <p v-else-if="raw" class="adm-alert adm-alert--warn">
-      這一欄目前的內容不符合表單預期的格式，暫時以原始 JSON 顯示。
-      修正格式、儲存後重新整理這一頁，就會回到表單。
+      這一欄目前的內容不符合表單預期的格式，暫時以原始格式顯示。
+      <strong>建議先不要動它，請告知工程端</strong>——格式修好之後這一欄就會變回表單。
     </p>
 
     <!-- 原始 JSON 模式（只在上面兩種情況出現，沒有手動切換的入口） -->
@@ -81,7 +81,7 @@ const undeclared = computed(() => {
     <!-- 🔴 這一行不能省。沒有它，使用者會以為表單顯示的就是全部 ——
          那正是 560 篇文章的 runs 可能消失的方式（例如整段複製到別處再貼回來）。 -->
     <p v-if="undeclared.length" class="adm-field__hint">
-      這筆資料另有 {{ undeclared.length }} 個不由表單管理的欄位（<code>{{ undeclared.join('、') }}</code>），儲存時會原樣保留。
+      這筆資料另有 {{ undeclared.length }} 項不會顯示在表單上的內容，儲存時會原樣保留，不會消失。
     </p>
   </div>
 </template>
