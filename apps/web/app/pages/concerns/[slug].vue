@@ -256,7 +256,9 @@ usePageHead({
                 <a v-if="doctor.href" :href="doctor.href">{{ doctor.name }}</a>
                 <template v-else>{{ doctor.name }}</template>
               </h3>
-              <div class="c-card__meta"><span>{{ doctor.role }}</span></div>
+              <div class="c-card__meta">
+                <span v-for="line in roleLines(doctor.role)" :key="line">{{ line }}</span>
+              </div>
             </div>
           </article>
         </div>

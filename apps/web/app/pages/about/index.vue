@@ -146,7 +146,9 @@ usePageHead({
             </div>
             <div class="c-card__body">
               <h3 class="c-card__title"><a :href="member.href">{{ member.name }}</a></h3>
-              <div class="c-card__meta"><span>{{ member.role }}</span></div>
+              <div class="c-card__meta">
+                <span v-for="line in roleLines(member.role)" :key="line">{{ line }}</span>
+              </div>
             </div>
           </article>
         </div>

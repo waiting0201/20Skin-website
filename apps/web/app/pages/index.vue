@@ -231,11 +231,13 @@ usePageHead({
       <div class="home-doctors__grid">
         <article v-for="doctor in FEATURED_DOCTORS" :key="doctor.name" class="c-card c-card--doctor">
           <div class="c-card__media">
-            <img :src="doctor.photoPath" :alt="`${doctor.name} ${doctor.jobTitle}`" :width="doctor.photoWidth" :height="doctor.photoHeight" loading="lazy">
+            <img :src="doctor.photoPath" :alt="`${doctor.name} ${roleText(doctor.jobTitle)}`" :width="doctor.photoWidth" :height="doctor.photoHeight" loading="lazy">
           </div>
           <div class="c-card__body">
             <h3 class="c-card__title"><a :href="doctor.urlPath">{{ doctor.name }}</a></h3>
-            <div class="c-card__meta"><span>{{ doctor.jobTitle }}</span></div>
+            <div class="c-card__meta">
+              <span v-for="line in roleLines(doctor.jobTitle)" :key="line">{{ line }}</span>
+            </div>
           </div>
         </article>
       </div>

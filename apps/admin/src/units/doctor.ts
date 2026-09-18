@@ -17,7 +17,11 @@ export const doctorUnit: UnitDefinition = {
     { key: 'sortOrder', label: '排序' },
   ],
   fields: [
-    { key: 'jobTitle', label: '職稱', type: 'text', required: true, group: '基本資料' },
+    // 一行一個職稱：前台的醫師卡與個人頁主視覺會逐行顯示（apps/web/app/utils/role.ts）。
+    // ⚠️ maxLength 只是「建議字數」提示，不是硬上限 —— 真正的上限是 Doctors.JobTitle
+    //    的 nvarchar(300)（migration WidenDoctorJobTitle），而 API 那一層不驗長度，
+    //    超過就是 SQL 例外、存檔收到一個看不出原因的 500。
+    { key: 'jobTitle', label: '職稱', type: 'textarea', required: true, group: '基本資料', maxLength: 300, hint: '一行一個職稱，前台會逐行顯示。' },
     {
       key: 'isPhysician',
       label: '是否為醫師',

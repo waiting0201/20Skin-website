@@ -301,7 +301,7 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 
 ### C-2 `Doctors` ＋ `DoctorTags` ＋ `DoctorCredentials` ＋ `DoctorSchedules`
 
-`Doctors`：`JobTitle`（職稱）、**`IsPhysician` bit NOT NULL**、`Specialty`（專科）、`Photo` 內嵌圖片欄位、`Bio`、`Publications`
+`Doctors`：`JobTitle`（職稱，**nvarchar(300)**、多行 —— 一行一個職稱，前台逐行顯示；2026-09-18 由 100 放寬，migration `WidenDoctorJobTitle`）、**`IsPhysician` bit NOT NULL**、`Specialty`（專科）、`Photo` 內嵌圖片欄位、`Bio`、`Publications`
 
 ⚠️ **`IsPhysician` 不是可有可無的欄位。** 14 位團隊成員是 **13 位醫師 ＋ 1 位藝術總監**（安喬／許媖琄，兼執行長與「新中式美學」創始人）。資料層若預設全部是醫師，前台的「本文由 ○○ 醫師審閱」與 `Physician` schema 就會掛錯人。
 

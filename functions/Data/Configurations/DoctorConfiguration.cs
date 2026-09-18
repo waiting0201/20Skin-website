@@ -13,7 +13,10 @@ public sealed class DoctorConfiguration : IEntityTypeConfiguration<Doctor>
     {
         b.ToTable("Doctors");
 
-        b.Property(x => x.JobTitle).HasMaxLength(100);
+        // 職稱是多行的（後台一行一個，前台逐行顯示），所以不是 100 而是 300 ——
+        // ⚠️ 全鏈路沒有任何一層驗長度：ApplyDoctorFields 直接賦值，超過就是 SQL 例外、
+        //    後台收到一個看不出原因的 500。單行 input 時代打不到 100，改成多行文字框之後會。
+        b.Property(x => x.JobTitle).HasMaxLength(300);
         b.Property(x => x.Specialty).HasMaxLength(300);
 
         // ⚠️ 刻意不給 HasDefaultValue：14 位是 13 醫師 ＋ 1 藝術總監，

@@ -313,7 +313,7 @@ onMounted(() => {
           <div class="c-card__media">
             <img
               :src="doctor.photo.src"
-              :alt="`${doctor.name} ${doctor.jobTitle}`"
+              :alt="`${doctor.name} ${roleText(doctor.jobTitle)}`"
               :width="doctor.photo.width"
               :height="doctor.photo.height"
               loading="lazy"
@@ -321,7 +321,9 @@ onMounted(() => {
           </div>
           <div class="c-card__body">
             <h3 class="c-card__title"><a :href="`/team/${doctor.slug}/`">{{ doctor.name }}</a></h3>
-            <div class="c-card__meta"><span>{{ doctor.jobTitle }}</span></div>
+            <div class="c-card__meta">
+              <span v-for="line in roleLines(doctor.jobTitle)" :key="line">{{ line }}</span>
+            </div>
             <p v-if="doctor.clinics.find((c) => c.clinicSlug === clinic!.slug)?.scheduleNote" class="clinic-doctor__slot">
               <span class="u-eyebrow">本院區時段</span>{{ doctor.clinics.find((c) => c.clinicSlug === clinic!.slug)?.scheduleNote }}
             </p>

@@ -149,7 +149,7 @@ usePageHead({
       >
       <div>
         <h3 class="case-doctor__name">{{ item.doctorQuote.name }}</h3>
-        <p class="case-doctor__role">{{ item.doctorQuote.role }}</p>
+        <p class="case-doctor__role">{{ roleText(item.doctorQuote.role) }}</p>
         <p class="case-doctor__quote">{{ item.doctorQuote.quote }}</p>
         <a v-if="item.doctorQuote.href" class="case-doctor__more" :href="item.doctorQuote.href">查看醫師頁面 →</a>
       </div>

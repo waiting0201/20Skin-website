@@ -183,7 +183,7 @@ function siteLabel(doctor: (typeof ALL_DOCTORS)[number]) {
           <div class="c-card__media">
             <img
               :src="doctor.photo.src"
-              :alt="`${doctor.name} ${doctor.jobTitle}`"
+              :alt="`${doctor.name} ${roleText(doctor.jobTitle)}`"
               :width="doctor.photo.width"
               :height="doctor.photo.height"
               loading="lazy"
@@ -191,7 +191,9 @@ function siteLabel(doctor: (typeof ALL_DOCTORS)[number]) {
           </div>
           <div class="c-card__body">
             <h3 class="c-card__title"><a :href="`/team/${doctor.slug}/`">{{ doctor.name }}</a></h3>
-            <div class="c-card__meta"><span>{{ doctor.jobTitle }}</span></div>
+            <div class="c-card__meta">
+              <span v-for="line in roleLines(doctor.jobTitle)" :key="line">{{ line }}</span>
+            </div>
             <div class="team-card__tags">
               <span v-for="tag in doctor.tags" :key="tag" class="c-tag">{{ tag }}</span>
             </div>

@@ -36,7 +36,7 @@ const jsonLd = (() => {
     '@context': 'https://schema.org',
     '@type': doctor.isPhysician ? 'Physician' : 'Person',
     name: doctor.isPhysician ? `${doctor.name} 醫師` : doctor.name,
-    jobTitle: heroRole,
+    jobTitle: roleText(heroRole),
     worksFor: {
       '@type': 'MedicalOrganization',
       name: '20SKIN 美醫集團',
@@ -60,10 +60,10 @@ usePageHead({
   // 後台 SEO 區塊的覆寫（標題／描述／OG 圖／canonical／noindex／結構化資料）。
   // ⚠️ 讀的是已核准的版本快照，所以後台改完要重新發布才會生效。
   seo: doctor.seo,
-  title: doctor.isPhysician ? `${doctor.name} ${doctor.jobTitle.split('・')[0]}` : doctor.name,
+  title: doctor.isPhysician ? `${doctor.name} ${roleLines(doctor.jobTitle)[0] ?? ''}`.trim() : doctor.name,
   description: doctor.isPhysician
-    ? `${doctor.name}醫師，20SKIN美醫集團${doctor.jobTitle}${doctor.specialty ? `，${doctor.specialty}專科醫師` : ''}，於${doctor.clinics.map((c) => clinicNames[c.clinicSlug]).join('、')}看診。`
-    : `${doctor.name}，20SKIN美醫集團${doctor.jobTitle}。`,
+    ? `${doctor.name}醫師，20SKIN美醫集團${roleText(doctor.jobTitle)}${doctor.specialty ? `，${doctor.specialty}專科醫師` : ''}，於${doctor.clinics.map((c) => clinicNames[c.clinicSlug]).join('、')}看診。`
+    : `${doctor.name}，20SKIN美醫集團${roleText(doctor.jobTitle)}。`,
   pageCss: '/assets/pages/05-doctor-detail.css',
   path: `/team/${doctor.slug}/`,
   jsonLd: [
@@ -108,7 +108,9 @@ usePageHead({
       <div class="doc-hero__body">
         <span class="u-eyebrow">OUR TEAM</span>
         <h1 class="doc-hero__title">{{ doctor.name }}</h1>
-        <p class="doc-hero__role">{{ heroRole }}</p>
+        <p class="doc-hero__role">
+          <span v-for="line in roleLines(heroRole)" :key="line">{{ line }}</span>
+        </p>
         <div v-if="doctor.specialty" class="doc-hero__tags">
           <span class="c-tag">{{ doctor.specialty }}</span>
         </div>
@@ -393,7 +395,7 @@ usePageHead({
           <div class="c-card__media">
             <img
               :src="colleague.photo.src"
-              :alt="`${colleague.name} ${colleague.jobTitle}`"
+              :alt="`${colleague.name} ${roleText(colleague.jobTitle)}`"
               :width="colleague.photo.width"
               :height="colleague.photo.height"
               loading="lazy"
@@ -401,7 +403,9 @@ usePageHead({
           </div>
           <div class="c-card__body">
             <h3 class="c-card__title"><a :href="`/team/${colleague.slug}/`">{{ colleague.name }}</a></h3>
-            <div class="c-card__meta"><span>{{ colleague.isPhysician ? '醫師' : colleague.jobTitle }}</span></div>
+            <div class="c-card__meta">
+              <span v-for="line in roleLines(colleague.isPhysician ? '醫師' : colleague.jobTitle)" :key="line">{{ line }}</span>
+            </div>
           </div>
         </article>
       </div>

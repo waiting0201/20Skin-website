@@ -14,7 +14,7 @@ export const doctorBioSchema: StructuredSchema = {
   root: {
     kind: 'object',
     fields: [
-      { key: 'heroRole', label: '主視覺頭銜', node: { kind: 'string', placeholder: '例如：院長・醫療技術總監' } },
+      { key: 'heroRole', label: '主視覺頭銜', node: { kind: 'string', multiline: true, placeholder: '一行一個職稱，例如：\n院長\n醫療技術總監' }, hint: '一行一個職稱，前台會逐行顯示。' },
       { key: 'yearsInPractice', label: '執業年資', node: { kind: 'string', placeholder: '例如：約 20 年' } },
       {
         key: 'paragraphs',

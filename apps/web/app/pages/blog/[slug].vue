@@ -166,7 +166,7 @@ usePageHead({
           <img v-if="article.author.avatarSrc" class="article-byline__avatar" :src="article.author.avatarSrc" :alt="article.author.name" width="48" height="48">
           <span>
             <span class="article-byline__name">{{ article.author.name }}</span>
-            <span v-if="article.author.role" class="article-byline__role">{{ article.author.role }}</span>
+            <span v-if="article.author.role" class="article-byline__role">{{ roleText(article.author.role) }}</span>
           </span>
         </a>
         <div v-else class="article-byline__author">
@@ -308,7 +308,7 @@ usePageHead({
       <img v-if="article.author.avatarSrc" class="article-authorcard__avatar" :src="article.author.avatarSrc" :alt="article.author.name" width="84" height="84" loading="lazy">
       <div>
         <p class="article-authorcard__name">{{ article.author.name }}</p>
-        <p v-if="article.author.role" class="article-authorcard__role">{{ article.author.role }}</p>
+        <p v-if="article.author.role" class="article-authorcard__role">{{ roleText(article.author.role) }}</p>
         <p class="article-authorcard__bio">{{ article.authorBio }}</p>
         <a v-if="article.author.doctorSlug" class="article-authorcard__link" :href="`/team/${article.author.doctorSlug}/`">查看醫師頁 →</a>
       </div>

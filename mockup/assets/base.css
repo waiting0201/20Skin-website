@@ -723,7 +723,10 @@ address { font-style: normal; }
 }
 .c-card--doctor .c-card__body { padding: var(--sp-4) 0 0; gap: var(--sp-1); }
 .c-card--doctor .c-card__title { font-size: var(--fs-base); }
-.c-card--doctor .c-card__meta { padding-top: 0; margin-top: 0; }
+/* 職稱可以有多個（後台一行一個），逐行顯示。醫師卡的 meta 只放職稱一項，
+   所以整個容器改直向堆疊；中點是給文章卡「作者 · 日期 · 閱讀時間」用的，這裡拿掉。 */
+.c-card--doctor .c-card__meta { padding-top: 0; margin-top: 0; flex-direction: column; gap: 2px; }
+.c-card--doctor .c-card__meta span::before { content: none; margin: 0; }
 
 /* -- 文章卡：橫式封面 + meta（作者／日期／閱讀時間） --------------------- */
 .c-card--article .c-card__media { aspect-ratio: 16 / 10; }
