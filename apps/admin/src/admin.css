@@ -53,7 +53,7 @@
    11. 表單                 .adm-form／.adm-field／.adm-input 等
    12. 訊息元件             .adm-alert／.adm-empty／.adm-loading（新）
    13. 特殊表單元件          repeater／tags／hours／relation／upload／risk-hit
-   14. 編輯畫面版面          .adm-editor／.adm-editor-main（單欄）
+   14. 編輯畫面版面          .adm-editor／.adm-editor-layout／.adm-editor-main／.adm-editor-side
                             ＋ .adm-form-actions／.btn--save／.btn--danger／.adm-danger-zone
    15. 登入頁               .adm-login（左右分欄，獨立版面）
    16. 小工具               .adm-muted／.adm-divider／.adm-inline-actions
@@ -75,6 +75,9 @@
   --adm-topbar-h: 60px;
   --adm-radius: var(--radius-md);
   --adm-content-max: 1280px;
+  /* 編輯畫面右欄（排程／危險區）。300px 是 datetime-local 輸入框
+     加上卡片內距之後不會被壓到換行的下限。 */
+  --adm-editor-side-w: 300px;
 
   /* -- 狀態色：具名 token，供徽章／訊息框／風險提示共用 ------------------ */
   --adm-danger:    #B3452C;
@@ -691,27 +694,73 @@
 /* =========================================================================
    14. 編輯畫面
    -------------------------------------------------------------------------
-   兩種版面：
-   單欄：`.adm-editor`（寬度上限）＋ `.adm-editor-main`（段落之間的節奏）。
-   內容編輯頁（EditPage.vue）與首頁版位編排（HomeSections.vue）共用同一套。
-   ⚠️ 2026-09-17 由兩欄改成單欄 —— 右側工作流側欄整個拿掉（Tim 指定：
-      「只需要草稿跟發佈就好」「首頁版位這一頁都要改，對齊其他表單頁」）。
-   ⚠️ 寬度刻意壓在 960px，不是「單欄了就攤滿」：那正好是原本主欄的量測寬度
-      （1280 內容上限 − 300 側欄 − 間距），一行的字數不變，既有的兩欄
-      `.adm-field-grid` 也維持原本的欄寬。
+   兩種版面，共用 `.adm-editor`（寬度上限）＋ `.adm-editor-main`（段落節奏）：
+
+   單欄　　首頁版位編排（HomeSections.vue）。960px，右邊留白。
+   兩欄　　內容編輯頁（EditPage.vue）：`.adm-editor--aside` 放寬寬度上限，
+   　　　　內層 `.adm-editor-layout` 切成主欄 ＋ `.adm-editor-side`（sticky）。
+
+   ⚠️ 沿革：2026-09-17 由「主欄 ＋ 右側工作流側欄」改成單欄（送審那一層拿掉）；
+      2026-09-18 Tim 指定把排程與危險區搬回右欄 —— 主欄壓在 960px 之後，
+      右邊本來就空著一整條。
+   🔴 回來的是**版面**，不是工作流：右欄沒有送審、沒有審核、沒有版本歷程，
+      也不要往裡面加。`.adm-workflow*` 那組 class 沒有復活。
    ========================================================================= */
 /* 🔴 寬度上限掛在最外層（含標題列與訊息框），不是只掛內容欄 ——
-   只掛內容欄的話，標題列右側的「發布」會被推到 1280px 的右緣，
-   與下方 960px 的卡片右緣對不齊，看起來像是浮在旁邊的另一個東西。 */
+   只掛內容欄的話，標題列右側的「發布」會被推到內容上限的右緣，
+   與下方卡片的右緣對不齊，看起來像是浮在旁邊的另一個東西。 */
 .adm-editor { max-width: 960px; }
+/* 有右欄時放寬到內容上限，多出來的那一條給右欄。
+   ⚠️ 960 + 24 + 300 = 1284 > `.adm-main` 實際可用的 1216（1280 扣兩側 sp-6 內距），
+   所以主欄會收到約 890px —— 是刻意的取捨：右欄再窄就放不下 datetime-local
+   那種有固定最小寬度的輸入框，而主欄的兩欄 field-grid 少 70px 沒有影響。 */
+.adm-editor--aside { max-width: var(--adm-content-max); }
+
+.adm-editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--adm-editor-side-w);
+  gap: var(--sp-5);
+  /* 🔴 `start` 不可省：預設的 stretch 會把右欄拉成與主欄等高，
+     而 sticky 在一個「已經和捲動容器一樣高」的元素上完全不會作用。 */
+  align-items: start;
+}
+
+/* 右欄：跟著捲。不 sticky 的話，長表單捲過第一屏之後右邊又是一整條空白，
+   等於沒搬。頂端讓開固定的 topbar，不然卡片上緣會被它蓋住。 */
+.adm-editor-side {
+  position: sticky;
+  top: calc(var(--adm-topbar-h) + var(--sp-5));
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+/* 卡片與它的動作列是同一段，之間比段與段更緊（與主欄同一條規則）。 */
+.adm-editor-side__group { display: flex; flex-direction: column; gap: var(--sp-3); }
+/* 300px 排不下兩欄，也放不下 datetime-local 並排。 */
+.adm-editor-side .adm-field-grid { grid-template-columns: 1fr; }
+.adm-editor-side .adm-card { padding: var(--sp-4); }
+
 /* ⚠️ 用 `* + *` 而不是 gap：`.adm-form-actions` 要比段落之間更貼上一段
    （它是上一段的結尾，不是獨立的一段），gap 給不出兩種間距。 */
 .adm-editor-main > * + * { margin-top: var(--sp-5); }
 .adm-editor-main > .adm-card + .adm-card { margin-top: var(--sp-5); }
 .adm-editor-main > .adm-form-actions { margin-top: var(--sp-4); }
 
-/* 🔴 `.adm-editor-layout`（兩欄 grid）與 `.adm-workflow`（右側 sticky 側欄）
-   2026-09-17 刪除 —— 最後兩個使用者（內容編輯畫面、首頁版位編排）都改成單欄了。
+/* 窄螢幕：收回單欄，右欄接在 SEO 之後（＝ 2026-09-18 之前的順序）。
+   🔴 1264px 這個數字是算出來的，不是抓的：`.adm-main` 可用寬度 ＝ 視窗 − 側欄 240
+   − 兩側內距 64，要超過主欄上限 960 才會出現「右邊那一條空白」（＝ 這次要處理的問題），
+   也就是視窗 > 1264。再窄下去本來就沒有空白可以填，硬切兩欄只會把主欄壓到
+   500px 上下，兩欄的 `.adm-field-grid` 擠成一團。 */
+@media (max-width: 1264px) {
+  .adm-editor-layout { grid-template-columns: minmax(0, 1fr); }
+  .adm-editor-side { position: static; }
+  .adm-editor--aside { max-width: 960px; }
+}
+
+/* 🔴 `.adm-workflow`（那個裝著送審／審核／版本歷程的右側側欄）2026-09-17 刪除，
+   **沒有隨著 `.adm-editor-layout` 一起回來** —— 2026-09-18 回來的是兩欄版面，
+   裝的是排程與刪除，不是工作流。
    ⚠️ `__actions` 與 `__note` 兩個**留著**：帳號管理、全站設定、未命中題目清單
    仍在用，它們只是「一疊滿版按鈕」與「小字備註」，與工作流無關。
    名字沒改是刻意的 —— 改名要動四個檔案，而它們本來就不是工作流專屬的樣式。 */
@@ -747,8 +796,10 @@
 .btn--danger:hover:not(:disabled) { background: var(--adm-danger-bg); }
 .btn--danger:disabled { opacity: .55; cursor: not-allowed; }
 
-/* 危險區：整頁最後一段，與上面的內容用一條線隔開。
-   🔴 位置就是防護 —— 要捲到底才看得到，而且離兩顆儲存按鈕最遠。 */
+/* 危險區：與上面的內容用一條線隔開。
+   🔴 2026-09-18 起它在右欄、而且跟著捲，「要捲到底才看得到」那一層防護沒有了。
+   剩下的三層要一起在：與儲存（綠）／發布（藍）不同色、不同寬、隔一整段距離
+   （`.adm-editor-side` 的 gap 用 sp-6，比卡片之間更寬），加上 window.confirm。 */
 .adm-danger-zone {
   display: flex;
   align-items: center;
@@ -759,6 +810,15 @@
   border-top: 1px solid var(--line);
 }
 .adm-danger-zone__title { font-weight: 700; color: var(--ink); font-size: var(--fs-sm); }
+/* 右欄版：橫排在 300px 裡放不下，改直排。
+   ⚠️ 按鈕**不**拉成滿寬 —— 滿寬會讓它與上面的「儲存排程」變成一疊同形同寬的
+   按鈕，那正是 2026-09-17 把刪除搬離「發布」旁邊要避免的事。靠右、維持小尺寸。 */
+.adm-danger-zone--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-3);
+}
+.adm-danger-zone--stack > .btn { align-self: flex-end; }
 
 
 /* =========================================================================

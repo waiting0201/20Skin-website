@@ -1,7 +1,11 @@
 <script setup lang="ts">
 // 通用編輯畫面：九個內容模型共用（docs/09-frontend.md §8）。
-// 單欄，由上而下：發布動作（標題列）→ 本文 → 關聯 → 共用 SEO 區塊 → 排程 → 危險區。
-// ⚠️ 2026-09-17 由「主欄 ＋ 右側工作流側欄」改成單欄，見下方「發布」一節。
+// 主欄由上而下：發布動作（標題列）→ 本文 → 關聯 → 共用 SEO 區塊；
+// 右欄（sticky）：排程 → 危險區。
+// ⚠️ 2026-09-17 先把「主欄 ＋ 右側工作流側欄」改成單欄（送審那一層拿掉，見下方
+//    「發布」一節）；2026-09-18 Tim 指定把排程與危險區搬回右欄 ——
+//    主欄壓在 960px 之後，右邊本來就空著一整條，那兩段放在那裡剛好。
+//    🔴 搬回來的是**版面**，不是工作流側欄：右欄沒有送審、沒有審核、沒有版本歷程。
 //
 // 權限模型（docs/10-api.md §4、docs/11-backend-design.md §5.4）：
 //   - 本文（含關聯）：{unit}.edit，且醫師角色僅限 OwnerUserId=自己
@@ -500,8 +504,10 @@ async function removeRecord() {
   </div>
 
   <!-- ⚠️ max-width 掛在最外層，不是只掛主欄：不然標題列的「發布」會被推到
-       1280px 的右緣，與下方 960px 的內容對不齊，看起來像浮在旁邊。 -->
-  <div v-else-if="record" class="adm-editor">
+       內容上限的右緣，與下方的內容對不齊，看起來像浮在旁邊。
+       ⚠️ `--aside` 這個修飾子把寬度上限由 960px 放寬到內容上限（1280px）——
+       多出來的那一條給右欄。首頁版位那一頁沒有右欄，維持 960px 單欄。 -->
+  <div v-else-if="record" class="adm-editor adm-editor--aside">
     <!-- 回列表的逃生口。⚠️ 用固定目的地（該單元的列表）而不是 history.back()：
          直接貼網址進來的人沒有上一頁，而 back 也可能把人送回登入頁或站外。
          走 RouterLink 還有一個好處 —— 會經過 onBeforeRouteLeave 的
@@ -555,8 +561,13 @@ async function removeRecord() {
       下拉選單會是空的——請重新載入這一頁，不要把它當成「沒有可選的項目」而清掉原本的值。
     </p>
 
-    <!-- 單欄版面。右側的工作流側欄 2026-09-17 移除（見 <script> 末段的說明）——
-         `.adm-editor-layout` 那個兩欄 grid 仍給首頁版位畫面用，這裡不再套。 -->
+    <!-- 兩欄版面：主欄（本文／關聯／SEO）＋ 右欄（排程／危險區）。
+         ⚠️ 右欄裝的是「這一筆的處置」，不是被拿掉的那一層工作流 ——
+         送審、審核、版本歷程都不在這裡，也不要往這裡加回去。 -->
+    <div class="adm-editor-layout">
+    <!-- ⚠️ 主欄與右欄在原始碼裡同一層縮排（沒有因為多包一層 grid 就整段右移）——
+         兩欄之間是版面關係，不是從屬關係，而整段重排會把 800 行的 diff 變成
+         「每一行都改過」，之後 blame 不到真正動過的那幾行。 -->
     <div class="adm-editor-main">
       <!-- ============================ 本文 ============================ -->
       <form id="adm-body-form" class="adm-form" @submit.prevent="saveBody">
@@ -895,35 +906,45 @@ async function removeRecord() {
         </button>
       </div>
 
+    </div><!-- /.adm-editor-main -->
+
+    <!-- ======================= 右欄：排程 ＋ 危險區 ======================= -->
+    <!-- ⚠️ sticky：捲到長表單的中段時右邊仍然空著，不跟著捲就等於只有最上面
+         那一屏看得到它。頂端留 topbar 的高度，不然會被那條固定列蓋住。
+         ⚠️ 兩段之間刻意隔開，而且「刪除」不與「儲存排程」同寬同色 ——
+         右欄一窄，按鈕很容易疊成一疊長得一樣的東西，那正是把刪除搬離
+         「發布」旁邊的原因（2026-09-17）。刪除仍然要走 window.confirm。 -->
+    <aside v-if="canPublish || canDelete" class="adm-editor-side">
       <!-- ============================ 排程 ============================ -->
-      <!-- ⚠️ 這張卡片是「草稿／發布」的時間版本，不是被拿掉的那一層審核流程，
-           所以側欄收掉之後它留下來，只是換到頁尾。 -->
-      <div v-if="canPublish" class="adm-card">
-        <p class="adm-card__title">排程</p>
-        <div class="adm-field-grid">
-          <div class="adm-field">
-            <label class="adm-field__label">上線時間</label>
-            <input v-model="scheduleForm.publishAt" class="adm-input" type="datetime-local">
-            <!-- ⚠️ 2026-09-16 改：原本寫「不是精確發布時間——到點後仍需一次全站重建才會上線」。
-                 那是靜態版的事實，SSR 之後已經不對，而且是**低估**了實際行為。 -->
-            <p class="adm-field__hint">到這個時間點，前台就會看得到（不需要重新建置）。留空＝按下「發布」就立即上線。</p>
-          </div>
-          <div class="adm-field">
-            <label class="adm-field__label">下架時間</label>
-            <input v-model="scheduleForm.unpublishAt" class="adm-input" :class="{ 'is-invalid': scheduleError }" type="datetime-local">
-            <p v-if="scheduleError" class="adm-field__error" role="alert">{{ scheduleError }}</p>
+      <!-- ⚠️ 這張卡片是「草稿／發布」的時間版本，不是被拿掉的那一層審核流程。 -->
+      <div v-if="canPublish" class="adm-editor-side__group">
+        <div class="adm-card">
+          <p class="adm-card__title">排程</p>
+          <div class="adm-field-grid">
+            <div class="adm-field">
+              <label class="adm-field__label">上線時間</label>
+              <input v-model="scheduleForm.publishAt" class="adm-input" type="datetime-local">
+              <!-- ⚠️ 2026-09-16 改：原本寫「不是精確發布時間——到點後仍需一次全站重建才會上線」。
+                   那是靜態版的事實，SSR 之後已經不對，而且是**低估**了實際行為。 -->
+              <p class="adm-field__hint">到這個時間點，前台就會看得到（不需要重新建置）。留空＝按下「發布」就立即上線。</p>
+            </div>
+            <div class="adm-field">
+              <label class="adm-field__label">下架時間</label>
+              <input v-model="scheduleForm.unpublishAt" class="adm-input" :class="{ 'is-invalid': scheduleError }" type="datetime-local">
+              <p v-if="scheduleError" class="adm-field__error" role="alert">{{ scheduleError }}</p>
+            </div>
           </div>
         </div>
-      </div>
-      <div v-if="canPublish" class="adm-form-actions">
-        <button type="button" class="btn btn--save" :disabled="workflowBusy" @click="saveSchedule">儲存排程</button>
+        <div class="adm-form-actions">
+          <button type="button" class="btn btn--save" :disabled="workflowBusy" @click="saveSchedule">儲存排程</button>
+        </div>
       </div>
 
       <!-- ============================ 危險區 ============================ -->
-      <!-- 🔴 刪除從側欄搬到這裡（Tim 指定 2026-09-17）。位置本身就是防護：
-           它離兩顆儲存按鈕最遠，而且要捲到底才看得到 —— 原本它與「發布」
-           上下相鄰、同寬同形，差一格就是刪掉一整筆內容。 -->
-      <div v-if="canDelete" class="adm-danger-zone">
+      <!-- 🔴 刪除 2026-09-17 由工作流側欄搬到頁尾，2026-09-18 隨排程一起搬到
+           右欄（Tim 指定）。它不再「要捲到底才看得到」，所以防護全靠三件事：
+           與儲存／發布不同色、不同寬、隔一段距離，加上送出前的 confirm。 -->
+      <div v-if="canDelete" class="adm-danger-zone adm-danger-zone--stack">
         <div>
           <p class="adm-danger-zone__title">刪除這筆{{ def.labelSingular }}</p>
           <p class="adm-field__hint">
@@ -933,6 +954,7 @@ async function removeRecord() {
         </div>
         <button type="button" class="btn btn--danger" :disabled="workflowBusy" @click="removeRecord">刪除</button>
       </div>
-    </div>
+    </aside>
+    </div><!-- /.adm-editor-layout -->
   </div>
 </template>
