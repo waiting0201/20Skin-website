@@ -34,15 +34,20 @@ interface Envelope<T> {
 
 // ── 憑證 ──────────────────────────────────────────────────────────────
 //
-// 🔴 docs/09-frontend.md §8：「access token 只放記憶體，refresh 走端點。放
-//    localStorage 等於把 token 交給任何一次 XSS」。
+// 🔴 **access token 只放記憶體**（docs/09-frontend.md §8）。它每一支端點都會帶，
+//    寫進任何一種瀏覽器儲存都是把「立即可用的憑證」交給任何一次 XSS。
 //
-// ⚠️ refresh token **也只放記憶體**，這不是漏做。正常作法是把它放 httpOnly cookie，
-//    但本專案明文決定**不使用跨來源 cookie**（docs/07 §1），而後台與 API 不同網域 ——
-//    cookie 這條路從架構上就被關掉了。連帶後果：**重新整理分頁就會登出**。
-//    這是已知且刻意的取捨，不要為了「使用者體驗」把任何一個 token 寫進
-//    localStorage／sessionStorage —— 後台的唯一憑證就是帳密（CLAUDE.md 決策 10：
-//    IP 白名單不做、雙因素不做），token 外洩沒有第二道防線接得住。
+// 🟡 **refresh token 放 sessionStorage**（Tim 定案 2026-09-18，**不要改回純記憶體**）。
+//    原本兩顆都只放記憶體，連帶後果是**重新整理分頁就會登出** —— 編輯到一半按了 F5、
+//    或是後台開著隔天再回來，都要重打一次帳密。正常作法是 httpOnly cookie，但本專案
+//    明文不使用跨來源 cookie（docs/07 §1）而後台與 API 不同網域，那條路從架構上就關掉了。
+//    ⚠️ **是 sessionStorage 不是 localStorage**：分頁關掉就沒了，換來的是
+//       「重新整理不登出」而不是「這台機器永久登入」。
+//    ⚠️ 代價要記住：一次 XSS 可以拿走 refresh token（有效期 30 天），而後台沒有
+//       IP 白名單也沒有雙因素（CLAUDE.md 決策 10）。接得住的只剩後端的輪替機制
+//       —— 舊 token 一被重用就撤銷該使用者全部憑證（docs/11 §5.2）。
+//    ⚠️ 連帶：**登出一定要真的撤銷**（見下方 client.ts 的 logout），
+//       否則那顆 token 會在伺服器上活到自然過期。
 
 interface Tokens {
   accessToken: string
@@ -51,11 +56,52 @@ interface Tokens {
 
 let tokens: Tokens | null = null
 
+/**
+ * sessionStorage 的鍵。⚠️ 每個分頁各自一份，**複製分頁會把它一起複製過去** ——
+ * 兩個分頁拿著同一顆 refresh token 各自換發，後端會判定為重用而撤銷全部憑證
+ * （docs/11 §5.2），兩邊一起被踢出去。這是已知的邊角，重新登入即可。
+ */
+const REFRESH_STORAGE_KEY = '20skin.admin.refresh'
+
+// ⚠️ 無痕模式或「封鎖網站資料」時，存取 sessionStorage 會直接丟例外 ——
+//    存不進去只代表「重新整理會回到登入頁」，不該讓登入流程整個失敗。
+function persistRefreshToken(value: string | null) {
+  try {
+    if (value === null) sessionStorage.removeItem(REFRESH_STORAGE_KEY)
+    else sessionStorage.setItem(REFRESH_STORAGE_KEY, value)
+  } catch {
+    /* 存不了就退回「重整即登出」的舊行為 */
+  }
+}
+
+/** 開頁時用它把身分換回來（見 client.ts 的 auth.restore）。 */
+export function storedRefreshToken(): string | null {
+  try {
+    return sessionStorage.getItem(REFRESH_STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
+
+/** 登出時要**先**同步清掉這一份，再去打撤銷端點（那一支需要還活著的 access token）。 */
+export function clearStoredRefreshToken() {
+  persistRefreshToken(null)
+}
+
+/** 目前這顆 refresh token —— 只有登出（要送去撤銷）用得到。 */
+export function currentRefreshToken(): string | null {
+  return tokens?.refreshToken ?? null
+}
+
 /** 憑證失效時通知外層（auth.ts 用它把畫面導回登入頁）。 */
 let onSessionLost: (() => void) | null = null
 
 export function setTokens(next: Tokens | null) {
   tokens = next
+  // 🔴 憑證的每一次變動都經過這裡（登入、換發輪替、登出、逾期），
+  //    所以持久化也只掛在這一個地方 —— 少一處就是「畫面上登出了、
+  //    重新整理又活過來」。
+  persistRefreshToken(next?.refreshToken ?? null)
 }
 
 export function hasTokens(): boolean {
@@ -85,7 +131,10 @@ async function refreshTokens(): Promise<boolean> {
       })
       const envelope = (await res.json()) as Envelope<{ accessToken: string; refreshToken: string }>
       if (!res.ok || !envelope.success || !envelope.data) return false
-      tokens = { accessToken: envelope.data.accessToken, refreshToken: envelope.data.refreshToken }
+      // ⚠️ 走 setTokens，不要直接指派 —— 輪替後的新 refresh token 沒有寫回
+      //    sessionStorage 的話，下一次重新整理拿的是已經被撤銷的舊值，
+      //    而那會觸發後端的「重用即全撤」。
+      setTokens({ accessToken: envelope.data.accessToken, refreshToken: envelope.data.refreshToken })
       return true
     } catch {
       return false
@@ -184,7 +233,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     if (refreshed) {
       res = await rawFetch(url, init)
     } else {
-      tokens = null
+      setTokens(null)
       onSessionLost?.()
       throw new ApiError('AUTH_TOKEN_INVALID', '登入已逾期，請重新登入。', [], 401)
     }

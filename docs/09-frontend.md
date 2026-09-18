@@ -318,7 +318,12 @@ AND (UnpublishAt IS NULL OR UnpublishAt >  @now)
 
 - **Bearer token，不使用跨來源 cookie。** 前台在 `20skin.tw`、API 在 `api.20skin.tw`，兩者不同源（[07](07-deployment.md) §1）
 - **access token 只放記憶體**，refresh 走 [10-api.md](10-api.md) §3.2 的端點。放 `localStorage` 等於把 token 交給任何一次 XSS
-- ⚠️ **refresh token 也只放記憶體**，這不是漏做。正常作法是 httpOnly cookie，但本專案明文不使用跨來源 cookie（[07](07-deployment.md) §1），而後台與 API 不同網域 —— 這條路從架構上就被關掉了。**連帶後果：重新整理分頁就會登出。** 這是已知且刻意的取捨
+- 🟡 **refresh token 放 `sessionStorage`**（Tim 定案 2026-09-18）。原本兩顆都只放記憶體，連帶後果是**重新整理分頁就會登出** —— 編輯到一半按 F5、或後台開著隔天回來都要重打帳密。正常作法是 httpOnly cookie，但本專案明文不使用跨來源 cookie（[07](07-deployment.md) §1）而後台與 API 不同網域，那條路從架構上就關掉了
+  - ⚠️ **是 `sessionStorage` 不是 `localStorage`**：分頁關掉就沒了，換到的是「重新整理不登出」而不是「這台機器永久登入」
+  - ⚠️ 代價：一次 XSS 可以拿走 refresh token（30 天有效），而後台沒有 IP 白名單也沒有雙因素（CLAUDE.md 決策 10）。接得住的只剩後端的輪替 —— 舊 token 一被重用就撤銷該使用者全部憑證（[11](11-backend-design.md) §5.2）
+  - 🔴 **還原要在掛載 app 之前做完**（`main.ts` 先 `await restoreSession()` 再 `mount`）。路由守衛只看「現在是不是已登入」，換發還沒回來就掛載的症狀是每次重整都先閃一下登入頁
+  - 🔴 **`/auth/logout` 一定要把 refresh token 送過去**，後端那一支靠 body 裡的 token 找出要撤銷哪一筆；不送等於空操作，那顆憑證會活到自然過期 —— 憑證持久化之後這件事才真的有後果
+  - ⚠️ **複製分頁會把 `sessionStorage` 一起複製過去**，兩個分頁各自換發會觸發「重用即全撤」而一起被踢出去。已知邊角，重新登入即可
 - ⚠️ **401 只自動換發並重試一次**，而且併發時只能換一次：refresh 是輪替制（[10](10-api.md) §5），三個請求各自去換發會讓第二、三個拿著已被輪替掉的舊 token，後端判定為重用、撤銷該使用者全部 token，使用者當場被踢出去
 - ⚠️ **權限判斷查的是登入回應帶回來的 `permissions[]`**（[10](10-api.md) §3.2），前端不自己用角色推導 —— 角色權限可以在後台改，推導表在那一刻就過期了
 - **沒有雙因素**（2026-09-11 院方決定）。登入是單段的帳號密碼，**唯一的防護是次數限制**（[02](02-backend-cms.md) §4）—— 前端不要自行加「記住此裝置」之類會放寬判定的東西

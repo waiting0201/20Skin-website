@@ -5,7 +5,7 @@
 > 分工：本檔記錄**狀態**；[`docs/`](docs/README.md) 的十二份文件記錄各領域的**規格與施工標準**；
 > [`CLAUDE.md`](CLAUDE.md) 記錄**專案規範、關鍵數字與已定案決策**。三份不要互相抄，各司其職。
 
-**最後更新**：2026-09-16
+**最後更新**：2026-09-18
 
 ---
 
@@ -211,6 +211,37 @@ Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/ad
 `GET /admin/role`** —— 這個畫面本身就是用來改那張表的，前端寫死一份等於改完還是顯示舊的）、
 發布聚合狀態、301 的 CSV 匯入匯出
 與衝突／迴圈檢查、robots.txt 的 `Disallow: /admin` 防呆、NAP 一致性比對。
+
+### ✅ 2026-09-18：後台重新整理不再登出
+
+Tim：「後台 reload 的時候會跳到 login 頁」。那原本是**刻意的**設計（access 與 refresh
+token 都只放記憶體，docs/09 §8），現由 Tim 定案改掉 —— **refresh token 放 `sessionStorage`**。
+
+| | |
+|---|---|
+| 存哪裡 | `sessionStorage['20skin.admin.refresh']`，只有 refresh token。**access token 仍然只放記憶體** |
+| 誰在寫 | `setTokens()` 一處（登入、換發輪替、登出、逾期都經過它）—— 少一處就是「畫面上登出了、重整又活過來」 |
+| 怎麼還原 | `main.ts` **先 `await restoreSession()` 再 `mount`**：換發端點回的是完整 `TokenResponse`，身分、角色與 `permissions[]` 一次拿回來，不需要另一支 `/auth/me` |
+| 活多久 | 分頁關掉就沒了（換到的是「重整不登出」，不是「這台機器永久登入」）；refresh token 本身 30 天 |
+
+🔴 **還原必須在掛載之前完成** —— 路由守衛只看 `isAuthenticated()`，換發還沒回來就掛載
+的症狀是「每次重整先閃一下登入頁」。
+🔴 **順手修掉一個真的 bug**：`/auth/logout` 原本送的是 `{}`，而後端靠 body 裡的 refresh token
+找出要撤銷哪一筆 —— **等於登出從來沒有真的撤銷過**，那顆憑證會活到 30 天自然過期。
+憑證被持久化之後這件事才開始有後果。連帶：登出要**先同步清掉 `sessionStorage` 那一份**，
+再打撤銷端點（記憶體那份得留著，那支端點要 Bearer）。
+⚠️ **權限一定要跟著還原更新**：只換回 token 卻沿用舊的權限清單，等於讓剛被改掉角色權限
+的人繼續看到不該有的畫面（決策 16：權威在後端）。
+⚠️ **代價**：一次 XSS 可以拿走 refresh token，而後台沒有 IP 白名單也沒有雙因素（決策 10）。
+接得住的只剩後端的輪替 —— 舊 token 一被重用就撤銷該使用者全部憑證。
+⚠️ 已知邊角：**複製分頁會連 `sessionStorage` 一起複製**，兩邊各自換發會觸發「重用即全撤」。
+⚠️ 連帶：`tools/admin-e2e/_shared.mjs` 的 `navigate()` 仍然用 pushState，但**理由換了** ——
+不再是「整頁載入就登出」，只剩速度。
+
+閘門：`pnpm --filter admin typecheck`／`build`、`tools/admin-e2e/check.mjs` 33 項全過；
+另以 Playwright 實測六項：重整儀表板、深連結重整、重整後權限還在、重整後打得動要 Bearer 的
+清單（20 列）、登出後重整回登入頁且 `sessionStorage` 已清空、新分頁要重新登入。
+撤銷則以 curl 驗過：登出後拿同一顆 refresh token 去換發回 401 `AUTH_TOKEN_INVALID`。
 
 ### ✅ 2026-09-18：排程與危險區搬到編輯畫面右欄
 

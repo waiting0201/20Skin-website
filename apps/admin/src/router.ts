@@ -84,8 +84,9 @@ const router = createRouter({
 // 授權集中在 Router，預設拒絕）。這裡只是避免使用者在沒有 token 時
 // 對著一堆打不通的畫面發呆，順手做成「導回登入頁」的體驗。
 //
-// access token 只放記憶體（docs/09 §8），所以重新整理分頁必然回到未登入
-// 狀態——這是設計行為，見 src/auth.ts 的說明。
+// ⚠️ 重新整理分頁**不會**回到未登入狀態（2026-09-18）——main.ts 會先用
+// sessionStorage 裡的 refresh token 把身分換回來，換完才掛載 app。所以守衛跑到
+// 這裡時，isAuthenticated() 已經是最終答案，不需要在這裡等任何非同步流程。
 router.beforeEach((to) => {
   if (to.path === '/login') return true
   if (!isAuthenticated()) {

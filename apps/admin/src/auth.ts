@@ -1,9 +1,11 @@
 // 後台認證狀態。
 //
-// 🔴 docs/09-frontend.md §8：「access token 只放記憶體，refresh 走端點。放
-// localStorage 等於把 token 交給任何一次 XSS」。憑證本體由 src/api/http.ts 保管，
-// 這裡只放「目前是誰」。**重新整理分頁就會登出，這是設計行為，不是還沒做完**
-// （理由見 http.ts 的憑證段落：不使用跨來源 cookie，所以 refresh token 也沒地方放）。
+// 🔴 docs/09-frontend.md §8：「access token 只放記憶體」。憑證本體由 src/api/http.ts
+// 保管，這裡只放「目前是誰」。
+//
+// ⚠️ **重新整理分頁不再登出**（2026-09-18）：refresh token 放在 sessionStorage，
+// 開頁時由 restoreSession() 換回一組憑證與身分。取捨與邊角都寫在 http.ts 的憑證段落 ——
+// 舊敘述「重新整理分頁就會登出，這是設計行為」已作廢。
 //
 // 登入是單段的帳號密碼（docs/11-backend-design.md §5.2）——不做雙因素
 // （2026-09-11 院方決定）。⚠️ 連帶後果：**登入次數限制是唯一的防線**，
@@ -34,6 +36,20 @@ export function currentUser(): CurrentUser | null {
 /** 內部使用：登入成功後寫入 session。不對外匯出，避免元件繞過流程直接寫入。 */
 export function _setSession(user: CurrentUser) {
   state.user = user
+}
+
+/**
+ * 開頁時的還原：sessionStorage 裡若有 refresh token 就換回身分。
+ *
+ * 🔴 **必須在掛載 app 之前 await 完**（見 main.ts）—— 路由守衛只看
+ * isAuthenticated()，換發還沒回來就掛載的話，使用者會先被彈去登入頁，
+ * 然後在原地看著自己「其實是登入的」。
+ */
+export async function restoreSession(): Promise<boolean> {
+  const user = await adminApi.auth.restore()
+  if (!user) return false
+  state.user = user
+  return true
 }
 
 export function logout() {

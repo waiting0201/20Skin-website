@@ -28,7 +28,17 @@ import { UNIT_REGISTRY } from '../units'
 import type { UnitField } from '../unit-schema'
 
 import { ApiError } from './errors'
-import { clampPageSize, fetchAllPages, normalizePaged, request, setTokens, type ServerPaged } from './http'
+import {
+  clampPageSize,
+  clearStoredRefreshToken,
+  currentRefreshToken,
+  fetchAllPages,
+  normalizePaged,
+  request,
+  setTokens,
+  storedRefreshToken,
+  type ServerPaged,
+} from './http'
 import { fieldsFromServer, fieldsToServer } from './content-fields'
 import { botCheckEnabled, getBotCheckToken } from './bot-check'
 import { uploadApi, type UploadedImage } from './upload'
@@ -298,9 +308,49 @@ const auth = {
     })
   },
 
-  async logout() {
+  /**
+   * 重新開頁時把身分換回來（sessionStorage 裡的 refresh token → 一組新憑證）。
+   *
+   * 🔴 **換發端點回的是完整的 TokenResponse**，身分、角色與 permissions 都在裡面 ——
+   * 所以還原不需要另一支 `/auth/me`。⚠️ 權限**一定要跟著更新**：只還原 token 卻沿用
+   * 舊的權限清單，等於讓「角色權限剛被改掉」的人繼續看到不該有的畫面（決策 16：
+   * 權威在後端）。
+   *
+   * ⚠️ 任何失敗（token 過期、被撤銷、帳號停用、API 連不上）一律回 null 並清乾淨 ——
+   * 開頁是使用者還沒做任何事的時刻，這裡丟錯只會變成一個沒有上下文的紅色橫幅。
+   */
+  async restore(): Promise<CurrentUser | null> {
+    const refreshToken = storedRefreshToken()
+    if (!refreshToken) return null
+
     try {
-      await request<null>('/auth/logout', { method: 'POST', body: {} })
+      const res = await request<TokenResponse>('/auth/refresh', {
+        method: 'POST',
+        body: { refreshToken },
+        auth: false,
+      })
+      setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken })
+      permissionCodes = res.permissions ?? []
+      return toCurrentUser(res)
+    } catch {
+      setTokens(null)
+      permissionCodes = []
+      return null
+    }
+  },
+
+  async logout() {
+    // 🔴 **先同步清掉 sessionStorage 那一份。** 撤銷請求還在飛的時候使用者若按了
+    //    重新整理，還原流程會拿著它把人又登回去 —— 記憶體那一份要留到請求送完，
+    //    因為 /auth/logout 需要還活著的 access token 才認得出呼叫者。
+    clearStoredRefreshToken()
+
+    // ⚠️ refresh token **要送過去**，否則後端那一支是冪等的空操作（它靠 body 裡的
+    //    token 找出要撤銷哪一筆），那顆憑證會在伺服器上活到 30 天自然過期。
+    const refreshToken = currentRefreshToken()
+
+    try {
+      await request<null>('/auth/logout', { method: 'POST', body: { refreshToken } })
     } catch {
       // 登出失敗不該把使用者留在後台裡。本機憑證照樣清掉 ——
       // 最壞的情況是伺服器上那個 refresh token 留到自然過期。

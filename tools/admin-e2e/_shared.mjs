@@ -105,10 +105,11 @@ export async function openAdmin() {
 /**
  * 在後台裡換頁。
  *
- * 🔴 **不可以用 `page.goto()` 或 `reload()`。** 後台是 `createWebHistory` 的 SPA，
- *    而且 access token **只放記憶體**（`src/auth.ts`：重新整理分頁就會登出）——
- *    整頁載入等於被踢回登入頁，後面每一個檢查都會失敗，而失敗訊息只會說
- *    「找不到某個選擇器」，完全看不出真正的原因。
+ * 🟡 **一律用 pushState，不要用 `page.goto()` 或 `reload()`。** 2026-09-18 之前的理由是
+ *    「整頁載入就登出」（refresh token 改放 sessionStorage 之後**已經不會了**）；
+ *    現在的理由只剩速度 —— 每一次整頁載入都要重跑一次換發與 Vite 的模組載入，
+ *    一支腳本幾十次換頁會多等好幾分鐘。
+ *    ⚠️ 要驗「重新整理還在不在登入狀態」請明確地 reload，那是另一件事。
  */
 export async function navigate(page, path) {
   await page.evaluate((p) => {
