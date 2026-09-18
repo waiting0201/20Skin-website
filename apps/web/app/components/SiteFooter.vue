@@ -14,7 +14,8 @@ const [FOOTER_COLUMNS, CLINIC_NAP, LEGAL_LINKS] = await Promise.all([
       <div class="c-footer__grid">
         <div class="c-footer__brand">
           <div class="c-footer__logo">
-            <img src="/assets/logo.jpg" alt="20SKIN 美醫集團標誌" width="36" height="35">
+            <!-- 頁尾是墨藍底（--brand-700），所以用白色版標誌；頁首那張仍是 logo.jpg -->
+            <img src="/assets/logo-white.png" alt="20SKIN 美醫集團標誌" width="36" height="35">
             <span>20SKIN 美醫集團</span>
           </div>
           <p class="c-footer__desc">以新中式美學為理念的皮膚科專科醫療團隊，旗下四季診所與二林四季皮膚科。</p>
