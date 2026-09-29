@@ -57,7 +57,23 @@ public sealed class GeminiService(
 
     public string ModelId => configuration["Gemini:EmbeddingModel"] ?? "gemini-embedding-001";
 
-    private string ChatModelId => configuration["Gemini:ChatModel"] ?? "gemini-2.5-flash";
+    /// <summary>
+    /// ⚠️ 2026-09-29 實測：<c>gemini-2.5-flash</c>／<c>gemini-2.5-flash-lite</c> 對新金鑰一律 404
+    /// （「no longer available to new users」），<c>gemini-3.7-flash</c>／<c>3.8-flash</c> 當天尖峰 503。
+    /// </summary>
+    private string ChatModelId => configuration["Gemini:ChatModel"] ?? "gemini-3.5-flash";
+
+    /// <summary>
+    /// 生成前的「思考」程度（<c>thinkingConfig.thinkingLevel</c>）。
+    /// <para>🔴 <b>思考用掉的 token 算在 <c>maxOutputTokens</c> 裡。</b> 2026-09-29 實測
+    /// <c>gemini-3.5-flash</c> 不設它：思考 766、回答 30 就 <c>MAX_TOKENS</c>，
+    /// 而且 <c>SOURCES:</c> 那一行根本出不來。設 <c>minimal</c>：1.9 秒、回答完整。</para>
+    /// <para>⚠️ 設成空字串＝不送這個欄位，給不認得它的舊型號用（送了會整批 400）。</para>
+    /// </summary>
+    private string? ThinkingLevel =>
+        configuration["Gemini:ThinkingLevel"] is { } level
+            ? (string.IsNullOrWhiteSpace(level) ? null : level)
+            : "minimal";
 
     /// <summary>
     /// 有些嵌入模型吃 <c>taskType</c>（語料與查詢用不同值，能提升檢索品質），有些則不認這個欄位。
@@ -150,13 +166,23 @@ public sealed class GeminiService(
             new GeminiContent([new GeminiPart(systemInstruction)]),
             [new GeminiTurn("user", [new GeminiPart(userMessage)])],
             // ⚠️ 低溫度是護欄的一部分，不是調味：這個場景要的是「照著片段講」，不是創意。
-            new GenerationConfig(0.2, 800));
+            new GenerationConfig(0.2, 800,
+                ThinkingLevel is { } level ? new ThinkingConfig(level) : null));
 
         var response = await PostAsync<GenerateRequest, GenerateResponse>(
             $"{ChatModelId}:generateContent", payload, ChatTimeout, ct);
 
         var candidate = response.Candidates?.FirstOrDefault();
         var text = candidate?.Content?.Parts?.FirstOrDefault()?.Text ?? "";
+
+        if (candidate?.FinishReason == "MAX_TOKENS")
+        {
+            // 🔴 截斷的回答一律丟掉：醫療回答講到一半（例如禁忌症只列了一半）比答不出來更糟，
+            //    而且 SOURCES 那一行在最後，截斷時一定不見。持續出現就是思考吃掉了輸出額度，
+            //    先查 Gemini__ThinkingLevel。
+            logger.LogWarning("生成回應被截斷（MAX_TOKENS，模型 {Model}），當作未命中。", ChatModelId);
+            return "";
+        }
 
         if (text.Length == 0)
         {
@@ -257,7 +283,11 @@ public sealed class GeminiService(
 
     private sealed record GenerationConfig(
         [property: JsonPropertyName("temperature")] double Temperature,
-        [property: JsonPropertyName("maxOutputTokens")] int MaxOutputTokens);
+        [property: JsonPropertyName("maxOutputTokens")] int MaxOutputTokens,
+        [property: JsonPropertyName("thinkingConfig")] ThinkingConfig? ThinkingConfig);
+
+    private sealed record ThinkingConfig(
+        [property: JsonPropertyName("thinkingLevel")] string ThinkingLevel);
 
     private sealed record GenerateRequest(
         [property: JsonPropertyName("systemInstruction")] GeminiContent SystemInstruction,

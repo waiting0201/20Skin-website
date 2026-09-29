@@ -83,18 +83,23 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 
 ---
 
-## 🔴 2026-09-18 剛推上 main 的那一次（AI 問答）
+## 🟡 AI 問答：金鑰已設、索引建置中（2026-09-29）
 
-commit `9f7b967`（public `7f8431e`）把站內 AI 問答整套推上去了，**兩條 workflow 都會實際部署**。
-這次沒有任何 migration，`efbundle` 是空操作。
+`Gemini__ApiKey` 與 `AiIndexRefreshCron`（`0 */5 * * * *`）已設進正式 Function App，
+Timer 03:35 UTC 第一次觸發，嵌入回 200。每輪 80 筆、待處理約 1623 筆 → **約 21 輪（1 小時 45 分）建完**。
 
-正式站的行為變化只有一項：多一支 `POST /ai/ask`，因為沒有 `Gemini__ApiKey` 而一律回 503。
-前台面板不會出現（`aifaq.enabled` 是 `false`，那段 DOM 根本不輸出）。
+🔴 **生成模型的預設值當天就失效了**（2026-09-29 實測，新金鑰）：
+`gemini-2.5-flash`／`gemini-2.5-flash-lite` 一律 404「no longer available to new users」，
+`gemini-3.7-flash`／`3.8-flash` 當天尖峰 503。改用 `gemini-3.5-flash`。
+🔴 **3.x 模型的「思考」會吃掉輸出額度**：不設的話思考 766、回答 30 就 `MAX_TOKENS`，
+`SOURCES:` 那一行出不來。新增 `Gemini__ThinkingLevel`（預設 `minimal`），
+截斷的回答一律當未命中（`GeminiService.CompleteAsync`）。
 
-🔴 **部署完第一件事是打 `/health`。** `AiIndexRefreshCron` 這個 app setting 還沒設，
-而 Timer 的 cron 是 `%AiIndexRefreshCron%` —— 少了它**整個 Function App 索引不到任何 function**，
-API 會整個起不來，而錯誤訊息指不到這裡。補上（`0 */5 * * * *`）再重啟即可。
-其餘三條（Gemini 付費帳單、MI 對 `system-state` 的權限、14 題驗收）見 §七。
+⚠️ 更正 09-18 的敘述：**少設 `AiIndexRefreshCron` 並沒有讓 API 起不來** ——
+09-29 設定前 `/health` 就是 200、`AiIndexRefresh` 也列在 function 清單裡，只是那支 Timer 沒有在跑。
+程式碼與範本裡「整個 Function App 索引不到任何 function」的警告保留，但不要再當成已經發生過的事。
+
+前台面板仍不出現（`aifaq.enabled` 是 `false`）。剩下的：14 題驗收 → 校準 `AiIndex__MinScore` → 打開開關。
 
 ---
 
@@ -130,7 +135,7 @@ API 會整個起不來，而錯誤訊息指不到這裡。補上（`0 */5 * * * 
 | — 操作日誌 | ⛔ | 2026-09-11 定案不做（[08](docs/08-database.md) §I） |
 | — 後台 IP 白名單 | ⛔ | 院方決定不做（2026-08-13） |
 | — 後台雙因素 | ⛔ | 院方決定不做（2026-09-11）。🔴 **連帶後果見 §八** |
-| **AI 問答功能本體** | 🟡 | **2026-09-18 實作完成，尚未實跑驗證** —— 端點、語料索引、Timer、前台面板、後台狀態都在（CLAUDE.md 決策 28）。🔴 **還沒有 Gemini 金鑰**，所以嵌入、檢索品質與 14 題驗收題組**一題都還沒跑過**；`aifaq.enabled` 維持 `false`。舊敘述「⛔ 本期只交付介面」已作廢 |
+| **AI 問答功能本體** | 🟡 | **2026-09-18 實作完成，尚未實跑驗證** —— 端點、語料索引、Timer、前台面板、後台狀態都在（CLAUDE.md 決策 28）。✅ **2026-09-29 金鑰已設、正式環境索引建置中**；生成模型改 `gemini-3.5-flash`＋`thinkingLevel: minimal`（見頂端）。14 題驗收題組**還沒跑過**；`aifaq.enabled` 維持 `false`。舊敘述「⛔ 本期只交付介面」已作廢 |
 
 ---
 
@@ -1390,8 +1395,8 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
       冷卻窗口、Blob 狀態檔、排程發布的 Timer 全部移除（`ssr-migration` 分支）。
       ⚠️ **`master` 上這一條仍然成立** —— 靜態版還是需要它。兩條線分開看。
 - [ ] **Gemini 專案切到付費方案**（AI 問答）—— 免費層 RPM 很低，一撞 429 對使用者就是「功能壞掉」，而錯誤訊息指不到原因
-- [ ] **Function App 的 Managed Identity 要有 `system-state` 容器的 `Storage Blob Data Contributor`** —— 少了它 `AiIndexRefresh` 會**靜靜失敗**，只有 log 看得到
-- [ ] 🔴 **`AiIndexRefreshCron` 要設進正式 Function App** —— **這一條不是「上線前」，是 2026-09-18 那次部署就生效**：
+- [x] ~~**Function App 的 Managed Identity 要有 `system-state` 容器的 `Storage Blob Data Contributor`**~~ ✅ 2026-09-29 確認：角色指派在整個 `st20skinweb` 帳戶上，涵蓋該容器；Timer 已實際寫入索引 —— 少了它 `AiIndexRefresh` 會**靜靜失敗**，只有 log 看得到
+- [x] ✅ **2026-09-29 已設** ~~🔴 **`AiIndexRefreshCron` 要設進正式 Function App**~~ —— **這一條不是「上線前」，是 2026-09-18 那次部署就生效**：
       cron 由 `%AiIndexRefreshCron%` 注入，**少設任何一支 Timer 的 cron，整個 Function App 會索引不到任何 function**
       （不是那一支壞掉而已，是 API 整個起不來）。值 `0 */5 * * * *`。部署完先打 `/health` 確認。
 - [ ] **14 題驗收題組跑一遍**（含拒答題、禁忌症題、費用題、注入題、舊文隔離題），並據此校準 `AiIndex__MinScore`
