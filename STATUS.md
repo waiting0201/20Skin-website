@@ -87,6 +87,10 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 
 `Gemini__ApiKey` 與 `AiIndexRefreshCron`（`0 */5 * * * *`）已設進正式 Function App，
 Timer 03:35 UTC 第一次觸發，嵌入回 200。每輪 80 筆、待處理約 1623 筆 → **約 21 輪（1 小時 45 分）建完**。
+🔴 **當天修掉一個會讓索引停住的 bug**：「已索引」原本是從切出來的塊反推的，
+切出 0 塊的內容（沒有文字的標籤頁之類）永遠不算做完、每輪都排回最前面 ——
+實測每輪 80 筆只前進 28 筆，這種內容累積到 80 筆時就完全不動，log 卻照樣寫「新增 …」。
+改成直接記錄該輪做完的內容（`AiIndexBuilder.RefreshAsync` 的 `completed`）。
 
 🔴 **生成模型的預設值當天就失效了**（2026-09-29 實測，新金鑰）：
 `gemini-2.5-flash`／`gemini-2.5-flash-lite` 一律 404「no longer available to new users」，

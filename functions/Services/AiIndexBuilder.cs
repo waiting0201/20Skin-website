@@ -103,6 +103,11 @@ public sealed class AiIndexBuilder(
         var todo = added.Concat(changed).Take(MaxItemsPerRun).ToList();
         var processed = new List<AiIndexFormat.Chunk>();
         var processedVectors = new List<float[]>();
+        // 🔴 這一輪「做完」的內容要自己記，不可以從切出來的塊反推 ——
+        //    切出 0 塊的內容（沒有可用文字的標籤頁之類）反推不出來，於是永遠不算已索引，
+        //    每一輪都排回隊伍最前面佔掉名額。2026-09-29 正式環境實測：每輪 80 筆只前進 28 筆，
+        //    而這種內容一累積到 MaxItemsPerRun 筆，索引就**完全停住**，log 卻照樣說「新增 …」。
+        var completed = new Dictionary<int, int>();
         var done = 0;
 
         if (todo.Count > 0)
@@ -114,6 +119,7 @@ public sealed class AiIndexBuilder(
             foreach (var row in snapshots)
             {
                 stale.Add(row.Id);
+                completed[row.Id] = row.PublishedVersionId;
                 done++;
 
                 if (!IncludeMainSiteArticles && IsLegacyMainSiteArticle(row)) continue;
@@ -140,10 +146,24 @@ public sealed class AiIndexBuilder(
 
             // 預算用完時，沒嵌到的那些內容不能算已索引 —— 把它們排除在這一輪之外，
             // 下一輪會因為 manifest 裡仍然沒有它們而重新撿起來。
-            var embeddedItems = processed.Select(c => c.Ci).ToHashSet();
-            foreach (var id in todo.Where(id => !embeddedItems.Contains(id) && !indexed.ContainsKey(id)))
+            // ⚠️ 以「有任何一塊沒嵌到」判斷，不是「一塊都沒嵌到」：批次邊界可能把同一筆內容
+            //    切在兩批之間，只收一半的塊等於那一篇永遠缺後半段。
+            var unembedded = pending.Skip(processed.Count).Select(c => c.ContentItemId).ToHashSet();
+            if (unembedded.Count > 0)
             {
-                stale.Remove(id);
+                for (var k = processed.Count - 1; k >= 0; k--)
+                {
+                    if (!unembedded.Contains(processed[k].Ci)) continue;
+                    processed.RemoveAt(k);
+                    processedVectors.RemoveAt(k);
+                }
+                foreach (var id in unembedded)
+                {
+                    completed.Remove(id);
+                    // 舊版本的塊照樣移除（stale 不動）：它對應的是已經被取代的內容。
+                    // 沒有舊版本的新內容則根本不在 chunks 裡，移不移都一樣。
+                }
+                done -= unembedded.Count;
             }
         }
 
@@ -162,8 +182,13 @@ public sealed class AiIndexBuilder(
         keptChunks.AddRange(processed);
         foreach (var vector in processedVectors) keptVectors.AddRange(vector);
 
-        var keptItems = keptChunks.Select(c => (c.Ci, c.Pv)).Distinct()
-            .Select(p => new[] { p.Ci, p.Pv })
+        // 已索引＝上一版 manifest 裡這一輪沒動到的 ＋ 這一輪做完的（含切出 0 塊的）。
+        var keptMap = indexed.Where(kv => !stale.Contains(kv.Key))
+            .ToDictionary(kv => kv.Key, kv => kv.Value);
+        foreach (var (id, pv) in completed) keptMap[id] = pv;
+
+        var keptItems = keptMap
+            .Select(kv => new[] { kv.Key, kv.Value })
             .OrderBy(p => p[0])
             .ToList();
 
