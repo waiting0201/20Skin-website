@@ -188,6 +188,8 @@ node tools/content-audit/audit-json-fields.mjs
 # 改了 AI 語料的切塊規則（functions/Common/AiChunker.cs）一定要跑（決策 28）——
 # 零成本：只連唯讀 SQL、只切塊，不碰 Gemini、不碰 Blob。
 # 🔴 切壞了不會有任何錯誤訊息，症狀是「AI 答非所問」或「站上明明有寫卻說不知道」。
+# 🔴 改了切塊規則**一定要把 `AiChunker.Version` 加一** —— 索引只在內容重新發布時重切，
+#    少了它，部署之後線上用的仍是舊的塊（2026-10-01 加上這個版本號）。
 SKIN20_EXPORT_SQL='…' dotnet run --project tools/ai-index-inspect -- --dry-run --out /tmp/chunks.txt
 
 # 🔴 verify:links 需要一個**跑著的站台**（而站台需要跑得動的 API）——

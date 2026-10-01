@@ -76,8 +76,11 @@ public sealed class AiHandler(
     /// 命中門檻（原始餘弦分數）。
     /// <para>⚠️ <b>這個值要靠驗收題組校準</b>，別把預設值當定論；可用
     /// <c>AiIndex__MinScore</c> 覆蓋。太低會開始胡謅，太高會變成什麼都答不出來。</para>
+    /// <para>0.65：2026-10-01 對完整索引（2474 塊）跑 14 題校準。該答的最低 0.682（擦什麼藥），
+    /// 該拒答的注入題 0.546、端午節 0.619。⚠️ 防曬乳 0.710 任何門檻都分不開，靠模型的 NO_ANSWER。
+    /// 原本的 0.55 是在索引只有 336 塊時定的，幾乎攔不到東西。</para>
     /// </summary>
-    private const double DefaultMinScore = 0.55;
+    private const double DefaultMinScore = 0.65;
 
     private const string RiskTermCacheKey = "AiHandler.RiskTerms";
 

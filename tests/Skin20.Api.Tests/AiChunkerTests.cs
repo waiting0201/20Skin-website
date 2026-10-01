@@ -221,6 +221,38 @@ public class AiChunkerTests
         Assert.True(text.IndexOf("週一", StringComparison.Ordinal) < text.IndexOf("週日", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void 營業時間與地址獨立成塊_加成_開頭寫院區所在地()
+    {
+        var json = """
+            {"title":"四季診所","summary":"以醫學美容為主。","fields":{
+              "address":"台中市南屯區公益路二段120號","phone":"04-23103389",
+              "businessHours":[{"dayOfWeek":1,"startTime":"09:00:00","endTime":"13:00:00"}],
+              "intro":"設有獨立諮詢空間。"}}
+            """;
+        var chunks = Chunk(ContentType.Clinic, json);
+        var facts = Assert.Single(chunks, c => c.Heading == "營業時間與地址");
+
+        Assert.Equal(1.15, facts.Weight);
+        Assert.StartsWith("四季診所（台中市南屯區）門診營業時間：週一 09:00–13:00。", facts.Text);
+        Assert.Contains("地址：台中市南屯區公益路二段120號。電話：04-23103389。", facts.Text);
+        // 簡介與摘要不可以併進來稀釋它
+        Assert.DoesNotContain("獨立諮詢空間", facts.Text);
+        Assert.DoesNotContain("醫學美容", facts.Text);
+    }
+
+    [Fact]
+    public void 沒有時段的日子寫成休診_週一起排()
+    {
+        var days = string.Join(",", new[] { 1, 2, 3, 4, 5 }.Select(d =>
+            $$"""{"dayOfWeek":{{d}},"startTime":"09:00:00","endTime":"12:00:00"}"""));
+        var json = $$$"""{"title":"X","fields":{"address":"彰化縣二林鎮儒林路","businessHours":[{{{days}}}]}}""";
+        var facts = Chunk(ContentType.Clinic, json).Single(c => c.Heading == "營業時間與地址");
+
+        Assert.Contains("X（彰化縣二林鎮）", facts.Text);
+        Assert.Contains("週六、週日休診。", facts.Text);
+    }
+
     // ── 醫師：藝術總監不是醫師 ───────────────────────────────────────
 
     [Theory]

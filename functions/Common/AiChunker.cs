@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Skin20.Api.Models.Entities;
 
 namespace Skin20.Api.Common;
@@ -39,6 +40,18 @@ public static class AiChunker
     private const int HardChunkChars = 900;
 
     /// <summary>
+    /// 切塊規則的版本。<b>改了任何會讓同一份快照切出不同塊的規則，就要加一</b>。
+    ///
+    /// <para>
+    /// 🔴 索引只在「內容重新發布」時重切（manifest 比對的是 <c>PublishedVersionId</c>）——
+    /// 少了這個號碼，改了切塊、部署了、測試全過，線上用的卻永遠是舊的塊，而且不會有任何徵兆。
+    /// 版本不同的內容會被當成「有變動」，逐輪重切（舊塊留到新塊嵌好才換掉，不清空索引）。
+    /// </para>
+    /// <para>1：初版（2026-09-18）。2：據點的營業時間與地址獨立成塊（2026-10-01）。</para>
+    /// </summary>
+    public const int Version = 2;
+
+    /// <summary>
     /// 主站舊文的權重（<c>fields.sourceSite == 1</c>，692 篇社群行銷貼文）。
     ///
     /// <para>
@@ -55,6 +68,19 @@ public static class AiChunker
     /// （60–100 字、語意自足、第一句直接回答），它天生就是最好的檢索目標。
     /// </summary>
     private const double FaqAiAnswerWeight = 1.15;
+
+    /// <summary>
+    /// 據點「營業時間與地址」那一塊的加成，與 FAQ 的 AI 摘要版同級。
+    ///
+    /// <para>
+    /// 🔴 <b>少了它，「台中的診所幾點營業？」檢索不到據點頁</b>（2026-10-01 實測）：
+    /// 營業時間是全站唯一的來源，卻輸給「需要提前多久預約？」這種短 FAQ（0.708 × 1.15 = 0.814）。
+    /// 獨立成塊、寫進院區所在地之後原始分數 0.698 → 0.748，仍要同級加成才排得上去。
+    /// 它跟 AI 摘要版一樣是結構化的事實，不是行銷文字，給同一個加成站得住。
+    /// </para>
+    /// <para>⚠️ 加成不同的段落不會被 <see cref="Merge"/> 併掉 —— 這一塊因此一定獨立。</para>
+    /// </summary>
+    private const double ClinicFactWeight = FaqAiAnswerWeight;
 
     /// <summary>主站舊文的 <c>sourceSite</c> 值（2 是 blog 站，docs/06 §4）。</summary>
     private const int SourceSiteMain = 1;
@@ -158,7 +184,7 @@ public static class AiChunker
             ContentType.Treatment => TreatmentSections(fields),
             ContentType.Concern => ConcernSections(fields),
             ContentType.Doctor => DoctorSections(fields),
-            ContentType.Clinic => ClinicSections(fields),
+            ContentType.Clinic => ClinicSections(snapshot["title"]?.GetValue<string>() ?? "", fields),
             ContentType.Case => CaseSections(fields),
             ContentType.Faq => FaqSections(snapshot, fields),
             ContentType.Term => [new Section("", Collapse(Flatten(fields["intro"])))],
@@ -303,16 +329,29 @@ public static class AiChunker
         if (credentials.Length > 0) yield return new Section("經歷與資格", credentials);
     }
 
-    private static IEnumerable<Section> ClinicSections(JsonObject f)
+    private static IEnumerable<Section> ClinicSections(string title, JsonObject f)
     {
-        yield return new Section("地址與聯絡方式",
-            Collapse($"地址：{Text(f, "address")}。電話：{Text(f, "phone")}。"));
-
         // 🔴 營業時間**必須合成人看得懂的中文**。原始資料是
         //    `[{dayOfWeek:1, startTime:"09:00:00", endTime:"13:00:00"}, …]` 十列 ——
         //    直接攤平就是一串數字，「幾點營業」這種最常見的問題永遠檢索不到。
-        var hours = BusinessHours(f["businessHours"]);
-        if (hours.Length > 0) yield return new Section("營業時間", hours);
+        // 🔴 而且要**跟地址同一塊、開頭寫院區所在地**：使用者問的是「台中的」「二林的」，
+        //    不是院所名稱。原本這兩段被併進簡介與交通裡，訊號被稀釋到排不進前六。
+        var address = Text(f, "address");
+        var area = AreaOf(address);
+        var hours = BusinessHours(f["businessHours"], out var closed);
+
+        var facts = new StringBuilder();
+        if (hours.Length > 0)
+        {
+            facts.Append(area.Length > 0 ? $"{title}（{area}）門診營業時間：" : $"{title}門診營業時間：");
+            facts.Append(hours).Append('。');
+            if (closed.Length > 0) facts.Append($"{closed}休診。");
+            facts.Append('\n');
+        }
+        var phone = Text(f, "phone");
+        if (address.Length > 0) facts.Append($"地址：{address}。");
+        if (phone.Length > 0) facts.Append($"電話：{phone}。");
+        yield return new Section("營業時間與地址", Collapse(facts.ToString()), ClinicFactWeight);
 
         yield return HeadedSection(f["transportInfo"], "交通方式", node =>
             Join(Items(node).Select(i => $"{Text(i, "title")}：{Collapse(Flatten(i?["points"]))}")));
@@ -320,9 +359,14 @@ public static class AiChunker
         yield return new Section("關於這個據點", Collapse(Flatten(f["intro"])));
     }
 
+    /// <summary>「台中市南屯區公益路…」→「台中市南屯區」；認不出來回空字串。</summary>
+    private static string AreaOf(string address) =>
+        Regex.Match(address, "^[^市縣]{1,3}[市縣](?:[^區鎮鄉市]{1,3}[區鎮鄉市])?").Value;
+
     /// <summary>⚠️ <c>dayOfWeek</c> <b>0 是星期日</b>（docs/08 §C-7）。差一格整排錯開。</summary>
-    private static string BusinessHours(JsonNode? node)
+    private static string BusinessHours(JsonNode? node, out string closed)
     {
+        closed = "";
         string[] names = ["週日", "週一", "週二", "週三", "週四", "週五", "週六"];
         var byDay = new SortedDictionary<int, List<string>>();
 
@@ -346,6 +390,11 @@ public static class AiChunker
 
         // 週一排前面、週日排最後，與前台的 HOURS_WEEKDAY_LABELS 一致。
         var ordered = byDay.Keys.OrderBy(d => (d + 6) % 7);
+
+        // 沒有任何時段的那幾天寫成「週日休診」—— 否則「週日有看診嗎？」只能靠模型從缺席推論。
+        closed = string.Join("、", Enumerable.Range(0, 7)
+            .Where(d => !byDay.ContainsKey(d)).OrderBy(d => (d + 6) % 7).Select(d => names[d]));
+
         return Collapse(string.Join("；", ordered.Select(d => $"{names[d]} {string.Join("、", byDay[d])}")));
     }
 

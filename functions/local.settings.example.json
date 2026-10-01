@@ -61,7 +61,7 @@
     "Gemini__ThinkingLevel": "minimal",
     "//aiindex": "語料索引。Dimensions 換了就是整批重建（模型／維度／語料範圍任一改變都會重建）。MinScore 是命中門檻，要靠驗收題組校準，太低會開始胡謅、太高會什麼都答不出來。UseTaskType 只有在確認模型吃 taskType 時才打開，送了不認得的欄位會整批 400。",
     "AiIndex__Dimensions": "768",
-    "AiIndex__MinScore": "0.55",
+    "AiIndex__MinScore": "0.65",
     "AiIndex__UseTaskType": "false",
     "//aiindex_scope": "主站舊文（sourceSite=1，692 篇社群行銷貼文）收不收進語料。Tim 2026-09-18 定案收（降權 0.75 ＋ 不可引用）。改成 false 再讓 Timer 跑一輪就會整批重建。",
     "AiIndex__IncludeMainSiteArticles": "true",

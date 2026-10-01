@@ -86,7 +86,9 @@ public sealed class AiIndexBuilder(
 
         var removed = indexed.Keys.Where(id => !live.ContainsKey(id)).ToHashSet();
         var added = live.Keys.Where(id => !indexed.ContainsKey(id)).ToList();
-        var changed = live.Where(kv => indexed.TryGetValue(kv.Key, out var v) && v != kv.Value)
+        // 切塊規則改版也算「有變動」（AiChunker.Version）—— 否則要等院方重新發布那一筆才會重切。
+        var changed = live.Where(kv => indexed.TryGetValue(kv.Key, out var v)
+                && (v.Pv != kv.Value || v.Chunker != AiChunker.Version))
             .Select(kv => kv.Key).ToList();
 
         if (removed.Count == 0 && added.Count == 0 && changed.Count == 0)
@@ -199,10 +201,10 @@ public sealed class AiIndexBuilder(
         // 已索引＝上一版 manifest 裡這一輪沒動到的 ＋ 這一輪做完的（含切出 0 塊的）。
         var keptMap = indexed.Where(kv => !stale.Contains(kv.Key))
             .ToDictionary(kv => kv.Key, kv => kv.Value);
-        foreach (var (id, pv) in completed) keptMap[id] = pv;
+        foreach (var (id, pv) in completed) keptMap[id] = (pv, AiChunker.Version);
 
         var keptItems = keptMap
-            .Select(kv => new[] { kv.Key, kv.Value })
+            .Select(kv => new[] { kv.Key, kv.Value.Pv, kv.Value.Chunker })
             .OrderBy(p => p[0])
             .ToList();
 

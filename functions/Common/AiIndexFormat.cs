@@ -48,7 +48,8 @@ public static class AiIndexFormat
     };
 
     /// <summary>
-    /// 索引的狀態摘要。<see cref="Items"/> 是排序後的 <c>[ContentItemId, PublishedVersionId]</c>
+    /// 索引的狀態摘要。<see cref="Items"/> 是排序後的 <c>[ContentItemId, PublishedVersionId, 切塊版本]</c>
+    /// （第三欄是 2026-10-01 加的，舊 manifest 只有兩欄，視為版本 1 —— 見 <see cref="AiChunker.Version"/>）
     /// —— 它就是「索引到哪了」的唯一真相，所以**不需要在資料庫加任何欄位**
     /// （docs/08 §0 決策二：不預留未定案的欄位）。
     /// </summary>
@@ -63,9 +64,9 @@ public static class AiIndexFormat
         public static Manifest Empty(string model, int dim, bool includeMainSite) =>
             new(DateTime.MinValue, model, dim, 0, includeMainSite, []);
 
-        /// <summary>ContentItemId → PublishedVersionId。</summary>
-        public Dictionary<int, int> AsMap() =>
-            Items.Where(p => p.Length == 2).ToDictionary(p => p[0], p => p[1]);
+        /// <summary>ContentItemId → (PublishedVersionId, 切塊版本)。</summary>
+        public Dictionary<int, (int Pv, int Chunker)> AsMap() =>
+            Items.Where(p => p.Length >= 2).ToDictionary(p => p[0], p => (p[1], p.Length >= 3 ? p[2] : 1));
     }
 
     /// <summary>
