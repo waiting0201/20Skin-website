@@ -30,6 +30,10 @@
     <PackageReference Include="Azure.Storage.Blobs" Version="12.23.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="acceptance-questions.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!--
     🔴 與 API **共用同一份原始碼**，不是抄一份（同 ContentExport.csproj 的理由）。
        切塊規則若在這裡分岔，這支工具就會「檢查一份 API 根本不會產生的語料」，

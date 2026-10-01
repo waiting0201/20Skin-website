@@ -13,23 +13,32 @@ using Skin20.Api.Models.Entities;
 //
 // 用法：
 //   dotnet run --project tools/ai-index-inspect -- --dry-run [--out /tmp/chunks.txt] [連線字串]
-//   dotnet run --project tools/ai-index-inspect -- --dump    [--out /tmp/chunks.txt]
+//   dotnet run --project tools/ai-index-inspect -- --dump    [--out /tmp/chunks.txt] [--save-to <目錄>]
+//   dotnet run --project tools/ai-index-inspect -- --query   [--out /tmp/scores.txt] [--questions <檔案>]
 //
 // 連線字串也可由 SKIN20_EXPORT_SQL 提供（與 tools/content-export 同一個唯讀身分）。
 // --dump 讀 STORAGE_ACCOUNT 指定的儲存體帳戶（Managed Identity／az login 身分）。
 //
-// 🔴 **這支不會建索引，也不會花任何 API 費用。** 索引由 API 的 AiIndexRefresh Timer 建。
+// 🔴 **這支不會建索引。** 索引由 API 的 AiIndexRefresh Timer 建。
+//    --dry-run／--dump 不花任何 API 費用；--query 每題嵌入一次（GEMINI_API_KEY），一題不到一分錢。
 
-var mode = args.FirstOrDefault(a => a is "--dry-run" or "--dump") ?? "--dry-run";
-var outPath = ArgValue("--out") ?? "/tmp/ai-chunks.txt";
+var mode = args.FirstOrDefault(a => a is "--dry-run" or "--dump" or "--query") ?? "--dry-run";
+var outPath = ArgValue("--out") ?? (mode == "--query" ? "/tmp/ai-scores.txt" : "/tmp/ai-chunks.txt");
 
-// ⚠️ `--out <路徑>` 的那個路徑不是位置參數 —— 少了這一段，它會被當成連線字串，
+// ⚠️ 帶值的旗標，它的值不是位置參數 —— 少了這一段，`--out` 的路徑會被當成連線字串，
 //    而錯誤訊息是「初始化字串的格式與規格不符」，指不到真正的原因。
+string[] valueFlags = ["--out", "--save-to", "--questions"];
 var positional = args
-    .Where((a, i) => !a.StartsWith("--") && (i == 0 || args[i - 1] != "--out"))
+    .Where((a, i) => !a.StartsWith("--") && (i == 0 || !valueFlags.Contains(args[i - 1])))
     .ToArray();
 
-var chunks = mode == "--dump" ? await DumpAsync() : await DryRunAsync();
+if (mode == "--query")
+{
+    await QueryAsync();
+    return 0;
+}
+
+var chunks = mode == "--dump" ? (await DumpAsync()).Chunks : await DryRunAsync();
 
 WriteReport(chunks, outPath);
 return 0;
@@ -89,7 +98,7 @@ async Task<List<AiChunker.AiChunk>> DryRunAsync()
 // ════════════════════════════════════════════════════════════════════════
 // --dump：下載既有索引，回答「AI 到底看到了什麼」
 // ════════════════════════════════════════════════════════════════════════
-async Task<List<AiChunker.AiChunk>> DumpAsync()
+async Task<OnlineIndex> DumpAsync()
 {
     var account = Environment.GetEnvironmentVariable("STORAGE_ACCOUNT")
         ?? throw new InvalidOperationException("缺少 STORAGE_ACCOUNT。");
@@ -105,14 +114,118 @@ async Task<List<AiChunker.AiChunk>> DumpAsync()
         + $"{manifest.Count} 塊／涵蓋內容 {manifest.Items.Count} 筆／"
         + $"主站舊文{(manifest.IncludeMainSiteArticles ? "納入" : "未納入")}");
 
-    var gz = (await container.GetBlobClient(AiIndexFormat.ChunksBlobName).DownloadContentAsync())
-        .Value.Content.ToStream();
-    await using var unzip = new GZipStream(gz, CompressionMode.Decompress);
+    var chunkBytes = (await container.GetBlobClient(AiIndexFormat.ChunksBlobName).DownloadContentAsync())
+        .Value.Content.ToArray();
+    await using var unzip = new GZipStream(new MemoryStream(chunkBytes), CompressionMode.Decompress);
     var stored = await JsonSerializer.DeserializeAsync<List<AiIndexFormat.Chunk>>(unzip, AiIndexFormat.Json) ?? [];
 
-    return stored
-        .Select(c => new AiChunker.AiChunk(c.Ci, c.Pv, c.T, c.U, c.Ti, c.H, c.W, c.Q, c.X))
+    var vectorBytes = (await container.GetBlobClient(AiIndexFormat.VectorsBlobName).DownloadContentAsync())
+        .Value.Content.ToArray();
+    var vectors = AiIndexFormat.FromBytes(vectorBytes);
+
+    // 🔴 三個檔不是原子性一起換的（AiIndexService.Validate 同一條理由）。
+    //    對不上就是剛好碰到 Timer 換檔，重跑一次即可；拿不一致的索引去校準，分數全部是錯的。
+    if (stored.Count * manifest.Dim != vectors.Length)
+        throw new InvalidOperationException(
+            $"索引不一致：{stored.Count} 塊 × {manifest.Dim} 維 ≠ {vectors.Length} 個浮點數。Timer 可能正在換檔，稍後重跑。");
+
+    // --save-to：存成 API 的 AiIndex__LocalPath 吃得下的目錄，讓本機的 func 用「正式那一份索引」作答。
+    if (ArgValue("--save-to") is { Length: > 0 } saveTo)
+    {
+        Directory.CreateDirectory(saveTo);
+        await File.WriteAllBytesAsync(Path.Combine(saveTo, "manifest.json"), manifestBytes);
+        await File.WriteAllBytesAsync(Path.Combine(saveTo, "chunks.json.gz"), chunkBytes);
+        await File.WriteAllBytesAsync(Path.Combine(saveTo, "vectors.f32"), vectorBytes);
+        Console.WriteLine($"索引已存到 {saveTo}（可設為 AiIndex__LocalPath）");
+    }
+
+    return new OnlineIndex(
+        manifest,
+        stored,
+        vectors,
+        stored.Select(c => new AiChunker.AiChunk(c.Ci, c.Pv, c.T, c.U, c.Ti, c.H, c.W, c.Q, c.X)).ToList());
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// --query：拿線上索引對一組問題做檢索，印出原始分數 —— 校準 AiIndex__MinScore 用
+// ════════════════════════════════════════════════════════════════════════
+//
+// 🔴 排序與 API 共用 AiIndexFormat.Rank，所以這裡看到的分數就是線上判斷用的分數。
+// ⚠️ 只做檢索、不呼叫生成模型：門檻是檢索的事，跟模型怎麼回答無關。
+// ⚠️ 嵌入設定（模型、維度）一律取 manifest 的值 —— 查詢向量與索引不同模型，分數毫無意義。
+//    taskType 取 AiIndex__UseTaskType（預設不送），要與正式環境一致。
+async Task QueryAsync()
+{
+    var apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY")
+        ?? throw new InvalidOperationException("缺少 GEMINI_API_KEY。");
+    var useTaskType = string.Equals(Environment.GetEnvironmentVariable("AiIndex__UseTaskType"), "true",
+        StringComparison.OrdinalIgnoreCase);
+
+    var questionsPath = ArgValue("--questions")
+        ?? Path.Combine(AppContext.BaseDirectory, "acceptance-questions.txt");
+    var questions = File.ReadAllLines(questionsPath)
+        .Select(l => l.Trim())
+        .Where(l => l.Length > 0 && !l.StartsWith('#'))
         .ToList();
+
+    var online = await DumpAsync();
+    var model = online.Manifest.Model;
+    var dim = online.Manifest.Dim;
+
+    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+    http.DefaultRequestHeaders.Add("x-goog-api-key", apiKey);
+
+    var sb = new StringBuilder();
+    sb.AppendLine($"# AI 檢索分數（--query）　{DateTime.Now:yyyy-MM-dd HH:mm}");
+    sb.AppendLine($"索引建於 {online.Manifest.BuiltAt:u}／{online.Stored.Count} 塊／涵蓋 {online.Manifest.Items.Count} 筆");
+    sb.AppendLine("每題列 top-6（與 AiHandler 的 ContextChunks、MaxChunksPerItem 相同）。");
+    sb.AppendLine("「最高可引用」＝命中判定看的那個數字：它 ≥ MinScore 才會進生成，否則直接未命中。");
+    sb.AppendLine();
+
+    var summary = new List<(string Q, float TopCitable)>();
+
+    foreach (var question in questions)
+    {
+        var body = new JsonObject
+        {
+            ["model"] = $"models/{model}",
+            ["content"] = new JsonObject { ["parts"] = new JsonArray(new JsonObject { ["text"] = question }) },
+            ["outputDimensionality"] = dim,
+        };
+        if (useTaskType) body["taskType"] = "RETRIEVAL_QUERY";
+
+        using var response = await http.PostAsync(
+            $"https://generativelanguage.googleapis.com/v1beta/models/{model}:embedContent",
+            new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"));
+        var text = await response.Content.ReadAsStringAsync();
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"嵌入失敗（{(int)response.StatusCode}）：{text[..Math.Min(400, text.Length)]}");
+
+        var vector = JsonNode.Parse(text)!["embedding"]!["values"]!.AsArray()
+            .Select(v => v!.GetValue<float>()).ToArray();
+        AiIndexFormat.Normalize(vector);
+
+        var ranked = AiIndexFormat.Rank(vector, online.Stored, online.Vectors, dim, topK: 6, perItem: 2);
+        var topCitable = ranked.Where(r => online.Stored[r.Index].Q).Select(r => r.RawScore).DefaultIfEmpty(0).Max();
+        summary.Add((question, topCitable));
+
+        sb.AppendLine($"## {question}");
+        sb.AppendLine($"最高可引用 {topCitable:F3}");
+        foreach (var r in ranked)
+        {
+            var c = online.Stored[r.Index];
+            sb.AppendLine($"  {r.RawScore:F3} (加權 {r.WeightedScore:F3}) {(c.Q ? "可引用" : "不可引用")}"
+                + $" [{ContentTypeLabels.Of(c.T)}] {c.Ti} ｜ {c.U}");
+        }
+        sb.AppendLine();
+    }
+
+    sb.Insert(0, string.Join(Environment.NewLine,
+        summary.Select(s => $"{s.TopCitable:F3}  {s.Q}").Prepend("## 摘要（最高可引用分數）")) + Environment.NewLine + Environment.NewLine);
+
+    File.WriteAllText(outPath, sb.ToString());
+    foreach (var s in summary) Console.WriteLine($"{s.TopCitable:F3}  {s.Q}");
+    Console.WriteLine($"→ {outPath}");
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -194,5 +307,11 @@ static string TitleOf(string snapshot)
     try { return (JsonNode.Parse(snapshot) as JsonObject)?["title"]?.GetValue<string>() ?? ""; }
     catch (JsonException) { return ""; }
 }
+
+internal sealed record OnlineIndex(
+    AiIndexFormat.Manifest Manifest,
+    List<AiIndexFormat.Chunk> Stored,
+    float[] Vectors,
+    List<AiChunker.AiChunk> Chunks);
 
 internal sealed record ContentRow(int Id, byte ContentType, string? UrlPath, int PublishedVersionId, string Snapshot);

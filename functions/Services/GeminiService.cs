@@ -252,7 +252,12 @@ public sealed class GeminiService(
     private static AppException Unavailable() =>
         new(ErrorCodes.AiUnavailable, "線上諮詢暫時無法回覆，請稍後再試。", 503);
 
-    private static string Truncate(string text) => text.Length <= 400 ? text : text[..400];
+    /// <summary>
+    /// ⚠️ 上限不可以壓回幾百字：Gemini 的 429 要到第 450 字左右才出現 <c>quotaId</c>
+    /// （例如 <c>…-FreeTier</c>），截在那之前，log 只剩一句「exceeded your current quota」，
+    /// 分不出是免費層、每分鐘還是每日配額。2026-10-01 就是這樣查了半天。
+    /// </summary>
+    private static string Truncate(string text) => text.Length <= 2000 ? text : text[..2000];
 
     // ── 線路上的形狀（camelCase 由 AiIndexFormat.Json 統一處理）──────────
 

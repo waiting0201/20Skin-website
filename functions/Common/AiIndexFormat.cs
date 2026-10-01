@@ -120,4 +120,42 @@ public static class AiIndexFormat
         for (var i = 0; i < length; i++) sum += a[i] * b[i];
         return sum;
     }
+
+    /// <summary>一次檢索的一個結果：第幾塊、原始餘弦分數、乘上權重之後的排序分數。</summary>
+    public readonly record struct Ranked(int Index, float RawScore, double WeightedScore);
+
+    /// <summary>
+    /// 依加權分數取前 <paramref name="topK"/> 塊，同一筆內容最多 <paramref name="perItem"/> 塊。
+    /// <para>
+    /// 🔴 <b>API 的檢索與 <c>tools/ai-index-inspect --query</c> 共用這一份</b> ——
+    /// 校準 <c>AiIndex__MinScore</c> 時看到的分數必須就是線上判斷用的分數，
+    /// 兩邊各寫一份排序，校準出來的門檻就不保證適用。
+    /// </para>
+    /// </summary>
+    public static List<Ranked> Rank(
+        ReadOnlySpan<float> query, IReadOnlyList<Chunk> chunks, float[] vectors, int dim, int topK, int perItem)
+    {
+        var scored = new Ranked[chunks.Count];
+        for (var i = 0; i < chunks.Count; i++)
+        {
+            var raw = Dot(query, vectors.AsSpan(i * dim, dim));
+            scored[i] = new Ranked(i, raw, raw * chunks[i].W);
+        }
+
+        var perItemCount = new Dictionary<int, int>();
+        var result = new List<Ranked>(topK);
+
+        foreach (var hit in scored.OrderByDescending(h => h.WeightedScore))
+        {
+            var ci = chunks[hit.Index].Ci;
+            var used = perItemCount.GetValueOrDefault(ci);
+            if (used >= perItem) continue;
+
+            perItemCount[ci] = used + 1;
+            result.Add(hit);
+            if (result.Count >= topK) break;
+        }
+
+        return result;
+    }
 }

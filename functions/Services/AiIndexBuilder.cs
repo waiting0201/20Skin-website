@@ -131,8 +131,22 @@ public sealed class AiIndexBuilder(
             for (var i = 0; i < pending.Count && budgetLeft(); i += GeminiService.EmbedBatchSize)
             {
                 var batch = pending.Skip(i).Take(GeminiService.EmbedBatchSize).ToList();
-                var embedded = await embeddings.EmbedDocumentsAsync(
-                    batch.Select(c => c.EmbeddingInput).ToList(), ct);
+                IReadOnlyList<float[]> embedded;
+                try
+                {
+                    embedded = await embeddings.EmbedDocumentsAsync(
+                        batch.Select(c => c.EmbeddingInput).ToList(), ct);
+                }
+                catch (AppException) when (processed.Count > 0)
+                {
+                    // 🔴 前面幾批已經成功時，**留下它們**，當成預算用完處理（下面那段會把
+                    //    半途的內容排除、下一輪重撿）。整輪丟掉的話，只要每輪的量都撞到
+                    //    同一個上限，索引就永遠不前進 —— 2026-09-29～10-01 正式環境就是這樣：
+                    //    免費層每分鐘 100 次，每輪第二批必 429，兩天 535 輪一筆都沒進。
+                    logger.LogWarning("嵌入中途失敗，保留這一輪已完成的 {Count} 塊，其餘下一輪再做。",
+                        processed.Count);
+                    break;
+                }
 
                 for (var j = 0; j < batch.Count; j++)
                 {

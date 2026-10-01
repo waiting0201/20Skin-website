@@ -85,28 +85,9 @@ public sealed class AiIndexService(
         var loaded = await EnsureLoadedAsync(ct);
         if (loaded is null || loaded.Chunks.Count == 0) throw Unavailable();
 
-        var scored = new List<AiIndexHit>(loaded.Chunks.Count);
-        for (var i = 0; i < loaded.Chunks.Count; i++)
-        {
-            var span = loaded.Vectors.AsSpan(i * loaded.Dim, loaded.Dim);
-            var raw = AiIndexFormat.Dot(query, span);
-            scored.Add(new AiIndexHit(loaded.Chunks[i], raw, raw * loaded.Chunks[i].W));
-        }
-
-        var perItemCount = new Dictionary<int, int>();
-        var result = new List<AiIndexHit>(topK);
-
-        foreach (var hit in scored.OrderByDescending(h => h.WeightedScore))
-        {
-            var used = perItemCount.GetValueOrDefault(hit.Chunk.Ci);
-            if (used >= perItem) continue;
-
-            perItemCount[hit.Chunk.Ci] = used + 1;
-            result.Add(hit);
-            if (result.Count >= topK) break;
-        }
-
-        return result;
+        return AiIndexFormat.Rank(query, loaded.Chunks, loaded.Vectors, loaded.Dim, topK, perItem)
+            .Select(r => new AiIndexHit(loaded.Chunks[r.Index], r.RawScore, r.WeightedScore))
+            .ToList();
     }
 
     /// <summary>Timer 寫完索引之後呼叫，讓這個執行個體立刻改讀新的（其他執行個體靠 ETag 探測）。</summary>
