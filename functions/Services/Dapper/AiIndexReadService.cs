@@ -8,6 +8,9 @@ namespace Skin20.Api.Services.Dapper;
 /// <summary>索引新舊比對用的一列：只有兩個 int。</summary>
 public sealed record AiIndexStampRow(int Id, int PublishedVersionId);
 
+/// <summary>療程專屬 FAQ 的所屬療程：已發布的標題與網址。</summary>
+public sealed record AiFaqOwnerRow(int FaqId, string Title, string UrlPath);
+
 /// <summary>要切塊的一筆內容。</summary>
 public sealed record AiIndexSnapshotRow(int Id, byte ContentType, string? UrlPath, int PublishedVersionId, string Snapshot);
 
@@ -39,6 +42,18 @@ public interface IAiIndexReadService
     /// <para>FAQ 沒有獨立網址（docs/08 §C-6），語料要指到它所屬的分類頁 —— 與 <c>SearchHandler</c> 同一條規則。</para>
     /// </summary>
     Task<IReadOnlyDictionary<int, string>> GetTermUrlsAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// 只被<b>一項</b>療程關聯的 FAQ → 那一項療程（<c>RelationType.TreatmentToFaq</c>）。
+    /// <para>
+    /// 🔴 療程頁的 FAQ 寫的是「本療程」「詳見上方禁忌症」，拿掉療程名稱就變成指稱不明的通用答案
+    /// （2026-10-01 實測：「我懷孕可以打皮秒嗎？」回了「不建議進行本療程」；
+    /// 「做幾次會變白？」把皮秒的「3–5 次」講成所有療程通用）。
+    /// 被兩項以上療程共用的 FAQ 本來就是通用的，不套。
+    /// </para>
+    /// </summary>
+    Task<IReadOnlyDictionary<int, AiFaqOwnerRow>> GetFaqOwnersAsync(
+        IReadOnlyCollection<int> faqIds, CancellationToken ct = default);
 }
 
 /// <inheritdoc cref="IAiIndexReadService"/>
@@ -95,5 +110,28 @@ public sealed class AiIndexReadService(ISqlConnectionFactory factory) : IAiIndex
                 new { Now = Clock.UtcNow, TermType = (byte)ContentType.Term }, cancellationToken: ct));
 
         return rows.ToDictionary(r => r.Id, r => r.UrlPath);
+    }
+
+    public async Task<IReadOnlyDictionary<int, AiFaqOwnerRow>> GetFaqOwnersAsync(
+        IReadOnlyCollection<int> faqIds, CancellationToken ct = default)
+    {
+        if (faqIds.Count == 0) return new Dictionary<int, AiFaqOwnerRow>();
+
+        using var connection = factory.Create();
+
+        var rows = await connection.QueryAsync<AiFaqOwnerRow>(
+            new CommandDefinition(AiIndexFormat.FaqOwnersSql,
+                new
+                {
+                    Now = Clock.UtcNow,
+                    Ids = faqIds,
+                    RelationType = (byte)RelationType.TreatmentToFaq,
+                    TreatmentType = (byte)ContentType.Treatment,
+                },
+                cancellationToken: ct));
+
+        return rows.GroupBy(r => r.FaqId)
+            .Where(g => g.Count() == 1)
+            .ToDictionary(g => g.Key, g => g.Single());
     }
 }

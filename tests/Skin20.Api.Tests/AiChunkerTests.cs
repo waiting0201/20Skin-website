@@ -202,6 +202,25 @@ public class AiChunkerTests
         Assert.Single(chunks);
     }
 
+    [Fact]
+    public void 療程專屬_FAQ_標題換成療程名稱_問題留在小標()
+    {
+        var chunks = AiChunker.Build(new AiChunkSource(1, 10, (byte)ContentType.Faq, "/treatments/pico/",
+            """{"title":"懷孕可以做嗎？","fields":{"webAnswer":"不建議進行本療程。"}}""", "蜂巢皮秒"));
+        var chunk = Assert.Single(chunks);
+        Assert.Equal("蜂巢皮秒", chunk.Title);
+        Assert.Equal("懷孕可以做嗎？", chunk.Heading);
+        Assert.StartsWith("【常見問題】蜂巢皮秒 — 懷孕可以做嗎？", chunk.EmbeddingInput);
+    }
+
+    [Fact]
+    public void 所屬療程只套在_FAQ_上()
+    {
+        var chunks = AiChunker.Build(new AiChunkSource(1, 10, (byte)ContentType.Concern, "/x/",
+            """{"title":"痘痘","summary":"摘要"}""", "蜂巢皮秒"));
+        Assert.All(chunks, c => Assert.Equal("痘痘", c.Title));
+    }
+
     // ── 據點營業時間 ─────────────────────────────────────────────────
 
     [Fact]
@@ -254,6 +273,14 @@ public class AiChunkerTests
     }
 
     // ── 醫師：藝術總監不是醫師 ───────────────────────────────────────
+
+    [Fact]
+    public void 醫師的空白欄位不輸出()
+    {
+        var text = Chunk(ContentType.Doctor, """{"title":"X","fields":{"isPhysician":true,"jobTitle":"主治醫師","specialty":""}}""")
+            .Single(c => c.Heading == "職稱與專長").Text;
+        Assert.Equal("身分：醫師。職稱：主治醫師。", text);
+    }
 
     [Theory]
     [InlineData("true", "身分：醫師")]

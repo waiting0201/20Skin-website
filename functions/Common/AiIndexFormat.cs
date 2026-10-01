@@ -42,6 +42,28 @@ public static class AiIndexFormat
     public const string ChunksBlobName = "ai-index/chunks.json.gz";
     public const string VectorsBlobName = "ai-index/vectors.f32";
 
+    /// <summary>
+    /// 療程專屬 FAQ → 所屬療程（<c>FaqId, Title, UrlPath</c>）。參數：<c>@Now</c>、<c>@Ids</c>、
+    /// <c>@RelationType</c>（TreatmentToFaq）、<c>@TreatmentType</c>。
+    /// 一筆 FAQ 可能回多列 —— 呼叫端只採用<b>恰好一列</b>的（被多項療程共用就是通用 FAQ）。
+    /// <para>
+    /// 🔴 API（<c>AiIndexReadService</c>）與 <c>tools/ai-index-inspect --dry-run</c> 共用這一份 ——
+    /// 兩邊各寫一份，dry-run 檢查的就是一份 API 根本不會產生的語料。
+    /// </para>
+    /// <para>⚠️ 標題取已發布快照、網址取即時值（決策 14／30）。</para>
+    /// </summary>
+    public const string FaqOwnersSql = $"""
+        SELECT cr.ToContentItemId AS FaqId,
+               COALESCE(NULLIF(JSON_VALUE(cv.Snapshot, '$.title'), ''), ci.Title) AS Title,
+               ci.UrlPath
+        FROM ContentRelations cr
+        INNER JOIN ContentItems ci ON ci.Id = cr.FromContentItemId
+        INNER JOIN ContentVersions cv ON cv.Id = ci.PublishedVersionId
+        WHERE cr.RelationType = @RelationType AND cr.ToContentItemId IN @Ids
+          AND ci.ContentType = @TreatmentType AND ci.UrlPath IS NOT NULL
+          AND {Visibility.PublicFilter}
+        """;
+
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,

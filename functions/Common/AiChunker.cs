@@ -47,9 +47,10 @@ public static class AiChunker
     /// 少了這個號碼，改了切塊、部署了、測試全過，線上用的卻永遠是舊的塊，而且不會有任何徵兆。
     /// 版本不同的內容會被當成「有變動」，逐輪重切（舊塊留到新塊嵌好才換掉，不清空索引）。
     /// </para>
-    /// <para>1：初版（2026-09-18）。2：據點的營業時間與地址獨立成塊（2026-10-01）。</para>
+    /// <para>1：初版（2026-09-18）。2：據點的營業時間與地址獨立成塊（2026-10-01）。
+    /// 3：療程專屬 FAQ 標上療程名稱、醫師空白欄位不輸出（2026-10-01）。</para>
     /// </summary>
-    public const int Version = 2;
+    public const int Version = 3;
 
     /// <summary>
     /// 主站舊文的權重（<c>fields.sourceSite == 1</c>，692 篇社群行銷貼文）。
@@ -116,9 +117,12 @@ public static class AiChunker
     /// <summary>
     /// 要切的一筆內容。<paramref name="Url"/> 由呼叫端解析好
     /// （FAQ 沒有獨立網址，要指到所屬分類頁 —— 見 <c>AiIndexBuilder</c>）。
+    /// <paramref name="OwnerTitle"/>：療程專屬 FAQ 的所屬療程名稱（只有 FAQ 用得到，
+    /// 此時 <paramref name="Url"/> 也應該是那一頁療程）。
     /// </summary>
     public sealed record AiChunkSource(
-        int ContentItemId, int PublishedVersionId, byte ContentType, string? Url, string SnapshotJson);
+        int ContentItemId, int PublishedVersionId, byte ContentType, string? Url, string SnapshotJson,
+        string? OwnerTitle = null);
 
     /// <summary>
     /// 切塊。回空陣列代表這一筆不進索引（沒有網址、內容不值得索引、或切不出文字）。
@@ -145,6 +149,12 @@ public static class AiChunker
 
         var title = snapshot["title"]?.GetValue<string>() ?? "";
         var sections = SectionsOf(type, snapshot, fields).ToList();
+
+        // 🔴 療程專屬 FAQ 的標題換成療程名稱（問題本身仍是 Heading）——
+        //    模型看到的是「（常見問題）鉑金版蜂巢皮秒雷射 — 懷孕可以做嗎？」，
+        //    少了它，「本療程」「建議 3–5 次」就會被當成所有療程通用。
+        if (type == ContentType.Faq && !string.IsNullOrWhiteSpace(source.OwnerTitle))
+            title = source.OwnerTitle;
         if (sections.Count == 0) return [];
 
         var isLegacyMainSite = type == ContentType.Article && IntOf(fields, "sourceSite") == SourceSiteMain;
@@ -318,8 +328,11 @@ public static class AiChunker
         var jobTitle = Collapse(Text(f, "jobTitle").Replace("\n", "、"));
         var specialty = Text(f, "specialty");
 
-        yield return new Section("職稱與專長",
-            Collapse($"身分：{role}。職稱：{jobTitle}。專長：{specialty}。"));
+        // 空的欄位不輸出（原本是「專長：。」—— 對模型是雜訊，還像是在暗示「專長是空白」）。
+        var parts = new List<string> { $"身分：{role}" };
+        if (jobTitle.Length > 0) parts.Add($"職稱：{jobTitle}");
+        if (specialty.Length > 0) parts.Add($"專長：{specialty}");
+        yield return new Section("職稱與專長", Collapse(string.Join("。", parts) + "。"));
 
         yield return HeadedSection(f["bio"], "簡介", node => Join(Strings(node, "paragraphs")));
         yield return HeadedSection(f["publications"], "著作與發表", node =>

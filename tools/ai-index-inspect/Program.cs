@@ -71,14 +71,28 @@ async Task<List<AiChunker.AiChunk>> DryRunAsync()
         .Where(r => r.ContentType == (byte)ContentType.Term && !string.IsNullOrEmpty(r.UrlPath))
         .ToDictionary(r => r.Id, r => r.UrlPath!);
 
+    // 療程專屬 FAQ → 所屬療程。🔴 SQL 與 API 共用（AiIndexFormat.FaqOwnersSql），規則也一樣：只採恰好一項的。
+    var faqIds = rows.Where(r => r.ContentType == (byte)ContentType.Faq).Select(r => r.Id).ToList();
+    var faqOwners = faqIds.Count == 0
+        ? new Dictionary<int, (int FaqId, string Title, string UrlPath)>()
+        : (await db.QueryAsync<(int FaqId, string Title, string UrlPath)>(AiIndexFormat.FaqOwnersSql, new
+            {
+                Now = DateTime.UtcNow,
+                Ids = faqIds,
+                RelationType = (byte)RelationType.TreatmentToFaq,
+                TreatmentType = (byte)ContentType.Treatment,
+            }))
+            .GroupBy(r => r.FaqId).Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.Single());
+
     var result = new List<AiChunker.AiChunk>();
     var skipped = new List<string>();
 
     foreach (var row in rows)
     {
-        var url = ResolveUrl(row, categoryUrls);
+        var owner = faqOwners.TryGetValue(row.Id, out var o) ? o : default;
+        var url = owner.UrlPath ?? ResolveUrl(row, categoryUrls);
         var built = AiChunker.Build(new AiChunker.AiChunkSource(
-            row.Id, row.PublishedVersionId, row.ContentType, url, row.Snapshot));
+            row.Id, row.PublishedVersionId, row.ContentType, url, row.Snapshot, owner.Title));
 
         if (built.Count == 0)
         {

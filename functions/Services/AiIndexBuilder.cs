@@ -116,6 +116,8 @@ public sealed class AiIndexBuilder(
         {
             var termUrls = await reads.GetTermUrlsAsync(ct);
             var snapshots = await reads.GetSnapshotsAsync(todo, ct);
+            var faqOwners = await reads.GetFaqOwnersAsync(
+                snapshots.Where(r => r.ContentType == (byte)ContentType.Faq).Select(r => r.Id).ToList(), ct);
 
             var pending = new List<AiChunker.AiChunk>();
             foreach (var row in snapshots)
@@ -126,8 +128,14 @@ public sealed class AiIndexBuilder(
 
                 if (!IncludeMainSiteArticles && IsLegacyMainSiteArticle(row)) continue;
 
+                // 療程專屬 FAQ 的來源指到那一頁療程 —— 它的答案寫著「詳見上方禁忌症」，
+                // 指到 FAQ 分類頁的話，使用者點過去上方什麼都沒有。
+                // ⚠️ 療程改名或改關聯不會讓這筆 FAQ 重切（比對的是 FAQ 自己的 PublishedVersionId），
+                //    要等它重新發布，或 AiChunker.Version 加一。
+                var owner = faqOwners.GetValueOrDefault(row.Id);
                 pending.AddRange(AiChunker.Build(new AiChunker.AiChunkSource(
-                    row.Id, row.PublishedVersionId, row.ContentType, ResolveUrl(row, termUrls), row.Snapshot)));
+                    row.Id, row.PublishedVersionId, row.ContentType,
+                    owner?.UrlPath ?? ResolveUrl(row, termUrls), row.Snapshot, owner?.Title)));
             }
 
             for (var i = 0; i < pending.Count && budgetLeft(); i += GeminiService.EmbedBatchSize)
