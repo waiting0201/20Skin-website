@@ -28,6 +28,7 @@ on:
     branches: [main]
     paths:
       - 'functions/**'
+      - 'tests/**'
       - 'global.json'
       - '.github/workflows/api.yml'
   workflow_dispatch:
@@ -63,11 +64,13 @@ jobs:
       - name: Build
         run: dotnet build ${{ env.PROJECT }} -c Release --nologo
 
-      # ⚠️ 範本（docs/templates/deploy-api.yml）有一步 `dotnet test functions/Skin20.Api.Tests`，
-      #    **那個專案不存在**（2026-09-14 確認）—— 照抄會讓每一次部署都失敗在那裡。
-      #    目前 API 的驗收靠 tools/api-smoke/read.mjs 與本檔最後的 smoke test。
-      #    日後補了測試專案請把那步加回來，且不可設 continue-on-error：沒有 staging，
-      #    這裡是僅有的關卡（CLAUDE.md 決策 5）。
+      # 🔴 單元測試是部署前唯一的自動化行為檢查（沒有 staging，CLAUDE.md 決策 5），
+      #    **不可設 continue-on-error**。範圍是權限判定表、可見性／可索引性判定式與幾支純函式
+      #    （tests/Skin20.Api.Tests），不連資料庫、不碰 Azure —— 那一類仍由 tools/api-smoke 負責。
+      # ⚠️ 測試專案在 tests/ 不在 functions/：放進 functions/ 底下會被 Skin20.Api.csproj 的
+      #    預設 glob 編進 API（範本 docs/templates/deploy-api.yml 原本寫錯，2026-10-01 已改）。
+      - name: Unit tests
+        run: dotnet test tests/Skin20.Api.Tests -c Release --nologo
 
       - name: Publish
         run: dotnet publish ${{ env.PROJECT }} -c Release --no-build -o ${{ env.OUTPUT_PATH }} --nologo

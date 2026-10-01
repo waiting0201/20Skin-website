@@ -539,7 +539,7 @@ CHECK ((RelationType, FromContentType, ToContentType) IN (...合法組合...))
 
 `SettingKey` nvarchar(100) PK, `SettingValue` nvarchar(max), `ValueType` tinyint, `UpdatedByUserId`, `UpdatedAt`
 
-收納：站名、預設 OG 圖、全站 NAP 主資料、追蹤碼、`/contact/` 收件信箱、頁尾社群連結與版權文案、`robots.txt` 內容、**sitemap 五個分檔的設定**（`seo.sitemapFiles`，見 §H）、AI FAQ 的啟用開關／面板標題／歡迎文案／轉真人出口網址。
+收納：站名、預設 OG 圖、~~全站 NAP 主資料~~（`nap.json` 鍵仍在、**沒有任何讀者也沒有編輯入口**，2026-10-01；NAP 一律來自據點內容）、追蹤碼、`/contact/` 收件信箱、頁尾社群連結與版權文案、`robots.txt` 內容、**sitemap 五個分檔的設定**（`seo.sitemapFiles`，見 §H）、AI FAQ 的啟用開關／面板標題／歡迎文案／轉真人出口網址。
 
 ⚠️ **鍵是固定的，不能在執行期新增。** `PUT /admin/setting` 對不存在的 `SettingKey` 回 404 —— 要多一個設定就是一支 migration ＋ 一列種子（`seo.sitemapFiles` 就是 2026-09-12 這樣加的）。
 
@@ -578,6 +578,8 @@ hero  specialties  featured-treatments  latest-articles  doctors  clinics  brand
 形狀的真實來源是前台的 `HeroSlide`（`apps/web/app/data/home.ts`）；後台的第二份宣告在 `apps/admin/src/units/schemas/home.ts`，兩邊由 [tools/content-roundtrip](../tools/content-roundtrip/) 把關（決策 17 同一條規則）。
 
 ⚠️ `specialties`（八大專科入口）的 `Settings` **刻意不開放編輯**：每一列都帶著 `slug` 與 `urlPath`，必須跟困擾頁實際的網址對得上。後台讀到什麼就原樣存回什麼 —— 少了這條，一次存檔就會把那一區清成 `null`（2026-09-17 實際踩到）。
+✅ **2026-10-01 起前台不再讀這份 `Settings`**：八大專科入口改成自動列出全部困擾（`GET /home` 的 `AutoSections`，與醫師、據點同一條，CLAUDE.md 決策 30）。那八列留著不刪（切回來時還在），仍原樣往返。
+⚠️ `IsEnabled`／`SortOrder` 2026-10-01 起前台真的讀（主視覺以外六區）：關掉整區不渲染、依 `SortOrder` 排先後。
 
 版位編排的送審與版本歷程掛在 `SystemKey='home'` 那筆 ContentItem 上（§C-8），快照時把 `HomeSections` ＋ `HomeSectionItems` 一併序列化進 `ContentVersions.Snapshot`。
 

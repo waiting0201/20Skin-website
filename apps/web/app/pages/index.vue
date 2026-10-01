@@ -24,7 +24,18 @@ const [treatments, DOCTORS, SITE_SETTINGS, home] = await Promise.all([
   getTreatments(), getDoctors(), getSiteSettings(), getHomeData(),
 ])
 const { heroSlides: HERO_SLIDES, specialties: SPECIALTIES, featuredTreatments: FEATURED_TREATMENTS,
-  latestArticles: LATEST_ARTICLES, featuredDoctors: FEATURED_DOCTORS, homeClinics: HOME_CLINICS } = home
+  latestArticles: LATEST_ARTICLES, featuredDoctors: FEATURED_DOCTORS, homeClinics: HOME_CLINICS,
+  sectionOrder: SECTION_ORDER } = home
+
+// 🔴 **主視覺以下六個版位的先後與顯示與否，跟著後台的版位設定走**（2026-10-01）。
+//    在此之前這裡是寫死的六個 `<section>`：後台的順序前台不讀、關掉也只會讓那一區
+//    變空（標題與英文小標照樣在）—— 所以 2026-09-18 先把後台那兩個入口拿掉了
+//    （決策 23）。現在前台照 `sortOrder` 排、`isEnabled=false` 整個 `<section>` 不渲染。
+// ⚠️ 主視覺**不參與**：它固定在最上面、永遠渲染 —— 全頁唯一的 `<h1>` 在裡面。
+// ⚠️ 底色交錯（`section--alt`）改成依「實際排在第幾個」算，不再寫死在各區上 ——
+//    否則換了順序或關掉一區，就會出現兩塊同色的區塊黏在一起。
+//    mockup 的節奏是主視覺之後第一塊有底色，這裡照它：第 0、2、4 個是 alt。
+const isAlt = (key: string) => SECTION_ORDER.indexOf(key) % 2 === 0
 const physicianCount = DOCTORS.filter((d) => d.isPhysician).length
 const nonPhysicianCount = DOCTORS.length - physicianCount
 
@@ -123,208 +134,212 @@ usePageHead({
     </div>
   </section>
 
-  <!-- =====================================================================
-       2. 八大專科入口（肌膚困擾）
-       ===================================================================== -->
-  <section class="section section--alt" id="specialties">
-    <div class="container">
-      <div class="c-sechead">
-        <div class="c-sechead__text">
-          <span class="u-eyebrow">SKIN CONCERNS</span>
-          <h2>看皮膚　找四季</h2>
-          <p>從肌膚問題出發，找到對應的專業科別與醫師，而不是先看療程再猜測適合與否。</p>
+  <!-- 主視覺以下六個版位：順序與顯示跟著後台的版位設定（見 <script> 的 SECTION_ORDER）。
+       ⚠️ 每一區各自 `v-if`，不是 v-else-if 鏈 —— 中間夾著註解會讓鏈斷掉。 -->
+  <template v-for="key in SECTION_ORDER" :key="key">
+    <!-- =====================================================================
+         2. 八大專科入口（肌膚困擾）
+         ===================================================================== -->
+    <section v-if="key === 'specialties'" class="section" :class="{ 'section--alt': isAlt(key) }" id="specialties">
+      <div class="container">
+        <div class="c-sechead">
+          <div class="c-sechead__text">
+            <span class="u-eyebrow">SKIN CONCERNS</span>
+            <h2>看皮膚　找四季</h2>
+            <p>從肌膚問題出發，找到對應的專業科別與醫師，而不是先看療程再猜測適合與否。</p>
+          </div>
+        </div>
+
+        <div class="grid grid--icons">
+          <a
+            v-for="item in SPECIALTIES" :key="item.slug"
+            class="home-specialty" :href="item.urlPath"
+          >
+            <img v-if="item.imagePath" class="home-specialty__icon" :src="item.imagePath" :alt="`${item.title}icon`" :width="item.iconWidth" :height="item.iconHeight">
+            <span class="home-specialty__label">{{ item.title }}</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         3. 精選療程
+         ===================================================================== -->
+    <section v-if="key === 'featured-treatments'" class="section" :class="{ 'section--alt': isAlt(key) }" id="treatments">
+      <div class="container">
+        <div class="c-sechead">
+          <div class="c-sechead__text">
+            <span class="u-eyebrow">FEATURED TREATMENTS</span>
+            <h2>精選療程</h2>
+            <p>依科別分類的療程項目，皆由醫師依個人膚況評估後規劃。</p>
+          </div>
+          <!-- mockup 原文連的是 03-treatment-category.html（光療美顏分類頁），因為 demo 只做了
+               那一頁。「查看全部療程」在語意上應指向總覽頁，連到單一分類是示意稿的落差。 -->
+          <a class="c-sechead__more" href="/treatments/">查看全部療程 →</a>
+        </div>
+
+        <div class="grid grid--4">
+          <article v-for="item in FEATURED_TREATMENTS" :key="item.slug" class="c-card c-card--treatment">
+            <div class="c-card__media">
+              <img :src="item.imagePath" :alt="item.alt" :width="item.imageWidth" :height="item.imageHeight">
+            </div>
+            <div class="c-card__body">
+              <span class="c-tag c-card__tag">{{ item.categoryLabel }}</span>
+              <h3 class="c-card__title"><a :href="item.urlPath">{{ item.title }}</a></h3>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         4. 最新文章
+         ===================================================================== -->
+    <section v-if="key === 'latest-articles'" class="section" :class="{ 'section--alt': isAlt(key) }" id="articles">
+      <div class="container">
+        <div class="c-sechead">
+          <div class="c-sechead__text">
+            <span class="u-eyebrow">LATEST ARTICLES</span>
+            <h2>最新文章</h2>
+            <p>醫美新知、皮膚新知與媒體報導，由院內醫師與編輯部共同審核。</p>
+          </div>
+          <a class="c-sechead__more" href="/blog/">查看全部文章 →</a>
+        </div>
+
+        <div class="grid grid--4">
+          <article v-for="item in LATEST_ARTICLES" :key="item.title" class="c-card c-card--article">
+            <div class="c-card__media">
+              <img :src="item.imagePath" :alt="item.alt" :width="item.imageWidth" :height="item.imageHeight">
+            </div>
+            <div class="c-card__body">
+              <span class="c-tag c-card__tag">{{ item.categoryLabel }}</span>
+              <h3 class="c-card__title"><a :href="item.urlPath">{{ item.title }}</a></h3>
+              <p class="c-card__excerpt">{{ item.summary }}</p>
+              <div class="c-card__meta">
+                <span>{{ item.authorLabel }}</span>
+                <span>{{ item.displayDate }}</span>
+                <span>{{ item.readingMinutes }} 分鐘閱讀</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         5. 醫師團隊
+         ===================================================================== -->
+    <section v-if="key === 'doctors'" class="section" :class="{ 'section--alt': isAlt(key) }" id="doctors">
+      <div class="container">
+        <div class="c-sechead">
+          <div class="c-sechead__text">
+            <span class="u-eyebrow">OUR DOCTORS</span>
+            <h2>醫師團隊</h2>
+            <p>皮膚科專科醫師與藝術總監團隊，共同把關每一項療程規劃。</p>
+          </div>
+          <a class="c-sechead__more" href="/team/">查看全部 {{ FEATURED_DOCTORS.length }} 位團隊成員 →</a>
         </div>
       </div>
 
-      <div class="grid grid--icons">
-        <a
-          v-for="item in SPECIALTIES" :key="item.slug"
-          class="home-specialty" :href="item.urlPath"
-        >
-          <img class="home-specialty__icon" :src="item.imagePath" :alt="`${item.title}icon`" :width="item.iconWidth" :height="item.iconHeight">
-          <span class="home-specialty__label">{{ item.title }}</span>
-        </a>
-      </div>
-    </div>
-  </section>
-
-  <!-- =====================================================================
-       3. 精選療程
-       ===================================================================== -->
-  <section class="section" id="treatments">
-    <div class="container">
-      <div class="c-sechead">
-        <div class="c-sechead__text">
-          <span class="u-eyebrow">FEATURED TREATMENTS</span>
-          <h2>精選療程</h2>
-          <p>依科別分類的療程項目，皆由醫師依個人膚況評估後規劃。</p>
+      <div class="container">
+        <div class="home-doctors__grid">
+          <article v-for="doctor in FEATURED_DOCTORS" :key="doctor.name" class="c-card c-card--doctor">
+            <div class="c-card__media">
+              <img :src="doctor.photoPath" :alt="`${doctor.name} ${roleText(doctor.jobTitle)}`" :width="doctor.photoWidth" :height="doctor.photoHeight" loading="lazy">
+            </div>
+            <div class="c-card__body">
+              <h3 class="c-card__title"><a :href="doctor.urlPath">{{ doctor.name }}</a></h3>
+              <div class="c-card__meta">
+                <span v-for="line in roleLines(doctor.jobTitle)" :key="line">{{ line }}</span>
+              </div>
+            </div>
+          </article>
         </div>
-        <!-- mockup 原文連的是 03-treatment-category.html（光療美顏分類頁），因為 demo 只做了
-             那一頁。「查看全部療程」在語意上應指向總覽頁，連到單一分類是示意稿的落差。 -->
-        <a class="c-sechead__more" href="/treatments/">查看全部療程 →</a>
       </div>
+    </section>
 
-      <div class="grid grid--4">
-        <article v-for="item in FEATURED_TREATMENTS" :key="item.slug" class="c-card c-card--treatment">
-          <div class="c-card__media">
-            <img :src="item.imagePath" :alt="item.alt" :width="item.imageWidth" :height="item.imageHeight">
+    <!-- =====================================================================
+         6. 據點資訊
+         ===================================================================== -->
+    <section v-if="key === 'clinics'" class="section" :class="{ 'section--alt': isAlt(key) }" id="clinics">
+      <div class="container">
+        <div class="c-sechead">
+          <div class="c-sechead__text">
+            <span class="u-eyebrow">OUR CLINICS</span>
+            <h2>據點資訊</h2>
+            <p>兩個院區，各自的門診時段與聯絡方式如下。</p>
           </div>
-          <div class="c-card__body">
-            <span class="c-tag c-card__tag">{{ item.categoryLabel }}</span>
-            <h3 class="c-card__title"><a :href="item.urlPath">{{ item.title }}</a></h3>
-          </div>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <!-- =====================================================================
-       4. 最新文章
-       ===================================================================== -->
-  <section class="section section--alt" id="articles">
-    <div class="container">
-      <div class="c-sechead">
-        <div class="c-sechead__text">
-          <span class="u-eyebrow">LATEST ARTICLES</span>
-          <h2>最新文章</h2>
-          <p>醫美新知、皮膚新知與媒體報導，由院內醫師與編輯部共同審核。</p>
         </div>
-        <a class="c-sechead__more" href="/blog/">查看全部文章 →</a>
-      </div>
 
-      <div class="grid grid--4">
-        <article v-for="item in LATEST_ARTICLES" :key="item.title" class="c-card c-card--article">
-          <div class="c-card__media">
-            <img :src="item.imagePath" :alt="item.alt" :width="item.imageWidth" :height="item.imageHeight">
-          </div>
-          <div class="c-card__body">
-            <span class="c-tag c-card__tag">{{ item.categoryLabel }}</span>
-            <h3 class="c-card__title"><a :href="item.urlPath">{{ item.title }}</a></h3>
-            <p class="c-card__excerpt">{{ item.summary }}</p>
-            <div class="c-card__meta">
-              <span>{{ item.authorLabel }}</span>
-              <span>{{ item.displayDate }}</span>
-              <span>{{ item.readingMinutes }} 分鐘閱讀</span>
+        <div class="grid grid--2">
+          <div v-for="clinic in HOME_CLINICS" :key="clinic.name" class="home-clinic">
+            <div class="home-clinic__head">
+              <h3 class="home-clinic__name c-heading-bar">{{ clinic.name }}</h3>
+            </div>
+            <address class="home-clinic__nap">
+              電話：{{ clinic.phone }}<br>
+              地址：{{ clinic.address }}
+            </address>
+            <table class="c-hours">
+              <caption class="visually-hidden">{{ clinic.name }}門診時間表</caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="c-hours__corner">門診時間</th>
+                  <th v-for="day in HOURS_WEEKDAY_LABELS" :key="day" scope="col">{{ day }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- ⚠️ 欄位名與據點頁同一組（label／days）—— 首頁原本用的是另一組名字，
+                     而那組從來沒有被填過，表格因此只有表頭。 -->
+                <tr v-for="row in clinic.hoursRows" :key="row.label">
+                  <th scope="row">{{ row.label }}</th>
+                  <td v-for="(open, dayIndex) in row.days" :key="dayIndex" :class="{ 'c-hours__cell--off': !open }">
+                    <span v-if="open" class="c-hours__mark" aria-hidden="true"></span><span class="visually-hidden">{{ open ? '看診' : '休診' }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="c-hours__foot">{{ clinic.hoursFootnote }}</p>
+            <div class="home-clinic__actions">
+              <a class="btn btn--ghost btn--sm" :href="clinic.urlPath">查看診所介紹</a>
             </div>
           </div>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <!-- =====================================================================
-       5. 醫師團隊
-       ===================================================================== -->
-  <section class="section" id="doctors">
-    <div class="container">
-      <div class="c-sechead">
-        <div class="c-sechead__text">
-          <span class="u-eyebrow">OUR DOCTORS</span>
-          <h2>醫師團隊</h2>
-          <p>皮膚科專科醫師與藝術總監團隊，共同把關每一項療程規劃。</p>
         </div>
-        <a class="c-sechead__more" href="/team/">查看全部 {{ FEATURED_DOCTORS.length }} 位團隊成員 →</a>
       </div>
-    </div>
+    </section>
 
-    <div class="container">
-      <div class="home-doctors__grid">
-        <article v-for="doctor in FEATURED_DOCTORS" :key="doctor.name" class="c-card c-card--doctor">
-          <div class="c-card__media">
-            <img :src="doctor.photoPath" :alt="`${doctor.name} ${roleText(doctor.jobTitle)}`" :width="doctor.photoWidth" :height="doctor.photoHeight" loading="lazy">
-          </div>
-          <div class="c-card__body">
-            <h3 class="c-card__title"><a :href="doctor.urlPath">{{ doctor.name }}</a></h3>
-            <div class="c-card__meta">
-              <span v-for="line in roleLines(doctor.jobTitle)" :key="line">{{ line }}</span>
+    <!-- =====================================================================
+         7. 品牌理念摘要
+         ===================================================================== -->
+    <section v-if="key === 'brand-story'" class="section" :class="{ 'section--alt': isAlt(key) }" id="philosophy">
+      <div class="container home-philosophy__layout">
+        <div class="home-philosophy__media">
+          <div class="c-ring c-ring--gold home-philosophy__ring" aria-hidden="true"></div>
+          <div class="home-philosophy__frame">
+            <div class="home-philosophy__frame-inner">
+              <img src="/assets/img/banner2.jpg" alt="診所大理石品牌牆與接待空間，展現新中式美學的簡約質感" width="320" height="220">
             </div>
           </div>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <!-- =====================================================================
-       6. 據點資訊
-       ===================================================================== -->
-  <section class="section section--alt" id="clinics">
-    <div class="container">
-      <div class="c-sechead">
-        <div class="c-sechead__text">
-          <span class="u-eyebrow">OUR CLINICS</span>
-          <h2>據點資訊</h2>
-          <p>兩個院區，各自的門診時段與聯絡方式如下。</p>
-        </div>
-      </div>
-
-      <div class="grid grid--2">
-        <div v-for="clinic in HOME_CLINICS" :key="clinic.name" class="home-clinic">
-          <div class="home-clinic__head">
-            <h3 class="home-clinic__name c-heading-bar">{{ clinic.name }}</h3>
-          </div>
-          <address class="home-clinic__nap">
-            電話：{{ clinic.phone }}<br>
-            地址：{{ clinic.address }}
-          </address>
-          <table class="c-hours">
-            <caption class="visually-hidden">{{ clinic.name }}門診時間表</caption>
-            <thead>
-              <tr>
-                <th scope="col" class="c-hours__corner">門診時間</th>
-                <th v-for="day in HOURS_WEEKDAY_LABELS" :key="day" scope="col">{{ day }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <!-- ⚠️ 欄位名與據點頁同一組（label／days）—— 首頁原本用的是另一組名字，
-                   而那組從來沒有被填過，表格因此只有表頭。 -->
-              <tr v-for="row in clinic.hoursRows" :key="row.label">
-                <th scope="row">{{ row.label }}</th>
-                <td v-for="(open, dayIndex) in row.days" :key="dayIndex" :class="{ 'c-hours__cell--off': !open }">
-                  <span v-if="open" class="c-hours__mark" aria-hidden="true"></span><span class="visually-hidden">{{ open ? '看診' : '休診' }}</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <p class="c-hours__foot">{{ clinic.hoursFootnote }}</p>
-          <div class="home-clinic__actions">
-            <a class="btn btn--ghost btn--sm" :href="clinic.urlPath">查看診所介紹</a>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- =====================================================================
-       7. 品牌理念摘要
-       ===================================================================== -->
-  <section class="section" id="philosophy">
-    <div class="container home-philosophy__layout">
-      <div class="home-philosophy__media">
-        <div class="c-ring c-ring--gold home-philosophy__ring" aria-hidden="true"></div>
-        <div class="home-philosophy__frame">
-          <div class="home-philosophy__frame-inner">
-            <img src="/assets/img/banner2.jpg" alt="診所大理石品牌牆與接待空間，展現新中式美學的簡約質感" width="320" height="220">
-          </div>
-        </div>
-      </div>
-
-      <div class="home-philosophy__copy">
-        <span class="home-philosophy__kicker">新中式美學</span>
-        <p class="home-philosophy__quote">以古為師，將東方的美學藝術，與「醫美微整形」創新結合。</p>
-
-        <div class="home-philosophy__points">
-          <div class="home-philosophy__point">
-            <h4 class="c-heading-bar">新中式美學</h4>
-            <p>以古為師，將東方的美學藝術與醫美微整形創新結合，追求歷久彌新的自然樣貌。</p>
-          </div>
-          <div class="home-philosophy__point">
-            <h4 class="c-heading-bar">彩妝式輕醫美</h4>
-            <p>強調五官與氣質的整體協調，而非單一標準的網紅罐頭臉。</p>
-          </div>
         </div>
 
-        <a class="c-sechead__more" href="/about/">了解品牌故事 →</a>
+        <div class="home-philosophy__copy">
+          <span class="home-philosophy__kicker">新中式美學</span>
+          <p class="home-philosophy__quote">以古為師，將東方的美學藝術，與「醫美微整形」創新結合。</p>
+
+          <div class="home-philosophy__points">
+            <div class="home-philosophy__point">
+              <h4 class="c-heading-bar">新中式美學</h4>
+              <p>以古為師，將東方的美學藝術與醫美微整形創新結合，追求歷久彌新的自然樣貌。</p>
+            </div>
+            <div class="home-philosophy__point">
+              <h4 class="c-heading-bar">彩妝式輕醫美</h4>
+              <p>強調五官與氣質的整體協調，而非單一標準的網紅罐頭臉。</p>
+            </div>
+          </div>
+
+          <a class="c-sechead__more" href="/about/">了解品牌故事 →</a>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
+  </template>
 </template>

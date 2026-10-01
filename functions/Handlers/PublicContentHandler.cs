@@ -191,8 +191,8 @@ public sealed class PublicContentHandler(
     /// </para>
     ///
     /// <para>
-    /// 🔴 <b>醫師與據點兩個版位不吃快照裡的名單，改成自動列出整個單元</b>
-    /// （2026-09-18，決策 30；<see cref="AutoSections"/>）。名單與順序都跟著單元走。
+    /// 🔴 <b>八大專科入口、醫師與據點三個版位不吃快照裡的名單，改成自動列出整個單元</b>
+    /// （2026-09-18，決策 30；八大專科入口 2026-10-01 加入；<see cref="AutoSections"/>）。名單與順序都跟著單元走。
     /// </para>
     ///
     /// <para>
@@ -388,9 +388,19 @@ public sealed class PublicContentHandler(
     /// 不必再回首頁按一次發布（與選單的自動子項目一致）。
     /// 版位自己的<c>快照名單</c>仍原樣留在資料庫裡，切回手挑時還在。
     /// </para>
+    ///
+    /// <para>
+    /// 🔴 <b>八大專科入口（<c>specialties</c>）2026-10-01 也改成自動列出全部困擾。</b>
+    /// 在此之前它讀的是版位 <c>settings</c> 裡手打的八列（標題＋slug＋網址＋圖示），
+    /// 而那八列就是全部 8 個困擾、順序也一樣 —— 等於困擾在資料庫裡有<b>第二份</b>
+    /// 名稱、網址與順序，後台還改不到（決策 23 那一句「要增刪請洽工程端」）。
+    /// 圖示是版面素材（決策 14），前台用 <c>concernIconFor()</c> 依 slug 對照，
+    /// 與困擾總覽頁同一份。⚠️ 那份 <c>settings</c> 不刪（理由同上：切回來時還在）。
+    /// </para>
     /// </summary>
     private static readonly Dictionary<string, ContentType> AutoSections = new()
     {
+        ["specialties"] = ContentType.Concern,
         ["doctors"] = ContentType.Doctor,
         ["clinics"] = ContentType.Clinic,
     };

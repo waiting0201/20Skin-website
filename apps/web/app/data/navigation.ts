@@ -121,6 +121,9 @@ export async function getClinicNap() {
   .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
   .map((c) => ({
     name: c.title,
+    // ⚠️ 給呼叫端比對用（clinics.ts／home.ts）。**比 slug 不比名稱**：名稱是院方改得動的
+    //    欄位，一改就比不到，而症狀是電話地址整組變空、沒有任何錯誤訊息（決策 30 同一條）。
+    slug: c.slug as string,
     href: c.urlPath ?? `/clinics/${c.slug}/`,
     phone: (c.fields.phone as string) ?? '',
     address: (c.fields.address as string) ?? '',

@@ -82,11 +82,12 @@ export interface HomeClinic {
 // ── 資料來源：content/home.json ＋ 各單元（docs/09 §3、docs/08 §G-2）──────
 //
 // ⚠️ 七個版位「只能引用既有內容，不能另打文案」（docs/02 §3）。
-//    精選療程／最新文章／醫師／據點走 Items（引用內容）；
-//    主視覺輪播與八大專科入口沒有可引用的內容，走版位的 Settings JSON。
+//    八大專科入口／精選療程／最新文章／醫師／據點走 Items（引用內容）；
+//    只有主視覺輪播沒有可引用的內容，走版位的 Settings JSON。
 // ⚠️ 版位勾到草稿時匯出端已經濾掉（content-export），這裡拿到的都是已發布的。
 
 import { UNIT, img, loadUnit } from './_content'
+import { concernIconFor } from './_presentation'
 import { getClinics, type ClinicHoursTableRow } from './clinics'
 import { getClinicNap } from './navigation'
 
@@ -99,6 +100,15 @@ interface HomeSection {
   settings: unknown
   items: { contentItemId: number; contentType: number; slug: string | null; urlPath: string | null; title: string; sortOrder: number }[]
 }
+
+/**
+ * 主視覺以下六個版位的預設先後（＝ mockup 的順序）。
+ * ⚠️ 只在「API 回來的資料裡根本沒有這個版位」時才用得到 —— 有的話一律照它的 `sortOrder`。
+ *    主視覺不在這裡：它固定在最上面、永遠渲染（全頁唯一的 `<h1>` 在裡面）。
+ */
+const ORDERABLE_SECTIONS = [
+  'specialties', 'featured-treatments', 'latest-articles', 'doctors', 'clinics', 'brand-story',
+] as const
 
 /**
  * 首頁的七個版位，一次取齊。
@@ -139,7 +149,7 @@ export async function getHomeData() {
     section(key)?.items.slice().sort((a, b) => a.sortOrder - b.sortOrder) ?? []
 
   /**
-   * 版位設定（hero 的輪播圖、specialties 的八大專科入口）。
+   * 版位設定（目前只有 hero 的輪播圖；八大專科入口 2026-10-01 起改讀 items）。
    *
    * 🔴 **形狀不對就當成沒有，不要讓整個首頁掛掉。**
    *    `settings` 是資料庫裡的自由 JSON 欄位，後台寫得動它。2026-09-17 正式站
@@ -182,17 +192,22 @@ export async function getHomeData() {
       }
     })
 
-  const specialties: SpecialtyEntry[] = (settingsArrayOf('specialties') as {
-    title: string, slug: string, urlPath: string, icon: unknown
-  }[]).map((s) => {
-    const i = img(s.icon)
+  // 🔴 **八大專科入口＝全部困擾，自動列出**（2026-10-01，與醫師、據點同一條，決策 30）。
+  //    在此之前讀的是版位 `settings` 裡手打的八列（標題＋slug＋網址＋圖示）——
+  //    那八列就是全部 8 個困擾、順序也一樣，等於困擾的名稱與網址在資料庫裡有第二份，
+  //    而且後台改不到。現在名單與順序跟著「困擾」清單走（`PublicContentHandler.AutoSections`）。
+  // ⚠️ 圖示是版面素材（決策 14），與困擾總覽頁同一份對照表；查不到就是空字串，
+  //    模板用 `v-if` 跳過 —— **不退回某一張預設圖**（理由見 `concernIconFor`）。
+  const specialties: SpecialtyEntry[] = itemsOf('specialties').map((item) => {
+    const icon = concernIconFor(item.slug ?? '', item.title)
     return {
-      title: s.title,
-      slug: s.slug,
-      urlPath: s.urlPath,
-      imagePath: i?.src ?? '',
-      iconWidth: i?.width ?? 0,
-      iconHeight: i?.height ?? 0,
+      title: item.title,
+      slug: item.slug ?? '',
+      urlPath: item.urlPath ?? '#',
+      imagePath: icon?.src ?? '',
+      // 首頁的圖示是 46×46（mockup/index.html），困擾總覽頁是 64×64 —— 同一張圖、不同顯示尺寸。
+      iconWidth: 46,
+      iconHeight: 46,
     }
   })
 
@@ -254,8 +269,8 @@ export async function getHomeData() {
     // 🔴 **不要退回用 `item.title` 比名稱**：標題是院方改得動的欄位，一改就比不到，
     //    而症狀是首頁那張據點卡的電話、地址、看診時段**整組變空**，沒有任何錯誤訊息。
     const c = clinics.find((x) => x.slug === item.slug) ?? clinics.find((x) => x.name === item.title)
-    // NAP 只有名稱可以認（它是全站設定裡的一份字串資料，見 navigation.ts）。
-    const n = nap.find((x) => x.name === (c?.name ?? item.title))
+    // NAP 與據點頁同一個來源（據點內容，見 navigation.ts 的 getClinicNap），一樣比 slug。
+    const n = nap.find((x) => x.slug === item.slug)
     return {
       name: c?.name ?? item.title,
       urlPath: item.urlPath ?? '#',
@@ -266,7 +281,17 @@ export async function getHomeData() {
     }
   })
 
-  return { heroSlides, specialties, featuredTreatments, latestArticles, featuredDoctors, homeClinics }
+  // 主視覺以下六個版位要渲染哪幾個、什麼順序（index.vue 的 SECTION_ORDER）。
+  // 🔴 `isEnabled=false` 的版位**整區不渲染**，不是渲染一個只剩標題的空殼。
+  // ⚠️ 資料裡沒有的版位當成「開著、排在預設位置」—— 快照壞掉時首頁至少長得跟 mockup 一樣，
+  //    而不是只剩一個主視覺。
+  const sectionOrder: string[] = ORDERABLE_SECTIONS
+    .map((key, index) => ({ key, row: sections.find((s) => s.sectionKey === key), index }))
+    .filter(({ row }) => row?.isEnabled ?? true)
+    .sort((a, b) => (a.row?.sortOrder ?? a.index) - (b.row?.sortOrder ?? b.index) || a.index - b.index)
+    .map(({ key }) => key)
+
+  return { heroSlides, specialties, featuredTreatments, latestArticles, featuredDoctors, homeClinics, sectionOrder }
 }
 
 export const HOURS_WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日'] as const

@@ -45,7 +45,9 @@ public sealed class AccountHandler(Skin20DbContext db, ISqlConnectionFactory sql
     // ⚠️ 2026-09-17 由 8 改為 6（Tim 指定）。前端的 `validation.ts` MIN_PASSWORD_LENGTH
     //    是同一個數字，**兩邊要一起改** —— 只改一邊的症狀是「畫面收得下、送出被 400 退回」，
     //    或反過來「畫面擋下一組 API 其實接受的密碼」。
-    private const int MinPasswordLength = 6;
+    // ⚠️ `internal` 是給 AuthHandler（自己改密碼）共用 —— 2026-10-01 前那邊另有一份 8，
+    //    於是「管理者設 6 碼可以、本人改成 6 碼被退回」。全專案只能有這一個數字。
+    internal const int MinPasswordLength = 6;
 
     public async Task<IActionResult> ListUsersAsync(HttpRequest req)
     {

@@ -19,7 +19,8 @@
 | 07 | [deployment](07-deployment.md) | **部署架構與 CI/CD** — Azure SWA（Free）＋ 獨立 Azure Functions（.NET 10．EF Core ＋ Dapper）＋ Blob ＋ SQL、平台硬限制、GitHub Actions、EF Core 遷移 |
 | 08 | [database](08-database.md) | **資料庫規劃** — 以功能單元劃分的 35 張表、共用內容主幹、權限與帳號、301 對照表、EF Core 對應與種子順序 |
 | 09 | [frontend](09-frontend.md) | **前端技術架構** — 一份 Nuxt 專案兩種產物、建置期資料流、純靜態站的三個執行期例外、21 個模板對應、後台 SPA |
-| 10 | [api](10-api.md) | **API 契約** — 回應信封、錯誤碼、端點清單、權限碼與五種角色對應 |
+| 10 | [api](10-api.md) | **API 契約** — 回應信封、錯誤碼、端點清單、權限碼與角色對應 |
+| — | [openapi.yaml](openapi.yaml) | **OpenAPI 3.1 規格**（手寫，2026-10-01）— 65 個 operation；改路由要同步 |
 | 11 | [backend-design](11-backend-design.md) | **後端施工標準** — 分層鐵律、集中式路由與預設拒絕、EF Core ＋ Dapper 分工、工作流狀態機、Coding Checklist |
 
 ## 原始資料

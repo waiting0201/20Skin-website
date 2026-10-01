@@ -40,10 +40,11 @@ public sealed class AuthHandler(
     ILogger<AuthHandler> logger)
 {
     /// <summary>
-    /// docs/08 §A-5 配套 3：密碼強度規則尚未定案（docs/02 §4「密碼強度與輪替規則需一併訂定」）。
-    /// 這裡先給一個保守的最低長度，不是最終政策——政策定案後要回來改這裡。
+    /// 與帳號管理共用同一個下限（CLAUDE.md 決策 10：6 碼）。
+    /// 🔴 2026-10-01 之前這裡另有一份 8 —— 帳號管理改成 6 時只改了那一邊，
+    /// 於是「管理者幫你設 6 碼可以、你自己改成 6 碼被退回」。
     /// </summary>
-    private const int MinPasswordLength = 8;
+    private const int MinPasswordLength = AccountHandler.MinPasswordLength;
 
     // PasswordHasher<TUser> 的 TUser 參數在 v3 雜湊演算法裡完全沒被用到（只是型別佔位），
     // 但 API 要求傳一個非 null 實例——這裡建一個空殼即可，不對應任何真正的使用者。
@@ -211,7 +212,7 @@ public sealed class AuthHandler(
 
         if (body.NewPassword.Length < MinPasswordLength)
             throw AppException.BadRequest(
-                ErrorCodes.ValidationRange, $"新密碼長度至少 {MinPasswordLength} 碼（暫行規則，待正式密碼政策定案）。");
+                ErrorCodes.ValidationRange, $"新密碼長度至少 {MinPasswordLength} 碼。");
 
         var userId = RequestContext.UserId(req);
 

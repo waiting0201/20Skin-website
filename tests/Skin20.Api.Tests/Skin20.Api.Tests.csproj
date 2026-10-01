@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    API（functions/）的第一個單元測試專案（STATUS.md §五：「至少要涵蓋權限判定表與可見性判定式」）。
+
+    ⚠️ 放在 tests/，**不是** functions/ 底下 —— Skin20.Api.csproj 用預設 glob，
+       子目錄的 .cs 會被一起編進 API。
+
+    🔴 範圍是「純邏輯、不需要資料庫」。不寫需要 SQL Server／Azure 的整合測試 ——
+       那一類由 tools/api-smoke 負責（而且只能對用完即丟的資料庫跑）。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Skin20.Api.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <!-- 可見性的 SQL 片段用 SQLite 記憶體庫實際執行（那段條件只用到 IS NULL 與比較，兩邊語意一致）。 -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.3" />
+    <!-- ⚠️ 釘住 transitive 的原生函式庫：預設解析到的 2.1.11 有 NU1903（高風險）公告。 -->
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../functions/Skin20.Api.csproj" />
+  </ItemGroup>
+
+</Project>

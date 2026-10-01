@@ -7,8 +7,14 @@
 //
 // 🔴 **這一頁真正編得動的只有三個半版位**（2026-09-18 起）：
 //    精選療程、最新文章、品牌理念摘要（挑選），加上 hero（輪播圖）。
-//    醫師與據點是**自動列出全部**（決策 30），八大專科入口的挑選器 2026-09-17 拿掉
-//    （決策 23）—— 三者都是「後台編得動、前台不理它」或「兩份順序」的來源。
+//    八大專科入口、醫師與據點是**自動列出全部**（決策 30；八大專科入口 2026-10-01 加入）
+//    —— 三者原本都是「後台編得動、前台不理它」或「兩份順序」的來源。
+//
+// 🔴 **2026-10-01：版位的先後與「在首頁顯示」回來了**，因為前台終於讀它們了
+//    （`apps/web/app/pages/index.vue` 的 `SECTION_ORDER`）。2026-09-18 拿掉這兩個入口
+//    的理由是「前台不讀」—— 那個理由已經不成立，不要拿它回頭再拿掉一次。
+//    ⚠️ 主視覺不參與：前台把它固定在最上面且永遠渲染（`<h1>` 在裡面），
+//    所以它沒有把手、也沒有顯示開關。
 //
 // 🔴 **2026-09-17：主視覺的輪播圖改成在這裡維護**（Tim 指定）。在此之前這一區
 //    是一段「要換圖請洽工程」的警告 —— 因為舊的表單假設 `hero.settings` 是
@@ -43,8 +49,10 @@ import type { RelationField } from '@/unit-schema'
 import { UNIT_REGISTRY } from '@/units'
 import { validateStructured } from '@/validation'
 import { revealFirstError } from '@/scroll-to-error'
+import DragHandle from '@/components/DragHandle.vue'
 import RelationPicker from '@/components/RelationPicker.vue'
 import StructuredField from '@/components/StructuredField.vue'
+import { useDragSort } from '@/drag-sort'
 import { useStickyHead } from '@/sticky-head'
 
 const { headRef } = useStickyHead()
@@ -73,12 +81,9 @@ const isLocked = computed(() => state.value?.status === 2)
 const canEdit = computed(() => canEditBase.value && !isLocked.value)
 
 /**
- * 🔴 **版位不給拖曳排序**（Tim 定案 2026-09-18：「拿掉把手」）。
- *    理由與「文章不給拖」同一條（決策 21）：**前台根本不讀這個順序** ——
- *    `apps/web/app/pages/index.vue` 的七個 `<section>` 是寫死的先後，
- *    `sortOrder` 只有後台自己看得到。給把手等於給一個拖了也不會有事情發生的假功能。
- * ⚠️ 排序值仍然照讀照送（`putSections` 用陣列位置當 sortOrder，所以這裡一定要
- *    用排好的那一份送出，不是 `sections` 的載入順序）。
+ * 版位的先後（2026-10-01 起前台照它排，見檔頭）。
+ * ⚠️ `putSections` 用**陣列位置**當 sortOrder，所以送出時一定要用排好的這一份，
+ *    不是 `sections` 的載入順序。
  */
 const sortedSections = computed(() => [...sections].sort((a, b) => a.sortOrder - b.sortOrder))
 
@@ -91,6 +96,27 @@ const sortedSections = computed(() => [...sections].sort((a, b) => a.sortOrder -
  */
 const heroSection = computed(() => sortedSections.value.find((x) => schemaOf(x)) ?? null)
 const mainSections = computed(() => sortedSections.value.filter((x) => x !== heroSection.value))
+
+// 拖曳排序：只有主欄那六個。⚠️ 只改本地的 sortOrder、**不打 API** —— 這一頁是
+// 「改完存草稿、再發布」，跟清單頁那種「動一下就即時寫回」不一樣。
+const drag = useDragSort<HomeSectionKey>({
+  keys: () => mainSections.value.map((s) => s.sectionKey),
+  onReorder: (_group, orderedKeys) => reorderSections(orderedKeys),
+  enabled: () => canEdit.value,
+})
+
+/**
+ * 🔴 **從 1 開始編，主視覺留在 0。** 主視覺不在拖曳清單裡，若六個也從 0 編，
+ *    就會跟它撞號 —— 而 `putSections` 是先排序再取陣列位置，撞號時誰先誰後
+ *    取決於排序的穩定性，存下去的順序可能不是畫面上看到的那一個。
+ */
+function reorderSections(orderedKeys: HomeSectionKey[]) {
+  orderedKeys.forEach((key, index) => {
+    const section = sections.find((s) => s.sectionKey === key)
+    if (section) section.sortOrder = index + 1
+  })
+  if (heroSection.value) heroSection.value.sortOrder = 0
+}
 
 function messageOf(e: unknown, fallback: string): string {
   if (e instanceof ApiError) return e.details.length ? `${e.message}（${e.details.join('、')}）` : e.message
@@ -314,11 +340,19 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
            編輯頁的右欄（排程／危險區）很矮，那裡 sticky 才有意義。 -->
       <div class="adm-editor-layout adm-editor-layout--hero">
       <div class="adm-editor-main">
-          <div v-for="section in mainSections" :key="section.sectionKey" class="adm-card">
+          <div
+            v-for="section in mainSections"
+            :key="section.sectionKey"
+            class="adm-card"
+            v-bind="drag.itemProps('sections', section.sectionKey)"
+            :class="drag.itemClass('sections', section.sectionKey)"
+          >
             <div class="adm-page__head" style="margin-bottom: var(--sp-3)">
               <div>
                 <p class="adm-card__title" style="margin-bottom: 0; display: flex; align-items: center; gap: var(--sp-2)">
+                  <DragHandle v-if="canEdit" v-bind="drag.handleProps(section.sectionKey)" />
                   {{ section.title }}
+                  <span v-if="!section.isEnabled" class="adm-muted" style="font-weight: normal">（首頁不顯示）</span>
                 </p>
                 <p v-if="section.autoAll && section.targetUnit" class="adm-field__hint">
                   這一區會自動列出全部的{{ UNIT_REGISTRY[section.targetUnit].label }}，順序跟著清單走。
@@ -327,19 +361,22 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
                   內容來源：{{ UNIT_REGISTRY[section.targetUnit].label }}——只能從既有的{{ UNIT_REGISTRY[section.targetUnit].label }}挑選，不能另打文案。
                 </p>
                 <p v-else class="adm-field__hint">
-                  這一區的內容不在這個畫面編輯，下面只是列出目前的設定。
+                  這一區的內容不在這個畫面編輯。
                 </p>
               </div>
             </div>
 
-            <!-- 🔴 **這張卡片沒有「版位標題」「副標／Eyebrow」，也沒有「在首頁顯示這個版位」**
-                 —— 三個都是 Tim 指定拿掉的「編了不生效」欄位：
-                 ① 標題與副標（2026-09-17）：`putSections` 根本沒送它們，而前台那兩行字
-                    來自 `app/data/_presentation.ts`（決策 14：版面留前台）；
-                 ② 顯示開關（2026-09-18）：關掉**只會讓那一區變空**，區塊本身照樣渲染 ——
-                    `apps/web/app/pages/index.vue` 的 `<section>` 沒有 `v-if`，
-                    前台會留下一塊只有標題與英文小標的空白區，比「關掉」更糟。
-                 ⚠️ `isEnabled` 仍然照讀照送（原值原樣回去），只是畫面上沒有入口可以改它。 -->
+            <!-- 🔴 **這張卡片沒有「版位標題」「副標／Eyebrow」**（Tim 指定 2026-09-17）——
+                 `putSections` 根本沒送它們，而前台那兩行字來自 `app/data/_presentation.ts`
+                 （決策 14：版面留前台）。
+                 ✅ 「在首頁顯示這個版位」2026-10-01 回來了：前台的 `<section>` 現在有 `v-if`，
+                    關掉就是整區不渲染（2026-09-18 拿掉它的理由是「關掉只會變空殼」，已修）。 -->
+            <div class="adm-field" style="margin-bottom: var(--sp-3)">
+              <label class="adm-checkbox">
+                <input v-model="section.isEnabled" type="checkbox" :disabled="!canEdit">
+                在首頁顯示這個版位
+              </label>
+            </div>
 
             <!-- 🔴 **自動列出全部的版位（醫師、據點）沒有挑選器**（Tim 指定 2026-09-18，
                  決策 30）。它們原本挑的就是整個單元（14/14、2/2），等於同一批內容
@@ -371,13 +408,13 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
               </div>
             </div>
 
-            <!-- 既沒有挑選器、也沒有 schema 的版位（目前是 specialties：八大專科入口）。
-                 🔴 **它的 `settings` 仍然原樣往返**（`HomeSection.rawSettings`）——
-                 少了那條，按一次「儲存草稿」就會把那八個入口連同圖示清成 null，
-                 而且沒有任何錯誤訊息（2026-09-17 實際踩到）。 -->
+            <!-- ⚠️ 2026-10-01 起主欄已經沒有「既沒有挑選器、也沒有 schema」的版位了
+                 （八大專科入口改成自動列出全部困擾）。這一段留著當退路，免得哪天多一個
+                 這種版位時卡片底下一片空白。
+                 🔴 `settings` 仍然原樣往返（`HomeSection.rawSettings`）—— 八大專科入口
+                 舊的那八列還在裡面，少了那條，一次存檔就會把它清成 null。 -->
             <p v-else class="adm-field__hint">
-              八大專科入口的標題、連結與圖示存在版位設定裡，儲存時會原樣保留。
-              要增刪或換圖請洽工程端。
+              這一區的內容不在這個畫面編輯。
             </p>
             <!-- ⚠️ 自動版位的 `items` **仍然原樣往返**（`toRelationItems` 沒有被呼叫，
                  但 `section.items` 原封不動跟著 putSections 送回去）——
@@ -395,7 +432,7 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
 
           <p class="adm-alert adm-alert--warn">
             🔴 <strong>只按「儲存草稿」前台不會變。</strong>前台讀的是已發布的版本快照，
-            排好之後一定要再按一次「發布」。（按「發布」會自動先存一次草稿。）
+            排好或開關版位之後一定要再按一次「發布」。（按「發布」會自動先存一次草稿。）
           </p>
           <p v-if="!canPublish" class="adm-muted">
             目前沒有發布首頁的權限，排好之後請找有權限的人按「發布」。
@@ -403,8 +440,8 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
       </div><!-- /.adm-editor-main -->
 
       <!-- 右欄：主視覺輪播。
-           🔴 **它不在拖曳清單裡**（drag.keys 只收主欄那六個），所以沒有把手 ——
-              排序值原封不動，見 reorderSections。
+           🔴 **它不在拖曳清單裡**（drag.keys 只收主欄那六個），所以沒有把手、也沒有
+              顯示開關 —— 前台把它固定在最上面且永遠渲染。排序值固定 0，見 reorderSections。
            ⚠️ 版位設定的形狀宣告在 units/schemas/home.ts，用九個內容模型同一套
               StructuredField 渲染（含上傳）。「進階：直接編輯 JSON」的切換鈕
               2026-09-18 拿掉了，見 StructuredField.vue 檔頭。

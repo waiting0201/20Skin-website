@@ -83,7 +83,7 @@ functions/
 5. **禁止引入**：Repository Pattern、In-Process Model、AutoMapper、自訂 IoC 容器
 6. 一個單元一個 Handler、一個 ReadService、一個 Dtos 檔。**單元代號逐字對應** [10](10-api.md) §3.3 與權限碼，不做單複數轉換
 
-> **為什麼是單一 `RouterFunction` catch-all 而不是每個資源一支 Function**：路由表與權限表集中在一處，才能與 [10](10-api.md) §4 的權限矩陣逐條對照。代價是自動 OpenAPI 產生器內省不出端點 —— 所以 `openapi.yaml` 手寫並進版控。
+> **為什麼是單一 `RouterFunction` catch-all 而不是每個資源一支 Function**：路由表與權限表集中在一處，才能與 [10](10-api.md) §4 的權限矩陣逐條對照。代價是自動 OpenAPI 產生器內省不出端點 —— 所以 [`docs/openapi.yaml`](openapi.yaml) 手寫並進版控。
 
 ---
 

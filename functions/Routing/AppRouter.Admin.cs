@@ -46,7 +46,7 @@ public sealed partial class AppRouter
                 => PermissionCodes.Edit(u),
 
             ("GET", ["admin", var u, ..]) when UnitCodes.IsValid(u)
-                // 讀取沒有獨立的 view 權限碼（docs/08 §A-2 的 31 列裡沒有），
+                // 讀取沒有獨立的 view 權限碼（docs/08 §A-2 的 28 列裡沒有），
                 // 能編輯就看得到；行銷與審核者靠 seo.edit／publish 進來。
                 => null,
             ("POST", ["admin", var u]) when UnitCodes.IsValid(u)

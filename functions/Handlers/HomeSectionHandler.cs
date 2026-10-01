@@ -133,6 +133,6 @@ public sealed class HomeSectionHandler(Skin20DbContext db, ISqlConnectionFactory
 
         // ⚠️ 這裡**不觸發重建**（理由見類別註解）：改的是工作副本，前台沒有任何變化。
         var updated = await reads.GetAllAsync(ct);
-        return new OkObjectResult(ApiResponse.Ok(updated, "已儲存首頁版位草稿。送審核准後才會出現在正式網站上。"));
+        return new OkObjectResult(ApiResponse.Ok(updated, "已儲存首頁版位草稿。按「發布」之後才會出現在正式網站上。"));
     }
 }

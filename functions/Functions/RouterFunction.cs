@@ -16,7 +16,7 @@ namespace Skin20.Api.Functions;
 /// <para>
 /// 為什麼是單一 catch-all 而不是每個資源一支 Function：路由表與權限表集中在一處，
 /// 才能與 docs/10 §4 的權限矩陣逐條對照。代價是自動 OpenAPI 產生器內省不出端點
-/// ——所以 <c>openapi.yaml</c> 手寫並進版控。
+/// ——所以 <c>docs/openapi.yaml</c> 手寫並進版控（改了路由要同步那份）。
 /// </para>
 /// </summary>
 public sealed class RouterFunction(AppRouter router)

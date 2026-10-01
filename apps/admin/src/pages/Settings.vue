@@ -1,8 +1,17 @@
 <script setup lang="ts">
 // 全站設定（/settings）—— 規格見 docs/02 §3、docs/08 §G-1。
 //
-// 站名／預設 OG 圖／全站 NAP 主資料／追蹤碼／`/contact/` 收件信箱，
+// 站名／預設 OG 圖／追蹤碼／`/contact/` 收件信箱，
 // 外加 AI 問答面板設定（docs/04-ai-faq.md §4：不新增畫面，併入這裡）。
+//
+// 🔴 **沒有「全站院所資訊（NAP）」的編輯區**（2026-10-01 拿掉，**不要加回來**）。
+//    那一區寫的是設定鍵 `nap.json`，而**前台從來沒有讀過它** —— 頁尾、據點頁、首頁、
+//    聯絡我們的名稱／電話／地址一律來自「據點」內容（`apps/web/app/data/navigation.ts`
+//    的 `getClinicNap()`）。所以它不是「主資料」，是一份沒有人讀的第二份：
+//    改了前台不會變，畫面上那組「與據點頁一致／不一致」的檢查，比對的是兩份
+//    其中一份根本沒在用的資料。真的要改電話地址，是改據點那一筆。
+//    ⚠️ 設定鍵 `nap.json` 留在資料庫（同 `site.logoImage`：拿掉要一支 migration，
+//    而它沒有害處）；`PUT /admin/setting` 只更新送上來的鍵，不送就不會動到它。
 //
 // 🔴 **沒有 Logo 上傳欄位**（Tim 指定 2026-09-17，**不要加回來**）。站徽走建置產物
 //    `/assets/logo.jpg`，前台三處（頁首、頁尾、首頁 JSON-LD 的 Organization.logo）
@@ -22,7 +31,6 @@ import { countPendingImages, resolveImage } from '@/image-value'
 import { currentUser } from '@/auth'
 import { hasPermission } from '@/permissions'
 import ImageField from '@/components/ImageField.vue'
-import type { AdminRecord } from '@/types'
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
@@ -38,7 +46,6 @@ const actionNotice = ref('')
 const form = reactive<SiteSettingsDraft>({
   siteName: '',
   defaultOgImage: null,
-  nap: [],
   trackingCodes: '',
   contactEmail: '',
   socialLinks: [],
@@ -47,29 +54,6 @@ const form = reactive<SiteSettingsDraft>({
   updatedAt: '',
   updatedByUserId: null,
 })
-
-// ⚠️ NAP 必須與據點頁、頁尾逐字一致（CLAUDE.md／docs/03 §4 ③：AI 靠交叉比對
-// 建立實體信心，任何不一致都會降低確信度）。這裡拿「據點」內容模型的既有
-// 資料做逐字比對，UI 上直接標出不一致，而不是等上線後被發現。
-const clinics = ref<AdminRecord[]>([])
-
-interface NapCheck {
-  matched: AdminRecord | null
-  phoneMismatch: boolean
-  addressMismatch: boolean
-}
-
-const napChecks = computed<NapCheck[]>(() =>
-  form.nap.map((entry) => {
-    const matched = clinics.value.find((c) => c.title === entry.name) ?? null
-    if (!matched) return { matched: null, phoneMismatch: false, addressMismatch: false }
-    return {
-      matched,
-      phoneMismatch: String(matched.fields.phone ?? '') !== entry.phone,
-      addressMismatch: String(matched.fields.address ?? '') !== entry.address,
-    }
-  }),
-)
 
 const loadError = ref('')
 
@@ -95,12 +79,7 @@ async function load() {
   loading.value = true
   loadError.value = ''
   try {
-    const [settings, clinicList] = await Promise.all([
-      adminApi.site.settings.get(),
-      adminApi.content.list('clinic', { pageSize: 100 }),
-    ])
-    Object.assign(form, settings)
-    clinics.value = clinicList.items
+    Object.assign(form, await adminApi.site.settings.get())
 
     // ⚠️ 語料狀態失敗不該讓整頁設定載不進來 —— 它只是一行說明文字。
     aiIndex.value = await adminApi.site.aiIndex.status().catch(() => null)
@@ -111,19 +90,6 @@ async function load() {
   }
 }
 onMounted(load)
-
-function addNapEntry() {
-  form.nap = [...form.nap, { name: '', phone: '', address: '' }]
-}
-function removeNapEntry(index: number) {
-  form.nap = form.nap.filter((_, i) => i !== index)
-}
-function copyFromClinic(index: number) {
-  const check = napChecks.value[index]
-  if (!check.matched) return
-  form.nap[index].phone = String(check.matched.fields.phone ?? '')
-  form.nap[index].address = String(check.matched.fields.address ?? '')
-}
 
 /**
  * 追蹤 ID 的格式。與 API 的 `SettingHandler.TrackingIdPattern` 逐條對應 ——
@@ -153,7 +119,6 @@ async function save() {
     const patch: Partial<SiteSettingsData> = {
       siteName: form.siteName,
       defaultOgImage,
-      nap: form.nap,
       trackingCodes: form.trackingCodes,
       contactEmail: form.contactEmail,
       aiFaq: form.aiFaq,
@@ -256,43 +221,12 @@ async function save() {
         </div>
 
         <div class="adm-card">
-          <p class="adm-fieldset__legend">全站院所資訊（名稱／電話／地址）</p>
-          <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
-            必須與各據點頁、頁尾<strong>逐字一致</strong>——Google 與 AI 會比對這幾處是否相同，
-            任何一個字不一樣（例如「台」與「臺」、電話有沒有加括號）都會降低它們對診所資訊的信任。
+          <p class="adm-fieldset__legend">院所資訊（名稱／電話／地址）</p>
+          <p class="adm-field__hint">
+            院所的名稱、電話、地址與看診時段請到
+            <RouterLink to="/clinic">據點</RouterLink>
+            裡修改。頁尾、據點頁、首頁與聯絡我們都讀那一份，改一次全站就一致。
           </p>
-
-          <div v-for="(entry, idx) in form.nap" :key="idx" class="adm-repeater__row" style="flex-direction: column; align-items: stretch; gap: var(--sp-2)">
-            <div class="adm-repeater__fields">
-              <div class="adm-field">
-                <label class="adm-field__label">名稱</label>
-                <input v-model="entry.name" class="adm-input" type="text" :disabled="!canEdit">
-              </div>
-              <div class="adm-field">
-                <label class="adm-field__label">電話</label>
-                <input v-model="entry.phone" class="adm-input" type="text" :disabled="!canEdit">
-              </div>
-              <div class="adm-field adm-field--span2">
-                <label class="adm-field__label">地址</label>
-                <input v-model="entry.address" class="adm-input" type="text" :disabled="!canEdit">
-              </div>
-            </div>
-
-            <p v-if="!napChecks[idx]?.matched" class="adm-risk-hit">
-              ⚠️ 在「據點」內容裡找不到名稱完全相同的項目（{{ entry.name || '（未命名）' }}），無法核對一致性。
-            </p>
-            <p v-else-if="napChecks[idx].phoneMismatch || napChecks[idx].addressMismatch" class="adm-risk-hit">
-              ⚠️ 與據點頁「{{ napChecks[idx].matched!.title }}」不一致：
-              <template v-if="napChecks[idx].phoneMismatch">電話（據點頁為「{{ napChecks[idx].matched!.fields.phone }}」）</template>
-              <template v-if="napChecks[idx].phoneMismatch && napChecks[idx].addressMismatch">、</template>
-              <template v-if="napChecks[idx].addressMismatch">地址（據點頁為「{{ napChecks[idx].matched!.fields.address }}」）</template>
-              <button v-if="canEdit" type="button" class="btn btn--line btn--sm" style="margin-left: var(--sp-2)" @click="copyFromClinic(idx)">套用據點頁的值</button>
-            </p>
-            <p v-else class="adm-field__hint" style="color: var(--adm-ok)">✓ 與據點頁「{{ napChecks[idx].matched!.title }}」一致。</p>
-
-            <button v-if="canEdit" type="button" class="btn btn--line btn--sm" style="align-self: flex-start" @click="removeNapEntry(idx)">移除這一筆</button>
-          </div>
-          <button v-if="canEdit" type="button" class="btn btn--ghost btn--sm" style="margin-top: var(--sp-2)" @click="addNapEntry">＋ 新增院所</button>
         </div>
 
         <div class="adm-card">

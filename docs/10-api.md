@@ -58,7 +58,7 @@ SSR 之後那個位置給了 Nuxt。它負責的 1000 條 301 改由前台的 `p
 - **快取**：後台端點一律 `Cache-Control: no-store`。公開端點（§3.1）只有 `/site-settings/public` 需要快取，給短 `s-maxage`。
 - **CORS**：allow-list 為正式前台來源與上線前驗收用的 SWA 預設網址，**不使用 `*`**（後台端點帶憑證）。由院方設定（[07](07-deployment.md) §1）。
   ⚠️ **4xx／5xx 的回應也要帶 CORS 標頭** —— 少了它，瀏覽器端只會看到一個沒有任何資訊的 network error。
-- **文件化**：以手寫 `functions/openapi.yaml` 進版控為準（catch-all 路由下自動產生器內省不出端點，見 [11](11-backend-design.md) §2）。改端點時同步本文件 §3。
+- **文件化**：以手寫 [`docs/openapi.yaml`](openapi.yaml) 進版控為準（2026-10-01 建立，OpenAPI 3.1；原本寫的位置 `functions/openapi.yaml` 從來沒有這個檔）（catch-all 路由下自動產生器內省不出端點，見 [11](11-backend-design.md) §2）。改端點時同步本文件 §3。
 
 ### 錯誤碼值域
 
@@ -113,7 +113,7 @@ SSR 之後那個位置給了 Nuxt。它負責的 1000 條 301 改由前台的 `p
 | `GET /content?path=…` | 依網址取單筆，**含內文**。網址全站唯一（[08](08-database.md) §B-1），所以這是內頁最直接的查法 |
 | `GET /content/batch?ids=…` | 依 id 批次取（上限 100）。給「關聯目標需要的欄位不只標題」用 —— 療程卡片要關聯文章的封面與日期，而 `relations[]` 只帶 slug／title／urlPath |
 | `GET /article/popular-tags?limit=` | 側欄熱門標籤，**依實際引用篇數在 SQL 層聚合** |
-| `GET /home` | 首頁七個版位。🔴 讀的是**首頁那筆 Page 已核准版本的快照**，不是 `HomeSections` 即時表（[08](08-database.md) §G-2）。⚠️ 例外是 **`doctors` 與 `clinics`：名單與順序改成算繪當下取整個單元**（依該單元的 `SortOrder`，決策 30）—— 它們挑的本來就是整個單元，留在快照裡等於第二份順序。⚠️ 項目的 `urlPath`／`slug` 用即時值（網址要與路由一致），**`title` 用已發布快照**（內容性欄位，同 `/menu`） |
+| `GET /home` | 首頁七個版位。🔴 讀的是**首頁那筆 Page 已核准版本的快照**，不是 `HomeSections` 即時表（[08](08-database.md) §G-2）。⚠️ 例外是 **`specialties`（全部困擾，2026-10-01 加入）、`doctors` 與 `clinics`：名單與順序改成算繪當下取整個單元**（依該單元的 `SortOrder`，決策 30）—— 它們挑的本來就是整個單元，留在快照裡等於第二份順序。⚠️ 項目的 `urlPath`／`slug` 用即時值（網址要與路由一致），**`title` 用已發布快照**（內容性欄位，同 `/menu`） |
 | `GET /menu` | 導覽選單與頁尾。`linkKind=1` 的網址由 `ContentItems.UrlPath` 決定，不另存一份 |
 | `GET /redirects/resolve?path=…` | 舊網址解析。**單筆 seek**，命中回 `{ toPath, statusCode }`，未命中 404 |
 | `GET /search?q=` | 站內搜尋。回 `[{ t, u, ti, ex }]`（型別標籤／網址／標題／摘要）。對**已核准版本快照**做 `LIKE` 子字串比對，標題命中排前面。🔴 **不設筆數上限** —— 前台有型別篩選 tab 的筆數，任何上限都會讓那些數字變成謊話，而排序讓截斷變成整類整類地砍掉（[09](09-frontend.md) §4）。上限是語料本身（約 1228 筆／309 KB） |
@@ -240,7 +240,7 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 | `GET /admin/dashboard` | 登入即可 | 聚合查詢，**無專屬資料表**。只回九個單元 × 四態的筆數矩陣（「待審核」「近期送審」「我的退件」三段隨審核佇列一起移除） |
 | `POST /admin/upload/sas` | `upload.file` | 取短效寫入 SAS（限定容器與 blob 名稱、write only、只收圖片） |
 | `POST /admin/upload/commit` | `upload.file` | 直傳完成後回報。API 讀檔頭驗真實型別，通過就回傳一組**圖片值**：`{ blobPath, url, alt, width, height, variants }` |
-| `GET|PUT /admin/home-section` | `home.arrange` | 首頁版位編排。**只能引用既有內容，不收自由文案**。⚠️ `doctors`／`clinics` 送上來的名單前台不讀（自動列出全部，決策 30），端點仍照收照存 |
+| `GET|PUT /admin/home-section` | `home.arrange` | 首頁版位編排。**只能引用既有內容，不收自由文案**。⚠️ `specialties`／`doctors`／`clinics` 送上來的名單前台不讀（自動列出全部，決策 30），端點仍照收照存 |
 | `GET|PUT /admin/menu` | `menu.edit` | 導覽選單與頁尾（限超級管理員） |
 | `GET|PUT /admin/setting` | `settings.edit` | 全站設定（限超級管理員），含 AI FAQ 開關 |
 | `GET|POST|PUT|DELETE /admin/redirect` | `redirect.manage` | 301 對照表（約 770 條）。清單支援 `keyword`／`isActive`／`source`／`sortBy`（`fromPath`／`createdAt`）／`sortDir`，**全部在 SQL 層** |
@@ -250,7 +250,7 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 | `GET|POST|PUT|DELETE /admin/user` | `account.manage` | 帳號管理（限超級管理員） |
 | `PUT /admin/user/{id}/password` | `account.manage` | 重設密碼 |
 | `GET /admin/role`、`PUT /admin/role/{id}/permissions` | `account.manage` | 角色權限設定（限超級管理員） |
-| `GET /admin/risk-term` | **登入即可** | 啟用中的高風險字詞清單，供編輯器即時提示（[02](02-backend-cms.md) §5）。⚠️ **是提示不是閘門** —— 送審時伺服器仍會自己重掃一次，前端掃到什麼不影響能不能送審，兩邊結果不一致也不是錯誤 |
+| `GET /admin/risk-term` | **登入即可** | 啟用中的高風險字詞清單，供編輯器即時提示（[02](02-backend-cms.md) §5）。⚠️ **是提示不是閘門**。送審 2026-09-17 拿掉之後（決策 20），**伺服器端不再重掃**，這是唯一的一道 |
 | `GET /admin/export/{kind}` | `settings.edit` | 預覽 `faq.json`／`llms.txt`／`llms-full.txt`。**實際產物在建置期產生**，此端點只供後台畫面預覽（[07](07-deployment.md) §4） |
 
 **未列於上表的 `/admin/*` 路徑一律拒絕（403）。** 新增後台端點時必須同步補進路由表與權限表兩處（[11](11-backend-design.md) §5.3）。

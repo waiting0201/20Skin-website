@@ -212,7 +212,7 @@ function toClinic(faqs: ContentRecord[], nap: Awaited<ReturnType<typeof getClini
   const look = PRESENTATION[slug] ?? {
     eyebrow: '', hoursFootnote: '', jsonLdDescription: '', roleLabel: '', medicalSpecialty: [],
   }
-  const napRow = nap.find((n) => n.name === record.title)
+  const napRow = nap.find((n) => n.slug === record.slug)
   const hours = ((f.businessHours ?? []) as { dayOfWeek: number; startTime: string; endTime: string; sortOrder: number }[])
     .slice()
     .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.sortOrder - b.sortOrder)

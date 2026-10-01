@@ -285,7 +285,7 @@ await step('🔴 新增按鈕只有一顆，型別在對話框裡問', async () 
 /** ImageField 那句「換圖會真的刪掉舊檔」的警告，用一小段夠獨特的原文比對。 */
 const DELETE_WARNING = '舊的圖片檔會在存檔時真的刪掉'
 
-section('首頁版位編排：兩欄版面與那些被拿掉的東西')
+section('首頁版位編排：兩欄版面、排序與顯示開關')
 await step('開得起來，而且是兩欄（右欄＝主視覺）', async () => {
   await navigate(page, '/admin/home-sections')
   await page.waitForSelector('.adm-editor-side--hero', { timeout: 30000 })
@@ -295,25 +295,29 @@ await step('開得起來，而且是兩欄（右欄＝主視覺）', async () =>
   if (!side || side.x < main.x) throw new Error('右欄不在主欄右邊')
   return `主欄 ${Math.round(main.width)}px ／ 右欄 ${Math.round(side.width)}px`
 })
-await step('🔴 沒有拖曳把手（前台不讀版位順序）', async () => {
-  // 決策 23：給把手等於給一個「拖了不會有事情發生」的假功能。
-  const n = await page.locator('.adm-drag-handle').count()
-  if (n) throw new Error(`還有 ${n} 個把手`)
-  return '0 個'
+await step('主欄六個版位各有拖曳把手，主視覺沒有', async () => {
+  // 決策 23：2026-10-01 起前台照 sortOrder 排（index.vue 的 SECTION_ORDER），把手回來了。
+  // 🔴 主視覺固定在最上面（全頁唯一的 <h1> 在裡面），它不可以有把手。
+  const main = await page.locator('.adm-editor-main .adm-drag-handle').count()
+  const hero = await page.locator('.adm-editor-side--hero .adm-drag-handle').count()
+  if (main !== 6) throw new Error(`主欄有 ${main} 個把手（應為 6）`)
+  if (hero) throw new Error('主視覺也有把手')
+  return '主欄 6 個、主視覺 0 個'
 })
-await step('🔴 沒有「在首頁顯示這個版位」（關掉只會留下空區塊）', async () => {
-  // 決策 23：關掉只讓那一區變空，前台那個 <section> 沒有 v-if，會留下一塊
-  // 只有標題與英文小標的空白區 —— 比關不掉更糟。
-  const n = await page.locator('.adm-checkbox').filter({ hasText: '在首頁顯示' }).count()
-  if (n) throw new Error(`還有 ${n} 個`)
-  return '0 個'
+await step('主欄六個版位各有「在首頁顯示」，主視覺沒有', async () => {
+  // 決策 23：2026-10-01 起前台的 <section> 有 v-if，關掉就是整區不渲染。
+  const main = await page.locator('.adm-editor-main .adm-checkbox').filter({ hasText: '在首頁顯示' }).count()
+  const hero = await page.locator('.adm-editor-side--hero .adm-checkbox').filter({ hasText: '在首頁顯示' }).count()
+  if (main !== 6) throw new Error(`主欄有 ${main} 個（應為 6）`)
+  if (hero) throw new Error('主視覺也有顯示開關')
+  return '主欄 6 個、主視覺 0 個'
 })
-await step('🔴 醫師與據點沒有挑選器（自動列出全部，順序跟著內容清單）', async () => {
+await step('🔴 八大專科入口、醫師與據點沒有挑選器（自動列出全部，順序跟著內容清單）', async () => {
   // 決策 30：那兩個版位挑的本來就是整個單元（14/14、2/2）—— 等於同一批內容
   // 有兩份順序，在「內容 → 醫師」拖一次首頁不會跟，而且兩邊都沒有任何徵兆。
   // 🔴 精選療程（4/28）與最新文章（4/1100）**必須還有**挑選器，它們是真的策展。
   const cardOf = (title) => page.locator('.adm-card').filter({ hasText: title }).first()
-  for (const title of ['醫師團隊', '據點資訊']) {
+  for (const title of ['看皮膚　找四季', '醫師團隊', '據點資訊']) {
     const card = cardOf(title)
     if (await card.locator('.adm-relation').count()) throw new Error(`「${title}」還有挑選器`)
     if (!(await card.innerText()).includes('自動列出全部')) throw new Error(`「${title}」沒有說明它是自動的`)
@@ -321,7 +325,7 @@ await step('🔴 醫師與據點沒有挑選器（自動列出全部，順序跟
   for (const title of ['精選療程', '最新文章']) {
     if (!(await cardOf(title).locator('.adm-relation').count())) throw new Error(`「${title}」的挑選器不見了`)
   }
-  return '醫師／據點 0 個，精選療程／最新文章各 1 個'
+  return '八大專科入口／醫師／據點 0 個，精選療程／最新文章各 1 個'
 })
 await step('🔴 主視覺的圖片欄位不談刪檔，只給建議尺寸', async () => {
   // 版位設定的圖換掉**不會**被刪（沒走發布那條清 blob 的路），

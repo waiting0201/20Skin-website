@@ -246,9 +246,9 @@ await step('拖回原位', async () => {
 //    兩者都沒有任何錯誤訊息，症狀是前台首頁少掉那兩區。
 //    ⚠️ 所以下面除了驗「停用真的生效」，也一定要驗「沒被碰到的那兩區還在」。
 //
-// ⚠️ 判斷「版位生效了沒」**不能看 <h2> 標題** —— 那是前台的版面字串
-//    （`app/data/_presentation.ts`），停用之後標題照樣渲染，只是底下沒有東西。
-//    要看只有資料才會產生的東西，例如醫師卡片的連結。
+// ⚠️ 判斷「版位生效了沒」看兩件事：只有資料才會產生的東西（醫師卡片的連結），
+//    以及**那個 `<section id>` 還在不在**。2026-10-01 起停用的版位整區不渲染
+//    （在此之前標題照樣渲染、底下空掉 —— 決策 23）。
 
 section('D. 首頁版位：停用一區 → 發布 → 前台')
 
@@ -294,11 +294,35 @@ const homePageId = (await api('/admin/page?page=1&pageSize=100')).data.items
   .find((p) => (p.fields || {}).systemKey === 'home')?.id
 if (!homePageId) throw new Error('找不到 systemKey=home 的那筆 Page')
 
-await step('停用「醫師團隊」並發布 → 前台少掉醫師卡片', async () => {
+await step('停用「醫師團隊」並發布 → 前台整區不見（不是只剩標題的空殼）', async () => {
   await putHome(homeBefore.map((r) => (r.sectionKey === 'doctors' ? { ...r, isEnabled: false } : r)))
   const html = await fetchPage('/')
   if (html.includes(doctorMarker)) throw new Error('停用了，前台還看得到醫師卡片')
-  return '停用生效'
+  if (html.includes('id="doctors"')) throw new Error('醫師卡片不見了，但 <section id="doctors"> 還在（只剩標題的空殼）')
+  return '整區不渲染'
+})
+
+// 版位 key → 前台 <section> 的 id（index.vue）。
+const SECTION_ID = {
+  specialties: 'specialties', 'featured-treatments': 'treatments', 'latest-articles': 'articles',
+  doctors: 'doctors', clinics: 'clinics', 'brand-story': 'philosophy',
+}
+const sectionIdOrder = (html) => [...html.matchAll(/<section[^>]*\bid="([a-z]+)"/g)].map((m) => m[1])
+
+await step('對調「八大專科入口」與「精選療程」並發布 → 前台的先後跟著變', async () => {
+  // 決策 23：2026-10-01 起前台照 sortOrder 排（在此之前七個 <section> 寫死）。
+  const so = (k) => homeBefore.find((r) => r.sectionKey === k).sortOrder
+  const a = so('specialties'); const b = so('featured-treatments')
+  await putHome(homeBefore.map((r) => {
+    if (r.sectionKey === 'specialties') return { ...r, sortOrder: b }
+    if (r.sectionKey === 'featured-treatments') return { ...r, sortOrder: a }
+    return r
+  }))
+  const ids = sectionIdOrder(await fetchPage('/'))
+  const i = ids.indexOf(SECTION_ID.specialties); const j = ids.indexOf(SECTION_ID['featured-treatments'])
+  if (i < 0 || j < 0) throw new Error(`兩區有一區不見了：${ids.join(' → ')}`)
+  if (i < j) throw new Error(`順序沒有跟著變：${ids.join(' → ')}`)
+  return ids.join(' → ')
 })
 
 await step('🔴 沒被碰到的版位沒有跟著消失（八大專科、主視覺）', async () => {
@@ -318,6 +342,8 @@ await step('🔴 版位設定形狀壞掉時，首頁要降級而不是 500', as
   // 清成 null，接著有人按了發布 —— `(settings ?? []).map(...)` 當場丟
   // 「.map is not a function」，**整個首頁 500**，其餘每一頁都好好的。
   // 一個裝飾性版位的資料壞掉，代價不該是整站門面回 5xx（apps/web/app/data/home.ts）。
+  // ⚠️ 2026-10-01 起八大專科入口**不讀 settings 了**（自動列出全部困擾，決策 23／30），
+  //    所以把它清成 null 之後，那一區要**原封不動**——次數不變才是對的。
   const broken = homeBefore.map((r) => {
     if (r.sectionKey === 'hero' && r.settings) {
       return { ...r, settings: JSON.stringify({ ...JSON.parse(r.settings), eyebrow: 'X' }) }
@@ -331,10 +357,10 @@ await step('🔴 版位設定形狀壞掉時，首頁要降級而不是 500', as
   // ⚠️ **不可以斷言「痘痘出現 0 次」**：那三個字在首頁其他地方也有（困擾連結等），
   //    2026-09-17 第一次寫這條時就踩到。要驗的是「少了那一區」，也就是次數下降。
   const after = specialtyCount(html)
-  if (after >= specialtyCount(home0)) {
-    throw new Error(`specialties 清空了，前台的專科字樣卻沒有變少（${specialtyCount(home0)} → ${after}）`)
+  if (after !== specialtyCount(home0)) {
+    throw new Error(`specialties.settings 清空後專科字樣變了（${specialtyCount(home0)} → ${after}）——前台還在讀那份 settings？`)
   }
-  return `首頁仍是 200（${html.length} 字元），專科字樣 ${specialtyCount(home0)} → ${after}`
+  return `首頁仍是 200（${html.length} 字元），專科字樣不受 settings 影響（${after} 處）`
 })
 
 await step('還原並重新發布，版位資料與備份相同', async () => {

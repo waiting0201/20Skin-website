@@ -42,7 +42,7 @@ public static class RoleCodes
     public const string Editor = "Editor";
     public const string Doctor = "Doctor";
     public const string Marketing = "Marketing";
-    public const string Reviewer = "Reviewer";
+    // ⚠️ 沒有 Reviewer：「審核者」角色 2026-09-17 刪除（CLAUDE.md 決策 20，5 → 4 個角色）。
 }
 
 /// <summary>
@@ -98,8 +98,9 @@ public static class TokenClaims
     public const string IsSuperAdmin = "is_superadmin";
 
     /// <summary>
-    /// 首登尚未改密碼。⚠️ 登入<b>仍會發 token</b>（否則使用者永遠改不了密碼），
-    /// 由 <c>AppRouter</c> 擋下除了改密碼以外的所有端點。
+    /// 首登尚未改密碼（舊資料才會帶的旗標）。
+    /// ⚠️ 「首登強制改密碼」2026-09-17 已移除（CLAUDE.md 決策 10）：<c>AppRouter</c>
+    /// 那道 403 閘一起拿掉了，這個 claim 不再擋任何端點。
     /// </summary>
     public const string MustChangePassword = "must_change_password";
 

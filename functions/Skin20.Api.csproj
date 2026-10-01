@@ -44,6 +44,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 單元測試（tests/Skin20.Api.Tests）要呼叫 internal 的純函式，例如 RedirectHandler.NormalizePath。
+         ⚠️ 只開 internal，不為了測試把任何成員改成 public。 -->
+    <InternalsVisibleTo Include="Skin20.Api.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- docs/11 §12：local.settings.json 不進版控，也不進發布產物 -->
     <None Update="host.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

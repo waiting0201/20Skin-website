@@ -601,7 +601,7 @@ function removeSocialLink(index: number) {
       <div v-if="settings" class="adm-card">
         <p class="adm-card__title">頁尾：社群連結與版權文案</p>
         <p class="adm-field__hint" style="margin-bottom: var(--sp-3)">
-          院所名稱、電話、地址在「全站設定」編輯（一致性檢查也在那裡），這裡只管社群連結與版權文案。
+          頁尾的院所名稱、電話、地址來自<RouterLink to="/clinic">據點</RouterLink>，這裡只管社群連結與版權文案。
         </p>
 
         <div class="adm-repeater">
@@ -620,13 +620,9 @@ function removeSocialLink(index: number) {
           <input class="adm-input" type="text" v-model="settings.footerCopyright" :disabled="!canEdit">
         </div>
 
-        <div class="adm-field-grid" style="margin-top: var(--sp-4)">
-          <div v-for="(nap, idx) in settings.nap" :key="idx" class="adm-field">
-            <label class="adm-field__label">{{ nap.name }}（頁尾顯示，唯讀）</label>
-            <p class="adm-field__hint">{{ nap.phone }}・{{ nap.address }}</p>
-          </div>
-        </div>
-
+        <!-- 🔴 這裡原本列出設定鍵 `nap.json` 的內容並標「頁尾顯示」—— 而頁尾從來不讀它
+             （`apps/web/app/data/navigation.ts` 的 `getClinicNap()` 讀的是據點內容）。
+             2026-10-01 隨全站設定那一區一起拿掉，見 pages/Settings.vue 檔頭。 -->
         <button v-if="canEdit" type="button" class="btn btn--primary" style="margin-top: var(--sp-4)" @click="saveSocial">儲存頁尾設定</button>
       </div>
     </template>

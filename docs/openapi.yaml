@@ -1,0 +1,3194 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# 20SKIN API —— OpenAPI 3.1 規格（手寫，進版控）
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 這份檔案是【手寫】的，不是產生出來的。
+#
+# 為什麼不能自動產生：
+#   API 只有一個 Azure Function（functions/Functions/RouterFunction.cs），
+#   Route = "{*route}" 的 catch-all，由 functions/Routing/AppRouter*.cs 用
+#   (method, segments) 的 list pattern 自己分派。Swashbuckle／NSwag／Azure Functions
+#   OpenAPI extension 這類產生器都靠「一支 Function ＝ 一條路由」內省，
+#   在這個架構下只會看到一個 {*route}，看不到任何真正的端點。
+#   （STATUS.md §五、docs/11-backend-design.md §2）
+#
+# 真實來源是程式碼，不是 docs/10-api.md：
+#   路由表     functions/Routing/AppRouter.Public.cs（IsPublicRoute／RoutePublicAsync）
+#              functions/Routing/AppRouter.Admin.cs （GetRequiredPermission／RouteAdminAsync）
+#   信封       functions/Common/ApiResponse.cs
+#   錯誤碼     functions/Common/ErrorCodes.cs
+#   權限碼     functions/Common/Constants.cs（PermissionCodes）
+#   形狀       functions/Models/Dtos/*.cs 與 functions/Handlers/*.cs
+#   與 docs/10 不一致時以程式碼為準；已知的不一致見本檔最下方的交付回報（不在這裡重複）。
+#
+# 改了路由就要同步這份：
+#   ① 新增／刪除／改名任何一條路由（IsPublicRoute、RoutePublicAsync、
+#      GetRequiredPermission、RouteAdminAsync 四處之一）
+#   ② 改了權限碼（GetRequiredPermission 的回傳值）→ 同步各操作的 x-permission
+#   ③ 改了 request／response 形狀（Models/Dtos、Handler 內的匿名物件）
+#   ④ 新增或改了錯誤碼（ErrorCodes.cs）→ 同步 components/schemas/ErrorCode
+#   檢查指令：  npx --yes @redocly/cli lint docs/openapi.yaml
+#
+# 自訂擴充欄位（x-*）：
+#   x-permission    後台端點：AppRouter.GetRequiredPermission 要求的權限碼。
+#                   「登入即可」寫成 null 並在 description 註明。超級管理員一律通過。
+#                   🔴 未登記於權限表的 /admin/* 一律 403（預設拒絕），所以這裡沒有的就是不存在。
+#   x-bot-check     公開寫入端點需要 botCheckToken（reCAPTCHA v3，決策 15）；值是伺服器端比對的 action。
+#   x-rate-limit    頻率限制：bucket（LoginThrottles 的鍵）與預設配額。可用 app setting 覆寫。
+#   x-owner-check   Handler 內的資料列層級判定（醫師角色只能動 OwnerUserId 是自己的內容）。
+#   x-handler       對應的 Handler 方法，方便從規格跳到程式。
+#
+# 其他慣例（對所有端點成立，不逐一重複）：
+#   * 請求與回應一律 camelCase。
+#   * 成功一律 HTTP 200（包含 POST 新增），沒有 201／204。
+#   * 除了 /seo/* 的文字檔，所有回應都是統一信封（components/schemas/Envelope）。
+#   * HEAD 當 GET 處理、OPTIONS 一律 200（CORS 預檢，allow-list 在平台層，由院方設定）；
+#     兩者不逐一列出。
+#   * 路由比對不分有無結尾斜線，且 /admin/{unit}/... 的 {unit} 只認九個代號。
+#   * 已刪除、不得再寫進來的端點：POST /admin/{unit}/{id}/submit、/admin/review/*、
+#     /api/fallback（決策 7、20）。
+#   * 路徑模板在 Redocly 會有 no-ambiguous-paths 的警告（/admin/{unit}/sort 對
+#     /admin/redirect/{id}）：實際上不衝突，因為 {unit} 只能是九個代號，而 redirect
+#     不在其中；路由程式也是依序比對。這是 OpenAPI 路徑模板表達不了「列舉」造成的。
+
+openapi: 3.1.0
+
+info:
+  title: 20SKIN API
+  version: 1.0.0
+  summary: 20SKIN 美醫集團網站（前台 SSR、後台 SPA、爬蟲）的唯一後端 API。
+  description: |
+    .NET 10 isolated Azure Functions（EF Core 寫入、Dapper 讀取），部署在 `api.20skin.tw`。
+    前台每一個頁面請求都會打到公開端點；後台（`/admin/`）使用同一個 App。
+
+    **認證**：公開端點匿名；`/admin/*`、`/auth/logout`、`/auth/change-password` 需要
+    `Authorization: Bearer <accessToken>`（自簽 JWT，audience `20skin-admin`）。
+    缺少或無效回 401 `AUTH_TOKEN_INVALID`；權限碼不足回 403 `FORBIDDEN`。
+
+    **權限**：超級管理員（`is_superadmin` claim）自動通過所有權限檢查。
+    其他角色看 JWT 的 `permissions` claim。共 28 個權限碼（見 `components/schemas/PermissionCode`）。
+
+    **內容發布模型**：九個內容單元只有「草稿／已發布」兩態（決策 19），送審與審核者整層不做
+    （決策 20）。公開端點讀的是**已核准版本快照**，不是工作副本。
+  contact:
+    name: 20SKIN 網站改版專案
+  license:
+    name: 私有專案
+    identifier: LicenseRef-Proprietary
+
+servers:
+  - url: https://api.20skin.tw/api/v1
+    description: 正式環境
+  - url: http://localhost:7071/api/v1
+    description: 本機（`cd functions && func start`）。換了位址，CORS allow-list 也要放行你的來源。
+
+security: []
+
+tags:
+  - name: 健康檢查
+  - name: 公開・內容
+    description: 前台 SSR 每個頁面都會打的內容讀取端點。
+  - name: 公開・表單與 AI
+    description: 對公網開放的寫入端點，必須有機器人驗證與頻率限制。
+  - name: 公開・SEO
+    description: robots／sitemap／llms／faq.json。由 Nuxt server route 同源代理出去。
+  - name: 認證
+  - name: 後台・內容單元
+    description: 九個內容單元共用同一組處理器。
+  - name: 後台・站台編排
+  - name: 後台・SEO 與 301
+  - name: 後台・帳號與角色
+  - name: 後台・系統
+
+paths:
+  # ═════════════════════════════════════════════════════════════════════
+  # 公開端點（匿名）
+  # ═════════════════════════════════════════════════════════════════════
+
+  /health:
+    get:
+      tags: [健康檢查]
+      operationId: getHealth
+      summary: 冒煙測試
+      description: >-
+        兩條 workflow 的部署後 smoke test 都打它。刻意不檢查資料庫連線
+        （冷啟動或暫時性延遲不該讓部署管線誤判全站掛掉）。
+      x-handler: HealthHandler.GetAsync
+      responses:
+        '200':
+          description: 服務存活。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [status]
+                        properties:
+                          status:
+                            type: string
+                            const: healthy
+
+  /{unit}:
+    get:
+      tags: [公開・內容]
+      operationId: listPublicContent
+      summary: 九個單元的公開列表
+      description: |
+        回傳的是**已核准版本快照**（形狀即前台的 `ContentRecord`），不另外定義公開 DTO。
+        每一筆都帶 `indexable`（「內容夠不夠實在，值得被索引」，與 sitemap 同一個判斷，
+        `Common/Indexability.cs`）。
+
+        - `article`：**自動分頁**（預設每頁 12、上限 100），回 `{ items, page, pageSize, totalCount }`
+          （注意：沒有 `totalPages`，與後台的 `PagedResult` 不同）。列表時 `fields.bodyBlocks` 為 null。
+        - 其餘八個單元：回平面陣列，不分頁。
+        - 非法的 `{unit}` 回 404。
+        - `Cache-Control: public, max-age=300, stale-while-revalidate=60`。
+      x-handler: PublicContentHandler.ListAsync
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+        - name: page
+          in: query
+          description: 只對 `article` 有效。
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          description: 只對 `article` 有效。預設 12，夾在 1–100。
+          schema: { type: integer, minimum: 1, maximum: 100, default: 12 }
+        - name: sort
+          in: query
+          description: 只認 `latest`（發布日期新到舊），其餘值一律退回預設排序（`article` 專用）。
+          schema: { type: string, enum: [latest] }
+        - name: categoryTermId
+          in: query
+          description: 文章分類（`article` 專用）。
+          schema: { type: integer, minimum: 1 }
+        - name: tagTermId
+          in: query
+          description: 文章標籤（`article` 專用）。
+          schema: { type: integer, minimum: 1 }
+        - name: authorDoctorId
+          in: query
+          description: 作者醫師（`article` 專用）。
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: |
+            `article` 回 `PublicArticlePage`；其他單元回 `PublicContentRecord[]`。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        oneOf:
+                          - $ref: '#/components/schemas/PublicArticlePage'
+                          - type: array
+                            items: { $ref: '#/components/schemas/PublicContentRecord' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /content:
+    get:
+      tags: [公開・內容]
+      operationId: getPublicContentByPath
+      summary: 依網址取單筆內容（含內文）
+      description: |
+        `path` 會被正規化成「前後都有斜線」。找不到回 404 `NOT_FOUND`。
+        `Cache-Control: public, max-age=300, stale-while-revalidate=60`。
+      x-handler: PublicContentHandler.GetByPathAsync
+      parameters:
+        - name: path
+          in: query
+          required: true
+          description: 站內網址，例如 `/treatments/xxx/`。
+          schema: { type: string }
+      responses:
+        '200':
+          description: 該網址的已核准快照。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PublicContentRecord' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /content/batch:
+    get:
+      tags: [公開・內容]
+      operationId: getPublicContentBatch
+      summary: 依 id 批次取內容（上限 100）
+      description: |
+        給「關聯目標需要的欄位不只標題」用（例如療程卡片要關聯文章的封面與日期）。
+        非數字或 ≤0 的 id 靜默略過，重複的去重，超過 100 個只取前 100。
+        不存在或不可見的 id 不會出現在結果裡（不報錯）。
+      x-handler: PublicContentHandler.BatchAsync
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          description: 以逗號分隔的內容 id，例如 `12,34,56`。
+          schema: { type: string }
+      responses:
+        '200':
+          description: 命中的快照陣列。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/PublicContentRecord' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /article/popular-tags:
+    get:
+      tags: [公開・內容]
+      operationId: getPopularTags
+      summary: 熱門標籤（依實際引用篇數在 SQL 層聚合）
+      description: '`Cache-Control: public, max-age=900`。'
+      x-handler: PublicContentHandler.PopularTagsAsync
+      parameters:
+        - name: limit
+          in: query
+          description: 1–50，超出範圍或非數字一律用 12。
+          schema: { type: integer, minimum: 1, maximum: 50, default: 12 }
+      responses:
+        '200':
+          description: 標籤清單。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          required: [slug, title, articleCount]
+                          properties:
+                            slug: { type: string }
+                            title: { type: string }
+                            articleCount: { type: integer }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /redirects/resolve:
+    get:
+      tags: [公開・內容]
+      operationId: resolveRedirect
+      summary: 舊網址解析（301 對照）
+      description: |
+        前台的 catch-all 路由（`pages/[...slug].vue`）查它。單筆 seek，只看 `IsActive = 1` 的規則。
+        接受百分比編碼與未編碼兩種寫法。命中回 `{ toPath, statusCode }`，**未命中回 404 `NOT_FOUND`**
+        （那是正常結果，不是錯誤）。
+      x-handler: RedirectHandler.ResolveAsync
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 命中的轉址規則。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [toPath, statusCode]
+                        properties:
+                          toPath: { type: string }
+                          statusCode: { type: integer, format: int32, examples: [301] }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /home:
+    get:
+      tags: [公開・內容]
+      operationId: getHome
+      summary: 首頁版位
+      description: |
+        讀的是**首頁那筆 Page 已核准版本的快照**，不是 `HomeSections` 即時表。
+        例外：版位 `specialties`（困擾）、`doctors`、`clinics` 的名單與順序改成算繪當下取整個單元
+        （依該單元的 `SortOrder`，決策 30）；項目的 `urlPath`／`slug` 用即時值、`title` 用已發布快照。
+        `settings` 在快照裡是 JSON 字串，這裡已解析成物件／陣列（首頁主視覺輪播的最外層是陣列）。
+        `Cache-Control: public, max-age=300, stale-while-revalidate=60`。
+      x-handler: PublicContentHandler.HomeAsync
+      responses:
+        '200':
+          description: 版位陣列。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/PublicHomeSection' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /menu:
+    get:
+      tags: [公開・內容]
+      operationId: getPublicMenu
+      summary: 導覽選單與頁尾
+      description: |
+        `label` 留空的節點會被填成被指到那筆內容的標題（取已發布快照）；`autoChildren` 非 0 的節點，
+        `children` 在這裡是算繪當下由該單元整批取得的結果。
+        `Cache-Control: public, max-age=300, stale-while-revalidate=60`。
+      x-handler: PublicContentHandler.MenuAsync
+      responses:
+        '200':
+          description: 兩份選單。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [main, footer]
+                        properties:
+                          main:
+                            type: array
+                            items: { $ref: '#/components/schemas/PublicMenuNode' }
+                          footer:
+                            type: array
+                            items: { $ref: '#/components/schemas/PublicMenuNode' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /search:
+    get:
+      tags: [公開・內容]
+      operationId: searchSite
+      summary: 站內搜尋
+      description: |
+        對 `ContentItems.SearchText`（發布時由已核准快照重算的純文字）做子字串比對，標題命中排前面。
+        **不設筆數上限**（前台有各型別 tab 的筆數）。`q` 為空回空陣列。
+        文章標籤、搜尋頁與 404 頁不會出現在結果裡；找不到可連結網址的結果整筆略過。
+        `Cache-Control: no-store`。
+      x-handler: SearchHandler.SearchAsync
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: 命中結果（縮寫鍵是為了縮小傳輸量）。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          required: [t, u, ti, ex]
+                          properties:
+                            t: { type: string, description: 型別標籤（療程／肌膚困擾／文章…）。 }
+                            u: { type: string, description: 站內網址。 }
+                            ti: { type: string, description: 標題。 }
+                            ex: { type: string, description: 摘要，最多 120 字。 }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /site-settings/public:
+    get:
+      tags: [公開・內容]
+      operationId: getPublicSiteSettings
+      summary: 前台需要的全站設定（白名單）
+      description: |
+        只回前台真的要的鍵。收件信箱等內部設定**一律不外露**。
+        `Cache-Control: public, s-maxage=60, max-age=30`。
+      x-handler: SettingHandler.GetPublicAsync
+      responses:
+        '200':
+          description: 公開設定。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PublicSiteSettings' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /contact:
+    post:
+      tags: [公開・表單與 AI]
+      operationId: submitContact
+      summary: 聯絡表單
+      description: |
+        **只寄通知信，不落庫**；唯一例外是 `message` 的文字本身會寫進 `QuestionInbox`
+        （`Source = ContactForm`），姓名／電話／Email 絕不進資料庫。
+        電話與 Email 至少擇一；`privacyConsent` 必須為 true。
+        收件信箱未設定時不寄信、只記警告（仍回成功）。
+      x-handler: FormHandler.SubmitContactAsync
+      x-bot-check: { action: contact }
+      x-rate-limit: { bucket: contact, scope: ip, default: '5 次 / 10 分鐘' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ContactRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/OkMessage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /questions/miss:
+    post:
+      tags: [公開・表單與 AI]
+      operationId: recordMissedQuestion
+      summary: 回寫未命中的問題
+      description: |
+        站內搜尋查無結果時回寫一筆到題庫成長清單（`QuestionInbox`），去重由伺服器端做。
+        只收問題文字（≤500 字），不收任何可回連送出者的欄位。
+        **AI 問答不走這一支**——那邊伺服器自己知道有沒有命中。
+      x-handler: FormHandler.RecordMissedQuestionAsync
+      x-bot-check: { action: questions_miss }
+      x-rate-limit: { bucket: questions-miss, scope: ip, default: '5 次 / 10 分鐘' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MissedQuestionRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/OkMessage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /ai/ask:
+    post:
+      tags: [公開・表單與 AI]
+      operationId: askAi
+      summary: 站內 AI 問答
+      description: |
+        Gemini 嵌入 ＋ Blob 單檔向量索引 ＋ 記憶體比對（決策 28）。`Cache-Control: no-store`。
+
+        - **「答不出來」是 200 配 `answered: false`**，不是 4xx；`handoff.needed = true` 並帶 `reason`。
+        - 模型永遠拿不到網址：片段在 prompt 裡是 `[S1]`、`[S2]`，由伺服器把模型回的 `SOURCES:` 對映回 `urlPath`。
+        - 輸出後再過一次確定性掃描（高風險字詞、金額樣式），命中就改用未命中文案
+          （`handoff.reason = needs_doctor`）。
+        - **不存對話**：多輪由前台帶 `history`，伺服器只取最後 4 則（每則截 500 字）。
+        - 只有模型／索引真的不能用才回 503 `AI_UNAVAILABLE`，且絕不退回用模型的一般知識回答。
+      x-handler: AiHandler.AskAsync
+      x-bot-check: { action: ai_ask }
+      x-rate-limit: { bucket: ai-ask, scope: ip, default: '20 次 / 10 分鐘（app setting RateLimit:PublicQuota:ai-ask:*）' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AiAskRequest' }
+      responses:
+        '200':
+          description: 回答（含「答不出來」）。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/AiAskResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/AiUnavailable' }
+
+  # ── SEO 產物（非信封，回純文字／XML／JSON）──────────────────────────
+
+  /seo/robots.txt:
+    get:
+      tags: [公開・SEO]
+      operationId: getRobotsTxt
+      summary: robots.txt
+      description: |
+        內容來自設定鍵 `seo.robotsTxt`。**設定被清空時回 404（空 body），不送出空檔案。**
+        `Cache-Control: public, max-age=3600, stale-while-revalidate=60`。
+      x-handler: SeoHandler.RobotsAsync
+      responses:
+        '200':
+          description: robots.txt 全文。
+          content:
+            text/plain: { schema: { type: string } }
+        '404':
+          description: 設定為空。沒有信封、沒有 body。
+
+  /seo/sitemap.xml:
+    get:
+      tags: [公開・SEO]
+      operationId: getSitemapIndex
+      summary: sitemap 索引
+      description: 只列出真的有內容且啟用的分檔。收錄範圍與頁面的 `noindex` 同一個判斷。
+      x-handler: SeoHandler.SitemapIndexAsync
+      parameters:
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: sitemapindex XML。
+          content:
+            application/xml: { schema: { type: string } }
+
+  /seo/sitemap/{key}:
+    get:
+      tags: [公開・SEO]
+      operationId: getSitemapFile
+      summary: sitemap 分檔
+      description: |
+        `key` 對應檔名：`pages`→sitemap-pages.xml、`treatments`、`concerns`、`doctors`、`blog`。
+        未知的 key、被停用或沒有內容的分檔回 404（空 body）。
+      x-handler: SeoHandler.SitemapFileAsync
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string, enum: [pages, treatments, concerns, doctors, blog] }
+        - $ref: '#/components/parameters/Origin'
+      responses:
+        '200':
+          description: urlset XML。
+          content:
+            application/xml: { schema: { type: string } }
+        '404':
+          description: 沒有這個分檔。沒有信封、沒有 body。
+
+  /seo/llms.txt:
+    get:
+      tags: [公開・SEO]
+      operationId: getLlmsTxt
+      summary: llms.txt
+      x-handler: SeoHandler.LlmsAsync
+      responses:
+        '200':
+          description: llms.txt 全文。
+          content:
+            text/plain: { schema: { type: string } }
+
+  /seo/llms-full.txt:
+    get:
+      tags: [公開・SEO]
+      operationId: getLlmsFullTxt
+      summary: llms-full.txt（含已發布 FAQ 全文）
+      x-handler: SeoHandler.LlmsFullAsync
+      responses:
+        '200':
+          description: llms-full.txt 全文。
+          content:
+            text/plain: { schema: { type: string } }
+
+  /seo/faq.json:
+    get:
+      tags: [公開・SEO]
+      operationId: getFaqJson
+      summary: faq.json
+      description: 回的是 `application/json` 的**純 JSON 檔案內容，不是信封**。
+      x-handler: SeoHandler.FaqJsonAsync
+      responses:
+        '200':
+          description: FAQ JSON 檔（形狀由 `Common/ExportFormats.cs` 決定）。
+          content:
+            application/json: { schema: { type: object, additionalProperties: true } }
+
+  # ═════════════════════════════════════════════════════════════════════
+  # 認證
+  # ═════════════════════════════════════════════════════════════════════
+
+  /auth/login:
+    post:
+      tags: [認證]
+      operationId: login
+      summary: 後台登入
+      description: |
+        單段驗證，沒有雙因素。次數限制**只以帳號計數**，是後台唯一的硬防線（預設 5 次失敗／15 分鐘
+        → 鎖 15 分鐘，鎖定事件寄告警信）。reCAPTCHA v3 是補強；連不上 Google 時放行。
+        失敗訊息不區分「帳號不存在」與「密碼錯誤」；帳號停用只在密碼驗證通過之後才揭露
+        （403 `AUTH_ACCOUNT_INACTIVE`）。
+      x-handler: AuthHandler.LoginAsync
+      x-bot-check: { action: login }
+      x-rate-limit: { bucket: login, scope: account, default: '5 次失敗 / 15 分鐘，鎖 15 分鐘（RateLimit:Login:*）' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/TokenOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: 帳號或密碼錯誤（`AUTH_INVALID_CREDENTIALS`）。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /auth/refresh:
+    post:
+      tags: [認證]
+      operationId: refreshToken
+      summary: 換發 token（refresh token 輪替）
+      description: |
+        舊 refresh token 立即撤銷並發新的一對。**偵測到已撤銷的 token 被重用 → 撤銷該使用者全部
+        refresh token**（疑似外洩）。回應含完整 `permissions[]`，前端還原登入狀態時要一併更新權限。
+      x-handler: AuthHandler.RefreshAsync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/TokenOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /auth/logout:
+    post:
+      tags: [認證]
+      operationId: logout
+      summary: 登出（撤銷 refresh token）
+      description: |
+        需要 Bearer，**不需權限碼**。冪等：缺 body、token 不存在、已撤銷都回成功。
+        只能撤銷自己的 refresh token（別人的回 403）。
+      x-handler: AuthHandler.LogoutAsync
+      x-permission: null
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LogoutRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/OkMessage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /auth/change-password:
+    post:
+      tags: [認證]
+      operationId: changePassword
+      summary: 改自己的密碼
+      description: |
+        需要 Bearer，**不需權限碼**（它改的是自己的密碼）。成功後撤銷該使用者**全部** refresh token，
+        呼叫端自己也要重新登入。
+        ⚠️ 本端點的新密碼長度下限是 **8**（`AuthHandler.MinPasswordLength`），
+        與帳號管理建立／重設密碼的 6 不同（見交付回報的不一致清單）。
+      x-handler: AuthHandler.ChangePasswordAsync
+      x-permission: null
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/OkMessage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: 缺少／無效憑證，或「目前密碼不正確」（`AUTH_INVALID_CREDENTIALS`）。
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  # ═════════════════════════════════════════════════════════════════════
+  # 後台：九個內容單元
+  # ═════════════════════════════════════════════════════════════════════
+
+  /admin/dashboard:
+    get:
+      tags: [後台・系統]
+      operationId: getDashboard
+      summary: 儀表板（九個單元 × 四態筆數）
+      description: 登入即可。聚合查詢，無專屬資料表。`inReview` 保留是因為舊資料仍可能停在該狀態。
+      x-handler: DashboardHandler.GetAsync
+      x-permission: null
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 各單元筆數。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [contentCountsByUnit]
+                        properties:
+                          contentCountsByUnit:
+                            type: object
+                            description: 鍵是九個單元代號。
+                            additionalProperties:
+                              $ref: '#/components/schemas/ContentUnitCounts'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/{unit}:
+    get:
+      tags: [後台・內容單元]
+      operationId: listContent
+      summary: 內容清單（分頁）
+      description: |
+        登入即可（沒有獨立的 view 權限碼）。永遠回 `PagedResult`：`page`／`pageSize` 沒帶時用預設 1／20；
+        `pageSize` 夾在 1–100。
+        `termType` 只對 `term` 有效，值域外（非 1–4）當成「不篩」而不是 400。
+      x-handler: ContentHandler.ListAsync
+      x-permission: null
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Keyword'
+        - name: status
+          in: query
+          description: 1 草稿／2 送審中（舊資料）／3 已發布／4 已下架。
+          schema: { type: integer, enum: [1, 2, 3, 4] }
+        - name: categoryId
+          in: query
+          description: 分類 Term 的 id（有分類的單元：療程、文章、FAQ）。
+          schema: { type: integer }
+        - name: ownerUserId
+          in: query
+          schema: { type: integer }
+        - name: termType
+          in: query
+          description: 只對 `term`：1 療程分類／2 文章分類／3 FAQ 分類／4 文章標籤。
+          schema: { type: integer, enum: [1, 2, 3, 4] }
+      responses:
+        '200':
+          description: 分頁清單。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PagedResult'
+                          - type: object
+                            properties:
+                              items:
+                                type: array
+                                items: { $ref: '#/components/schemas/ContentListItem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [後台・內容單元]
+      operationId: createContent
+      summary: 新增內容
+      description: |
+        新建一律是草稿，`sortOrder` 沒給就排在該單元最後。回傳新建後的完整詳情（HTTP 200）。
+        型別專屬欄位可放巢狀 `fields`，也可攤在頂層（**帶了 `fields` 就只讀 `fields`**）。
+        各單元必填：`title`、`slug`（小寫英數連字號）；`treatment`／`article`／`faq` 另需 `categoryTermId`；
+        `term` 需 `termType`。`page` 不可新增系統頁（`pageKind = 2`）。
+
+        逐單元的額外權限檢查（Handler 內，非 Router）：
+        * `term`：新增分類（`termType` 1–3）需要 `taxonomy.category.manage`（限超級管理員）；
+          新增標籤（`termType` 4）需要 `taxonomy.tag.create`。
+        * `doctor`／`article`：醫師角色建立的內容 `ownerUserId` 一律歸自己。
+      x-handler: ContentHandler.CreateAsync
+      x-permission: 'content.{unit}.edit'
+      x-owner-check: 醫師角色建立時 ownerUserId 強制為自己。
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ContentSaveRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/ContentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/{unit}/sort:
+    put:
+      tags: [後台・內容單元]
+      operationId: sortContent
+      summary: 批次排序（當頁內重新分配）
+      description: |
+        送的是「當頁那幾筆原本佔住的排序值」的重新分配，不是整個單元的順序，也不是陣列索引（決策 21）。
+        一次最多 100 筆；空陣列直接回成功。醫師角色只能調整自己負責的內容。
+        `article` 單元前台不讀這個排序（只影響「某位醫師的文章」那一區）。
+      x-handler: ContentHandler.SortAsync
+      x-permission: 'content.{unit}.edit'
+      x-owner-check: 醫師角色只能排序 OwnerUserId 是自己的內容。
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              maxItems: 100
+              items: { $ref: '#/components/schemas/SortItem' }
+      responses:
+        '200': { $ref: '#/components/responses/OkNull' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/{unit}/{id}:
+    get:
+      tags: [後台・內容單元]
+      operationId: getContent
+      summary: 單筆內容詳情
+      description: |
+        登入即可。含 `fields`、`seo`、`relations`（**兩個方向都回**，靠 `isReverse` 分辨；
+        反向的是唯讀，不可寫回 `PUT .../relations`）。`term` 的 `fields.usageCount` 為唯讀的引用筆數。
+      x-handler: ContentHandler.GetAsync
+      x-permission: null
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200': { $ref: '#/components/responses/ContentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    put:
+      tags: [後台・內容單元]
+      operationId: updateContent
+      summary: 更新本文
+      description: |
+        整份替換語意：沒帶的純量欄位不動；明細列（圖庫、學經歷、看診時段…）有帶就整批取代。
+        已發布的內容被編輯 → 工作副本回到草稿，但前台仍顯示已核准的那一版。
+        換圖與移除圖片會把舊 blob 刪除。改 slug／分類造成網址變動時自動補一筆 301（`Source = SystemAuto`）。
+        回傳更新後的完整詳情。
+
+        附加檢查：
+        * `Status = 送審中`（舊資料）本文鎖定 → 409 `CONFLICT_STATE`；按「發布」可救回。
+        * 醫師角色只能動 `ownerUserId` 是自己的內容 → 403。
+        * 法務頁（`page`，`superAdminOnly`）限超級管理員 → 403。
+        * 系統鎖定（`isSystemLocked`）的內容不可改 slug。
+        * `term` 非標籤的分類改 slug 需要 `taxonomy.category.manage`。
+      x-handler: ContentHandler.UpdateAsync
+      x-permission: 'content.{unit}.edit'
+      x-owner-check: 醫師角色只能動 OwnerUserId 是自己的內容。
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ContentSaveRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/ContentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [後台・內容單元]
+      operationId: deleteContent
+      summary: 刪除內容
+      description: |
+        * `isSystemLocked` → 409 `CONFLICT_LOCKED`。
+        * `term`：需 `taxonomy.category.manage`／`taxonomy.tag.create`（依 `termType`），
+          且仍被引用時 409 `CONFLICT_STATE`（訊息帶筆數）。
+        * 指向它的關聯在同一交易內清掉；它獨佔的圖片 blob 一併刪除。
+        * 外鍵違反一律轉成 409 `CONFLICT_STATE`。
+      x-handler: ContentHandler.DeleteAsync
+      x-permission: 'content.{unit}.edit'
+      x-owner-check: 醫師角色只能刪 OwnerUserId 是自己的內容。
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200': { $ref: '#/components/responses/OkNull' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/{unit}/{id}/seo:
+    put:
+      tags: [後台・內容單元]
+      operationId: updateContentSeo
+      summary: 只寫 SEO 區塊
+      description: |
+        行銷角色的落點：可改 SEO 欄位，不可改本文。`aiSummary` 有填時須 20–300 字；
+        `seoTitle` ≤200、`metaDescription` ≤400。整份替換（沒帶的欄位會被清成 null／false）。
+        回傳更新後的完整詳情。
+      x-handler: ContentHandler.UpdateSeoAsync
+      x-permission: seo.edit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SeoSaveRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/ContentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/{unit}/{id}/relations:
+    put:
+      tags: [後台・內容單元]
+      operationId: updateContentRelations
+      summary: 整筆取代正向關聯
+      description: |
+        會刪掉這筆內容**所有**正向關聯，再寫入送出的這一份——只改一個關聯欄位也要把其餘一起送，
+        少送就是刪掉。`relationType` 必須適用於這個單元（例如 1–4 只給 `treatment`、12 只給 `page`）。
+        反向關聯（`isReverse: true`）不可送回來。已發布者工作副本回草稿。
+      x-handler: ContentHandler.UpdateRelationsAsync
+      x-permission: 'content.{unit}.edit'
+      x-owner-check: 醫師角色只能動 OwnerUserId 是自己的內容；法務頁限超級管理員。
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: '#/components/schemas/RelationSaveItem' }
+      responses:
+        '200': { $ref: '#/components/responses/ContentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/{unit}/{id}/schedule:
+    patch:
+      tags: [後台・內容單元]
+      operationId: scheduleContent
+      summary: 設定排程發布／下架時間
+      description: 兩者皆可為 null（清除）。下架時間須晚於發布時間。回傳完整詳情。
+      x-handler: ContentHandler.ScheduleAsync
+      x-permission: 'content.{unit}.publish'
+      x-owner-check: 醫師角色只能動 OwnerUserId 是自己的內容。
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/ContentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/{unit}/{id}/publish:
+    patch:
+      tags: [後台・內容單元]
+      operationId: publishContent
+      summary: 直接發布／下架
+      description: |
+        `publish`：快照目前的工作副本成新版本、設為已發布、重算站內搜尋用文字，並清掉上一版獨有的圖片。
+        **不檢查來源狀態**，所以卡在舊「送審中」的內容按一次發布就救得回來。
+        `unpublish`：只對已發布的內容有效，否則 409 `CONFLICT_STATE`。回傳完整詳情。
+      x-handler: ContentHandler.PublishAsync
+      x-permission: 'content.{unit}.publish'
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PublishRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/ContentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/{unit}/{id}/versions:
+    get:
+      tags: [後台・內容單元]
+      operationId: listContentVersions
+      summary: 版本清單
+      description: 平面陣列（每筆內容最多保留 30 版）。
+      x-handler: ContentHandler.ListVersionsAsync
+      x-permission: 'content.{unit}.edit'
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: 版本清單。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/VersionListItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/{unit}/{id}/versions/{no}:
+    get:
+      tags: [後台・內容單元]
+      operationId: getContentVersion
+      summary: 單一版本快照
+      x-handler: ContentHandler.GetVersionAsync
+      x-permission: 'content.{unit}.edit'
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+        - $ref: '#/components/parameters/IdPath'
+        - $ref: '#/components/parameters/VersionNoPath'
+      responses:
+        '200':
+          description: 版本詳情，`snapshot` 為原始 JSON 字串。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/VersionDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/{unit}/{id}/versions/{no}/restore:
+    post:
+      tags: [後台・內容單元]
+      operationId: restoreContentVersion
+      summary: 還原版本為草稿
+      description: |
+        還原成草稿，**不直接上線**。版本還原救不回已被刪除的圖片 blob。
+        舊「送審中」狀態會被擋（409 `CONFLICT_STATE`）。回傳完整詳情。
+      x-handler: ContentHandler.RestoreVersionAsync
+      x-permission: 'content.{unit}.edit'
+      x-owner-check: 醫師角色只能動 OwnerUserId 是自己的內容；法務頁限超級管理員。
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UnitPath'
+        - $ref: '#/components/parameters/IdPath'
+        - $ref: '#/components/parameters/VersionNoPath'
+      responses:
+        '200': { $ref: '#/components/responses/ContentDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  # ═════════════════════════════════════════════════════════════════════
+  # 後台：上傳
+  # ═════════════════════════════════════════════════════════════════════
+
+  /admin/upload/sas:
+    post:
+      tags: [後台・系統]
+      operationId: requestUploadSas
+      summary: 取得短效上傳 SAS
+      description: |
+        瀏覽器直傳 Blob（write-only、短效，以 Managed Identity 簽發）。只收圖片
+        （.jpg/.jpeg/.png/.gif/.webp，由 `fileName` 的副檔名判定）。**blob 名稱由伺服器決定。**
+        不是媒體庫：沒有清單、沒有刪除端點。
+      x-handler: UploadHandler.RequestSasAsync
+      x-permission: upload.file
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName]
+              properties:
+                fileName: { type: string, description: 只用來判定副檔名。 }
+      responses:
+        '200':
+          description: 上傳位址。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [blobPath, uploadUrl, expiresAt]
+                        properties:
+                          blobPath: { type: string, description: 暫存路徑，commit 時要原樣帶回。 }
+                          uploadUrl: { type: string, format: uri }
+                          expiresAt: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/upload/commit:
+    post:
+      tags: [後台・系統]
+      operationId: commitUpload
+      summary: 直傳完成後回報
+      description: |
+        伺服器讀檔頭驗真實型別（非圖片 → 400 `UPLOAD_TYPE` 並刪檔）、量大小（>10 MB →
+        400 `UPLOAD_SIZE` 並刪檔），通過後搬到正式路徑（`yyyy/MM/{guid}{ext}`，不以內容雜湊命名、不去重）。
+        回傳的圖片值就是內容欄位裡存的形狀，整包放進欄位、隨內容一起送。
+      x-handler: UploadHandler.CommitAsync
+      x-permission: upload.file
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [blobPath, originalFileName]
+              properties:
+                blobPath: { type: string }
+                originalFileName: { type: string }
+                alt: { type: [string, 'null'] }
+      responses:
+        '200':
+          description: 圖片值。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/UploadedImage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  # ═════════════════════════════════════════════════════════════════════
+  # 後台：站台編排
+  # ═════════════════════════════════════════════════════════════════════
+
+  /admin/home-section:
+    get:
+      tags: [後台・站台編排]
+      operationId: getHomeSections
+      summary: 首頁版位（工作副本）
+      description: 讀的是 `HomeSections` 工作副本，不是前台用的已核准快照。
+      x-handler: HomeSectionHandler.GetAsync
+      x-permission: home.arrange
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 七個版位。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/HomeSection' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    put:
+      tags: [後台・站台編排]
+      operationId: updateHomeSections
+      summary: 更新首頁版位
+      description: |
+        只列出要更新的版位即可；未知的 `sectionKey` → 400（七個版位是種子資料，不可新增刪除）。
+        `settings` 須為合法 JSON 字串。引用的內容必須存在。已發布的首頁會回到草稿（前台仍顯示舊快照）。
+        `doctors`／`clinics`／`specialties` 的項目名單前台不讀（自動列出整個單元），端點仍照收照存。
+      x-handler: HomeSectionHandler.UpdateAsync
+      x-permission: home.arrange
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HomeSectionUpdateRequest' }
+      responses:
+        '200':
+          description: 更新後的七個版位。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/HomeSection' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/menu:
+    get:
+      tags: [後台・站台編排]
+      operationId: getMenu
+      summary: 導覽選單與頁尾（編輯用）
+      x-handler: MenuHandler.GetAsync
+      x-permission: menu.edit
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 兩份選單樹。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/MenuTree' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    put:
+      tags: [後台・站台編排]
+      operationId: updateMenu
+      summary: 整份取代選單
+      description: |
+        `main`／`footer` 省略其中一個＝不動那份；兩個都省略 → 400。送出的那份選單整份取代。
+        最多兩層；`autoChildren` 只能掛在頂層。`linkKind = 1` 以外的節點 `label` 不可為空。
+        外部連結（`linkKind = 3`）強制新分頁並補 `rel`。引用的內容必須存在。
+        儲存即生效，不走審核、不留痕。
+      x-handler: MenuHandler.UpdateAsync
+      x-permission: menu.edit
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MenuTree' }
+      responses:
+        '200':
+          description: 更新後的選單樹。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/MenuTree' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/setting:
+    get:
+      tags: [後台・系統]
+      operationId: getSettings
+      summary: 全站設定（全部鍵值）
+      x-handler: SettingHandler.GetAdminAsync
+      x-permission: settings.edit
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 設定清單。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/SiteSettingAdminItem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    put:
+      tags: [後台・系統]
+      operationId: updateSettings
+      summary: 更新全站設定
+      description: |
+        只更新呼叫端明確送上來的鍵；**只能更新既有的鍵**（未知鍵 → 404）。空字串視為「尚未設定」放行；
+        其餘依該鍵的 `valueType` 驗證格式（Boolean／Number／Url／Json）。
+        `tracking.ga4` 只收 GA4 評估 ID（`G-XXXX`）或 GTM 容器 ID（`GTM-XXXX`），多組逗號分隔，
+        不收整段程式碼。儲存即生效，不走審核、不留痕。
+      x-handler: SettingHandler.UpdateAsync
+      x-permission: settings.edit
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [settingKey]
+                    properties:
+                      settingKey: { type: string }
+                      settingValue: { type: [string, 'null'] }
+      responses:
+        '200': { $ref: '#/components/responses/OkMessage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/ai-index:
+    get:
+      tags: [後台・系統]
+      operationId: getAiIndexStatus
+      summary: AI 語料索引的唯讀狀態
+      description: '沿用 `settings.edit`，不新增權限碼。回應標頭 `Cache-Control: no-store`。'
+      x-handler: AiHandler.IndexStatusAsync
+      x-permission: settings.edit
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 索引狀態。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [builtAt, chunkCount, indexedItemCount, ready]
+                        properties:
+                          builtAt:
+                            type: [string, 'null']
+                            format: date-time
+                            description: 索引尚未就緒時為 null。
+                          chunkCount: { type: integer }
+                          indexedItemCount: { type: integer }
+                          ready: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/export/{kind}:
+    get:
+      tags: [後台・系統]
+      operationId: previewExport
+      summary: 預覽 SEO／AI 匯出產物
+      description: 只是預覽（每型別最多 20 筆等限制），正式產物走公開的 `/seo/*`。
+      x-handler: ExportHandler.PreviewAsync
+      x-permission: settings.edit
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string, enum: [faq.json, llms.txt, llms-full.txt] }
+      responses:
+        '200':
+          description: 預覽內容。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ExportPreview' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/risk-term:
+    get:
+      tags: [後台・系統]
+      operationId: listRiskTerms
+      summary: 啟用中的高風險字詞
+      description: 登入即可。編輯器即時提示的來源——是提示不是閘門。
+      x-handler: ContentHandler.ListRiskTermsAsync
+      x-permission: null
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 字詞陣列。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  # ═════════════════════════════════════════════════════════════════════
+  # 後台：SEO 與 301
+  # ═════════════════════════════════════════════════════════════════════
+
+  /admin/redirect:
+    get:
+      tags: [後台・SEO 與 301]
+      operationId: listRedirects
+      summary: 301 規則清單（分頁）
+      description: 預設新的在前，只有 `sortDir=asc` 才升冪。全部篩選在 SQL 層。
+      x-handler: RedirectHandler.ListAsync
+      x-permission: redirect.manage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Keyword'
+        - name: isActive
+          in: query
+          schema: { type: boolean }
+        - name: source
+          in: query
+          description: 1 遷移工具／2 人工新增／3 系統自動。
+          schema: { type: integer, enum: [1, 2, 3] }
+        - name: sortBy
+          in: query
+          description: 白名單鍵（`fromPath`／`createdAt`）；其他值由 ReadService 退回預設。
+          schema: { type: string, enum: [fromPath, createdAt] }
+        - name: sortDir
+          in: query
+          schema: { type: string, enum: [asc, desc], default: desc }
+      responses:
+        '200':
+          description: 分頁清單。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PagedResult'
+                          - type: object
+                            properties:
+                              items:
+                                type: array
+                                items: { $ref: '#/components/schemas/Redirect' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [後台・SEO 與 301]
+      operationId: createRedirect
+      summary: 新增一筆 301 規則
+      description: |
+        `fromPath` 會正規化。自我迴圈、轉址鏈 → 400；`fromPath` 已存在 → 409 `CONFLICT_DUPLICATE`；
+        `toContentItemId` 指向不存在的內容 → 404。`statusCode` 預設 301、`source` 預設 2（人工新增）。
+      x-handler: RedirectHandler.CreateAsync
+      x-permission: redirect.manage
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RedirectCreateRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/RedirectOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/redirect/{id}:
+    put:
+      tags: [後台・SEO 與 301]
+      operationId: updateRedirect
+      summary: 更新一筆 301 規則
+      description: 允許改 `fromPath`（會重新跑迴圈防護與重複檢查）。沒帶的 `fromPath`／`toPath`／`statusCode`／`isActive` 維持原值。
+      x-handler: RedirectHandler.UpdateAsync
+      x-permission: redirect.manage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RedirectUpdateRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/RedirectOk' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [後台・SEO 與 301]
+      operationId: deleteRedirect
+      summary: 刪除一筆 301 規則
+      x-handler: RedirectHandler.DeleteAsync
+      x-permission: redirect.manage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200': { $ref: '#/components/responses/OkMessage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/redirect/stats:
+    get:
+      tags: [後台・SEO 與 301]
+      operationId: getRedirectStats
+      summary: 301 統計卡（全表）
+      x-handler: RedirectHandler.StatsAsync
+      x-permission: redirect.manage
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 統計。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RedirectStats' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/redirect/export:
+    get:
+      tags: [後台・SEO 與 301]
+      operationId: exportRedirects
+      summary: 匯出 CSV
+      description: CSV 全文放在信封的 `data.csv`（API 一律 JSON，不直接回檔案）。
+      x-handler: RedirectHandler.ExportAsync
+      x-permission: redirect.manage
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 匯出結果。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [count, fileName, csv]
+                        properties:
+                          count: { type: integer }
+                          fileName: { type: string, examples: ['redirects-20260918-1530.csv'] }
+                          csv: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/redirect/import:
+    post:
+      tags: [後台・SEO 與 301]
+      operationId: importRedirects
+      summary: 匯入 CSV
+      description: |
+        CSV 全文放在 JSON 的 `csv` 欄位（不是 multipart）。第一列為標頭，欄名不分大小寫：
+        `FromPath`／`ToPath`（必填）、`ToContentItemId`、`StatusCode`、`IsActive`、`Source`。
+        逐列驗證，失敗列放進 `errors`，不影響其他列。`overwriteExisting` 預設 false；
+        為 true 時來源已存在改成更新 `ToPath`／`StatusCode`／`IsActive`，**不動 `Source` 與 `IsVerified`**。
+      x-handler: RedirectHandler.ImportAsync
+      x-permission: redirect.manage
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [csv]
+              properties:
+                csv: { type: string }
+                overwriteExisting: { type: boolean, default: false }
+      responses:
+        '200':
+          description: 匯入摘要。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RedirectImportResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/question:
+    get:
+      tags: [後台・SEO 與 301]
+      operationId: listQuestions
+      summary: 未命中題目清單（題庫成長）
+      description: 權限沿用 FAQ 的編輯權（行銷角色有）。
+      x-handler: QuestionHandler.ListAsync
+      x-permission: content.faq.edit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Keyword'
+        - name: status
+          in: query
+          description: 1 待處理／2 已建題／3 忽略。
+          schema: { type: integer, enum: [1, 2, 3] }
+        - name: source
+          in: query
+          description: 1 站內搜尋無結果／2 AI 未命中／3 聯絡表單／4 人工。
+          schema: { type: integer, enum: [1, 2, 3, 4] }
+      responses:
+        '200':
+          description: 分頁清單。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PagedResult'
+                          - type: object
+                            properties:
+                              items:
+                                type: array
+                                items: { $ref: '#/components/schemas/QuestionListItem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/question/{id}:
+    patch:
+      tags: [後台・SEO 與 301]
+      operationId: updateQuestion
+      summary: 標記處理結果
+      description: |
+        `status = 2`（已建題）時 `linkedFaqContentItemId` 必填且必須是 FAQ；`3` 忽略；`1` 撤銷先前的處理決定。
+      x-handler: QuestionHandler.UpdateAsync
+      x-permission: content.faq.edit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QuestionUpdateRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/OkMessage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [後台・SEO 與 301]
+      operationId: deleteQuestion
+      summary: 刪除題目
+      x-handler: QuestionHandler.DeleteAsync
+      x-permission: content.faq.edit
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200': { $ref: '#/components/responses/OkMessage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  # ═════════════════════════════════════════════════════════════════════
+  # 後台：帳號與角色
+  # ═════════════════════════════════════════════════════════════════════
+
+  /admin/user:
+    get:
+      tags: [後台・帳號與角色]
+      operationId: listUsers
+      summary: 帳號清單（分頁）
+      x-handler: AccountHandler.ListUsersAsync
+      x-permission: account.manage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Keyword'
+      responses:
+        '200':
+          description: 分頁清單。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PagedResult'
+                          - type: object
+                            properties:
+                              items:
+                                type: array
+                                items: { $ref: '#/components/schemas/UserListItem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [後台・帳號與角色]
+      operationId: createUser
+      summary: 新增帳號
+      description: |
+        `userName` 只允許 `a-z0-9._@-`（不是 email、不分大小寫）；密碼下限 **6** 碼；至少一個角色。
+        管理者填的密碼就是最終密碼，不強制首登更換。帳號重複 → 409 `CONFLICT_DUPLICATE`。
+      x-handler: AccountHandler.CreateUserAsync
+      x-permission: account.manage
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserCreateRequest' }
+      responses:
+        '200':
+          description: 新帳號 id。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [id]
+                        properties:
+                          id: { type: integer }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/user/{id}:
+    put:
+      tags: [後台・帳號與角色]
+      operationId: updateUser
+      summary: 更新帳號
+      description: |
+        `userName` 不可變更。`isActive` 也用於重新啟用；啟用狀態改變時會更換 SecurityStamp。
+        `roleIds` 有帶就整批取代（至少一個）；沒帶＝不動角色。`doctorId` 與 `notifyEmail` 沒帶會被清成 null。
+      x-handler: AccountHandler.UpdateUserAsync
+      x-permission: account.manage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserUpdateRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/OkMessage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [後台・帳號與角色]
+      operationId: deactivateUser
+      summary: 停用帳號（軟刪除）
+      description: 不可停用目前登入的自己（409 `CONFLICT_STATE`）。立即讓既發權杖失效。
+      x-handler: AccountHandler.DeactivateUserAsync
+      x-permission: account.manage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200': { $ref: '#/components/responses/OkMessage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/user/{id}/password:
+    put:
+      tags: [後台・帳號與角色]
+      operationId: resetUserPassword
+      summary: 重設密碼
+      description: 新密碼下限 6 碼。同時更換 SecurityStamp 使既發權杖失效。重設出來的就是最終密碼。
+      x-handler: AccountHandler.ResetPasswordAsync
+      x-permission: account.manage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newPassword]
+              properties:
+                newPassword: { type: string, minLength: 6 }
+      responses:
+        '200': { $ref: '#/components/responses/OkMessage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/role:
+    get:
+      tags: [後台・帳號與角色]
+      operationId: listRoles
+      summary: 角色與權限目錄
+      x-handler: AccountHandler.ListRolesAsync
+      x-permission: account.manage
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 角色（含已授權碼）與完整權限目錄。
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Envelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RolePermissionMatrix' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/role/{id}/permissions:
+    put:
+      tags: [後台・帳號與角色]
+      operationId: updateRolePermissions
+      summary: 整批設定角色的權限
+      description: |
+        `permissionCodes` 整批取代。未知的權限碼 → 400。移除唯一持有 `account.manage` 的角色的該權限 →
+        409 `CONFLICT_STATE`（否則沒人能再管理帳號）。
+      x-handler: AccountHandler.UpdateRolePermissionsAsync
+      x-permission: account.manage
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissionCodes]
+              properties:
+                permissionCodes:
+                  type: array
+                  items: { $ref: '#/components/schemas/PermissionCode' }
+      responses:
+        '200': { $ref: '#/components/responses/OkMessage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+# ═══════════════════════════════════════════════════════════════════════════
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        自簽 JWT（audience `20skin-admin`）。claims：`sub`、`roles`、`permissions`、`is_superadmin`。
+        由 `POST /auth/login` 取得，`POST /auth/refresh` 換發。access token 只放記憶體。
+
+  # ─────────────────────────────────────────────────────────────────────
+  parameters:
+    UnitPath:
+      name: unit
+      in: path
+      required: true
+      description: 九個內容單元代號，與權限碼前綴逐字對應（不做單複數轉換）。其他值回 404。
+      schema: { $ref: '#/components/schemas/UnitCode' }
+    IdPath:
+      name: id
+      in: path
+      required: true
+      description: 數字識別碼。內容端點格式錯誤回 400 `VALIDATION_FORMAT`；其他資源格式錯誤回 404。
+      schema: { type: integer }
+    VersionNoPath:
+      name: no
+      in: path
+      required: true
+      description: 版本號。
+      schema: { type: integer }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      description: 預設 20，夾在 1–100。
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Keyword:
+      name: keyword
+      in: query
+      description: 在 SQL 層過濾。
+      schema: { type: string }
+    Origin:
+      name: origin
+      in: query
+      description: |
+        sitemap 裡網址用的 origin。必須是 http／https 絕對網址，否則退回 `https://20skin.tw`。
+        由 Nuxt 從請求推導（正式站、測試站與 SWA 預覽是三個主機名）。
+      schema: { type: string, format: uri }
+
+  # ─────────────────────────────────────────────────────────────────────
+  responses:
+    OkMessage:
+      description: 成功，只有訊息，`data` 為 null。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Envelope' }
+    OkNull:
+      description: 成功，`data` 為 null。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Envelope' }
+    TokenOk:
+      description: 憑證與身分。
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/TokenResponse' }
+    ContentDetail:
+      description: 內容詳情。
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ContentDetail' }
+    RedirectOk:
+      description: 轉址規則。
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/Envelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Redirect' }
+    BadRequest:
+      description: |
+        400。`VALIDATION_REQUIRED`／`VALIDATION_FORMAT`／`VALIDATION_RANGE`，
+        以及 `UPLOAD_TYPE`／`UPLOAD_SIZE`／`BOT_CHECK_FAILED`。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Unauthorized:
+      description: 401 `AUTH_TOKEN_INVALID`：缺少、過期或簽章不符的憑證。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: |
+        403。`FORBIDDEN`（權限碼不足、未登記於權限表的 /admin/* 路徑、醫師動別人的內容、
+        法務頁限超級管理員）或 `AUTH_ACCOUNT_INACTIVE`。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: 404 `NOT_FOUND`。未登記的路由也是這個（訊息為「端點不存在」）。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: |
+        409。`CONFLICT_DUPLICATE`（網址／slug／帳號重複，含資料庫唯一鍵違反）、
+        `CONFLICT_STATE`（狀態不允許、仍被引用，含外鍵違反）、`CONFLICT_LOCKED`（系統鎖定）。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    TooManyRequests:
+      description: 429 `RATE_LIMITED`。超限後鎖一整個視窗。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    AiUnavailable:
+      description: 503 `AI_UNAVAILABLE`：模型服務連不上／逾時／金鑰未設定／語料索引尚未建立。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    InternalError:
+      description: 500 `INTERNAL`。不洩漏堆疊，細節只進 Application Insights。
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  # ─────────────────────────────────────────────────────────────────────
+  schemas:
+    # ── 信封與共用 ─────────────────────────────────────────────────────
+
+    Envelope:
+      type: object
+      description: |
+        統一回應信封（`Common/ApiResponse.cs`）。所有 JSON 端點一律用它，**不回裸 data**。
+        前端一律以 `code` 分支，**不得比對 `message` 字串**。成功時 `code` 為 null。
+      required: [success, code, data, message, errors, timestamp]
+      properties:
+        success: { type: boolean }
+        code:
+          description: 成功為 null；失敗為 ErrorCode。
+          oneOf:
+            - $ref: '#/components/schemas/ErrorCode'
+            - type: 'null'
+        data:
+          description: 依端點而定；失敗為 null。
+        message:
+          type: string
+          description: 給人看。成功時多半是 `Success`。
+        errors:
+          type: array
+          items: { type: string }
+          description: 錯誤細節。
+        timestamp:
+          type: string
+          format: date-time
+
+    ErrorEnvelope:
+      description: 失敗信封。
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            success: { type: boolean, const: false }
+            code: { $ref: '#/components/schemas/ErrorCode' }
+            data: { type: 'null' }
+
+    ErrorCode:
+      type: string
+      description: |
+        錯誤碼值域（`Common/ErrorCodes.cs`）。注意 `AUTH_MUST_CHANGE_PASSWORD` 目前程式碼中
+        已沒有任何地方丟出（首登強制改密碼 2026-09-17 移除），常數保留。
+      enum:
+        - VALIDATION_REQUIRED
+        - VALIDATION_FORMAT
+        - VALIDATION_RANGE
+        - AUTH_INVALID_CREDENTIALS
+        - AUTH_TOKEN_INVALID
+        - AUTH_MUST_CHANGE_PASSWORD
+        - AUTH_ACCOUNT_INACTIVE
+        - FORBIDDEN
+        - NOT_FOUND
+        - CONFLICT_DUPLICATE
+        - CONFLICT_STATE
+        - CONFLICT_LOCKED
+        - UPLOAD_TYPE
+        - UPLOAD_SIZE
+        - RATE_LIMITED
+        - BOT_CHECK_FAILED
+        - AI_UNAVAILABLE
+        - INTERNAL
+
+    PagedResult:
+      type: object
+      description: 後台清單的分頁形狀。`items` 由各端點的 allOf 補上型別。
+      required: [items, totalCount, page, pageSize, totalPages]
+      properties:
+        items: { type: array, items: {} }
+        totalCount: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalPages: { type: integer }
+
+    UnitCode:
+      type: string
+      enum: [treatment, doctor, concern, article, case, faq, clinic, page, term]
+
+    PermissionCode:
+      type: string
+      description: |
+        28 個權限碼（種子在 `Data/Seed/SeedData.cs`）。`content.{unit}.edit`／`.publish` 九個單元各一對（共 18）。
+      enum:
+        - content.treatment.edit
+        - content.treatment.publish
+        - content.doctor.edit
+        - content.doctor.publish
+        - content.concern.edit
+        - content.concern.publish
+        - content.article.edit
+        - content.article.publish
+        - content.case.edit
+        - content.case.publish
+        - content.faq.edit
+        - content.faq.publish
+        - content.clinic.edit
+        - content.clinic.publish
+        - content.page.edit
+        - content.page.publish
+        - content.term.edit
+        - content.term.publish
+        - seo.edit
+        - redirect.manage
+        - taxonomy.tag.create
+        - taxonomy.category.manage
+        - page.legal.edit
+        - home.arrange
+        - menu.edit
+        - settings.edit
+        - account.manage
+        - upload.file
+
+    UploadedImage:
+      type: object
+      description: |
+        圖片值——內容欄位裡存下來的形狀，也是 `POST /admin/upload/commit` 的回傳。
+        `url` 與 `blobPath` 必須原封不動來自 commit，少了 `blobPath` 換圖時就找不到檔案可刪。
+      required: [blobPath, url]
+      properties:
+        blobPath: { type: string }
+        url: { type: string }
+        alt: { type: [string, 'null'] }
+        width: { type: [integer, 'null'] }
+        height: { type: [integer, 'null'] }
+        variants: { type: [string, 'null'] }
+
+    NullableImage:
+      description: 可為空的圖片欄位。
+      oneOf:
+        - $ref: '#/components/schemas/UploadedImage'
+        - type: 'null'
+
+    # ── 認證 ───────────────────────────────────────────────────────────
+
+    LoginRequest:
+      type: object
+      required: [userName, password]
+      properties:
+        userName: { type: string, description: 登入識別，不是 email。 }
+        password: { type: string }
+        botCheckToken: { type: string, description: 機器人驗證權杖（reCAPTCHA v3，action `login`）。 }
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+
+    LogoutRequest:
+      type: object
+      properties:
+        refreshToken: { type: string }
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string }
+        newPassword: { type: string, minLength: 8 }
+
+    TokenResponse:
+      type: object
+      required: [accessToken, refreshToken, userId, userName, displayName, roles, permissions, isSuperAdmin, mustChangePassword]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        userId: { type: integer }
+        userName: { type: string }
+        doctorId: { type: [integer, 'null'], description: 醫師角色綁定的個人頁；非醫師為 null。 }
+        displayName: { type: string }
+        roles:
+          type: array
+          items: { type: string, enum: [SuperAdmin, Editor, Doctor, Marketing] }
+        permissions:
+          type: array
+          description: 前端權限判斷的唯一依據。
+          items: { $ref: '#/components/schemas/PermissionCode' }
+        isSuperAdmin: { type: boolean }
+        mustChangePassword:
+          type: boolean
+          description: 惰性欄位，目前一律 false，不要拿它擋人。
+
+    # ── 公開：表單與 AI ───────────────────────────────────────────────
+
+    ContactRequest:
+      type: object
+      required: [name, message, privacyConsent]
+      properties:
+        name: { type: string }
+        phone: { type: [string, 'null'], description: 與 email 至少擇一。 }
+        email: { type: [string, 'null'], format: email }
+        site: { type: [string, 'null'], description: 想詢問的院區。只進通知信，不落庫。 }
+        topic: { type: [string, 'null'], description: 詢問主題。只進通知信，不落庫。 }
+        message: { type: string }
+        privacyConsent: { type: boolean, description: 必須為 true。 }
+        botCheckToken: { type: string, description: reCAPTCHA v3，action `contact`。 }
+
+    MissedQuestionRequest:
+      type: object
+      required: [questionText, source]
+      properties:
+        questionText: { type: string, maxLength: 500 }
+        source: { type: string, enum: [search, ai-faq] }
+        botCheckToken: { type: string, description: reCAPTCHA v3，action `questions_miss`。 }
+
+    AiAskRequest:
+      type: object
+      required: [question]
+      properties:
+        question: { type: string, minLength: 1, maxLength: 300 }
+        history:
+          type: array
+          description: 先前幾則對話。伺服器只取最後 4 則，且明確標注「不得作為事實來源」。
+          items:
+            type: object
+            properties:
+              role: { type: string, enum: [user, assistant] }
+              text: { type: string, maxLength: 500 }
+        botCheckToken: { type: string, description: reCAPTCHA v3，action `ai_ask`。 }
+
+    AiAskResponse:
+      type: object
+      required: [answer, answered, sources, handoff, disclaimer]
+      properties:
+        answer: { type: string }
+        answered: { type: boolean, description: false＝答不出來（仍是 HTTP 200）。 }
+        sources:
+          type: array
+          description: 引用的站內頁面。主站舊文（`sourceSite = 1`）不會出現在這裡。最多 3 筆。
+          items:
+            type: object
+            required: [title, url, kind]
+            properties:
+              title: { type: string }
+              url: { type: string, description: 由伺服器對映，模型看不到網址。 }
+              kind: { type: string, description: 型別標籤（療程／文章…）。 }
+        handoff:
+          type: object
+          required: [needed, reason]
+          properties:
+            needed: { type: boolean }
+            reason:
+              type: [string, 'null']
+              description: 前台依它分支文案。目前程式只會產生 `no_match` 與 `needs_doctor`。
+              enum: [no_match, needs_doctor, null]
+        disclaimer: { type: string }
+
+    # ── 公開：內容 ─────────────────────────────────────────────────────
+
+    PublicContentRecord:
+      type: object
+      description: |
+        已核准版本快照（`ContentVersions.Snapshot`）加上少數即時覆寫。
+        **結構性欄位用即時值**（`id`、`contentType`、`slug`、`urlPath`、`sortOrder`、
+        `includeInSitemap`、`updatedAt`）；**內容性欄位用快照**（`title`、`summary`、`fields`）。
+        `fields` 的形狀逐單元不同，與後台 `ContentDetail.fields` 同鍵。
+      required: [id, contentType, slug, urlPath, title, indexable]
+      additionalProperties: true
+      properties:
+        id: { type: integer }
+        contentType: { type: integer, enum: [1, 2, 3, 4, 5, 6, 7, 8, 9], description: '1 療程／2 醫師／3 困擾／4 文章／5 案例／6 FAQ／7 據點／8 頁面／9 分類。' }
+        slug: { type: [string, 'null'] }
+        urlPath: { type: [string, 'null'] }
+        title: { type: string }
+        summary: { type: [string, 'null'] }
+        sortOrder: { type: integer }
+        includeInSitemap: { type: boolean }
+        updatedAt: { type: string, description: 'ISO 本地格式（`s`），例如 `2026-09-18T15:30:00`。' }
+        indexable: { type: boolean, description: 是否值得被索引（與 sitemap 同一個判斷）。 }
+        fields: { type: object, additionalProperties: true }
+        seo:
+          type: [object, 'null']
+          additionalProperties: true
+        relations:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            properties:
+              toContentItemId: { type: integer }
+              toSlug: { type: [string, 'null'] }
+              toUrlPath: { type: [string, 'null'] }
+              toTitle: { type: [string, 'null'], description: 取已發布快照的標題。 }
+              toIsPublished: { type: boolean, description: 前台看得到＝true（不是 Status = 3）。 }
+
+    PublicArticlePage:
+      type: object
+      description: 文章列表的分頁形狀（沒有 `totalPages`）。
+      required: [items, page, pageSize, totalCount]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/PublicContentRecord' }
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalCount: { type: integer }
+
+    PublicHomeSection:
+      type: object
+      required: [sectionKey, isEnabled, sortOrder, items]
+      properties:
+        sectionKey: { type: string }
+        title: { type: [string, 'null'] }
+        subtitle: { type: [string, 'null'] }
+        isEnabled: { type: boolean }
+        sortOrder: { type: integer }
+        settings:
+          description: 版位設定，已由 JSON 字串解析成物件／陣列；沒有設定為 null。
+        items:
+          type: array
+          items:
+            type: object
+            required: [contentItemId, contentType, urlPath, title, sortOrder]
+            properties:
+              contentItemId: { type: integer }
+              contentType: { type: integer }
+              slug: { type: [string, 'null'] }
+              urlPath: { type: [string, 'null'] }
+              title: { type: string }
+              sortOrder: { type: integer }
+
+    PublicMenuNode:
+      type: object
+      required: [label, linkKind, url, external, openInNewTab, children]
+      properties:
+        label: { type: string, description: 留空的節點已被填成被指到內容的標題。 }
+        linkKind: { type: integer, enum: [1, 2, 3], description: 1 站內內容／2 站內路徑／3 外部網址。 }
+        url: { type: [string, 'null'] }
+        external: { type: boolean }
+        relAttr: { type: [string, 'null'] }
+        openInNewTab: { type: boolean }
+        children:
+          type: array
+          items: { $ref: '#/components/schemas/PublicMenuNode' }
+
+    PublicSiteSettings:
+      type: object
+      required: [siteName, siteDescription, aiFaqEnabled, aiFaqPanelTitle, aiFaqWelcomeText, aiFaqHandoffBookingUrl, aiFaqHandoffLineUrl, trackingIds, socialLinks, footerCopyright]
+      properties:
+        siteName: { type: string }
+        siteDescription: { type: string }
+        aiFaqEnabled: { type: boolean }
+        aiFaqPanelTitle: { type: string }
+        aiFaqWelcomeText: { type: string }
+        aiFaqHandoffBookingUrl: { type: string }
+        aiFaqHandoffLineUrl: { type: string, description: 填了就統一用這一個，院區清單不出現（決策 28）。 }
+        trackingIds: { type: string, description: 'GA4／GTM 識別碼，逗號分隔，例如 `G-ABCD1234,GTM-XYZ9876`。' }
+        socialLinks:
+          type: array
+          description: 頁尾社群連結；來源 JSON 解析失敗時為空陣列。
+          items:
+            type: object
+            required: [label, url]
+            properties:
+              label: { type: string }
+              url: { type: string }
+        footerCopyright: { type: string }
+
+    # ── 後台：內容單元 ─────────────────────────────────────────────────
+
+    ContentUnitCounts:
+      type: object
+      required: [draft, inReview, published, unpublished]
+      properties:
+        draft: { type: integer }
+        inReview: { type: integer }
+        published: { type: integer }
+        unpublished: { type: integer }
+
+    ContentListItem:
+      type: object
+      required: [id, unit, title, status, statusName, effectiveStatus, sortOrder, includeInSitemap, isSystemLocked, updatedAt]
+      properties:
+        id: { type: integer }
+        unit: { $ref: '#/components/schemas/UnitCode' }
+        title: { type: string }
+        slug: { type: [string, 'null'] }
+        urlPath: { type: [string, 'null'] }
+        status: { type: integer, enum: [1, 2, 3, 4], description: 1 草稿／2 送審中（舊資料）／3 已發布／4 已下架。 }
+        statusName: { type: string, enum: [草稿, 送審中, 已發布, 已下架] }
+        effectiveStatus:
+          type: string
+          description: 顯示用推導狀態（由 Status 與排程時間推導，不是資料庫欄位）。
+          enum: [draft, inReview, published, scheduled, expired, unpublished]
+        publishAt: { type: [string, 'null'], format: date-time }
+        unpublishAt: { type: [string, 'null'], format: date-time }
+        sortOrder: { type: integer }
+        includeInSitemap: { type: boolean }
+        isSystemLocked: { type: boolean }
+        ownerUserId: { type: [integer, 'null'] }
+        categoryTermId: { type: [integer, 'null'] }
+        categoryTitle: { type: [string, 'null'] }
+        updatedAt: { type: string, format: date-time }
+        usageCount: { type: [integer, 'null'], description: 只有 `term` 有值。 }
+        fields:
+          type: [object, 'null']
+          description: 逐單元的少數清單顯示欄位（不是完整的詳情 fields）。
+          additionalProperties: true
+
+    ContentDetail:
+      type: object
+      required: [id, unit, contentType, title, status, statusName, effectiveStatus, sortOrder, includeInSitemap, isSystemLocked, createdAt, updatedAt, fields, relations]
+      properties:
+        id: { type: integer }
+        unit: { $ref: '#/components/schemas/UnitCode' }
+        contentType: { type: integer, enum: [1, 2, 3, 4, 5, 6, 7, 8, 9] }
+        slug: { type: [string, 'null'] }
+        urlPath: { type: [string, 'null'] }
+        title: { type: string }
+        summary: { type: [string, 'null'], description: 一句話導言（≤500 字），不是 `seo.aiSummary`。 }
+        status: { type: integer, enum: [1, 2, 3, 4] }
+        statusName: { type: string }
+        effectiveStatus:
+          type: string
+          enum: [draft, inReview, published, scheduled, expired, unpublished]
+        publishAt: { type: [string, 'null'], format: date-time }
+        unpublishAt: { type: [string, 'null'], format: date-time }
+        publishedVersionId: { type: [integer, 'null'] }
+        sortOrder: { type: integer }
+        includeInSitemap: { type: boolean }
+        isSystemLocked: { type: boolean }
+        ownerUserId: { type: [integer, 'null'] }
+        createdByUserId: { type: [integer, 'null'] }
+        updatedByUserId: { type: [integer, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        fields: { $ref: '#/components/schemas/ContentFields' }
+        seo:
+          oneOf:
+            - $ref: '#/components/schemas/SeoMeta'
+            - type: 'null'
+        relations:
+          type: array
+          items: { $ref: '#/components/schemas/RelationItem' }
+
+    ContentFields:
+      description: |
+        型別專屬欄位，依單元（`unit`）擇一。不是 discriminated union——判斷靠外層的 `unit`。
+      anyOf:
+        - $ref: '#/components/schemas/TreatmentFields'
+        - $ref: '#/components/schemas/DoctorFields'
+        - $ref: '#/components/schemas/ConcernFields'
+        - $ref: '#/components/schemas/ArticleFields'
+        - $ref: '#/components/schemas/CaseFields'
+        - $ref: '#/components/schemas/FaqFields'
+        - $ref: '#/components/schemas/ClinicFields'
+        - $ref: '#/components/schemas/PageFields'
+        - $ref: '#/components/schemas/TermFields'
+
+    TreatmentFields:
+      type: object
+      description: '`treatment`。`categoryTermId` 新增時必填。'
+      properties:
+        categoryTermId: { type: integer }
+        nameEn: { type: [string, 'null'] }
+        subtitle: { type: [string, 'null'] }
+        indications: { type: [string, 'null'], description: 區塊 JSON，以 JSON 字串送。 }
+        mechanism: { type: [string, 'null'], description: 區塊 JSON，以 JSON 字串送。 }
+        durationText: { type: [string, 'null'] }
+        sessionsText: { type: [string, 'null'] }
+        aftercare: { type: [string, 'null'], description: 區塊 JSON，以 JSON 字串送。 }
+        contraindications: { type: [string, 'null'], description: 區塊 JSON，以 JSON 字串送。 }
+        deviceInfo: { type: [string, 'null'], description: 區塊 JSON，以 JSON 字串送。 }
+        facts: { type: [string, 'null'], description: 區塊 JSON，以 JSON 字串送。 }
+        steps: { type: [string, 'null'], description: 區塊 JSON，以 JSON 字串送。 }
+        cover: { $ref: '#/components/schemas/NullableImage' }
+        images:
+          type: array
+          description: 有帶就整批取代。
+          items:
+            type: object
+            properties:
+              image: { $ref: '#/components/schemas/UploadedImage' }
+              caption: { type: [string, 'null'] }
+              sortOrder: { type: integer }
+
+    DoctorFields:
+      type: object
+      description: '`doctor`（團隊成員，含非醫師的藝術總監）。'
+      properties:
+        jobTitle: { type: [string, 'null'] }
+        isPhysician: { type: boolean }
+        specialty: { type: [string, 'null'] }
+        photo: { $ref: '#/components/schemas/NullableImage' }
+        bio: { type: [string, 'null'] }
+        publications: { type: [string, 'null'] }
+        tags:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: integer, enum: [1, 2], description: 1 專長／2 擅長項目（DoctorTagType）。 }
+              tag: { type: string }
+              sortOrder: { type: integer }
+        credentials:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: integer, description: 1 學歷／2 經歷／3 證照（CredentialType）。 }
+              text: { type: string }
+              sortOrder: { type: integer }
+        schedules:
+          type: array
+          items:
+            type: object
+            properties:
+              clinicId: { type: integer }
+              dayOfWeek: { type: integer }
+              startTime: { type: string, examples: ['09:00'] }
+              endTime: { type: string, examples: ['12:00'] }
+              note: { type: [string, 'null'] }
+
+    ConcernFields:
+      type: object
+      description: '`concern`（肌膚困擾）。'
+      properties:
+        symptoms: { type: [string, 'null'], description: 區塊 JSON，以 JSON 字串送。 }
+        causes: { type: [string, 'null'], description: 區塊 JSON，以 JSON 字串送。 }
+        selfCheckGuide: { type: [string, 'null'], description: 區塊 JSON，以 JSON 字串送。 }
+        whenToSeeDoctor: { type: [string, 'null'], description: 區塊 JSON，以 JSON 字串送。 }
+        recommendationIntro: { type: [string, 'null'] }
+        cover: { $ref: '#/components/schemas/NullableImage' }
+
+    ArticleFields:
+      type: object
+      description: '`article`。⚠️ `bodyBlocks` 寫入要送物件／陣列（不是 JSON 字串），與其他區塊 JSON 欄位相反。'
+      properties:
+        categoryTermId: { type: integer }
+        authorDoctorId: { type: [integer, 'null'] }
+        authorName: { type: [string, 'null'] }
+        reviewerDoctorId: { type: [integer, 'null'] }
+        reviewedOn: { type: [string, 'null'], format: date }
+        displayDate: { type: [string, 'null'] }
+        cover: { $ref: '#/components/schemas/NullableImage' }
+        bodyBlocks: {}
+        readingMinutes: { type: [integer, 'null'] }
+        sourceSite: { type: integer, description: '1 主站／2 blog 站（ArticleSourceSite）。主站舊文為 1，AI 檢索降權且不列為來源。' }
+
+    CaseFields:
+      type: object
+      description: '`case`（案例）。'
+      properties:
+        treatmentId: { type: [integer, 'null'] }
+        sessionsText: { type: [string, 'null'] }
+        narrative: { type: [string, 'null'] }
+        individualVarianceStatement: { type: [string, 'null'] }
+        hasWrittenConsent: { type: boolean }
+        consentReference: { type: [string, 'null'] }
+        shootingConditions: { type: [string, 'null'] }
+        images:
+          type: array
+          items:
+            type: object
+            properties:
+              image: { $ref: '#/components/schemas/UploadedImage' }
+              phase: { type: integer, enum: [1, 2], description: 1 術前／2 術後（CasePhase）。 }
+              takenOn: { type: [string, 'null'], format: date }
+              sortOrder: { type: integer }
+
+    FaqFields:
+      type: object
+      description: '`faq`。'
+      properties:
+        categoryTermId: { type: integer }
+        webAnswer: { type: [string, 'null'] }
+        aiAnswer: { type: [string, 'null'] }
+        lastReviewedOn: { type: string, format: date }
+        reviewedBy: { type: [string, 'null'] }
+
+    ClinicFields:
+      type: object
+      description: '`clinic`（據點）。'
+      properties:
+        address: { type: [string, 'null'] }
+        phone: { type: [string, 'null'] }
+        lineUrl: { type: [string, 'null'], description: AI 面板「轉 LINE 諮詢」依院區分流的來源。 }
+        latitude: { type: [number, 'null'] }
+        longitude: { type: [number, 'null'] }
+        mapUrl: { type: [string, 'null'] }
+        transportInfo: { type: [string, 'null'] }
+        intro: { type: [string, 'null'] }
+        businessHours:
+          type: array
+          items:
+            type: object
+            properties:
+              dayOfWeek: { type: integer }
+              startTime: { type: string, examples: ['09:00'] }
+              endTime: { type: string, examples: ['21:00'] }
+              sortOrder: { type: integer }
+        photos:
+          type: array
+          items:
+            type: object
+            properties:
+              image: { $ref: '#/components/schemas/UploadedImage' }
+              caption: { type: [string, 'null'] }
+              sortOrder: { type: integer }
+
+    PageFields:
+      type: object
+      description: |
+        `page`。系統頁（`pageKind = 2`）不可新增、不可刪除、不可改 slug；法務三頁
+        （`superAdminOnly`）限超級管理員。`bodyBlocks` 依 slug 分派 schema（見決策 17）。
+      properties:
+        pageKind: { type: integer, enum: [1, 2], description: 1 自由頁／2 系統頁。 }
+        systemKey: { type: [string, 'null'], description: '系統頁識別碼（home、team-index…共 11 筆）；唯讀。' }
+        lead: { type: [string, 'null'] }
+        bodyBlocks: {}
+        cover: { $ref: '#/components/schemas/NullableImage' }
+        listSortRule: { type: [string, 'null'] }
+        pageSize: { type: [integer, 'null'] }
+        superAdminOnly: { type: boolean }
+
+    TermFields:
+      type: object
+      description: '`term`（分類與標籤）。`termType` 新增時必填。'
+      properties:
+        termType: { type: integer, enum: [1, 2, 3, 4], description: 1 療程分類／2 文章分類／3 FAQ 分類／4 文章標籤。 }
+        intro: { type: [string, 'null'] }
+        cover: { $ref: '#/components/schemas/NullableImage' }
+        usageCount: { type: integer, readOnly: true, description: 唯讀，只在詳情回應出現。 }
+
+    ContentSaveRequest:
+      type: object
+      description: |
+        新增／更新內容。共同欄位**永遠在頂層**；型別專屬欄位放巢狀 `fields`，或直接攤在頂層
+        （**帶了 `fields` 就只讀 `fields`**，頂層同名欄位忽略）。**欄位沒帶＝不動該欄位**
+        （不是清空）。必須是 JSON 物件。
+      additionalProperties: true
+      properties:
+        title: { type: string, maxLength: 200, description: 新增時必填。 }
+        slug: { type: string, pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', description: 新增時必填；系統鎖定的內容不可改。 }
+        summary: { type: [string, 'null'], maxLength: 500 }
+        sortOrder: { type: integer }
+        includeInSitemap: { type: boolean }
+        ownerUserId: { type: [integer, 'null'], description: 醫師角色送了也會被忽略／強制為自己。 }
+        fields: { $ref: '#/components/schemas/ContentFields' }
+
+    SeoMeta:
+      type: object
+      properties:
+        seoTitle: { type: [string, 'null'] }
+        metaDescription: { type: [string, 'null'] }
+        ogImage: { $ref: '#/components/schemas/NullableImage' }
+        canonicalOverride: { type: [string, 'null'] }
+        noIndex: { type: boolean }
+        structuredDataOverride: { type: [string, 'null'], description: 整段取代自動產生的 JSON-LD（預設不在後台露出入口）。 }
+        aiSummary: { type: [string, 'null'] }
+        updatedByUserId: { type: [integer, 'null'] }
+        updatedAt: { type: [string, 'null'], format: date-time }
+
+    SeoSaveRequest:
+      type: object
+      properties:
+        seoTitle: { type: [string, 'null'], maxLength: 200 }
+        metaDescription: { type: [string, 'null'], maxLength: 400 }
+        ogImage: { $ref: '#/components/schemas/NullableImage' }
+        canonicalOverride: { type: [string, 'null'] }
+        noIndex: { type: boolean }
+        structuredDataOverride: { type: [string, 'null'] }
+        aiSummary: { type: [string, 'null'], description: 有填時須 20–300 字。 }
+
+    RelationItem:
+      type: object
+      description: |
+        一筆關聯，正向與反向共用。`to*` 永遠是「對方」。`isReverse = true` 唯讀，
+        不可拿去寫回 `PUT .../relations`。
+      required: [toContentItemId, toContentType, relationType, sortOrder, isReverse]
+      properties:
+        toContentItemId: { type: integer }
+        toContentType: { type: integer }
+        relationType: { type: integer, description: 1–14，見 RelationType（12 為頁面精選項目）。 }
+        sortOrder: { type: integer }
+        note: { type: [string, 'null'] }
+        toTitle: { type: [string, 'null'] }
+        toUrlPath: { type: [string, 'null'] }
+        isReverse: { type: boolean }
+
+    RelationSaveItem:
+      type: object
+      required: [relationType, toContentItemId]
+      properties:
+        relationType: { type: integer }
+        toContentItemId: { type: integer }
+        sortOrder: { type: integer }
+        note: { type: [string, 'null'] }
+
+    SortItem:
+      type: object
+      required: [id, sortOrder]
+      properties:
+        id: { type: integer }
+        sortOrder: { type: integer }
+
+    ScheduleRequest:
+      type: object
+      properties:
+        publishAt: { type: [string, 'null'], format: date-time }
+        unpublishAt: { type: [string, 'null'], format: date-time }
+
+    PublishRequest:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [publish, unpublish] }
+
+    VersionListItem:
+      type: object
+      required: [id, versionNo, title, createdAt]
+      properties:
+        id: { type: integer }
+        versionNo: { type: integer }
+        title: { type: string }
+        note: { type: [string, 'null'] }
+        createdByUserId: { type: [integer, 'null'] }
+        createdAt: { type: string, format: date-time }
+
+    VersionDetail:
+      allOf:
+        - $ref: '#/components/schemas/VersionListItem'
+        - type: object
+          required: [snapshot]
+          properties:
+            snapshot: { type: string, description: 版本快照的原始 JSON 字串，供前端自行 parse 做差異比對。 }
+
+    # ── 後台：站台編排與系統 ──────────────────────────────────────────
+
+    HomeSection:
+      type: object
+      required: [id, sectionKey, title, isEnabled, sortOrder, items]
+      properties:
+        id: { type: integer }
+        sectionKey: { type: string }
+        title: { type: string }
+        subtitle: { type: [string, 'null'] }
+        isEnabled: { type: boolean }
+        sortOrder: { type: integer }
+        settings: { type: [string, 'null'], description: JSON 字串（主視覺輪播的最外層必須是陣列）。 }
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, contentItemId, contentTitle, contentType, sortOrder]
+            properties:
+              id: { type: integer }
+              contentItemId: { type: integer }
+              contentTitle: { type: string }
+              contentUrlPath: { type: [string, 'null'] }
+              contentType: { type: integer }
+              sortOrder: { type: integer }
+
+    HomeSectionUpdateRequest:
+      type: object
+      required: [sections]
+      properties:
+        sections:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [sectionKey, isEnabled, sortOrder, items]
+            properties:
+              sectionKey: { type: string }
+              isEnabled: { type: boolean }
+              sortOrder: { type: integer }
+              settings: { type: [string, 'null'], description: 須為合法 JSON 字串。 }
+              items:
+                type: array
+                items:
+                  type: object
+                  required: [contentItemId, sortOrder]
+                  properties:
+                    contentItemId: { type: integer }
+                    sortOrder: { type: integer }
+
+    MenuNode:
+      type: object
+      description: 讀寫共用。樹狀靠 `children` 巢狀表示；`id` 寫入時 null＝新增。最多兩層。
+      required: [label, linkKind, children]
+      properties:
+        id: { type: [integer, 'null'] }
+        label: { type: string, description: 只有 `linkKind = 1` 可留空（跟著被指到內容的標題走）。 }
+        linkKind: { type: integer, enum: [1, 2, 3], description: 1 站內內容／2 站內路徑／3 外部網址。 }
+        contentItemId: { type: [integer, 'null'] }
+        url: { type: [string, 'null'] }
+        relAttr: { type: [string, 'null'] }
+        openInNewTab: { type: boolean }
+        children:
+          type: array
+          items: { $ref: '#/components/schemas/MenuNode' }
+        contentType: { type: [integer, 'null'], readOnly: true, description: 唯讀，寫入時忽略。 }
+        contentTitle: { type: [string, 'null'], readOnly: true, description: 唯讀，寫入時忽略。 }
+        autoChildren:
+          type: integer
+          enum: [0, 1, 2, 3, 4]
+          default: 0
+          description: 0 自己維護／1 全部困擾／2 全部療程分類／3 全部文章分類／4 全部據點。只能掛在頂層。
+
+    MenuTree:
+      type: object
+      properties:
+        main:
+          type: [array, 'null']
+          items: { $ref: '#/components/schemas/MenuNode' }
+        footer:
+          type: [array, 'null']
+          items: { $ref: '#/components/schemas/MenuNode' }
+
+    SiteSettingAdminItem:
+      type: object
+      required: [settingKey, settingValue, valueType, updatedAt]
+      properties:
+        settingKey: { type: string }
+        settingValue: { type: string }
+        valueType: { type: string, description: SettingValueType 的名稱。, enum: [Text, Number, Boolean, Json, Url] }
+        updatedByUserId: { type: [integer, 'null'] }
+        updatedByUserName: { type: [string, 'null'] }
+        updatedAt: { type: string, format: date-time }
+
+    ExportPreview:
+      type: object
+      required: [kind, itemCount, generatedAt, content]
+      properties:
+        kind: { type: string }
+        itemCount: { type: integer }
+        generatedAt: { type: string, format: date-time }
+        content: { type: string, description: 預覽內容全文（JSON 或純文字）。 }
+
+    # ── 後台：301 與題庫 ──────────────────────────────────────────────
+
+    Redirect:
+      type: object
+      required: [id, fromPath, toPath, statusCode, isActive, source, isVerified, createdAt]
+      properties:
+        id: { type: integer }
+        fromPath: { type: string }
+        toPath: { type: string }
+        toContentItemId: { type: [integer, 'null'] }
+        statusCode: { type: integer, examples: [301] }
+        isActive: { type: boolean }
+        source: { type: integer, enum: [1, 2, 3], description: 1 遷移工具／2 人工新增／3 系統自動。 }
+        isVerified: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    RedirectCreateRequest:
+      type: object
+      required: [fromPath, toPath]
+      properties:
+        fromPath: { type: string, description: 舊路徑，可含 query string。伺服器端會正規化。 }
+        toPath: { type: string }
+        toContentItemId: { type: [integer, 'null'] }
+        statusCode: { type: integer, default: 301 }
+        isActive: { type: boolean, default: true }
+        source: { type: integer, enum: [1, 2, 3], default: 2 }
+
+    RedirectUpdateRequest:
+      type: object
+      properties:
+        fromPath: { type: string }
+        toPath: { type: string }
+        toContentItemId: { type: [integer, 'null'], description: 沒帶會被清成 null。 }
+        statusCode: { type: integer }
+        isActive: { type: boolean }
+        source: { type: integer, enum: [1, 2, 3] }
+        isVerified: { type: boolean }
+
+    RedirectStats:
+      type: object
+      required: [totalCount, activeCount, verifiedCount, migrationCount, manualCount, systemCount]
+      properties:
+        totalCount: { type: integer }
+        activeCount: { type: integer }
+        verifiedCount: { type: integer }
+        migrationCount: { type: integer }
+        manualCount: { type: integer }
+        systemCount: { type: integer }
+
+    RedirectImportResult:
+      type: object
+      required: [totalRows, imported, updated, skipped, errors]
+      properties:
+        totalRows: { type: integer }
+        imported: { type: integer }
+        updated: { type: integer }
+        skipped: { type: integer }
+        errors:
+          type: array
+          items:
+            type: object
+            required: [rowNumber, reason]
+            properties:
+              rowNumber: { type: integer, description: 第 1 列是標頭，資料從 2 起算。 }
+              fromPath: { type: [string, 'null'] }
+              reason: { type: string }
+
+    QuestionListItem:
+      type: object
+      required: [id, questionText, source, hitCount, firstSeenAt, lastSeenAt, status]
+      properties:
+        id: { type: integer }
+        questionText: { type: string }
+        source: { type: integer, enum: [1, 2, 3, 4] }
+        hitCount: { type: integer }
+        firstSeenAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time }
+        status: { type: integer, enum: [1, 2, 3] }
+        linkedFaqContentItemId: { type: [integer, 'null'] }
+        linkedFaqTitle: { type: [string, 'null'] }
+        handledByUserId: { type: [integer, 'null'] }
+        handledByUserName: { type: [string, 'null'] }
+        handledAt: { type: [string, 'null'], format: date-time }
+
+    QuestionUpdateRequest:
+      type: object
+      required: [status]
+      properties:
+        status: { type: integer, enum: [1, 2, 3], description: 1 待處理／2 已建題／3 忽略。 }
+        linkedFaqContentItemId: { type: [integer, 'null'], description: '`status = 2` 時必填。' }
+
+    # ── 後台：帳號與角色 ──────────────────────────────────────────────
+
+    UserListItem:
+      type: object
+      required: [id, userName, displayName, isActive, mustChangePassword, createdAt, updatedAt, roleCodes]
+      properties:
+        id: { type: integer }
+        userName: { type: string, description: 登入識別，不是 email。 }
+        displayName: { type: string }
+        notifyEmail: { type: [string, 'null'] }
+        isActive: { type: boolean }
+        mustChangePassword: { type: boolean, description: 惰性欄位。 }
+        doctorId: { type: [integer, 'null'] }
+        doctorName: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        roleCodes:
+          type: array
+          items: { type: string }
+
+    UserCreateRequest:
+      type: object
+      required: [userName, displayName, password, roleIds]
+      properties:
+        userName: { type: string, pattern: '^[a-zA-Z0-9._@-]+$' }
+        displayName: { type: string }
+        password: { type: string, minLength: 6 }
+        notifyEmail: { type: [string, 'null'] }
+        doctorId: { type: [integer, 'null'] }
+        roleIds:
+          type: array
+          minItems: 1
+          items: { type: integer }
+
+    UserUpdateRequest:
+      type: object
+      required: [displayName]
+      properties:
+        displayName: { type: string }
+        notifyEmail: { type: [string, 'null'] }
+        doctorId: { type: [integer, 'null'] }
+        roleIds:
+          type: array
+          minItems: 1
+          items: { type: integer }
+        isActive: { type: boolean }
+
+    RolePermissionMatrix:
+      type: object
+      required: [roles, allPermissions]
+      properties:
+        roles:
+          type: array
+          items:
+            type: object
+            required: [id, code, name, isSystem, permissionCodes]
+            properties:
+              id: { type: integer }
+              code: { type: string, enum: [SuperAdmin, Editor, Doctor, Marketing] }
+              name: { type: string }
+              isSystem: { type: boolean }
+              permissionCodes:
+                type: array
+                items: { $ref: '#/components/schemas/PermissionCode' }
+        allPermissions:
+          type: array
+          items:
+            type: object
+            required: [id, code, name, groupName]
+            properties:
+              id: { type: integer }
+              code: { $ref: '#/components/schemas/PermissionCode' }
+              name: { type: string }
+              groupName: { type: string }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 與 docs/10-api.md 的不一致清單：見產生這份檔案時的交付回報（不寫在規格檔內，
+# 免得 docs 修正後這裡變成過期敘述）。

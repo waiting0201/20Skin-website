@@ -23,13 +23,6 @@ import { readSettings, settingBool, settingJson, settingText, writeSettings } fr
 // docs/08 §I）。這裡只記 updatedAt／updatedByUserId 供畫面顯示「最後修改」，
 // 不是版本歷程——誰在這之前改過什麼，事後查不到。畫面上要把這件事講清楚。
 
-export interface NapEntry {
-  /** 對應據點名稱，只用來跟 Clinic 內容比對，不是外鍵——比對用字串相等，見 docs/03 §4 ③。 */
-  name: string
-  phone: string
-  address: string
-}
-
 export interface SocialLink {
   label: string
   url: string
@@ -58,8 +51,9 @@ export interface SiteSettingsData {
   //    但**不要再從這裡寫它** —— 寫了就又製造出「後台有、前台沒有」的落差。
   /** 個別內容頁沒設 OG 圖時的退回值。對應 `site.defaultOgImage`（JSON）。 */
   defaultOgImage: UploadedImage | null
-  /** 全站 NAP 主資料。⚠️ 必須與據點頁、頁尾逐字一致（CLAUDE.md／docs/03 §4 ③）。 */
-  nap: NapEntry[]
+  // 🔴 **沒有 `nap`**（2026-10-01 拿掉）。設定鍵 `nap.json` 前台從來沒有讀過 ——
+  //    名稱／電話／地址一律來自「據點」內容（`apps/web/app/data/navigation.ts` 的
+  //    `getClinicNap()`）。鍵留在資料庫，但**不要再從這裡讀寫它**，理由同上面的 `logo`。
   /** 追蹤碼（GA／GTM／Meta Pixel 等），先以自由文字收納——docs/08 §G-1：
    * 用 key-value 而非固定欄位，前端以一個多行文字欄位承接同一件事。 */
   trackingCodes: string
@@ -96,7 +90,6 @@ const KEYS = {
   siteName: 'site.name',
   // ⚠️ `site.logoImage` 刻意不列在這裡——站徽走建置產物，見 SiteSettingsData 的註解。
   defaultOgImage: 'site.defaultOgImage',
-  nap: 'nap.json',
   trackingCodes: 'tracking.ga4',
   contactEmail: 'contact.recipientEmail',
   socialLinks: 'footer.social.json',
@@ -119,7 +112,6 @@ const settings = {
     return {
       siteName: settingText(map, KEYS.siteName),
       defaultOgImage: settingJson<UploadedImage | null>(map, KEYS.defaultOgImage, null),
-      nap: settingJson<NapEntry[]>(map, KEYS.nap, []),
       trackingCodes: settingText(map, KEYS.trackingCodes),
       contactEmail: settingText(map, KEYS.contactEmail),
       socialLinks: settingJson<SocialLink[]>(map, KEYS.socialLinks, []),
@@ -149,7 +141,6 @@ const settings = {
     const changes: Record<string, string> = {}
     if (patch.siteName !== undefined) changes[KEYS.siteName] = patch.siteName
     if (patch.defaultOgImage !== undefined) changes[KEYS.defaultOgImage] = patch.defaultOgImage ? JSON.stringify(patch.defaultOgImage) : ''
-    if (patch.nap !== undefined) changes[KEYS.nap] = JSON.stringify(patch.nap)
     if (patch.trackingCodes !== undefined) changes[KEYS.trackingCodes] = patch.trackingCodes
     if (patch.contactEmail !== undefined) changes[KEYS.contactEmail] = patch.contactEmail
     if (patch.socialLinks !== undefined) changes[KEYS.socialLinks] = JSON.stringify(patch.socialLinks)
@@ -295,14 +286,12 @@ const HOME_SECTION_META: Record<
   { title: string; subtitle: string; targetUnit: UnitKey | null; autoAll?: true }
 > = {
   hero: { title: '主視覺', subtitle: 'WELCOME TO 20SKIN', targetUnit: null },
-  // 🔴 **`specialties` 的 targetUnit 是 null，不是 'concern'**（Tim 指定 2026-09-17）。
-  //    在此之前這個版位在後台長出一個困擾挑選器，而**前台根本不讀它** ——
-  //    八大專科入口讀的是 `settings` 那八列（標題＋slug＋urlPath＋圖示，
-  //    `apps/web/app/data/home.ts` 的 `settingsArrayOf('specialties')`），
-  //    `HomeSectionItems` 在正式資料是 0 筆。挑了、存了、發布了，首頁完全沒有變化。
-  //    ⚠️ **不要因為「其餘版位都有挑選器」就把它改回 'concern'** —— 那是一個
-  //    前台看不到效果的假功能（與決策 21「文章不給拖」同一條理由）。
-  specialties: { title: '看皮膚　找四季', subtitle: 'SKIN CONCERNS', targetUnit: null },
+  // 🔴 **八大專科入口＝自動列出全部困擾**（2026-10-01，與醫師、據點同一條，決策 30）。
+  //    2026-09-17 之前這裡有一個困擾挑選器，而前台讀的是 `settings` 裡手打的八列，
+  //    挑了也沒用；那八列又正好是全部 8 個困擾、順序也相同 —— 那不是策展，是第二份資料。
+  //    現在前台改讀 items、API 自動帶入整個困擾單元（`PublicContentHandler.AutoSections`）。
+  //    ⚠️ **不要加回挑選器**：要增減或調整順序，到「困擾」清單做。
+  specialties: { title: '看皮膚　找四季', subtitle: 'SKIN CONCERNS', targetUnit: 'concern', autoAll: true },
   'featured-treatments': { title: '精選療程', subtitle: 'FEATURED TREATMENTS', targetUnit: 'treatment' },
   'latest-articles': { title: '最新文章', subtitle: 'LATEST ARTICLES', targetUnit: 'article' },
   // 🔴 **醫師與據點是「自動列出全部」，沒有挑選器**（Tim 指定 2026-09-18，決策 30）。
@@ -467,9 +456,9 @@ const home = {
     return loadHomeState()
   },
 
-  // ⚠️ `reorderSections()` 2026-09-18 刪除 —— 那一頁的拖曳把手拿掉了（決策 23：
-  //    前台不讀版位順序），它從此沒有呼叫端。順序仍然隨 `saveDraft()` 一起送出
-  //    （`putSections` 用陣列位置當 sortOrder），不需要一支專門的端點。
+  // ⚠️ 版位順序沒有專門的端點：隨 `saveDraft()` 一起送出（`putSections` 用陣列位置當
+  //    sortOrder）。2026-10-01 起前台照它排（決策 23），拖曳只改畫面上的 sortOrder，
+  //    見 pages/HomeSections.vue 的 `reorderSections`。
 
   /**
    * 發布。走的是**首頁那筆 Page** 的發布端點 —— 版位編排會隨版本快照一起帶走
