@@ -325,6 +325,8 @@ await step('🔴 八大專科入口、醫師與據點沒有挑選器（自動列
   for (const title of ['精選療程', '最新文章']) {
     if (!(await cardOf(title).locator('.adm-relation').count())) throw new Error(`「${title}」的挑選器不見了`)
   }
+  // 品牌理念摘要：前台那一區是寫死的版面，挑了也不會生效（2026-10-01 拿掉）。
+  if (await cardOf('品牌理念摘要').locator('.adm-relation').count()) throw new Error('「品牌理念摘要」還有挑選器')
   return '八大專科入口／醫師／據點 0 個，精選療程／最新文章各 1 個'
 })
 await step('🔴 主視覺的圖片欄位不談刪檔，只給建議尺寸', async () => {

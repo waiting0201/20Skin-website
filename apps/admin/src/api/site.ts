@@ -301,7 +301,13 @@ const HOME_SECTION_META: Record<
   //    ⚠️ **不要因為「精選療程也有挑選器」就加回去** —— 那一個挑 4/28，是真的策展。
   doctors: { title: '醫師團隊', subtitle: 'OUR DOCTORS', targetUnit: 'doctor', autoAll: true },
   clinics: { title: '據點資訊', subtitle: 'OUR CLINICS', targetUnit: 'clinic', autoAll: true },
-  'brand-story': { title: '品牌理念摘要', subtitle: '新中式美學', targetUnit: 'page' },
+  // 🔴 **品牌理念摘要沒有挑選器**（Tim 指定 2026-10-01）。前台那一區的文案、圖與
+  //    「了解品牌故事 →」連結全部寫死在 `apps/web/app/pages/index.vue`（版面，決策 14），
+  //    **從來沒有讀過這裡挑的那一頁** —— 挑了、存了、發布了，首頁一個字都不會變。
+  //    與決策 24 的 Logo、2026-10-01 的 NAP 同一類「編了不生效」。
+  //    ⚠️ 版位自存的 items 仍原樣往返（`section.items` 照送），切回來時還在。
+  //    ⚠️ 它仍然可以拖曳與開關 —— 那兩個前台有讀（決策 23）。
+  'brand-story': { title: '品牌理念摘要', subtitle: '新中式美學', targetUnit: null },
 }
 
 interface ServerHomeSection {
