@@ -16,8 +16,14 @@
 import { EXTERNAL } from '~/data/navigation'
 
 const props = withDefaults(
-  defineProps<{ panelTitle?: string; welcomeText?: string; bookingUrl?: string; lineUrl?: string }>(),
-  { panelTitle: 'AI 線上諮詢', welcomeText: '', bookingUrl: '', lineUrl: '' },
+  defineProps<{
+    panelTitle?: string
+    welcomeText?: string
+    bookingUrl?: string
+    lineUrl?: string
+    lineContacts?: { name: string; url: string }[]
+  }>(),
+  { panelTitle: 'AI 線上諮詢', welcomeText: '', bookingUrl: '', lineUrl: '', lineContacts: () => [] },
 )
 
 interface Source { title: string; url: string; kind: string }
@@ -34,9 +40,12 @@ const { public: { apiBaseUrl } } = useRuntimeConfig()
 
 const bookingHref = computed(() => props.bookingUrl || EXTERNAL.booking)
 
+// 轉 LINE 諮詢：**依院區分流**（Tim 定案 2026-10-01），名單來自據點單元的「LINE 連結」。
+// 全站設定的那一格是覆寫 —— 填了就統一用那一個帳號，院區清單不出現。
 // ⚠️ LINE 沒有寫死的預設值（`EXTERNAL` 只有預約與商城）——
-//    後台沒填就不顯示那個出口，而不是連到一個猜出來的網址。
-const lineHref = computed(() => props.lineUrl)
+//    兩邊都沒填就不顯示那個出口，而不是連到一個猜出來的網址。
+const lineLinks = computed(() =>
+  props.lineUrl ? [{ name: '', url: props.lineUrl }] : props.lineContacts)
 
 const open = ref(false)
 const sending = ref(false)
@@ -250,8 +259,13 @@ function classOf(role: Role) {
         </p>
 
         <p v-if="message.handoff" :class="['c-chat__msg', 'c-chat__msg--bot']">
-          <template v-if="lineHref">
-            <a class="ext" :href="lineHref" target="_blank" rel="noopener external">LINE 諮詢</a>／
+          <template v-if="lineLinks.length === 1 && !lineLinks[0]!.name">
+            <a class="ext" :href="lineLinks[0]!.url" target="_blank" rel="noopener external">LINE 諮詢</a>／
+          </template>
+          <template v-else-if="lineLinks.length">
+            LINE 諮詢：<template v-for="(line, j) in lineLinks" :key="line.url">
+              <span v-if="j > 0">、</span><a class="ext" :href="line.url" target="_blank" rel="noopener external">{{ line.name }}</a>
+            </template>／
           </template>
           <a class="ext" :href="bookingHref" target="_blank" rel="noopener external">預約門診</a>
         </p>

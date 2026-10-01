@@ -701,6 +701,11 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    🔴 面板的 `c-chat__msg--user`／`--pending` **只存在 base.css、不在任何 mockup HTML 裡**，
    靜態 class 會被 verify:css 斷言 4 擋下，一律用 `:class` 綁定。
    ⚠️ **後台不新增畫面**（29 不變），只在全站設定的 AI 那一區加一行唯讀狀態（權限沿用 `settings.edit`）。
+   🔴 **「轉 LINE 諮詢」依院區分流**（Tim 定案 2026-10-01）：名單來自**據點單元的「LINE 連結」**
+   （`getClinicLineContacts()`），不在全站設定另存一份（決策 29／30 同一條理由）。
+   全站設定的 `aifaq.handoffLineUrl` 降為覆寫：**填了就統一用那一個，院區清單不出現**。
+   ⚠️ 舊站每個院區其實有兩個帳號（門診／自費美容），據點只有一欄，目前填的是門診那組；
+   另一組記在 `tools/legacy-import/contact.json`。
    ⚠️ 上線前置：Gemini 專案要**切到付費**（免費層 RPM 一撞就是 429，體感等於功能壞掉）、
    Function App 的 MI 要有 `system-state` 容器的 `Storage Blob Data Contributor`、
    **`AiIndexRefreshCron` 少設會讓整個 Function App 索引不到任何 function**。

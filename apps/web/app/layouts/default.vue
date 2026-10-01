@@ -5,7 +5,13 @@
 // ⚠️ 前台刻意使用原生 <a>，不用 <NuxtLink>（見 app.vue 的說明）。
 // AI 面板的開關**在執行期讀**，不是建置期常數 —— 院方在後台按一下就要生效，
 // 不必等下一次建置（docs/08 §J-4 步驟 7 的註解、docs/09 §13）。
+import { getClinicLineContacts } from '~/data/navigation'
+
 const siteSettings = await usePublicSiteSettings()
+
+// 轉 LINE 諮詢的院區分流。⚠️ 面板關閉時不取 —— 雖然與頁尾共用同一次取得，
+// 但沒有理由讓面板的資料成為頁面算繪的前提。
+const lineContacts = siteSettings.aiFaqEnabled ? await getClinicLineContacts() : []
 
 defineProps<{ section?: string }>()
 </script>
@@ -31,6 +37,7 @@ defineProps<{ section?: string }>()
       :welcome-text="siteSettings.aiFaqWelcomeText"
       :booking-url="siteSettings.aiFaqHandoffBookingUrl"
       :line-url="siteSettings.aiFaqHandoffLineUrl"
+      :line-contacts="lineContacts"
     />
   </div>
 </template>

@@ -86,8 +86,9 @@ export interface Clinic {
   /** Facebook 連結的顯示文字（各院區的官方粉專名稱不同）。 */
   facebookLabel?: string
   /** 院區的 LINE 官方帳號（2026-09-14 自舊站 contact.php 補齊）。
-   *  ⚠️ **目前沒有任何模板渲染它** —— mockup 沒有 LINE 的版位，加上去會動到
-   *  `verify:css` 把關的標記。資料先備妥，要不要露出是設計的決定。
+   *  ⚠️ **21 個模板都沒有渲染它** —— mockup 沒有 LINE 的版位，加上去會動到
+   *  `verify:css` 把關的標記。唯一的使用者是 AI 面板的「轉 LINE 諮詢」院區分流
+   *  （`getClinicLineContacts()`，2026-10-01），那裡讀的是同一個欄位。
    *  ⚠️ 每個院區其實有兩組（門診諮詢／自費美容諮詢），資料表只有一欄，
    *  這裡是門診諮詢那組；另一組記在 tools/legacy-import/contact.json。 */
   lineUrl?: string

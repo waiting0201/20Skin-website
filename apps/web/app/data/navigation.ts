@@ -128,6 +128,24 @@ export async function getClinicNap() {
   }))
 }
 
+/**
+ * AI 面板「轉 LINE 諮詢」的院區分流（決策 28）：每個有填 LINE 連結的院區一個出口。
+ *
+ * 🔴 **跟著據點單元走，不在全站設定再存一份**（決策 29／30 同一條理由）——
+ *    院區的 LINE 帳號本來就填在據點的「LINE 連結」，另存一份就會分岔。
+ *    全站設定的 `aifaq.handoffLineUrl` 只當覆寫：填了就統一用那一個，這份清單不出現。
+ * ⚠️ 與頁尾的 `getClinicNap()` 共用同一次取得（`loadUnit` 同一個請求內去重），不多打 API。
+ * ⚠️ 名稱取已發布快照的標題、順序取即時的 `sortOrder`（決策 30）。
+ */
+export async function getClinicLineContacts(): Promise<{ name: string; url: string }[]> {
+  const clinics = await loadUnit(UNIT.clinic)
+  return clinics
+    .slice()
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+    .map((c) => ({ name: c.title, url: (c.fields.lineUrl as string) ?? '' }))
+    .filter((c) => c.url.length > 0)
+}
+
 export async function getLegalLinks(): Promise<NavItem[]> {
   return (await getLegalDocs()).map((doc) => ({
     label: doc.navLabel,

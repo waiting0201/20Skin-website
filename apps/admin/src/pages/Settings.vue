@@ -326,6 +326,9 @@ async function save() {
             <div class="adm-field">
               <label class="adm-field__label">轉接真人：LINE 連結</label>
               <input v-model="form.aiFaq.lineUrl" class="adm-input" type="text" :disabled="!canEdit">
+              <p class="adm-field__hint">
+                留空＝依院區分流，列出每個據點的「LINE 連結」。填了就統一使用這一個帳號。
+              </p>
             </div>
           </div>
 
