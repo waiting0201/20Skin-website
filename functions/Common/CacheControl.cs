@@ -6,27 +6,21 @@ namespace Skin20.Api.Common;
 /// 公開讀取端點的快取標頭。後台與寫入端點一律不可快取。
 ///
 /// <para>
-/// 🔴 <b>這裡的 TTL 只是保險層，不是失效機制。</b> 真正的失效是「發布時主動通知」——
-/// 內容核准／下架／改網址時，<c>IRebuildService</c> 會打前台的失效端點，
-/// 讓那幾筆的快取當場作廢，下一次請求就是新的。
-/// 作法取自姊妹專案 VicRound（<c>apps/web/app/api/revalidate/route.ts</c>）。
+/// 🔴 <b>沒有任何失效機制</b>（CLAUDE.md 決策 14：不做快取，2026-09-16）。
+/// 原本這裡寫的「發布時由 <c>IRebuildService</c> 主動通知失效」那支服務已隨 SSR 改版刪除，
+/// 前台的 nitro 也沒有資料快取 —— 所以這個 TTL 就是「發布之後最久多久看得到」的上限，
+/// 對象是會照標頭快取的那一方（瀏覽器端換頁時直接打 API 的 <c>$fetch</c>）。
+/// SSR 算繪時由伺服器打 API，不經過瀏覽器快取，不受這個 TTL 影響。
 /// </para>
 ///
 /// <para>
-/// ⚠️ <b>不要用「把 TTL 調短」來追求即時。</b> 那是拿全站的資料庫負載去換幾十秒，
-/// 而且永遠不會真的即時。發布→失效那條路才是即時的來源；TTL 存在的意義只是
-/// 「萬一失效通知沒送到，最久多久會自己回正」。
-/// </para>
-///
-/// <para>
-/// ⚠️ <b>SWA 的 CDN 沒有清除 API</b>（2026-09-15 查證），所以**不要**把賭注押在
-/// <c>s-maxage</c> 上：邊緣快取一旦存下就只能等它到期。真正受失效通知控制的是
-/// 前台 nitro 那一層的資料快取。
+/// ⚠️ <b>SWA 的 CDN 沒有清除 API</b>（2026-09-15 查證），所以<b>不要</b>加 <c>s-maxage</c>
+/// 去押邊緣快取：一旦存下就只能等它到期。真要加快取，位置見決策 14。
 /// </para>
 /// </summary>
 public static class CacheControl
 {
-    /// <summary>公開內容。預設 5 分鐘，配合發布時的主動失效。</summary>
+    /// <summary>公開內容。預設 5 分鐘（沒有主動失效，見上方）。</summary>
     public static void Public(HttpResponse? response, int seconds = 300)
     {
         if (response is null) return;

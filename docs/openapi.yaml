@@ -501,9 +501,10 @@ paths:
           （`handoff.reason = needs_doctor`）。
         - **不存對話**：多輪由前台帶 `history`，伺服器只取最後 4 則（每則截 500 字）。
         - 只有模型／索引真的不能用才回 503 `AI_UNAVAILABLE`，且絕不退回用模型的一般知識回答。
+        - 全站設定 `aifaq.enabled` 為關閉（或讀不到）時同樣回 503 `AI_UNAVAILABLE`，且在機器人驗證、頻率限制與模型呼叫之前就回。
       x-handler: AiHandler.AskAsync
       x-bot-check: { action: ai_ask }
-      x-rate-limit: { bucket: ai-ask, scope: ip, default: '20 次 / 10 分鐘（app setting RateLimit:PublicQuota:ai-ask:*）' }
+      x-rate-limit: { bucket: ai-ask, scope: ip, default: '20 次 / 10 分鐘（app setting RateLimit:PublicQuota:ai_ask:*，Linux 不允許連字號鍵名）' }
       requestBody:
         required: true
         content:
@@ -1598,7 +1599,7 @@ paths:
       operationId: createRedirect
       summary: 新增一筆 301 規則
       description: |
-        `fromPath` 會正規化。自我迴圈、轉址鏈 → 400；`fromPath` 已存在 → 409 `CONFLICT_DUPLICATE`；
+        `fromPath` 會正規化。自我迴圈、轉址鏈 → 409 `CONFLICT_STATE`；`fromPath` 已存在 → 409 `CONFLICT_DUPLICATE`；
         `toContentItemId` 指向不存在的內容 → 404。`statusCode` 預設 301、`source` 預設 2（人工新增）。
       x-handler: RedirectHandler.CreateAsync
       x-permission: redirect.manage
@@ -2351,7 +2352,7 @@ components:
       required: [currentPassword, newPassword]
       properties:
         currentPassword: { type: string }
-        newPassword: { type: string, minLength: 8 }
+        newPassword: { type: string, minLength: 6 }
 
     TokenResponse:
       type: object

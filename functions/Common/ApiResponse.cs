@@ -38,8 +38,9 @@ public static class ApiResponse
 /// <summary>
 /// 分頁回應（docs/10 §2）。
 /// <para>
-/// <b>雙模式</b>：帶 <c>page</c> 或 <c>pageSize</c> 時 <c>data</c> 是這個形狀；
-/// 兩者皆無時 <c>data</c> 是平面陣列（供下拉選單）。省掉一組 <c>/lookup</c> 端點。
+/// 後台清單<b>永遠分頁</b>（沒帶參數時預設 1／20），<c>data</c> 一律是這個形狀。
+/// ⚠️ 早期規格的「雙模式」（不帶分頁參數就回平面陣列）從來沒有實作，docs/10 §2 已改。
+/// 公開的 <c>GET /article</c> 另有自己的形狀，沒有 <c>TotalPages</c>。
 /// </para>
 /// </summary>
 public sealed record PagedResult<T>(
