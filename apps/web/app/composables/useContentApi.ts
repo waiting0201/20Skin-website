@@ -387,6 +387,8 @@ export interface SearchHit {
   ti: string
   /** 摘要 */
   ex: string
+  /** 縮圖（已核准快照裡的代表圖）。案例、FAQ、頁面一律沒有 —— 理由見 SearchHandler.ThumbOf。 */
+  im?: { u: string; w: number; h: number } | null
 }
 
 /**

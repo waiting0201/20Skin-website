@@ -91,6 +91,7 @@ public sealed class SearchHandler(
                 u = url,
                 ti = hit.Title,
                 ex = ExcerptOf(hit.Snapshot),
+                im = ThumbOf(type, hit.Snapshot),
             });
         }
 
@@ -113,6 +114,48 @@ public sealed class SearchHandler(
 
         return Truncate(SearchTextBuilder.Collapse(SearchTextBuilder.Flatten(root["fields"])));
     }
+
+    /// <summary>
+    /// 結果縮圖：取<b>已核准快照</b>裡那一筆的代表圖（與標題同一版，決策 14）。
+    ///
+    /// <para>🔴 <b>案例刻意不給圖</b>（2026-10-02 Tim 定案）：案例自己的圖是術前／術後照，
+    /// 出現在搜尋清單裡就脫離了內頁的揭露說明脈絡。FAQ 與頁面沒有代表圖，回 null。</para>
+    ///
+    /// <para>⚠️ 取不到、形狀不對一律回 null —— 縮圖是裝飾，不可以讓整支搜尋 500。</para>
+    /// </summary>
+    private static object? ThumbOf(ContentType type, string snapshot)
+    {
+        if (JsonNode.Parse(snapshot) is not JsonObject root
+            || root["fields"] is not JsonObject fields) return null;
+
+        var image = type switch
+        {
+            ContentType.Treatment or ContentType.Article or ContentType.Concern or ContentType.Term
+                => AsObject(fields["cover"]),
+            ContentType.Doctor => AsObject(fields["photo"]),
+            ContentType.Clinic => AsArray(fields["photos"])?.OfType<JsonObject>()
+                .Select(p => AsObject(p["image"])).FirstOrDefault(i => i is not null),
+            _ => null,
+        };
+
+        var url = image?["url"] is JsonValue u && u.TryGetValue<string>(out var s) ? s : null;
+        if (string.IsNullOrEmpty(url)) return null;
+        return new { u = url, w = IntOf(image!["width"]), h = IntOf(image["height"]) };
+    }
+
+    // ⚠️ 走 JStr 的欄位在快照裡可能是 JSON 字串而不是物件，兩種都要接。
+    private static JsonNode? Unwrap(JsonNode? node)
+    {
+        if (node is JsonValue v && v.TryGetValue<string>(out var text))
+        {
+            try { return JsonNode.Parse(text); } catch (JsonException) { return null; }
+        }
+        return node;
+    }
+
+    private static JsonObject? AsObject(JsonNode? node) => Unwrap(node) as JsonObject;
+    private static JsonArray? AsArray(JsonNode? node) => Unwrap(node) as JsonArray;
+    private static int IntOf(JsonNode? node) => node is JsonValue v && v.TryGetValue<int>(out var i) ? i : 0;
 
     private static string Truncate(string text) => text.Length <= 120 ? text : text[..120];
 

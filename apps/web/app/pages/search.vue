@@ -187,6 +187,11 @@ watch([result, status, query], ([res, s, q]) => {
           <!-- eslint-disable-next-line vue/no-v-html -- 內容已在 highlight() 裡逸出，只插入 <mark> -->
           <p class="search-result__excerpt" v-html="highlight(hit.ex)"></p>
           <span class="search-result__path">{{ displayPath(hit.u) }}</span>
+          <!-- 標題就在旁邊，縮圖是裝飾 —— alt 留空，讀屏不重唸一次。 -->
+          <img v-if="hit.im" class="search-result__thumb" :src="hit.im.u"
+               :srcset="srcsetOf(hit.im.u)" :sizes="IMAGE_SIZES.listThumb"
+               :width="hit.im.w || undefined" :height="hit.im.h || undefined"
+               alt="" loading="lazy" decoding="async">
         </article>
       </div>
     </div>

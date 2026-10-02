@@ -47,4 +47,6 @@ export const IMAGE_SIZES = {
   full: '(max-width: 1200px) 100vw, 1200px',
   /** 側欄、小卡片的縮圖。 */
   thumb: '(max-width: 480px) 50vw, 240px',
+  /** 搜尋結果右側的小縮圖（19-search.css：桌機 120px、480 以下 80px）。 */
+  listThumb: '(max-width: 480px) 80px, 120px',
 } as const
