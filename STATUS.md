@@ -236,7 +236,11 @@ Function App 只有 `RateLimit__PublicQuota__MaxRequests=10`／`WindowMinutes=60
 - 手機 Lighthouse（修前 → 本輪）：頁面總重 首頁 3518 → 1141 KB、`/blog/` 4757 → 1071、`/treatments/` 2233 → 1091、`/team/` 1475 → 879；
   LCP 首頁 9.2 → **5.0 秒**、`/team/` 8.3 → 2.9～6.9（波動大）、`/blog/` 7.4 → 6.9、`/clinics/siji/` 仍約 9.5
 - 🟡 剩下的延遲在「發現圖片前的延遲 2–4 秒」與「下載 2–4 秒」：各模板的主圖原本都沒有 `fetchpriority="high"`（全站只有 3 處），
-  已補 8 處（本機 commit，待部署）；`/treatments/` 的 LCP 是版面素材 `/assets/img/photo-facade-detail.jpg`（260 KB），不在這套機制內
+  已補 8 處並部署（`986a272`）。結果（手機，兩次）：首頁 perf **75**／LCP 5.0 秒、`/treatments/` perf **86–87**／LCP **3.8 秒**、
+`/team/` 83／4.1 秒（另一次 57／11.5，波動大）；`/clinics/siji/` 仍 9.5 秒、`/blog/` 與文章內頁約 7.5 秒
+- 🔴 **圖片已經不是瓶頸**（LCP 圖現在 45 KB）。LCP 之前佔頻寬的是：
+  **兩支中文襯線字型子集各約 270 KB（600／700 字重，VeryHigh 優先序，每一頁都有）**，
+  與 `/clinics/siji/` 的 **Google 地圖嵌入在首屏就載入約 360 KB 程式**。下一步在這兩項，待 Tim 決定
 
 ---
 
