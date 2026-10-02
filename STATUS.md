@@ -133,7 +133,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 ---
 
 
-## ✅ AI 問答：已上線（2026-10-02 實查 `aifaq.enabled = true`）
+## ✅ AI 問答：已上線（2026-10-02，Tim 打開 `aifaq.enabled`）
 
 **2026-10-02 前台兩處調整**（Tim 指定，已部署）：
 - **全站設定拿掉「轉接真人：LINE 連結」**（`2595a98`）—— 那一格只是覆寫（填了就蓋掉院區名單），
@@ -1543,7 +1543,7 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
       （不是那一支壞掉而已，是 API 整個起不來）。值 `0 */5 * * * *`。部署完先打 `/health` 確認。
 - [x] ~~**14 題驗收題組跑一遍**，並據此校準 `AiIndex__MinScore`~~ —— ✅ 2026-10-01～02，14/14（第 4、5、6、10 題修完部署後重量），門檻 0.65
 - [x] ~~**`aifaq.enabled` 在正式庫必須是 `false`**~~（docs/04 §4）—— ✅ **2026-09-15 對正式 API 實測 `aiFaqEnabled: false`**。匯入腳本曾把它蓋成 `true`（已修，見 §二）。
-      ⚠️ **這一條已過時**：AI 串接並驗收完成後，2026-10-02 實查是 `true`（面板已對外）。
+      ⚠️ **這一條已過時**：AI 串接並驗收完成後，Tim 於 2026-10-02 打開（面板已對外，是刻意的，不是匯入腳本蓋掉）。
 - [x] ~~**reCAPTCHA v3 的金鑰對**~~（[10](docs/10-api.md) §5.1）—— ✅ **2026-09-15 逐處核對，三個地方都設了**：
       `BotCheck__SecretKey`＋`BotCheck__MinimumScore`（Function App，`az` 確認存在）、
       GitHub repo variable `RECAPTCHA_SITE_KEY`（同一個值餵給 `NUXT_PUBLIC_RECAPTCHA_SITE_KEY`
