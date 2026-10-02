@@ -139,7 +139,7 @@ usePageHead({
     <div class="container">
       <div class="article-cover__inner">
         <div class="article-cover__frame">
-          <img :src="article.cover.src" :srcset="srcsetOf(article.cover.src)" :sizes="IMAGE_SIZES.half" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height">
+          <img fetchpriority="high" :src="article.cover.src" :srcset="srcsetOf(article.cover.src)" :sizes="IMAGE_SIZES.half" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height">
         </div>
         <figcaption>{{ article.summary }}</figcaption>
       </div>

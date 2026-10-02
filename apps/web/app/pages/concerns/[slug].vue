@@ -103,7 +103,7 @@ usePageHead({
 
       <div class="concern-head__media">
         <div class="concern-head__frame">
-          <img
+          <img fetchpriority="high"
             :src="concern.heroImage.src" :srcset="srcsetOf(concern.heroImage.src)" :sizes="IMAGE_SIZES.half"
             :alt="concern.heroImage.alt"
             :width="concern.heroImage.width"

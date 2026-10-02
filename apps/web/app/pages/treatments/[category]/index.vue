@@ -65,7 +65,7 @@ usePageHead({
 
       <div class="tcat-hero__media">
         <div class="tcat-hero__frame">
-          <img :src="category.image.src" :srcset="srcsetOf(category.image.src)" :sizes="IMAGE_SIZES.half" :alt="category.image.alt" :width="category.image.width" :height="category.image.height">
+          <img fetchpriority="high" :src="category.image.src" :srcset="srcsetOf(category.image.src)" :sizes="IMAGE_SIZES.half" :alt="category.image.alt" :width="category.image.width" :height="category.image.height">
         </div>
       </div>
     </div>

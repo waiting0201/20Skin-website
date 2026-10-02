@@ -227,6 +227,17 @@ Function App 只有 `RateLimit__PublicQuota__MaxRequests=10`／`WindowMinutes=60
 - 測試 259 個全過；前台 typecheck、`verify:css`、`verify:seo-head` 全過。⚠️ Linux 上實際載入 `.so` 沒有在本機驗過，部署後第一次上傳要驗一張
 - ⚠️ 版面素材（`/assets/img/*`，例如 `/treatments/` 的 LCP 圖 260 KB）不在 Blob，這次沒處理
 
+✅ **已部署並補產完成（2026-10-02）**：
+- API 先上線（`b2507fa`，產物 36 MB）。Linux 驗證：reCAPTCHA 擋自動化登入（設計如此），所以改在 **linux-x64 容器**跑產圖測試 27/27 通過；
+  🟡 **真正的後台上傳還沒驗**，請在後台傳一張圖，確認 `{stem}.w480.webp` 等四張有出現
+- `tools/image-variants --apply`：**4592 張、18368 個衍生檔、677 MB、933 秒、零失敗**（另 20 張先試跑並目視比對過）；
+  驗證 dry-run：4612 張四個尺寸齊全、需要補 0。抽查一張 3 MB 的 PNG → 衍生圖 15／34／62／94 KB
+- 前台後上線（`f135e40`）。正式站手機＋桌機各 15 頁、捲到底：**0 張破圖、0 個 404**、載入 234 張 WebP
+- 手機 Lighthouse（修前 → 本輪）：頁面總重 首頁 3518 → 1141 KB、`/blog/` 4757 → 1071、`/treatments/` 2233 → 1091、`/team/` 1475 → 879；
+  LCP 首頁 9.2 → **5.0 秒**、`/team/` 8.3 → 2.9～6.9（波動大）、`/blog/` 7.4 → 6.9、`/clinics/siji/` 仍約 9.5
+- 🟡 剩下的延遲在「發現圖片前的延遲 2–4 秒」與「下載 2–4 秒」：各模板的主圖原本都沒有 `fetchpriority="high"`（全站只有 3 處），
+  已補 8 處（本機 commit，待部署）；`/treatments/` 的 LCP 是版面素材 `/assets/img/photo-facade-detail.jpg`（260 KB），不在這套機制內
+
 ---
 
 ### ✅ 2026-10-01：程式面的五項補完

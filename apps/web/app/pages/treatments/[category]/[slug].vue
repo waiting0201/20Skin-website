@@ -142,7 +142,7 @@ usePageHead({
       </div>
 
       <div class="tdetail-hero__frame">
-        <img
+        <img fetchpriority="high"
           :src="(treatment.cardImage ?? category.image).src" :srcset="srcsetOf((treatment.cardImage ?? category.image).src)" :sizes="IMAGE_SIZES.half"
           :alt="(treatment.cardImage ?? category.image).alt"
           :width="(treatment.cardImage ?? category.image).width"

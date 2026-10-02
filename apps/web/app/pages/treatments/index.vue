@@ -85,7 +85,7 @@ const faqs = [
       </div>
       <div class="tov-hero__media">
         <div class="tov-hero__frame">
-          <img src="/assets/img/photo-facade-detail.jpg" alt="四季診所白磚立面與招牌" width="1800" height="1167">
+          <img fetchpriority="high" src="/assets/img/photo-facade-detail.jpg" alt="四季診所白磚立面與招牌" width="1800" height="1167">
         </div>
       </div>
     </div>

@@ -66,7 +66,7 @@ usePageHead({
 
       <div class="story-hero__media">
         <div class="story-hero__frame">
-          <img :src="story.heroImage.src" :srcset="srcsetOf(story.heroImage.src)" :sizes="IMAGE_SIZES.half" :alt="story.heroImage.alt" :width="story.heroImage.w" :height="story.heroImage.h">
+          <img fetchpriority="high" :src="story.heroImage.src" :srcset="srcsetOf(story.heroImage.src)" :sizes="IMAGE_SIZES.half" :alt="story.heroImage.alt" :width="story.heroImage.w" :height="story.heroImage.h">
         </div>
         <p class="story-hero__caption">{{ story.heroCaption }}</p>
       </div>

@@ -144,7 +144,7 @@ onMounted(() => {
 
       <div class="clinic-hero__media">
         <div class="clinic-hero__frame">
-          <img
+          <img fetchpriority="high"
             :src="clinic.heroPhoto.src" :srcset="srcsetOf(clinic.heroPhoto.src)" :sizes="IMAGE_SIZES.half"
             :alt="clinic.heroPhoto.alt"
             :width="clinic.heroPhoto.width"

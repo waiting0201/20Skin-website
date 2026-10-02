@@ -106,7 +106,7 @@ usePageHead({
   <section class="doc-hero">
     <div class="container doc-hero__layout">
       <div class="doc-hero__frame">
-        <img
+        <img fetchpriority="high"
           :src="doctor.photo.src" :srcset="srcsetOf(doctor.photo.src)" :sizes="IMAGE_SIZES.half"
           :alt="`${doctor.name} ${doctor.isPhysician ? '診間人像照' : '人像照'}`"
           :width="doctor.photo.width"
