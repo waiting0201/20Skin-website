@@ -50,7 +50,7 @@ const form = reactive<SiteSettingsDraft>({
   contactEmail: '',
   socialLinks: [],
   footerCopyright: '',
-  aiFaq: { enabled: false, panelTitle: '', welcomeMessage: '', bookingUrl: '', lineUrl: '' },
+  aiFaq: { enabled: false, panelTitle: '', welcomeMessage: '', bookingUrl: '' },
   updatedAt: '',
   updatedByUserId: null,
 })
@@ -258,10 +258,9 @@ async function save() {
               <input v-model="form.aiFaq.bookingUrl" class="adm-input" type="text" :disabled="!canEdit">
             </div>
             <div class="adm-field">
-              <label class="adm-field__label">轉接真人：LINE 連結</label>
-              <input v-model="form.aiFaq.lineUrl" class="adm-input" type="text" :disabled="!canEdit">
+              <label class="adm-field__label">轉接真人：LINE</label>
               <p class="adm-field__hint">
-                留空＝依院區分流，列出每個據點的「LINE 連結」。填了就統一使用這一個帳號。
+                依院區列出各據點的 LINE。要新增或更換，請到「據點」修改該院區的「LINE 連結」。
               </p>
             </div>
           </div>

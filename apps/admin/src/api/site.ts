@@ -35,8 +35,9 @@ export interface AiFaqSettings {
   welcomeMessage: string
   /** 轉真人出口：預約。 */
   bookingUrl: string
-  /** 轉真人出口：LINE。 */
-  lineUrl: string
+  // ⚠️ 沒有 LINE：2026-10-02 拿掉。LINE 依院區分流，名單取自據點的「LINE 連結」（決策 28）；
+  //    這裡原本是「填了就蓋掉院區名單」的覆寫，留空時畫面上看不出任何作用。
+  //    設定鍵 `aifaq.handoffLineUrl` 留在資料庫（同 site.logoImage、nap.json），不讀也不寫。
 }
 
 export interface SiteSettingsData {
@@ -98,7 +99,6 @@ const KEYS = {
   aiFaqPanelTitle: 'aifaq.panelTitle',
   aiFaqWelcome: 'aifaq.welcomeText',
   aiFaqBookingUrl: 'aifaq.handoffBookingUrl',
-  aiFaqLineUrl: 'aifaq.handoffLineUrl',
 } as const
 
 const settings = {
@@ -123,7 +123,6 @@ const settings = {
         panelTitle: settingText(map, KEYS.aiFaqPanelTitle),
         welcomeMessage: settingText(map, KEYS.aiFaqWelcome),
         bookingUrl: settingText(map, KEYS.aiFaqBookingUrl),
-        lineUrl: settingText(map, KEYS.aiFaqLineUrl),
       },
       updatedAt: latest,
       updatedByUserId: latestBy?.updatedByUserId ?? null,
@@ -150,7 +149,6 @@ const settings = {
       changes[KEYS.aiFaqPanelTitle] = patch.aiFaq.panelTitle
       changes[KEYS.aiFaqWelcome] = patch.aiFaq.welcomeMessage
       changes[KEYS.aiFaqBookingUrl] = patch.aiFaq.bookingUrl
-      changes[KEYS.aiFaqLineUrl] = patch.aiFaq.lineUrl
     }
 
     await writeSettings(changes)

@@ -136,7 +136,7 @@ export async function getClinicNap() {
  *
  * 🔴 **跟著據點單元走，不在全站設定再存一份**（決策 29／30 同一條理由）——
  *    院區的 LINE 帳號本來就填在據點的「LINE 連結」，另存一份就會分岔。
- *    全站設定的 `aifaq.handoffLineUrl` 只當覆寫：填了就統一用那一個，這份清單不出現。
+ *    （全站設定的 `aifaq.handoffLineUrl` 原本是覆寫，2026-10-02 拿掉，前台不再讀它。）
  * ⚠️ 與頁尾的 `getClinicNap()` 共用同一次取得（`loadUnit` 同一個請求內去重），不多打 API。
  * ⚠️ 名稱取已發布快照的標題、順序取即時的 `sortOrder`（決策 30）。
  */
