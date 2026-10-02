@@ -39,6 +39,7 @@ GEMINI_API_KEY=… STORAGE_ACCOUNT=st20skinweb \
 拿線上索引對 [`acceptance-questions.txt`](acceptance-questions.txt) 的 14 題做檢索，
 印出每題的「最高可引用分數」與 top-6。`AiHandler` 就是拿這個數字跟 `AiIndex__MinScore` 比。
 🔴 排序與 API 共用 `AiIndexFormat.Rank`，**這裡的分數就是線上判斷用的分數**。
+⚠️ 分數是 `MatchScore`（語意分數＋標題關鍵字加分），括號裡是原始餘弦分數；有加分的那一列標「＋關鍵字」。
 ⚠️ 只做檢索、不呼叫生成模型 —— 門檻是檢索的事。回答品質要另外打 `/ai/ask` 看。
 ⚠️ **索引沒建完之前的分數不能拿來定門檻**：缺了哪一類內容，那一類題目的分數就是錯的。
 

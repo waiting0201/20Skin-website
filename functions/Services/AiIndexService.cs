@@ -8,8 +8,8 @@ using Skin20.Api.Common;
 
 namespace Skin20.Api.Services;
 
-/// <summary>命中的一塊與它的分數。</summary>
-public sealed record AiIndexHit(AiIndexFormat.Chunk Chunk, float RawScore, double WeightedScore);
+/// <summary>命中的一塊與它的分數。⚠️ 命中判定看 <c>MatchScore</c>（含標題關鍵字加分），見 <see cref="AiIndexFormat.LexicalBonus"/>。</summary>
+public sealed record AiIndexHit(AiIndexFormat.Chunk Chunk, float RawScore, double MatchScore, double WeightedScore);
 
 /// <summary>索引現況，給後台的唯讀狀態用。</summary>
 public sealed record AiIndexStatus(DateTime BuiltAt, int ChunkCount, int IndexedItemCount, bool Ready);
@@ -71,7 +71,7 @@ public sealed class AiIndexService(
     /// 相似度檢索。<paramref name="query"/> 必須已正規化（<see cref="IAiEmbeddingService"/> 會做）。
     ///
     /// <para>
-    /// 排序用<b>加權</b>分數（主站舊文降權），但「有沒有命中」要看<b>原始</b>分數 ——
+    /// 排序用<b>加權</b>分數（主站舊文降權），但「有沒有命中」要看<b>未加權</b>的 <c>MatchScore</c> ——
     /// 呼叫端自己判斷，見 <c>AiHandler</c>。
     /// </para>
     /// <para>
@@ -80,13 +80,13 @@ public sealed class AiIndexService(
     /// </para>
     /// </summary>
     public async Task<IReadOnlyList<AiIndexHit>> SearchAsync(
-        float[] query, int topK, int perItem, CancellationToken ct = default)
+        float[] query, string question, int topK, int perItem, CancellationToken ct = default)
     {
         var loaded = await EnsureLoadedAsync(ct);
         if (loaded is null || loaded.Chunks.Count == 0) throw Unavailable();
 
-        return AiIndexFormat.Rank(query, loaded.Chunks, loaded.Vectors, loaded.Dim, topK, perItem)
-            .Select(r => new AiIndexHit(loaded.Chunks[r.Index], r.RawScore, r.WeightedScore))
+        return AiIndexFormat.Rank(query, question, loaded.Chunks, loaded.Vectors, loaded.Dim, topK, perItem)
+            .Select(r => new AiIndexHit(loaded.Chunks[r.Index], r.RawScore, r.MatchScore, r.WeightedScore))
             .ToList();
     }
 

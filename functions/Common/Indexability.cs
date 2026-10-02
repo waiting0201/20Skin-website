@@ -53,12 +53,7 @@ public static class Indexability
         //    （sitemap 收了 29 個 noindex 網址）的形狀。
         //    ⚠️ 2026-09-17 之前 `SeoMeta.NoIndex` 這一欄**全專案沒有任何人讀**：
         //    後台勾得起來、存得進去，但前台與 sitemap 都當它不存在。
-        if (snapshot["seo"] is JsonObject seo
-            && seo["noIndex"] is JsonNode noIndex
-            && noIndex.GetValueKind() == JsonValueKind.True)
-        {
-            return false;
-        }
+        if (IsNoIndexed(snapshot)) return false;
 
         var fields = snapshot["fields"] as JsonObject;
 
@@ -82,6 +77,36 @@ public static class Indexability
             _ => true,
         };
     }
+
+    /// <summary>
+    /// 「這一筆要不要進站內 AI 問答的語料」（CLAUDE.md 決策 28）。
+    ///
+    /// <para>
+    /// 🔴 <b>刻意比 <see cref="IsIndexable"/> 寬，不要改成呼叫它。</b> 那一支問的是
+    /// 「內容寫完了沒，值不值得讓搜尋引擎收錄」—— 療程要有簡述與事實一覽才算數，
+    /// 28 項裡只有 1 項通過。AI 問的是「站上有沒有這份資料」：青萃光療程沒有簡述，
+    /// 卻有三段適應症與許可證字號，而 2026-10-02 問「青萃光」時 AI 因此只剩文章可用
+    /// （Tim 定案：「以目前有什麼資料就要進 AI，否則上線之後也要等來等去」）。
+    /// </para>
+    /// <para>
+    /// ⚠️ 「有沒有文字」不必在這裡判 —— 切不出文字的內容 <c>AiChunker</c> 自然回 0 塊。
+    /// 這裡只留兩條<b>不是內容多寡</b>的排除：
+    /// 編輯明確勾了 <c>noIndex</c>（意願優先，同 <see cref="IsIndexable"/>），
+    /// 以及只有骨架的法務頁（它的區塊裡有標題字串，切得出塊，但那些字不是條文）。
+    /// </para>
+    /// </summary>
+    public static bool IsAiEligible(byte contentType, JsonObject snapshot)
+    {
+        if (IsNoIndexed(snapshot)) return false;
+
+        return (ContentType)contentType != ContentType.Page
+            || !HasEmptySections((snapshot["fields"] as JsonObject)?["bodyBlocks"]);
+    }
+
+    private static bool IsNoIndexed(JsonObject snapshot) =>
+        snapshot["seo"] is JsonObject seo
+        && seo["noIndex"] is JsonNode noIndex
+        && noIndex.GetValueKind() == JsonValueKind.True;
 
     /// <summary>區塊欄位在快照裡是**一個 JSON 字串**（API 存的是 GetRawText()），不是物件。</summary>
     private static JsonNode? ParseBlocks(JsonNode? value)

@@ -48,9 +48,10 @@ public static class AiChunker
     /// 版本不同的內容會被當成「有變動」，逐輪重切（舊塊留到新塊嵌好才換掉，不清空索引）。
     /// </para>
     /// <para>1：初版（2026-09-18）。2：據點的營業時間與地址獨立成塊（2026-10-01）。
-    /// 3：療程專屬 FAQ 標上療程名稱、醫師空白欄位不輸出（2026-10-01）。</para>
+    /// 3：療程專屬 FAQ 標上療程名稱、醫師空白欄位不輸出（2026-10-01）。
+    /// 4：收錄範圍改用 <c>Indexability.IsAiEligible</c>，內容未寫完的療程也進語料（2026-10-02）。</para>
     /// </summary>
-    public const int Version = 3;
+    public const int Version = 4;
 
     /// <summary>
     /// 主站舊文的權重（<c>fields.sourceSite == 1</c>，692 篇社群行銷貼文）。
@@ -136,9 +137,10 @@ public static class AiChunker
         catch (JsonException) { return []; }
         if (root is not JsonObject snapshot) return [];
 
-        // 🔴 「值不值得被索引」全專案只有一份判斷（27 個骨架療程、空的法務頁、seo.noIndex）。
-        //    不要在這裡另寫一套 —— 那正是 2026-09-15 那個「sitemap 收了 29 個 noindex 網址」的形狀。
-        if (!Indexability.IsIndexable(source.ContentType, snapshot)) return [];
+        // 🔴 用 IsAiEligible，**不是** IsIndexable —— 後者是「寫完了沒、給不給搜尋引擎收」，
+        //    會把 27 個還沒寫完、但已經有適應症與許可證字號的療程整批擋在 AI 外面（2026-10-02）。
+        //    判斷仍放在 Indexability.cs，與搜尋引擎那一份並排，不在這裡另寫。
+        if (!Indexability.IsAiEligible(source.ContentType, snapshot)) return [];
 
         var type = (ContentType)source.ContentType;
         var fields = snapshot["fields"] as JsonObject;

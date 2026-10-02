@@ -156,17 +156,18 @@ public sealed class AiHandler(
         CacheControl.NoStore(httpContextAccessor.HttpContext?.Response);
 
         var queryVector = await embeddings.EmbedQueryAsync(question);
-        var hits = await index.SearchAsync(queryVector, ContextChunks, MaxChunksPerItem);
+        var hits = await index.SearchAsync(queryVector, question, ContextChunks, MaxChunksPerItem);
 
         // 🔴 命中判定只看**可引用**的塊。只有主站舊文過門檻時判未命中 ——
         //    否則會出現「答得頭頭是道，卻一個來源都列不出來」，那在醫療情境比不回答更糟。
         var threshold = MinScore();
-        var hasCitableHit = hits.Any(h => h.Chunk.Q && h.RawScore >= threshold);
+        // ⚠️ 看 MatchScore（含標題關鍵字加分）—— 只打產品名的問句語意分數天生偏低（AiIndexFormat.LexicalBonus）。
+        var hasCitableHit = hits.Any(h => h.Chunk.Q && h.MatchScore >= threshold);
 
         if (!hasCitableHit)
         {
             logger.LogInformation("AI 問答未命中（最高分 {Top:F3}、門檻 {Threshold:F2}）",
-                hits.Count > 0 ? hits[0].RawScore : 0, threshold);
+                hits.Count > 0 ? hits[0].MatchScore : 0, threshold);
             return await MissAsync(question, "no_match");
         }
 

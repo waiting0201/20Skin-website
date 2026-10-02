@@ -196,7 +196,7 @@ async Task QueryAsync()
     sb.AppendLine("「最高可引用」＝命中判定看的那個數字：它 ≥ MinScore 才會進生成，否則直接未命中。");
     sb.AppendLine();
 
-    var summary = new List<(string Q, float TopCitable)>();
+    var summary = new List<(string Q, double TopCitable)>();
 
     foreach (var question in questions)
     {
@@ -219,8 +219,8 @@ async Task QueryAsync()
             .Select(v => v!.GetValue<float>()).ToArray();
         AiIndexFormat.Normalize(vector);
 
-        var ranked = AiIndexFormat.Rank(vector, online.Stored, online.Vectors, dim, topK: 6, perItem: 2);
-        var topCitable = ranked.Where(r => online.Stored[r.Index].Q).Select(r => r.RawScore).DefaultIfEmpty(0).Max();
+        var ranked = AiIndexFormat.Rank(vector, question, online.Stored, online.Vectors, dim, topK: 6, perItem: 2);
+        var topCitable = ranked.Where(r => online.Stored[r.Index].Q).Select(r => r.MatchScore).DefaultIfEmpty(0).Max();
         summary.Add((question, topCitable));
 
         sb.AppendLine($"## {question}");
@@ -228,7 +228,7 @@ async Task QueryAsync()
         foreach (var r in ranked)
         {
             var c = online.Stored[r.Index];
-            sb.AppendLine($"  {r.RawScore:F3} (加權 {r.WeightedScore:F3}) {(c.Q ? "可引用" : "不可引用")}"
+            sb.AppendLine($"  {r.MatchScore:F3} (原始 {r.RawScore:F3}{(r.Lexical ? "＋關鍵字" : "")}、加權 {r.WeightedScore:F3}) {(c.Q ? "可引用" : "不可引用")}"
                 + $" [{ContentTypeLabels.Of(c.T)}] {c.Ti} ｜ {c.U}");
         }
         sb.AppendLine();

@@ -144,8 +144,59 @@ public static class AiIndexFormat
         return sum;
     }
 
-    /// <summary>一次檢索的一個結果：第幾塊、原始餘弦分數、乘上權重之後的排序分數。</summary>
-    public readonly record struct Ranked(int Index, float RawScore, double WeightedScore);
+    /// <summary>
+    /// 一次檢索的一個結果：第幾塊、原始餘弦分數、加上標題關鍵字加分後的命中分數、
+    /// 再乘上權重之後的排序分數。
+    /// <para>⚠️ <b>「有沒有命中」看 <see cref="MatchScore"/></b>，不是 <see cref="RawScore"/> ——
+    /// 後者只留給 log 與校準對照（看得出加分前後差多少）。</para>
+    /// </summary>
+    public readonly record struct Ranked(int Index, float RawScore, double MatchScore, double WeightedScore)
+    {
+        public bool Lexical => MatchScore > RawScore;
+    }
+
+    /// <summary>
+    /// 標題關鍵字命中的加分。
+    ///
+    /// <para>
+    /// 🔴 <b>為什麼需要它</b>（2026-10-02 正式站實測）：只打產品名「青萃光」，正確的文章
+    /// <c>/blog/dermav/</c> 排第一、分數卻是 0.649，差 0.001 沒過門檻 0.65，於是回「找不到」。
+    /// 語意向量比的是「意思像不像」，三個字的專有名詞幾乎沒有語意可比 ——
+    /// 同一篇文章，問「DermaV 青萃光」是 0.791。使用者最常打的偏偏就是產品名。
+    /// </para>
+    /// <para>⚠️ 加分只動「命中與排序」，不改模型拿到的內容；改了這個值要重跑
+    /// <c>tools/ai-index-inspect --query</c> 的驗收題組。</para>
+    /// </summary>
+    public const double LexicalBonus = 0.05;
+
+    /// <summary>
+    /// 關鍵字最短長度（正規化後的字元數）。
+    /// <para>⚠️ 兩個字的「雷射」「皮秒」「痘疤」太泛用，比到的標題動輒上百筆。</para>
+    /// </summary>
+    private const int LexicalMinChars = 3;
+
+    /// <summary>
+    /// 一個字串最多出現在幾筆內容的標題裡，才算數。
+    /// <para>
+    /// ⚠️ <b>不可以靠這個數字分辨「專有名詞」與「虛詞」</b>：2026-10-02 實計 1185 個標題，
+    /// 「矽谷電波」出現在 16 筆、「是什麼」只有 13 筆 —— 熱門療程名反而比虛詞常見。
+    /// 虛詞由 <see cref="FunctionChars"/> 擋；這個上限只擋「皮秒雷射」（64 筆）這種
+    /// 加了等於沒加、只會把排序攪亂的泛用詞。
+    /// </para>
+    /// </summary>
+    private const int LexicalMaxItems = 30;
+
+    /// <summary>
+    /// 問句裡的虛詞用字。<b>整個片段都由這些字組成</b>的（「是什麼」「怎麼辦」「可以嗎」）不算關鍵字。
+    /// <para>
+    /// 🔴 少了這一步，「矽谷電波是什麼？」會替所有「○○是什麼」的文章加分。
+    /// 只要片段裡有一個實詞就保留（「會痛嗎」的「痛」、「做雷射」的「雷射」）——
+    /// 那種片段比到的標題本來就與問題相關。
+    /// </para>
+    /// </summary>
+    private const string FunctionChars =
+        "的了是在有和與及或嗎呢吧啊呀哪什麼甚怎樣為何如可以能會要想請問該需不沒很最多少幾個一這那些"
+        + "我你妳您他她們它做到得過還就都也再又跟對從把被讓給說看呀喔嗯其實真";
 
     /// <summary>
     /// 依加權分數取前 <paramref name="topK"/> 塊，同一筆內容最多 <paramref name="perItem"/> 塊。
@@ -154,15 +205,20 @@ public static class AiIndexFormat
     /// 校準 <c>AiIndex__MinScore</c> 時看到的分數必須就是線上判斷用的分數，
     /// 兩邊各寫一份排序，校準出來的門檻就不保證適用。
     /// </para>
+    /// <para><paramref name="question"/> 是使用者原始問句，只用來做標題關鍵字比對（<see cref="LexicalBonus"/>）。</para>
     /// </summary>
     public static List<Ranked> Rank(
-        ReadOnlySpan<float> query, IReadOnlyList<Chunk> chunks, float[] vectors, int dim, int topK, int perItem)
+        ReadOnlySpan<float> query, string question, IReadOnlyList<Chunk> chunks, float[] vectors, int dim,
+        int topK, int perItem)
     {
+        var lexicalItems = LexicalMatches(question, chunks);
+
         var scored = new Ranked[chunks.Count];
         for (var i = 0; i < chunks.Count; i++)
         {
             var raw = Dot(query, vectors.AsSpan(i * dim, dim));
-            scored[i] = new Ranked(i, raw, raw * chunks[i].W);
+            var match = lexicalItems.Contains(chunks[i].Ci) ? raw + LexicalBonus : raw;
+            scored[i] = new Ranked(i, raw, match, match * chunks[i].W);
         }
 
         var perItemCount = new Dictionary<int, int>();
@@ -180,5 +236,62 @@ public static class AiIndexFormat
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// 問句與哪幾筆內容的<b>標題</b>共用一個關鍵字串（≥ <see cref="LexicalMinChars"/> 字、
+    /// 不全是虛詞、出現在 ≤ <see cref="LexicalMaxItems"/> 筆內容的標題裡）。
+    ///
+    /// <para>
+    /// 做法是拿問句的 3 字與 4 字片段去比標題，不做斷詞 —— 中文沒有空白，斷詞要另一套字典；
+    /// 跨詞的片段（「光是什」）不會出現在任何標題裡，自然不算。
+    /// </para>
+    /// <para>
+    /// ⚠️ 只比標題（<see cref="Chunk.Ti"/>），不比內文與段落標題：內文裡什麼詞都有，
+    /// 比內文等於每一篇都加分。療程專屬 FAQ 的標題已換成療程名稱（<c>AiChunker</c>），一併受惠。
+    /// </para>
+    /// <para>⚠️ 每次查詢都重算（約一千個標題 × 數十個片段），不做快取 —— 毫秒級，而快取得跟著索引重載失效。</para>
+    /// </summary>
+    private static HashSet<int> LexicalMatches(string question, IReadOnlyList<Chunk> chunks)
+    {
+        var matched = new HashSet<int>();
+        var q = NormalizeForMatch(question);
+        if (q.Length < LexicalMinChars) return matched;
+
+        var titles = new Dictionary<int, string>();
+        foreach (var c in chunks) titles.TryAdd(c.Ci, NormalizeForMatch(c.Ti));
+
+        var grams = new HashSet<string>();
+        for (var n = LexicalMinChars; n <= LexicalMinChars + 1; n++)
+            for (var i = 0; i + n <= q.Length; i++)
+                grams.Add(q.Substring(i, n));
+
+        foreach (var gram in grams)
+        {
+            if (gram.All(ch => FunctionChars.Contains(ch))) continue;
+
+            var hits = new List<int>();
+            foreach (var (ci, title) in titles)
+            {
+                if (!title.Contains(gram, StringComparison.Ordinal)) continue;
+                hits.Add(ci);
+                if (hits.Count > LexicalMaxItems) break;
+            }
+
+            if (hits.Count is > 0 and <= LexicalMaxItems) matched.UnionWith(hits);
+        }
+
+        return matched;
+    }
+
+    /// <summary>全形轉半形、轉小寫、只留文字與數字（標點與空白會讓「DermaV 青萃光」與「DermaV青萃光」比不到）。</summary>
+    private static string NormalizeForMatch(string text)
+    {
+        var sb = new System.Text.StringBuilder(text.Length);
+        foreach (var ch in text.Normalize(System.Text.NormalizationForm.FormKC))
+        {
+            if (char.IsLetterOrDigit(ch)) sb.Append(char.ToLowerInvariant(ch));
+        }
+        return sb.ToString();
     }
 }

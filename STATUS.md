@@ -287,6 +287,12 @@ Function App 只有 `RateLimit__PublicQuota__MaxRequests=10`／`WindowMinutes=60
   設定鍵 `aifaq.handoffLineUrl` 留在資料庫、前後台都不讀不寫。
 - **面板不顯示「參考來源」**（`ba0da63`）—— API 仍回 `sources`，只是 `SiteConsult.vue` 不渲染。
 
+**2026-10-02「青萃光」問不到**（Tim 回報）：App Insights 兩次都是 `未命中（最高分 0.649／0.626、門檻 0.65）`——
+正確的 `/blog/dermav/` 排第一，只差一點沒過門檻；療程頁則因「內容未寫完」根本不在語料裡。兩項修正（CLAUDE.md 決策 28）：
+- **標題關鍵字加分 0.05**：「青萃光」0.649 → 0.699、「矽谷電波」0.651 → 0.701；14 題驗收題組負面題分數不變。
+- **AI 收錄改用 `IsAiEligible`（有資料就收）**：療程 1 → 28 項、2477 → 2507 塊（正式庫 dry-run）。
+  `AiChunker.Version` 3 → 4，部署後整份索引逐輪重建（80 筆／5 分鐘，約 1.5 小時），期間舊索引照常作答。
+
 ---
 
 （以下是 2026-09-29 起的建置紀錄）

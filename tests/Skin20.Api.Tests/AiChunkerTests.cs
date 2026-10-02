@@ -36,12 +36,28 @@ public class AiChunkerTests
         => Assert.Empty(Chunk(ContentType.Article, json));
 
     [Fact]
-    public void 沿用_Indexability_的判斷_骨架療程不進索引()
+    public void 內容未寫完的療程_有什麼就收什麼()
     {
-        // 決策 14：「值不值得被索引」全專案只有一份。
-        Assert.Empty(Chunk(ContentType.Treatment,
-            """{"title":"皮秒","summary":"簡述","fields":{"facts":[]}}"""));
+        // 決策 28（2026-10-02）：AI 用 IsAiEligible，不是 IsIndexable。
+        // 青萃光沒有簡述與事實一覽（搜尋引擎那一份判它 noindex），但適應症與許可證字號是真的資料。
+        const string json = """
+            {"title":"DermaV 青萃光","summary":null,"fields":{
+              "indications":"{\"heading\":\"青萃光可以處理哪些問題？\",\"items\":[{\"title\":\"精準處理不同型態血管\",\"desc\":\"雙波長血管雷射\"}]}",
+              "deviceInfo":"[{\"label\":\"醫療器材許可字號\",\"value\":\"衛署醫器輸字第021691號\"}]",
+              "facts":null}}
+            """;
+        Assert.False(Indexability.IsIndexable((byte)ContentType.Treatment,
+            (System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(json)!));
+
+        var chunks = Chunk(ContentType.Treatment, json);
+        Assert.Contains(chunks, c => c.Text.Contains("雙波長血管雷射"));
+        Assert.Contains(chunks, c => c.Text.Contains("衛署醫器輸字第021691號"));
     }
+
+    [Fact]
+    public void 只有骨架的法務頁不進語料()
+        => Assert.Empty(Chunk(ContentType.Page,
+            """{"title":"服務條款","summary":"","fields":{"bodyBlocks":"{\"heading\":\"服務條款\",\"sections\":[]}"}}"""));
 
     [Fact]
     public void SEO_noIndex_的內容不進索引()
