@@ -139,7 +139,14 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 - `recordsByIds()`（`/content/batch`）**丟掉 `bodyBlocks`** —— 首頁最新文章那 11 篇連整篇內文一起抓，payload 裡 94 KB，比其餘全部加起來還多；三個呼叫端都只畫卡片
 - 內容紀錄進 payload 前拿掉 `seo`／`fields`／`relations[]` 第一層的 null 與沒人讀的欄位（效果小，gzip 本來就壓得掉 null）。**伺服器算繪用的也是瘦過的那份**，hydration 一致靠構造保證
 剩下的大頭是 `/treatment`（gz 13 KB）與 `/term`（gz 11 KB，406 筆裡 393 筆是標籤，幾乎每頁都載）。
-🟡 **部署後要重量一次 CWV**（尤其手機 LCP）。
+✅ **已部署（2026-10-02，`d5e794b`），正式站覆核**：`*.azurestaticapps.net`（不在 CORS 白名單）上 10 種頁面
+hydration 期間 API 請求 0、不再塌成 503／noindex。
+🔴 **手機 CWV 的代價量到了**（Lighthouse 12 模擬慢速 4G，對 `20skin.4webdemo.com`，修前 → 修後）：
+首頁 perf 75 → **64–67**、FCP 1.6 → **3.5 秒**、LCP 7.2 → **9.5 秒**（三次都穩定）；`/treatments/` 79 → 84、
+`/blog/` 68 → 70、`/team/` 74 → 74、`/clinics/siji/` 72 → 66（單次，波動大）。SEO 全 100、CLS 全 0。
+首頁退最多，因為它的 payload 最大。下一步要壓 payload：`/term`（393 筆標籤，幾乎每頁都載，多數頁用不到標籤）
+與 `/treatment` 是大頭，正解是 API 提供精簡欄位的清單，或前台只載用得到的 termType。
+⚠️ 這是拿正確性換來的：修之前那批資料瀏覽器也要下載，只是在 hydration 之後才抓，所以沒算進 FCP —— 而且抓失敗就整頁變 503。
 🟡 順手看到：首頁 SSR 時對 14 位醫師各打一次 `/article?authorDoctorId=…&pageSize=100`（伺服器端負載，不進 payload 的大頭），值得另外看
 🟡 順手看到：`nuxt dev` 下 `/team/` 是 500 —— dev 才跑的資料檢查說篩選列寫死的專長「注射微整」在後台醫師標籤裡找不到（正式站不跑這段檢查，所以 200，但那個篩選按下去是空清單）。內容問題，與這次無關
 
