@@ -25,9 +25,8 @@ const props = withDefaults(
   { panelTitle: 'AI 線上諮詢', welcomeText: '', bookingUrl: '', lineContacts: () => [] },
 )
 
-interface Source { title: string; url: string; kind: string }
 type Role = 'user' | 'bot' | 'pending'
-interface Message { role: Role; text: string; sources?: Source[]; handoff?: boolean }
+interface Message { role: Role; text: string; handoff?: boolean }
 
 /** 問題長度上限。與 API 的 `MaxQuestionLength` 一致 —— 前端先擋，省一次來回。 */
 const MAX_QUESTION = 300
@@ -149,7 +148,7 @@ async function send(raw: string) {
     const res = await $fetch<{
       success: boolean
       code: string | null
-      data: { answer: string; answered: boolean; sources: Source[]; handoff: { needed: boolean } } | null
+      data: { answer: string; answered: boolean; handoff: { needed: boolean } } | null
     }>(`${apiBaseUrl}/ai/ask`, {
       method: 'POST',
       body: { question, history, botCheckToken },
@@ -160,7 +159,6 @@ async function send(raw: string) {
       replace(placeholder, {
         role: 'bot',
         text: res.data.answer,
-        sources: res.data.sources ?? [],
         handoff: res.data.handoff?.needed ?? false,
       })
       return
@@ -248,13 +246,9 @@ function classOf(role: Role) {
       <template v-for="(message, i) in messages" :key="i">
         <p :class="classOf(message.role)">{{ message.text }}</p>
 
-        <!-- 來源：站內連結，**不套 .ext**（那是外連樣式，會讀成離站）。 -->
-        <p v-if="message.sources?.length" :class="['c-chat__msg', 'c-chat__msg--bot']">
-          參考來源：
-          <template v-for="(source, j) in message.sources" :key="source.url">
-            <span v-if="j > 0">、</span><a :href="source.url">{{ source.title }}</a>
-          </template>
-        </p>
+        <!-- ⚠️ 不顯示「參考來源」（Tim 指定 2026-10-02：「那個可以不用放」）。
+             API 仍回 `sources`（契約不變），要加回來只改這裡；
+             伺服器端「沒有可引用的片段就不回答」的判斷不受影響。 -->
 
         <p v-if="message.handoff" :class="['c-chat__msg', 'c-chat__msg--bot']">
           <template v-if="lineLinks.length">
