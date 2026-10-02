@@ -8,9 +8,16 @@
 #
 # 為什麼要子集化：
 #   Noto Serif TC 完整字重約 9.7 MB，三個字重近 30 MB，不可能直接上線。
-#   這支腳本只保留三份 mockup 的 *.html 裡實際出現過的字，體積會降到數百 KB。
+#   這支腳本只保留 mockup（方向 A）的 *.html 與前台 .vue 模板裡實際出現過的字，體積會降到數百 KB。
 #
-# ⚠️ 改過 mockup／mockup2／mockup3 的文案之後要重跑這支腳本，否則新字會掉回系統字型。
+# 🔴 2026-10-02 起**只收方向 A ＋ 前台模板**，不再收落選的 mockup2／mockup3（決策 11）——
+#    那兩份的字一起進子集，每一個字重都多帶幾十 KB，而這兩支（600／700）在每一頁的首屏
+#    跟 LCP 主圖搶頻寬（Lighthouse 實測各約 270 KB，是全站最大的單項）。
+#    ⚠️ 前台 .vue 只收 <template> 區塊：script 裡的中文多半是註解，收進來只會撐大子集。
+#    ⚠️ 資料庫的內容（文章標題、療程名稱）本來就不在子集裡，那些字落回系統襯線體 ——
+#       那是子集化在動態網站上的根本限制，要解得改成依 Unicode 範圍切片（另案）。
+#
+# ⚠️ 改過 mockup/ 或前台模板的文案之後要重跑這支腳本，否則新字會掉回系統字型。
 #
 # 用法：./scripts/build-mockup-fonts.sh
 
@@ -18,7 +25,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 WORK="${TMPDIR:-/tmp}/20skin-fonts"
-OUT_DIRS=("$ROOT/mockup/assets/fonts" "$ROOT/mockup2/assets/fonts" "$ROOT/mockup3/assets/fonts")
+OUT_DIRS=("$ROOT/mockup/assets/fonts")
 WEIGHTS="400 600 700"
 
 mkdir -p "$WORK"
@@ -50,15 +57,19 @@ for block in css.split("@font-face")[1:]:
 PYEOF
 fi
 
-# 3. 掃出三份 mockup 實際用到的字（字元集共用，三邊輸出同一份）
+# 3. 掃出 mockup（方向 A）與前台模板實際用到的字
 echo "── 收集字元集"
 "$PY" - "$ROOT" "$WORK" <<'PYEOF'
 import glob, re, sys
 root, work = sys.argv[1], sys.argv[2]
 chars = set()
-for f in (glob.glob(f"{root}/mockup/*.html") + glob.glob(f"{root}/mockup2/*.html")
-          + glob.glob(f"{root}/mockup3/*.html")):
+vue = glob.glob(f"{root}/apps/web/app/**/*.vue", recursive=True)
+for f in glob.glob(f"{root}/mockup/*.html") + vue:
     src = open(f, encoding="utf-8").read()
+    if f.endswith(".vue"):
+        m = re.search(r"<template>([\s\S]*)</template>", src)
+        src = m.group(1) if m else ""
+        src = re.sub(r"\{\{[\s\S]*?\}\}", " ", src)   # 插值是程式，不是畫面文字
     # 只留畫面上看得到的文字：去掉 style/script/註解，再去掉標籤
     src = re.sub(r"<style\b.*?</style>|<script\b.*?</script>|<!--.*?-->", " ", src, flags=re.S)
     # alt / title 屬性的文字也會顯示，要保留
@@ -98,4 +109,4 @@ https://openfontlicense.org/
 EOF
 done
 
-echo "── 完成，輸出於 mockup/、mockup2/、mockup3/ 的 assets/fonts/"
+echo "── 完成，輸出於 mockup/assets/fonts/（前台建置時由 sync:assets 帶過去）"

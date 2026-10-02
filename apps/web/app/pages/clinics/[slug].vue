@@ -79,6 +79,30 @@ function toMinutes(hhmm: string) {
   return h * 60 + m
 }
 
+// 🔴 地圖等使用者捲到附近才掛上 iframe（2026-10-02）。
+//    `loading="lazy"` 不夠：Chrome 的延後門檻很寬，手機上一千多 px 外的地圖照樣先抓，
+//    Google 那包約 360 KB 的程式就在首屏跟主圖搶頻寬（Lighthouse 實測 LCP 9.5 秒）。
+//    畫布本身固定 280px 高、有底色，iframe 晚出現不會造成版面位移。
+// ⚠️ 不支援 IntersectionObserver 的環境直接載入，不要讓地圖永遠出不來。
+const mapCanvas = ref<HTMLElement | null>(null)
+const mapVisible = ref(false)
+let mapObserver: IntersectionObserver | null = null
+onMounted(() => {
+  const el = mapCanvas.value
+  if (!el || typeof IntersectionObserver === 'undefined') {
+    mapVisible.value = true
+    return
+  }
+  mapObserver = new IntersectionObserver((entries) => {
+    if (entries.some((e) => e.isIntersecting)) {
+      mapVisible.value = true
+      mapObserver?.disconnect()
+    }
+  }, { rootMargin: '300px 0px' })
+  mapObserver.observe(el)
+})
+onBeforeUnmount(() => mapObserver?.disconnect())
+
 onMounted(() => {
   const now = new Date()
   const day = now.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6
@@ -257,8 +281,9 @@ onMounted(() => {
            以地址查詢的免金鑰嵌入，網址由 clinics.ts 推導，見那裡的註解。
            loading="lazy"：地圖在第一屏之外，不讓 Google 的資源拖慢 LCP。
            iframe 自己有 title，外層不再掛 role="img"，否則螢幕報讀會把地圖蓋成一張圖。 -->
-      <div class="clinic-map__canvas">
+      <div ref="mapCanvas" class="clinic-map__canvas">
         <iframe
+          v-if="mapVisible"
           :src="clinic.mapEmbedUrl"
           :title="`${clinic.name}位置地圖`"
           loading="lazy"
