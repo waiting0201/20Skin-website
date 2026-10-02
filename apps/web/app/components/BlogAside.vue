@@ -33,7 +33,7 @@ const POPULAR_TAGS = await getPopularTags()
     <ul class="blog-mini-list">
       <li v-for="item in POPULAR_TREATMENTS_FOR_BLOG" :key="item.slug" class="blog-mini">
         <a class="blog-mini__media" :href="`/treatments/${item.categorySlug}/${item.slug}/`">
-          <img :src="item.image.src" :alt="item.image.alt" :width="item.image.width" :height="item.image.height" loading="lazy">
+          <img :src="item.image.src" :srcset="srcsetOf(item.image.src)" :sizes="IMAGE_SIZES.thumb" :alt="item.image.alt" :width="item.image.width" :height="item.image.height" loading="lazy">
         </a>
         <div class="blog-mini__body">
           <span class="c-tag c-tag--outline">{{ item.categoryLabel }}</span>

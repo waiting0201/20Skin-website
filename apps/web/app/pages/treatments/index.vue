@@ -107,7 +107,7 @@ const faqs = [
       <div class="tov-cats">
         <article v-for="(cat, i) in treatmentCategories" :key="cat.slug" class="tov-cat">
           <div class="tov-cat__media">
-            <img :src="cat.image.src" :alt="cat.image.alt" :width="cat.image.width" :height="cat.image.height" loading="lazy">
+            <img :src="cat.image.src" :srcset="srcsetOf(cat.image.src)" :sizes="IMAGE_SIZES.half" :alt="cat.image.alt" :width="cat.image.width" :height="cat.image.height" loading="lazy">
           </div>
           <div class="tov-cat__copy">
             <span class="tov-cat__no">{{ String(i + 1).padStart(2, '0') }}</span>

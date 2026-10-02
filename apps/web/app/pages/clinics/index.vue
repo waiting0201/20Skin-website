@@ -75,7 +75,7 @@ const faqs = [
         <article v-for="(clinic, i) in CLINICS" :key="clinic.slug" class="clist-site">
           <div class="clist-site__media">
             <img
-              :src="clinic.heroPhoto.src"
+              :src="clinic.heroPhoto.src" :srcset="srcsetOf(clinic.heroPhoto.src)" :sizes="IMAGE_SIZES.half"
               :alt="clinic.heroPhoto.alt"
               :width="clinic.heroPhoto.width"
               :height="clinic.heroPhoto.height"

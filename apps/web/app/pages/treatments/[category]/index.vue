@@ -65,7 +65,7 @@ usePageHead({
 
       <div class="tcat-hero__media">
         <div class="tcat-hero__frame">
-          <img :src="category.image.src" :alt="category.image.alt" :width="category.image.width" :height="category.image.height">
+          <img :src="category.image.src" :srcset="srcsetOf(category.image.src)" :sizes="IMAGE_SIZES.half" :alt="category.image.alt" :width="category.image.width" :height="category.image.height">
         </div>
       </div>
     </div>
@@ -107,7 +107,7 @@ usePageHead({
         <article v-for="item in items" :key="item.slug" class="c-card c-card--treatment">
           <div class="c-card__media">
             <img
-              :src="(item.cardImage ?? category.image).src"
+              :src="(item.cardImage ?? category.image).src" :srcset="srcsetOf((item.cardImage ?? category.image).src)" :sizes="IMAGE_SIZES.grid4"
               :alt="(item.cardImage ?? category.image).alt"
               :width="(item.cardImage ?? category.image).width"
               :height="(item.cardImage ?? category.image).height"
@@ -169,7 +169,7 @@ usePageHead({
       <div class="grid grid--4">
         <article v-for="doc in category.doctors" :key="doc.slug" class="c-card c-card--doctor">
           <div class="c-card__media">
-            <img :src="doc.photo.src" :alt="doc.photo.alt" :width="doc.photo.width" :height="doc.photo.height">
+            <img :src="doc.photo.src" :srcset="srcsetOf(doc.photo.src)" :sizes="IMAGE_SIZES.grid4" :alt="doc.photo.alt" :width="doc.photo.width" :height="doc.photo.height">
           </div>
           <div class="c-card__body">
             <h3 class="c-card__title"><a :href="`/team/${doc.slug}/`">{{ doc.name }}</a></h3>
@@ -199,7 +199,7 @@ usePageHead({
       <div class="grid grid--3">
         <article v-for="article in category.articles" :key="article.title" class="c-card c-card--article">
           <div class="c-card__media">
-            <img :src="article.photo.src" :alt="article.photo.alt" :width="article.photo.width" :height="article.photo.height">
+            <img :src="article.photo.src" :srcset="srcsetOf(article.photo.src)" :sizes="IMAGE_SIZES.grid3" :alt="article.photo.alt" :width="article.photo.width" :height="article.photo.height">
           </div>
           <div class="c-card__body">
             <span class="c-tag c-card__tag">{{ article.category }}</span>

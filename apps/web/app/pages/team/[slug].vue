@@ -107,7 +107,7 @@ usePageHead({
     <div class="container doc-hero__layout">
       <div class="doc-hero__frame">
         <img
-          :src="doctor.photo.src"
+          :src="doctor.photo.src" :srcset="srcsetOf(doctor.photo.src)" :sizes="IMAGE_SIZES.half"
           :alt="`${doctor.name} ${doctor.isPhysician ? '診間人像照' : '人像照'}`"
           :width="doctor.photo.width"
           :height="doctor.photo.height"
@@ -239,7 +239,7 @@ usePageHead({
         <article v-for="treatment in doctor.treatments" :key="treatment.slug" class="c-card c-card--treatment">
           <div class="c-card__media">
             <img
-              :src="treatment.image.src"
+              :src="treatment.image.src" :srcset="srcsetOf(treatment.image.src)" :sizes="IMAGE_SIZES.grid4"
               :alt="treatment.image.alt"
               :width="treatment.image.width"
               :height="treatment.image.height"
@@ -275,7 +275,7 @@ usePageHead({
         <article v-for="(article, i) in doctor.articles" :key="i" class="c-card c-card--article">
           <div class="c-card__media">
             <img
-              :src="article.image.src"
+              :src="article.image.src" :srcset="srcsetOf(article.image.src)" :sizes="IMAGE_SIZES.grid4"
               :alt="article.image.alt"
               :width="article.image.width"
               :height="article.image.height"
@@ -394,7 +394,7 @@ usePageHead({
         <article v-for="colleague in colleagues" :key="colleague.slug" class="c-card c-card--doctor">
           <div class="c-card__media">
             <img
-              :src="colleague.photo.src"
+              :src="colleague.photo.src" :srcset="srcsetOf(colleague.photo.src)" :sizes="IMAGE_SIZES.grid4"
               :alt="`${colleague.name} ${roleText(colleague.jobTitle)}`"
               :width="colleague.photo.width"
               :height="colleague.photo.height"

@@ -191,7 +191,7 @@ function siteLabel(doctor: (typeof ALL_DOCTORS)[number]) {
         >
           <div class="c-card__media">
             <img
-              :src="doctor.photo.src"
+              :src="doctor.photo.src" :srcset="srcsetOf(doctor.photo.src)" :sizes="IMAGE_SIZES.grid4"
               :alt="`${doctor.name} ${roleText(doctor.jobTitle)}`"
               :width="doctor.photo.width"
               :height="doctor.photo.height"

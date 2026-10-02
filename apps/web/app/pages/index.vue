@@ -109,7 +109,7 @@ usePageHead({
                 role="group" aria-roledescription="投影片" :aria-label="`${index + 1} / ${HERO_SLIDES.length}`"
               >
                 <img
-                  :src="slide.imagePath" :alt="slide.alt"
+                  :src="slide.imagePath" :srcset="srcsetOf(slide.imagePath)" :sizes="IMAGE_SIZES.half" :alt="slide.alt"
                   :width="slide.imageWidth" :height="slide.imageHeight"
                   :fetchpriority="index === 0 ? 'high' : undefined"
                   :loading="index === 0 ? undefined : 'lazy'"
@@ -184,7 +184,7 @@ usePageHead({
         <div class="grid grid--4">
           <article v-for="item in FEATURED_TREATMENTS" :key="item.slug" class="c-card c-card--treatment">
             <div class="c-card__media">
-              <img :src="item.imagePath" :alt="item.alt" :width="item.imageWidth" :height="item.imageHeight">
+              <img :src="item.imagePath" :srcset="srcsetOf(item.imagePath)" :sizes="IMAGE_SIZES.grid4" :alt="item.alt" :width="item.imageWidth" :height="item.imageHeight">
             </div>
             <div class="c-card__body">
               <span class="c-tag c-card__tag">{{ item.categoryLabel }}</span>
@@ -212,7 +212,7 @@ usePageHead({
         <div class="grid grid--4">
           <article v-for="item in LATEST_ARTICLES" :key="item.title" class="c-card c-card--article">
             <div class="c-card__media">
-              <img :src="item.imagePath" :alt="item.alt" :width="item.imageWidth" :height="item.imageHeight">
+              <img :src="item.imagePath" :srcset="srcsetOf(item.imagePath)" :sizes="IMAGE_SIZES.grid4" :alt="item.alt" :width="item.imageWidth" :height="item.imageHeight">
             </div>
             <div class="c-card__body">
               <span class="c-tag c-card__tag">{{ item.categoryLabel }}</span>
@@ -248,7 +248,7 @@ usePageHead({
         <div class="home-doctors__grid">
           <article v-for="doctor in FEATURED_DOCTORS" :key="doctor.name" class="c-card c-card--doctor">
             <div class="c-card__media">
-              <img :src="doctor.photoPath" :alt="`${doctor.name} ${roleText(doctor.jobTitle)}`" :width="doctor.photoWidth" :height="doctor.photoHeight" loading="lazy">
+              <img :src="doctor.photoPath" :srcset="srcsetOf(doctor.photoPath)" :sizes="IMAGE_SIZES.grid4" :alt="`${doctor.name} ${roleText(doctor.jobTitle)}`" :width="doctor.photoWidth" :height="doctor.photoHeight" loading="lazy">
             </div>
             <div class="c-card__body">
               <h3 class="c-card__title"><a :href="doctor.urlPath">{{ doctor.name }}</a></h3>

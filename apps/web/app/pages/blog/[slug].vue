@@ -139,7 +139,7 @@ usePageHead({
     <div class="container">
       <div class="article-cover__inner">
         <div class="article-cover__frame">
-          <img :src="article.cover.src" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height">
+          <img :src="article.cover.src" :srcset="srcsetOf(article.cover.src)" :sizes="IMAGE_SIZES.half" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height">
         </div>
         <figcaption>{{ article.summary }}</figcaption>
       </div>
@@ -217,7 +217,7 @@ usePageHead({
         <p v-else-if="block.type === 'paragraph'">{{ block.text }}</p>
         <figure v-else-if="block.type === 'figure'" class="article-figure" :class="{ 'article-figure--wide': block.wide }">
           <div class="article-figure__frame">
-            <img :src="block.image.src" :alt="block.image.alt" :width="block.image.width" :height="block.image.height" loading="lazy">
+            <img :src="block.image.src" :srcset="srcsetOf(block.image.src)" :sizes="IMAGE_SIZES.full" :alt="block.image.alt" :width="block.image.width" :height="block.image.height" loading="lazy">
           </div>
           <figcaption>{{ block.caption }}</figcaption>
         </figure>
@@ -277,7 +277,7 @@ usePageHead({
       <div class="grid grid--3">
         <article v-for="treatment in article.relatedTreatments" :key="treatment.slug" class="c-card c-card--treatment">
           <div class="c-card__media">
-            <img :src="treatment.image.src" :alt="treatment.image.alt" :width="treatment.image.width" :height="treatment.image.height" loading="lazy">
+            <img :src="treatment.image.src" :srcset="srcsetOf(treatment.image.src)" :sizes="IMAGE_SIZES.grid3" :alt="treatment.image.alt" :width="treatment.image.width" :height="treatment.image.height" loading="lazy">
           </div>
           <div class="c-card__body">
             <span class="c-tag c-card__tag">{{ treatment.categoryLabel }}</span>
@@ -342,7 +342,7 @@ usePageHead({
       <div class="grid grid--3">
         <article v-for="related in relatedArticles" :key="related.slug" class="c-card c-card--article">
           <div class="c-card__media" :class="{ 'blog-grid__media--pad': related.cover.src.endsWith('.png') }">
-            <img :src="related.cover.src" :alt="related.cover.alt" :width="related.cover.width" :height="related.cover.height" loading="lazy">
+            <img :src="related.cover.src" :srcset="srcsetOf(related.cover.src)" :sizes="IMAGE_SIZES.grid3" :alt="related.cover.alt" :width="related.cover.width" :height="related.cover.height" loading="lazy">
           </div>
           <div class="c-card__body">
             <span class="c-tag c-card__tag">{{ relatedCategoryLabels.get(related.slug) }}</span>

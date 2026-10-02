@@ -104,7 +104,7 @@ usePageHead({
       <div class="concern-head__media">
         <div class="concern-head__frame">
           <img
-            :src="concern.heroImage.src"
+            :src="concern.heroImage.src" :srcset="srcsetOf(concern.heroImage.src)" :sizes="IMAGE_SIZES.half"
             :alt="concern.heroImage.alt"
             :width="concern.heroImage.width"
             :height="concern.heroImage.height"
@@ -122,7 +122,7 @@ usePageHead({
       <div class="container concern-symptom__layout">
         <div class="concern-symptom__media">
           <img
-            :src="concern.detail.symptomMedia.src"
+            :src="concern.detail.symptomMedia.src" :srcset="srcsetOf(concern.detail.symptomMedia.src)" :sizes="IMAGE_SIZES.half"
             :alt="concern.detail.symptomMedia.alt"
             :width="concern.detail.symptomMedia.width"
             :height="concern.detail.symptomMedia.height"
@@ -218,7 +218,7 @@ usePageHead({
         <div class="grid grid--3">
           <article v-for="(t, i) in concern.detail.treatments" :key="t.key" class="c-card c-card--treatment">
             <div class="c-card__media">
-              <img :src="t.image.src" :alt="t.image.alt" :width="t.image.width" :height="t.image.height">
+              <img :src="t.image.src" :srcset="srcsetOf(t.image.src)" :sizes="IMAGE_SIZES.grid3" :alt="t.image.alt" :width="t.image.width" :height="t.image.height">
             </div>
             <div class="c-card__body">
               <span class="concern-rx-badge" aria-hidden="true">{{ String(i + 1).padStart(2, '0') }}</span>
@@ -252,7 +252,7 @@ usePageHead({
         <div class="concern-doctors">
           <article v-for="doctor in concern.detail.doctors" :key="doctor.name" class="c-card c-card--doctor">
             <div class="c-card__media">
-              <img :src="doctor.image.src" :alt="doctor.image.alt" :width="doctor.image.width" :height="doctor.image.height">
+              <img :src="doctor.image.src" :srcset="srcsetOf(doctor.image.src)" :sizes="IMAGE_SIZES.thumb" :alt="doctor.image.alt" :width="doctor.image.width" :height="doctor.image.height">
             </div>
             <div class="c-card__body">
               <h3 class="c-card__title">
@@ -310,7 +310,7 @@ usePageHead({
           <article v-for="article in concern.detail.articles" :key="article.title" class="c-card c-card--article">
             <div class="c-card__media">
               <img
-                :src="article.image.src"
+                :src="article.image.src" :srcset="srcsetOf(article.image.src)" :sizes="IMAGE_SIZES.grid4"
                 :alt="article.image.alt"
                 :width="article.image.width"
                 :height="article.image.height"
@@ -348,7 +348,7 @@ usePageHead({
         <div class="grid grid--4">
           <article v-for="cat in CONCERN_TREATMENT_CATEGORIES" :key="cat.href" class="c-card c-card--treatment">
             <div class="c-card__media">
-              <img :src="cat.image.src" :alt="cat.image.alt" :width="cat.image.width" :height="cat.image.height" loading="lazy">
+              <img :src="cat.image.src" :srcset="srcsetOf(cat.image.src)" :sizes="IMAGE_SIZES.grid4" :alt="cat.image.alt" :width="cat.image.width" :height="cat.image.height" loading="lazy">
             </div>
             <div class="c-card__body">
               <h3 class="c-card__title"><a :href="cat.href">{{ cat.label }}</a></h3>

@@ -143,7 +143,7 @@ usePageHead({
 
       <div class="tdetail-hero__frame">
         <img
-          :src="(treatment.cardImage ?? category.image).src"
+          :src="(treatment.cardImage ?? category.image).src" :srcset="srcsetOf((treatment.cardImage ?? category.image).src)" :sizes="IMAGE_SIZES.half"
           :alt="(treatment.cardImage ?? category.image).alt"
           :width="(treatment.cardImage ?? category.image).width"
           :height="(treatment.cardImage ?? category.image).height"
@@ -219,7 +219,7 @@ usePageHead({
             </div>
             <div v-if="treatment.mechanismImage" class="tdetail-split__frame">
               <img
-                :src="treatment.mechanismImage.src"
+                :src="treatment.mechanismImage.src" :srcset="srcsetOf(treatment.mechanismImage.src)" :sizes="IMAGE_SIZES.half"
                 :alt="treatment.mechanismImage.alt"
                 :width="treatment.mechanismImage.width"
                 :height="treatment.mechanismImage.height"
@@ -303,7 +303,7 @@ usePageHead({
           <div class="tdetail-gallery">
             <figure v-for="img in treatment.gallery" :key="img.src" class="tdetail-gallery__item">
               <div class="tdetail-gallery__frame">
-                <img :src="img.src" :alt="img.alt" :width="img.width" :height="img.height" loading="lazy">
+                <img :src="img.src" :srcset="srcsetOf(img.src)" :sizes="IMAGE_SIZES.grid3" :alt="img.alt" :width="img.width" :height="img.height" loading="lazy">
               </div>
               <figcaption class="tdetail-gallery__cap">{{ img.caption }}</figcaption>
             </figure>
@@ -320,7 +320,7 @@ usePageHead({
           <div class="grid grid--3">
             <article v-for="doc in treatment.doctors" :key="doc.slug" class="c-card c-card--doctor">
               <div class="c-card__media">
-                <img :src="doc.photo.src" :alt="doc.photo.alt" :width="doc.photo.width" :height="doc.photo.height" loading="lazy">
+                <img :src="doc.photo.src" :srcset="srcsetOf(doc.photo.src)" :sizes="IMAGE_SIZES.grid3" :alt="doc.photo.alt" :width="doc.photo.width" :height="doc.photo.height" loading="lazy">
               </div>
               <div class="c-card__body">
                 <h3 class="c-card__title"><a :href="`/team/${doc.slug}/`">{{ doc.name }}</a></h3>
@@ -358,7 +358,7 @@ usePageHead({
           <div class="grid grid--3">
             <article v-for="c in treatment.cases" :key="c.title" class="c-card">
               <div class="c-card__media">
-                <img :src="c.photo.src" :alt="c.photo.alt" :width="c.photo.width" :height="c.photo.height" loading="lazy">
+                <img :src="c.photo.src" :srcset="srcsetOf(c.photo.src)" :sizes="IMAGE_SIZES.grid3" :alt="c.photo.alt" :width="c.photo.width" :height="c.photo.height" loading="lazy">
               </div>
               <div class="c-card__body">
                 <h3 class="c-card__title"><a href="/cases/">{{ c.title }}</a></h3>
@@ -401,7 +401,7 @@ usePageHead({
           <div class="grid grid--3">
             <article v-for="article in treatment.articles" :key="article.title" class="c-card c-card--article">
               <div class="c-card__media">
-                <img :src="article.photo.src" :alt="article.photo.alt" :width="article.photo.width" :height="article.photo.height" loading="lazy">
+                <img :src="article.photo.src" :srcset="srcsetOf(article.photo.src)" :sizes="IMAGE_SIZES.grid3" :alt="article.photo.alt" :width="article.photo.width" :height="article.photo.height" loading="lazy">
               </div>
               <div class="c-card__body">
                 <span class="c-tag c-card__tag">{{ article.category }}</span>

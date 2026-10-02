@@ -101,9 +101,9 @@ usePageHead({
     <div class="container blog-layout">
       <div class="blog-main">
         <div v-if="paged.items.length" class="grid grid--3 blog-grid">
-          <article v-for="article in paged.items" :key="article.slug" class="c-card c-card--article">
+          <article v-for="(article, i) in paged.items" :key="article.slug" class="c-card c-card--article">
             <div class="c-card__media" :class="{ 'blog-grid__media--pad': article.cover.src.endsWith('.png') }">
-              <img :src="article.cover.src" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height" loading="lazy">
+              <img :src="article.cover.src" :srcset="srcsetOf(article.cover.src)" :sizes="IMAGE_SIZES.grid3" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height" :loading="i < 3 ? undefined : 'lazy'" :fetchpriority="i === 0 ? 'high' : undefined">
             </div>
             <div class="c-card__body">
               <h3 class="c-card__title"><a :href="`/blog/${article.slug}/`">{{ article.title }}</a></h3>

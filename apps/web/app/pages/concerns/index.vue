@@ -129,7 +129,7 @@ usePageHead({
       <div class="grid grid--4">
         <article v-for="cat in CONCERN_TREATMENT_CATEGORIES" :key="cat.href" class="c-card c-card--treatment">
           <div class="c-card__media">
-            <img :src="cat.image.src" :alt="cat.image.alt" :width="cat.image.width" :height="cat.image.height" loading="lazy">
+            <img :src="cat.image.src" :srcset="srcsetOf(cat.image.src)" :sizes="IMAGE_SIZES.grid4" :alt="cat.image.alt" :width="cat.image.width" :height="cat.image.height" loading="lazy">
           </div>
           <div class="c-card__body">
             <h3 class="c-card__title"><a :href="cat.href">{{ cat.label }}</a></h3>
@@ -158,7 +158,7 @@ usePageHead({
         <article v-for="article in CONCERN_OVERVIEW_ARTICLES" :key="article.title" class="c-card c-card--article">
           <div class="c-card__media">
             <img
-              :src="article.image.src"
+              :src="article.image.src" :srcset="srcsetOf(article.image.src)" :sizes="IMAGE_SIZES.grid3"
               :alt="article.image.alt"
               :width="article.image.width"
               :height="article.image.height"

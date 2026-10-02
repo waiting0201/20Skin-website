@@ -145,7 +145,7 @@ onMounted(() => {
       <div class="clinic-hero__media">
         <div class="clinic-hero__frame">
           <img
-            :src="clinic.heroPhoto.src"
+            :src="clinic.heroPhoto.src" :srcset="srcsetOf(clinic.heroPhoto.src)" :sizes="IMAGE_SIZES.half"
             :alt="clinic.heroPhoto.alt"
             :width="clinic.heroPhoto.width"
             :height="clinic.heroPhoto.height"
@@ -312,7 +312,7 @@ onMounted(() => {
         <article v-for="doctor in residentDoctors" :key="doctor.slug" class="c-card c-card--doctor">
           <div class="c-card__media">
             <img
-              :src="doctor.photo.src"
+              :src="doctor.photo.src" :srcset="srcsetOf(doctor.photo.src)" :sizes="IMAGE_SIZES.grid4"
               :alt="`${doctor.name} ${roleText(doctor.jobTitle)}`"
               :width="doctor.photo.width"
               :height="doctor.photo.height"
@@ -387,7 +387,7 @@ onMounted(() => {
       <div class="grid grid--2 clinic-gallery">
         <figure v-for="photo in clinic.galleryPhotos" :key="photo.src" class="clinic-gallery__item">
           <div class="clinic-gallery__frame">
-            <img :src="photo.src" :alt="photo.alt" :width="photo.width" :height="photo.height" loading="lazy">
+            <img :src="photo.src" :srcset="srcsetOf(photo.src)" :sizes="IMAGE_SIZES.half" :alt="photo.alt" :width="photo.width" :height="photo.height" loading="lazy">
           </div>
           <figcaption class="clinic-gallery__caption">{{ photo.caption }}</figcaption>
         </figure>

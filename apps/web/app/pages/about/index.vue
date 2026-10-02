@@ -74,7 +74,7 @@ usePageHead({
         <div class="grid grid--3">
           <article v-for="pillar in ABOUT_PILLARS" :key="pillar.no" class="about-pillar">
             <a class="about-pillar__media" :href="pillar.href">
-              <img :src="pillar.image.src" :alt="pillar.image.alt" :width="pillar.image.w" :height="pillar.image.h" loading="lazy">
+              <img :src="pillar.image.src" :srcset="srcsetOf(pillar.image.src)" :sizes="IMAGE_SIZES.grid3" :alt="pillar.image.alt" :width="pillar.image.w" :height="pillar.image.h" loading="lazy">
             </a>
             <span class="about-pillar__no">{{ pillar.no }}</span>
             <h3>{{ pillar.title }}</h3>
@@ -142,7 +142,7 @@ usePageHead({
         <div class="grid grid--4">
           <article v-for="member in ABOUT_TEAM_PREVIEW" :key="member.name" class="c-card c-card--doctor">
             <div class="c-card__media">
-              <img :src="member.image.src" :alt="member.image.alt" :width="member.image.w" :height="member.image.h" loading="lazy">
+              <img :src="member.image.src" :srcset="srcsetOf(member.image.src)" :sizes="IMAGE_SIZES.grid4" :alt="member.image.alt" :width="member.image.w" :height="member.image.h" loading="lazy">
             </div>
             <div class="c-card__body">
               <h3 class="c-card__title"><a :href="member.href">{{ member.name }}</a></h3>
@@ -170,7 +170,7 @@ usePageHead({
         <div class="grid grid--2">
           <article v-for="clinic in ABOUT_CLINICS" :key="clinic.name" class="about-clinic">
             <a class="about-clinic__media" :href="clinic.href">
-              <img :src="clinic.image.src" :alt="clinic.image.alt" :width="clinic.image.w" :height="clinic.image.h" loading="lazy">
+              <img :src="clinic.image.src" :srcset="srcsetOf(clinic.image.src)" :sizes="IMAGE_SIZES.half" :alt="clinic.image.alt" :width="clinic.image.w" :height="clinic.image.h" loading="lazy">
             </a>
             <h3 class="about-clinic__name">{{ clinic.name }}</h3>
             <p>{{ clinic.body }}</p>

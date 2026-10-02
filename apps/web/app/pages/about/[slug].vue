@@ -66,7 +66,7 @@ usePageHead({
 
       <div class="story-hero__media">
         <div class="story-hero__frame">
-          <img :src="story.heroImage.src" :alt="story.heroImage.alt" :width="story.heroImage.w" :height="story.heroImage.h">
+          <img :src="story.heroImage.src" :srcset="srcsetOf(story.heroImage.src)" :sizes="IMAGE_SIZES.half" :alt="story.heroImage.alt" :width="story.heroImage.w" :height="story.heroImage.h">
         </div>
         <p class="story-hero__caption">{{ story.heroCaption }}</p>
       </div>
@@ -253,7 +253,7 @@ usePageHead({
       <div class="grid grid--3">
         <article v-for="item in story.treatments" :key="item.title" class="c-card c-card--treatment">
           <div class="c-card__media">
-            <img :src="item.image.src" :alt="item.image.alt" :width="item.image.w" :height="item.image.h" loading="lazy">
+            <img :src="item.image.src" :srcset="srcsetOf(item.image.src)" :sizes="IMAGE_SIZES.grid3" :alt="item.image.alt" :width="item.image.w" :height="item.image.h" loading="lazy">
           </div>
           <div class="c-card__body">
             <h3 class="c-card__title"><a :href="item.href">{{ item.title }}</a></h3>

@@ -48,7 +48,11 @@ export default defineNuxtConfig({
       htmlAttrs: { lang: 'zh-Hant' },
       charset: 'utf-8',
       viewport: 'width=device-width, initial-scale=1',
-      link: [{ rel: 'stylesheet', href: `/assets/base.css?v=${ASSET_VERSION['/assets/base.css'] ?? ''}` }],
+      link: [
+        { rel: 'stylesheet', href: `/assets/base.css?v=${ASSET_VERSION['/assets/base.css'] ?? ''}` },
+        // 內容圖全在 Blob（另一個來源）。先連線，LCP 那張圖就不必等 DNS＋TLS（2026-10-02）。
+        { rel: 'preconnect', href: 'https://st20skinweb.blob.core.windows.net' },
+      ],
     },
   },
 

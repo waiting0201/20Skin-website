@@ -173,7 +173,7 @@ usePageHead({
       <div class="grid grid--3">
         <article v-for="t in item.treatmentsUsed" :key="t.name" class="c-card c-card--treatment">
           <div class="c-card__media">
-            <img :src="t.image.src" :alt="t.image.alt" :width="t.image.width" :height="t.image.height" loading="lazy">
+            <img :src="t.image.src" :srcset="srcsetOf(t.image.src)" :sizes="IMAGE_SIZES.grid3" :alt="t.image.alt" :width="t.image.width" :height="t.image.height" loading="lazy">
           </div>
           <div class="c-card__body">
             <h3 class="c-card__title"><a :href="t.href">{{ t.name }}</a></h3>
