@@ -33,6 +33,14 @@
     <PackageReference Include="Azure.Identity" Version="1.14.2" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.24.0" />
 
+    <!-- 圖片衍生尺寸（Common/ImageVariants.cs，上傳流程見 docs/11 §9.3）。
+         🔴 選 SkiaSharp（MIT）而不是 ImageSharp：後者是分裂授權，商用可能要付費。
+         ⚠️ Function App 是 Linux Flex Consumption，必須帶 NativeAssets.Linux.NoDependencies
+            —— 少了它建置與本機（macOS）測試都過，部署後第一次上傳才丟 DllNotFoundException。
+            NoDependencies 版不要求系統有 fontconfig／libfreetype。 -->
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
+
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.3">
       <PrivateAssets>all</PrivateAssets>
@@ -59,5 +67,21 @@
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </None>
   </ItemGroup>
+
+  <!--
+    發布產物只留 linux-x64 的原生函式庫。
+    ⚠️ SkiaSharp 套件會連帶帶進 Windows／macOS 與十幾種 Linux 變體的 libSkiaSharp
+       （單單 win-x86／x64／arm64 就各 100 MB），不裁的話部署包從幾十 MB 變成近 500 MB，
+       每次部署都要上傳、Flex Consumption 冷啟動也要解開。Function App 只跑 Linux x64。
+    ⚠️ 只動 runtimes/*/native/ —— 託管的 runtimes/unix、runtimes/win 的 lib 不碰。
+       本機 dotnet build／func start 用的是 build 輸出，不受影響（macOS 開發仍有 osx 的 Skia）。
+  -->
+  <Target Name="TrimNonLinuxNativeForPublish" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <_NativeToTrim Include="@(ResolvedFileToPublish)"
+                     Condition="$([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Replace('\','/').StartsWith('runtimes/')) And $([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Replace('\','/').Contains('/native/')) And !$([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Replace('\','/').StartsWith('runtimes/linux-x64/'))" />
+      <ResolvedFileToPublish Remove="@(_NativeToTrim)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

@@ -98,7 +98,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 | 上線設定 | 正式網域前若有 Cloudflare，確認不擋 AI 爬蟲 | §七 |
 | ~~驗證~~ | ~~CWV 與 SSR 終點延遲、冷啟動、CORS preflight／5xx、遷移回滾演練~~ ✅ 2026-10-02 都量了，結果見下一節 | 下方「2026-10-02」 |
 | ~~🔴 程式~~ | ~~**頁面在瀏覽器 hydration 時把 API 全部再打一次，打失敗就把算繪好的頁換成 503**~~ ✅ 2026-10-02 修好（未部署） | 下方「2026-10-02」 |
-| 程式 | 手機 LCP 4.8–10.5 秒：圖片沒有衍生尺寸（卡在 §八「圖片衍生尺寸誰產」）＋ `/blog/` 第一張卡片是 `loading="lazy"` | 下方「2026-10-02」 |
+| 程式 | 手機 LCP 4–11 秒：圖片沒有衍生尺寸。✅ 2026-10-02 Tim 定案「Function 端產」，程式已完成，**部署順序：API → 補產 4612 張 → 前台** | 下方「圖片衍生尺寸」 |
 | 🔴 上線設定 | 正式站 AI 問答的頻率限制實際是 **10 次／60 分**。程式已改成收底線鍵名（未部署）；**還要在 Function App 設 `RateLimit__PublicQuota__ai_ask__MaxRequests=20`、`…__WindowMinutes=10`** | 下方「2026-10-02」 |
 | 院方內容 | 28 項療程的療程時間／術後照護／禁忌症（**最大瓶頸**）、13 位醫師資料、8 則案例的揭露欄位、法務條文 | §二、§八 |
 | 院方資料 | 院區經緯度、交通停車、門診時段書面確認、`product*.php` 清單、Search Console | §八 |
@@ -208,6 +208,24 @@ Function App 只有 `RateLimit__PublicQuota__MaxRequests=10`／`WindowMinutes=60
 後端新增 30 個測試，**223 個全綠**。
 已修：`openapi.yaml` 的轉址迴圈狀態碼（400 → 409）與改密碼下限（8 → 6）；`CacheControl.cs`、`ApiResponse.cs`、
 `ContentHandler.cs` 三處講「重建失效」「分頁雙模式」「重建時頁面消失」的過期註解。
+
+---
+
+### 圖片衍生尺寸（2026-10-02，Tim 定案 Function 端產）
+
+- **依檔名慣例，不寫資料庫**：原檔 `media/…/{32hex}.jpg` 旁固定產 `.w480`／`.w800`／`.w1200`／`.w1600.webp`（品質 78、不放大但四個檔名都在、處理 EXIF 方向、保留 alpha）。
+  `UploadedImage.Variants` 一律 NULL —— 圖片也散在區塊 JSON 與舊站內文 `src`，只有命名規則涵蓋得了全部
+- **API**：`functions/Common/ImageVariants.cs`（命名，零相依）＋ `.Encode.cs`（SkiaSharp，MIT；不用 ImageSharp，授權問題）。
+  上傳 commit 時先編好四張再搬正式路徑，失敗就整筆不成立並清乾淨；所有刪圖改走 `DeleteImageAsync`（原檔＋四張）。
+  解碼前擋 64 百萬像素（壓縮炸彈）。發布產物 37 MB（未裁剪原生檔時 492 MB），CI 斷言 linux-x64 的 `libSkiaSharp.so` 在、總量 < 150 MB
+- **`tools/image-variants`**：補產既有圖，預設 dry-run、`--apply` 才寫、`If-None-Match: *` 冪等可續跑、拒絕 `st20skinprod`。
+  dry-run（唯讀）：**4612 張全部要補**，原檔 765 MB，估新增約 450 MB
+- **`tools/blob-reconcile`**：原檔被引用則衍生圖不是孤兒；刪孤兒原檔連帶四張；20% 安全閥以「圖片」為單位（否則補完後 blob 數變 5 倍、閥門鬆 5 倍）
+- **前台**：`app/utils/responsiveImage.ts`（`srcsetOf()`＋`IMAGE_SIZES`），47 處 `<img>` 補上 `srcset`／`sizes`；`/blog/` 第一列不延後載入、第一張 `fetchpriority=high`；
+  `preconnect` 到 Blob。只認 `st20skinweb` 的 `media/`
+- 🔴 **部署順序不可對調**：API 上線 → `image-variants --apply` → dry-run 回 0 → 前台上線。前台先上線＝瀏覽器挑到還沒產的寬度就破圖
+- 測試 259 個全過；前台 typecheck、`verify:css`、`verify:seo-head` 全過。⚠️ Linux 上實際載入 `.so` 沒有在本機驗過，部署後第一次上傳要驗一張
+- ⚠️ 版面素材（`/assets/img/*`，例如 `/treatments/` 的 LCP 圖 260 KB）不在 Blob，這次沒處理
 
 ---
 
@@ -1839,7 +1857,7 @@ SSR 改版當天動到正式環境的**全部**項目。留這一節是因為「
 | 項目 | 說明 |
 |---|---|
 | **FAQ 五大分類，兩份文件對不上** | [08](docs/08-database.md) §C-9 種子（品牌與診所／療程相關／肌膚困擾／醫師與看診／費用與流程）vs `mockup/16-faq.html`（療程相關／術後照護／看診與預約／費用與付款／院所資訊）。**建議以 mockup 為準** —— 前者沒有 slug，且「肌膚困擾」與 `/concerns/` 整段重複。動到網址結構，所以先不改 |
-| 圖片衍生尺寸誰產 | 瀏覽器端上傳前轉檔 vs Function 端 sharp（[07](docs/07-deployment.md) §3） |
+| ~~圖片衍生尺寸誰產~~ | ✅ **2026-10-02 Tim 定案：Function 端**（SkiaSharp，依檔名慣例），見「圖片衍生尺寸」 |
 | ~~301 對照表是否改建置期烤 `redirects.json`~~ | **已不必決定**：`/api/fallback` 2026-09-16 刪除，301 改由前台 catch-all 查 API（決策 7），全架構已經沒有明文 SQL 連線字串 |
 | ~~機器人驗證供應商~~ | ✅ **已定案並實作（2026-09-12）：reCAPTCHA v3**。見 §五 |
 | **301 的「命中次數」放不進架構** | 後台原本想用命中次數排出「哪幾條值得寫進 `staticwebapp.config.json` 快速路徑」，但 [`Redirects`](docs/08-database.md) §H **沒有這個欄位，而且放不了**：`/api/fallback` 對這張表只做單筆 seek 不做寫入，它那組唯讀 SQL 使用者**只能 SELECT 這一張表**。<br>已改為顯示「目前已寫進設定檔的 7 條」（人工挑定，與 `apps/web/public/staticwebapp.config.json` 一致）。<br>若真的要命中次數，唯一不牴觸架構的作法是 **Application Insights 的請求記錄離線彙總**，需另案評估。<br>⚠️ **2026-09-16 前提改變**：`/api/fallback` 已刪除，301 改走 Function App 的 `GET /redirects/resolve` —— 那個身分寫得了資料庫，「放不了」不再成立。但每次命中多一次寫入，在 Azure SQL Basic 上仍不划算，**App Insights 離線彙總仍是建議作法** |

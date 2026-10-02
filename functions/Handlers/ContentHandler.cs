@@ -2189,6 +2189,10 @@ public sealed class ContentHandler(
     /// 不該讓使用者看到一個失敗的存檔。
     /// </para>
     /// <para>
+    /// 🔴 刪的是<b>整張圖</b>（原檔加四個衍生尺寸，<c>DeleteImageAsync</c>），不是只刪原檔 ——
+    /// 衍生檔沒有任何欄位指著它，漏刪就是永遠不會被清的孤兒。
+    /// </para>
+    /// <para>
     /// ⚠️ 連帶後果：<b>版本還原救不回已經被刪掉的圖片</b>。還原只還原記錄，
     /// 舊版快照裡指向的檔案若當時已被換掉，那個 URL 就是 404（docs/11 §8、§9）。
     /// </para>
@@ -2209,7 +2213,7 @@ public sealed class ContentHandler(
         {
             try
             {
-                await blobStorage.DeleteAsync(PublicContainer, path, cleanup.Token);
+                await blobStorage.DeleteImageAsync(PublicContainer, path, cleanup.Token);
             }
             catch (Exception ex)
             {

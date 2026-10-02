@@ -60,7 +60,7 @@
 | `{前綴}BlobPath` | nvarchar(400) | 換圖與刪內容時要靠它把舊檔案從 Blob 刪掉 |
 | `{前綴}Alt` | nvarchar(300) NULL | ⚠️ 舊站 alt 普遍缺漏，遷移時要補（[02](02-backend-cms.md) §7 步驟 6） |
 | `{前綴}Width`／`{前綴}Height` | int NULL | 回報端點讀檔頭量到的尺寸 |
-| `{前綴}Variants` | nvarchar(max) NULL | 衍生尺寸（WebP／AVIF、`srcset`）的 JSON。⚠️ 用 JSON 是刻意的：衍生尺寸誰來產尚未定案（[07](07-deployment.md) §3），兩種做法確定後都不必再做一次 migration |
+| `{前綴}Variants` | nvarchar(max) NULL | **一律是 NULL，沒有人讀寫**（2026-10-02 定案：Function 端產，**依檔名慣例**，見 [07](07-deployment.md) §3）。衍生圖是原檔旁的 `{stem}.w480.webp`／`.w800`／`.w1200`／`.w1600`，前台照命名規則組 `srcset` —— 因為圖片也散在區塊 JSON 與舊站內文的 `src` 裡，只有命名規則能一次涵蓋，不必改寫已發布快照。欄位留著（拿掉要一支 migration，它沒有害處） |
 
 前綴共十處：`Treatments.Cover`、`TreatmentImages.Image`、`Doctors.Photo`、`Concerns.Cover`、`Articles.Cover`、`CaseImages.Image`、`ClinicPhotos.Image`、`Pages.Cover`、`Terms.Cover`、`SeoMeta.OgImage`。**圖庫明細列（`TreatmentImages`／`CaseImages`／`ClinicPhotos`）的圖片欄位 NOT NULL** —— 那些列的存在理由就是那張圖。
 
@@ -788,6 +788,6 @@ ContentItems ─┬─ SeoMeta (1:1)            │
 | 項目 | 影響 |
 |---|---|
 | **`RefreshTokens` vs 短效 JWT ＋ `SecurityStamp`** | 二選一，不要兩套都做。見 §A-4 |
-| **衍生尺寸誰產**（[07](07-deployment.md) §3 待決） | 不影響 schema（`Variants` 用 JSON 承接），但影響上傳流程的實作 |
+| ~~**衍生尺寸誰產**~~ | ✅ 2026-10-02 定案：Function 端在上傳 commit 時產，依檔名慣例，不寫 `Variants`（見上方 §0） |
 | **AI FAQ 開關的執行期讀取端點** | 純靜態前台要在執行期讀 `SiteSettings`，需與前端確認做法。見 §G-1 |
 | `/api/fallback` 唯讀使用者的權限收斂 | 需在院方開帳號時指明只能 `SELECT Redirects`。見 §J-3 |

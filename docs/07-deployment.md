@@ -254,7 +254,14 @@ CSV 匯入用的 —— 讀寫共用同一段是這條規則能成立的前提�
 | **`Cache-Control`** | 架構中**沒有 CDN**，圖片是由 Blob 直接服務。上傳時就要寫入長效 `Cache-Control`。⚠️ 檔名是**隨機唯一值不是內容雜湊**（一個欄位獨佔一個 blob，[08](08-database.md) §0 決策四）——內容一樣永遠不變，`immutable` 照用 |
 | **SAS 用 Managed Identity 簽**（改善） | 獨立 Function App 支援 Managed Identity，可對 Storage 取 **user delegation key** 來簽 SAS，**不需要儲存帳戶金鑰**。原本卡在 SWA Free 沒有 Managed Identity，現在這個限制消失了。見 §6 |
 
-**待決策：衍生尺寸誰來產。** [03-seo-geo.md](03-seo-geo.md) 要求 WebP／AVIF 與響應式 `srcset`，但圖片不在 repo 裡，**建置期產不出來**。API 搬家後逾時已不是障礙，所以現在有兩個都可行的選項：**瀏覽器端上傳前轉檔**（省後端資源），或**Function App 以 sharp 於上傳後轉檔**（品質與一致性較好，之前受 45 秒限制而不可行）。此項需在開工前確認。
+**✅ 已決定（2026-10-02）：衍生尺寸由 Function 端產，靠檔名慣例、不寫資料庫。** [03-seo-geo.md](03-seo-geo.md) 要求 WebP 與響應式 `srcset`，但圖片不在 repo 裡，建置期產不出來；API 搬家後 230 秒的逾時也不再是障礙，所以選了品質與一致性較好的 Function 端。
+
+- **命名慣例就是契約**：原檔 `media/2026/09/{32hex}.jpg` 旁邊固定有 `{32hex}.w480.webp`、`.w800.webp`、`.w1200.webp`、`.w1600.webp`。前台只靠這個慣例組 `srcset`，對 blob 網域上副檔名為 jpg／jpeg／png／webp 的**每一張**圖都會要四個尺寸 —— 所以**每一張都必須四個齊全**。
+- **不放大**：原圖比目標窄時，那個尺寸的檔名照樣寫，內容用原圖寬度編碼（一組永遠是齊的）。保持比例、WebP 品質 78、EXIF 方向先轉正、`Cache-Control` 與原檔相同（`public, max-age=31536000, immutable`）。gif 不處理。
+- **為什麼不用 `UploadedImage.Variants` 那欄**：圖片也存在於區塊 JSON 與舊站匯入的內文 `src` 網址裡，那些地方沒有那一欄；只有依檔名推的慣例能不改任何已發布快照就涵蓋全部。`Variants` 永遠是 null。
+- **函式庫是 SkiaSharp（MIT）**，不是 ImageSharp（分裂授權，商用可能要付費）。需要 `SkiaSharp.NativeAssets.Linux.NoDependencies`；csproj 另有一個 publish 後處理只保留 `runtimes/linux-x64/native`（否則部署包從約 37 MB 變成近 500 MB，多出來的是 Windows／macOS 的 Skia）。
+- **上傳時**由 `POST /admin/upload/commit` 當場產齊；**存量**由 [`tools/image-variants`](../tools/image-variants/README.md) 回填。🔴 **回填必須在前台 `srcset` 上線之前跑完**，順序見該 README。
+- **刪圖要連衍生檔一起刪**（`IBlobStorageService.DeleteImageAsync`）；對帳器（`tools/blob-reconcile`）把衍生檔當原檔的附屬。見 [11](11-backend-design.md) §9.3。
 
 ---
 
@@ -483,7 +490,7 @@ functions/         獨立 Azure Functions App —— 應用程式 API（.NET 10�
 | **`api/` 實際可用的 .NET 版本** | .NET 10 確定不支援（§1），但 9.0 也還沒確認：Azure 兩份文件互相矛盾 —— [apis-functions](https://learn.microsoft.com/en-us/azure/static-web-apps/apis-functions) 只列到 **.NET 8.0**，[configuration](https://learn.microsoft.com/en-us/azure/static-web-apps/configuration) 的 `apiRuntime` 表列到 **`dotnet-isolated:9.0`**。範本先寫 9.0，**第一週要實測，不通就退 8.0**。只影響 fallback 那一支，`functions/` 的 .NET 10 不受此限 |
 | **遷移在正式資料庫的實際行為**（新增） | 沒有 staging，第一次跑 `efbundle` 就是對正式庫跑。至少要先在一套可丟棄的資料庫演練一次完整遷移與回滾，見 §6 |
 
-**待決策**：圖片衍生尺寸由誰產（§3 末段）、301 對照表是否改為建置期烤成 `redirects.json`（§2）、Azure 訂閱歸屬與區域。
+**待決策**：301 對照表是否改為建置期烤成 `redirects.json`（§2）、Azure 訂閱歸屬與區域。
 
 > 已定案、不再是待決事項（均 2026-08-10）：前端 **Nuxt 3 純靜態**、API 放**獨立 Azure Functions App**、API 語言 **.NET 10 isolated ＋ EF Core（寫入）＋ Dapper（讀取）**、**schema 由 EF Core migrations 管理**。
 > **Azure 訂閱與區域已定（2026-09-11）**：CSP 訂閱、`westus2`、資源群組 `rg-20skin-web-prod`。

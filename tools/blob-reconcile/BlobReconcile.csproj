@@ -26,4 +26,13 @@
     <PackageReference Include="Azure.Identity" Version="1.13.2" />
   </ItemGroup>
 
+  <!--
+    🔴 與 API **共用命名慣例**，不是抄一份：衍生尺寸的檔名規則若在這裡分岔，
+       對帳器就會把「規則改了之後新產的衍生檔」當成孤兒，照著刪就是 srcset 破圖。
+    ⚠️ 只連 ImageVariants.cs（零相依）；編碼的部分（要 SkiaSharp）不連。
+  -->
+  <ItemGroup>
+    <Compile Include="../../functions/Common/ImageVariants.cs" Link="Shared/ImageVariants.cs" />
+  </ItemGroup>
+
 </Project>

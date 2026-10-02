@@ -273,7 +273,7 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 |---|---|---|
 | `GET /admin/dashboard` | 登入即可 | 聚合查詢，**無專屬資料表**。只回九個單元 × 四態的筆數矩陣（「待審核」「近期送審」「我的退件」三段隨審核佇列一起移除） |
 | `POST /admin/upload/sas` | `upload.file` | 取短效寫入 SAS（限定容器與 blob 名稱、write only、只收圖片） |
-| `POST /admin/upload/commit` | `upload.file` | 直傳完成後回報。API 讀檔頭驗真實型別，通過就回傳一組**圖片值**：`{ blobPath, url, alt, width, height, variants }` |
+| `POST /admin/upload/commit` | `upload.file` | 直傳完成後回報。API 讀檔頭驗真實型別，並**產出四個 WebP 衍生尺寸**（`{原檔}.w480／w800／w1200／w1600.webp`，寫不齊就整個失敗並清乾淨），通過就回傳一組**圖片值**：`{ blobPath, url, alt, width, height, variants }`。🔴 `variants` **永遠是 null**——衍生尺寸靠檔名慣例、不靠這個欄位（[07](07-deployment.md) §3、[11](11-backend-design.md) §9.3）；檔案無法解碼時回 `UPLOAD_TYPE` |
 | `GET|PUT /admin/home-section` | `home.arrange` | 首頁版位編排。**只能引用既有內容，不收自由文案**。`GET` 讀的是 `HomeSections` **工作副本**；`PUT` 只送要改的版位即可，未知的 `sectionKey` 回 400。⚠️ 存檔會把已發布的首頁那筆 Page **打回草稿**，要對它按發布（`PATCH /admin/page/{id}/publish`）才會上線。⚠️ `specialties`／`doctors`／`clinics` 送上來的名單前台不讀（自動列出全部，決策 30），端點仍照收照存 |
 | `GET|PUT /admin/menu` | `menu.edit` | 導覽選單與頁尾（限超級管理員） |
 | `GET|PUT /admin/setting` | `settings.edit` | 全站設定（限超級管理員），含 AI FAQ 開關。`PUT` 只更新送上來的鍵，**只能更新既有的鍵**（未知鍵回 404 `NOT_FOUND`）；依該鍵的 `valueType` 驗格式，`tracking.ga4` 只收 `G-`／`GTM-` 識別碼（決策 18） |

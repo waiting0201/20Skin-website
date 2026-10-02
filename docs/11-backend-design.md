@@ -390,6 +390,18 @@ SAS 以 **Managed Identity 取 user delegation key** 簽發，系統內不存放
 
 **孤兒檔仍然存在**：回報成功、但使用者沒按存檔就關掉分頁的那些檔案，沒有任何欄位指向它們。對帳工具要掃過十個內嵌圖片欄位與 `BodyBlocks`，列進上線前的驗收項目（[08](08-database.md) §E）。
 
+### 9.3 衍生尺寸（2026-10-02）
+
+`POST /admin/upload/commit` 在回報成功之前，還要替原檔產出四個 WebP 衍生檔（`ImageVariants`，`functions/Common/ImageVariants*.cs`）。規格與取捨見 [07](07-deployment.md) §3，這裡只記施工規則：
+
+1. **順序**：驗證 → **編碼（記憶體內）** → 搬到正式路徑 → 上傳四個衍生檔。編碼放在搬移之前：解不開的圖在這一步就失敗，只需要清 `incoming/` 的暫存檔。
+2. 🔴 **半套狀態不存在**：衍生檔寫不齊，整個回報失敗，並把正式路徑的原檔與已寫的衍生檔全部刪掉（`DeleteImageAsync`）。前台假設「blob 網域上每一張 jpg／png／webp 都有四個尺寸」，半套＝某些寬度的破圖，沒有任何錯誤訊息。清理用獨立的 30 秒逾時、不吃請求的 `CancellationToken` —— 失敗最常見的原因就是用戶端斷線。
+3. 🔴 **所有「刪圖片」的地方都走 `IBlobStorageService.DeleteImageAsync`**（原檔＋四個衍生檔）：換圖、移除圖片、刪除整筆內容、發布時清掉上一版獨有的圖，全部經過 `ContentHandler.DeleteUnreferencedBlobsAsync`。**新增任何刪 blob 的程式碼時不要直接呼叫 `DeleteAsync` 刪原檔。** `incoming/` 暫存檔的清除仍用 `DeleteAsync`（沒有衍生檔）。
+4. **只判斷「路徑」**：上面的刪除只依命名慣例去刪四個衍生路徑（`DeleteIfExists`，不存在就算了），不需要查資料庫；舊站匯入的內文圖（只有 `src`、沒有 `blobPath`）從來不會被這條路徑刪到，所以不受影響。
+5. **逾時**：解碼＋四次縮放編碼＋五個 blob 往返，一張 10 MB 的圖約在一兩秒內，遠低於 230 秒上限。解碼前有 64 百萬像素的上限，擋住「檔案小、像素爆炸」的壓縮炸彈。
+6. `UploadedImage.Variants` 保持 null，不寫資料庫。
+7. **對帳**：`tools/blob-reconcile` 把衍生檔視為原檔的附屬（原檔被引用則不是孤兒；原檔是孤兒則連帶刪除）。安全閥的比例以「圖片」為單位。
+
 ---
 
 ## 10. ~~觸發重建~~ —— 整節作廢（2026-09-16）
@@ -519,6 +531,7 @@ SWA 的 managed function 位置現在跑 Nuxt 的 SSR server，301 改由前台�
 - [ ] 多表寫入包在 `CreateExecutionStrategy()` ＋ transaction 內
 - [ ] 工作流狀態轉換符合 §7；未引入 schema 沒有的狀態值
 - [ ] 媒體回報端點有讀回檔頭驗證，失敗時刪除 blob
+- [ ] 刪圖片一律走 `DeleteImageAsync`（連同四個衍生尺寸），沒有直接 `DeleteAsync` 原檔（§9.3）
 - [ ] 速率限制／聚合窗口的狀態存 DB 或 Blob，**未使用 `MemoryCache`**
 - [ ] 公開寫入端點有機器人驗證 ＋ rate limit
 - [ ] 日誌無密碼／token／個資／表單內容
@@ -534,6 +547,6 @@ SWA 的 managed function 位置現在跑 Nuxt 的 SSR server，301 改由前台�
 | ~~templates/ScheduledPublish.cs 與 §7 不一致~~ | ✅ **2026-09-16 消失**：範本與 Timer 都已刪除（§11） |
 | **機器人驗證供應商** | [10](10-api.md) §5，開工前定案 |
 | **`RefreshTokens` vs 短效 JWT ＋ `SecurityStamp`** | [08](08-database.md) §L 二選一，不要兩套都做 |
-| **圖片衍生尺寸由誰產** | [07](07-deployment.md) §3 待決。若由 Function 端 sharp 轉檔，§9 的直傳流程要多一步「轉檔完成才寫 `Variants`」 |
+| ~~圖片衍生尺寸由誰產~~ | ✅ **2026-10-02 定案**：Function 端以 SkiaSharp 產，靠檔名慣例、不寫 `Variants`。見 §9.3、[07](07-deployment.md) §3 |
 | **`GET /site-settings/public` 是否必要** | [09](09-frontend.md) §13 |
 | **測試範圍** | 至少涵蓋權限判定表、工作流狀態轉換與 `PublicFilter`。**沒有 staging，CI 的測試是僅有的攔截點之一**（[07](07-deployment.md) §5） |

@@ -84,6 +84,18 @@ jobs:
             exit 1
           fi
 
+      # 圖片衍生尺寸靠 SkiaSharp（2026-10-02）。Function App 是 Linux，少了這個原生檔，
+      # build 與測試都會過（本機是 macOS 的原生檔），要到正式環境第一次上傳圖片才失敗。
+      # ⚠️ 產物也不可以太大：SkiaSharp 帶了十幾種平台的原生檔，未裁剪時約 492 MB
+      #    （csproj 的 TrimNonLinuxNativeForPublish 只留 linux-x64）。
+      - name: Assert Linux Skia native lib in output
+        run: |
+          LIB="${{ env.OUTPUT_PATH }}/runtimes/linux-x64/native/libSkiaSharp.so"
+          [ -f "$LIB" ] || { echo "::error::發布產物缺少 $LIB —— 上傳圖片時產衍生尺寸會失敗。"; exit 1; }
+          SIZE_MB=$(du -sm "${{ env.OUTPUT_PATH }}" | cut -f1)
+          echo "發布產物 ${SIZE_MB} MB"
+          [ "$SIZE_MB" -lt 150 ] || { echo "::error::發布產物 ${SIZE_MB} MB，原生檔裁剪可能失效（TrimNonLinuxNativeForPublish）。"; exit 1; }
+
       # ── 資料庫遷移 ──────────────────────────────────────────────────
       # 🔴 CLAUDE.md 決策 8：**絕不在執行期呼叫 Database.Migrate()**，所以遷移在這裡跑。
       #    順序是「先遷移、後部署」—— 中間有一段新 schema 配舊程式，因此遷移必須向後相容。

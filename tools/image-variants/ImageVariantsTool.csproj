@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    圖片衍生尺寸回填工具（docs/07 §3、docs/11 §9.3，2026-10-02）。
+
+    列出公開 media 容器裡的圖片（jpg／jpeg／png／webp，本身不是衍生檔），
+    找出缺任何一個衍生尺寸（.w480／.w800／.w1200／.w1600.webp）的，補齊。
+
+    🔴 **預設是 dry-run，只讀不寫。** 要寫必須明確加 apply 旗標。
+    🔴 **必須在前台 srcset 上線之前跑完** —— 前台對 blob 網域上每一張 jpg／png／webp
+       都會去要四個尺寸，缺的就是破圖，而且沒有任何錯誤訊息。
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Skin20.ImageVariantsTool</RootNamespace>
+    <AssemblyName>image-variants</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.14.2" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.24.0" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+    <!-- 在 Linux（CI 或跳板機）上跑也要有原生函式庫；macOS／Windows 的由 SkiaSharp 本身帶。 -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.153.1" />
+  </ItemGroup>
+
+  <!--
+    🔴 與 API **共用同一份原始碼**，不是抄一份：命名慣例與縮圖規則若在這裡分岔，
+       回填出來的檔案就和上傳時產的不一樣（寬度、品質、方向處理），而那種差異看起來完全正常。
+    ⚠️ 兩個檔案都不可相依本專案以外的型別（只有 SkiaSharp）。
+  -->
+  <ItemGroup>
+    <Compile Include="../../functions/Common/ImageVariants.cs" Link="Shared/ImageVariants.cs" />
+    <Compile Include="../../functions/Common/ImageVariants.Encode.cs" Link="Shared/ImageVariants.Encode.cs" />
+  </ItemGroup>
+
+</Project>

@@ -91,7 +91,7 @@ public sealed class BlobStorageService(BlobServiceClient blobServiceClient, ILog
         var head = content.Length <= headByteCount ? content : content[..headByteCount];
         var hash = Convert.ToHexStringLower(SHA256.HashData(content));
 
-        return new BlobInspectionResult(head, content.Length, hash);
+        return new BlobInspectionResult(head, content.Length, hash, content);
     }
 
     public async Task<string> PromoteAsync(
@@ -140,5 +140,27 @@ public sealed class BlobStorageService(BlobServiceClient blobServiceClient, ILog
             // 留給 docs/08 §E-1 提到的對帳工具事後處理，不要讓這裡的失敗掩蓋原本的錯誤。
             logger.LogWarning(ex, "刪除 blob 失敗：{Container}/{BlobPath}", containerName, blobPath);
         }
+    }
+
+    public async Task UploadAsync(
+        string containerName, string blobPath, byte[] content, string contentType, string cacheControl,
+        CancellationToken ct = default)
+    {
+        var blob = blobServiceClient.GetBlobContainerClient(containerName).GetBlobClient(blobPath);
+        // 內容與標頭一次寫進去（不是先上傳再 SetHttpHeaders），少一次往返，也沒有「內容在、標頭還沒設」的中間狀態。
+        await blob.UploadAsync(BinaryData.FromBytes(content), new BlobUploadOptions
+        {
+            HttpHeaders = new BlobHttpHeaders { ContentType = contentType, CacheControl = cacheControl },
+        }, ct).ConfigureAwait(false);
+    }
+
+    public async Task DeleteImageAsync(string containerName, string blobPath, CancellationToken ct = default)
+    {
+        // 五個互不相干的刪除，並行即可。DeleteAsync 本身吞例外並記警告，所以這裡不會丟。
+        // ⚠️ 只對「有衍生尺寸」的副檔名去刪衍生檔：gif 沒有，多送四個必然 404 的請求只是浪費。
+        var paths = new List<string> { blobPath };
+        if (ImageVariants.PathHasVariants(blobPath)) paths.AddRange(ImageVariants.AllVariantPaths(blobPath));
+
+        await Task.WhenAll(paths.Select(p => DeleteAsync(containerName, p, ct))).ConfigureAwait(false);
     }
 }

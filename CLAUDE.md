@@ -358,6 +358,12 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    ⚠️ 連帶的施工規則：**驗證 → 上傳 → 送出**，順序不可對調；且「編輯中的圖片值」
    （`SeoDraft`／`SiteSettingsDraft`）與「送給 API 的圖片值」（`UploadedImage`）**型別分開**，
    漏掉上傳那一步要是編譯錯誤，不是執行期送出一個 `{"pending":true}`。
+   🔴 **衍生尺寸由 Function 端產，依檔名慣例**（Tim 定案 2026-10-02）：原檔旁固定有
+   `{stem}.w480.webp`／`.w800`／`.w1200`／`.w1600`，上傳 commit 時產，刪圖連帶刪（`DeleteImageAsync`）。
+   前台不查有沒有，看到 `st20skinweb/media/` 的 jpg／png／webp 就組 `srcset`（`srcsetOf()`）——
+   **所以衍生圖缺一張就是破圖**，任何繞過 commit 寫進 `media/` 的檔案都要跑 `tools/image-variants --apply`。
+   ⚠️ `UploadedImage.Variants` 一律 NULL，不要因為看到欄位就開始寫它。
+   ⚠️ 寬度清單兩份：API 的 `ImageVariants.Widths` 與前台的 `VARIANT_WIDTHS`，改一邊要改另一邊。
    ✅ **2026-09-16 起全架構沒有明文的 SQL 連線字串了。** 原本唯一那一個是 SWA 上給 `/api/fallback` 用的唯讀字串，那支 function 已刪除；Nuxt 的 SSR function **完全不碰 SQL**，它只打 API。見 [docs/07-deployment.md](docs/07-deployment.md) §3、§6
 10. **前後台同一個 SWA、同一個網域**：`20skin.tw` 前台、**`20skin.tw/admin` 後台**（Nuxt `ssr: false` 的 SPA）。API 則在另一個網域 `api.20skin.tw`，見第 7 條。
    後台路徑 `/admin/` 為客戶指定（2026-08-10），**不要再提案改成非預設路徑** —— 早期文件曾寫 `/manage/`，那是舊版。

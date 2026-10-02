@@ -31,6 +31,7 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Dapper;
 using Microsoft.Data.SqlClient;
+using Skin20.Api.Common;
 
 var args_ = Environment.GetCommandLineArgs().Skip(1).ToArray();
 string? Arg(string name)
@@ -145,18 +146,65 @@ await foreach (var b in client.GetBlobsAsync()) blobs.Add(b);
 Console.WriteLine($"· 容器裡共 {blobs.Count} 個檔案");
 
 // ── 3. 對帳 ────────────────────────────────────────────────────────────
+//
+// 🔴 **衍生尺寸（ImageVariants，2026-10-02）不是獨立的一種檔案，是原檔的附屬。**
+//    資料庫裡沒有任何欄位指著 `{stem}.w480.webp`，所以「有沒有被引用」只能問它的原檔：
+//      · 原檔被引用（stem 對得上任何一個引用）→ 衍生檔不是孤兒
+//      · 原檔是孤兒                           → 衍生檔跟著它一起刪（算在原檔頭上，不另計）
+//      · 容器裡根本沒有原檔                   → 衍生檔自己是孤兒（照樣受保護期約束）
+//    ⚠️ 少了這一段，全站每張圖都會有 4 個「沒人引用」的檔案，報告出來是 80% 的孤兒 —— 而且刪掉
+//       就是全站的 srcset 破圖。比例安全閥（下面）會擋下，但那是最後一道，不是這一道。
 var now = DateTimeOffset.UtcNow;
-var orphans = new List<BlobItem>();
 var tooNew = 0;
 
+// 引用集合的 stem。⚠️ 只收「會有衍生檔」的引用（jpg／png／webp），gif 之類的 stem 不進來。
+var referencedStems = new HashSet<string>(StringComparer.Ordinal);
+foreach (var r in referenced)
+    if (ImageVariants.PathHasVariants(r)) referencedStems.Add(ImageVariants.StemOf(r));
+
+var originals = new List<BlobItem>();
+var variants = new List<BlobItem>();
 foreach (var b in blobs)
+    (ImageVariants.IsVariantPath(b.Name) ? variants : originals).Add(b);
+
+bool OldEnough(BlobItem b)
+{
+    var age = now - (b.Properties.CreatedOn ?? b.Properties.LastModified ?? now);
+    return age.TotalHours >= minAgeHours;
+}
+
+var orphans = new List<BlobItem>();          // 要報告的孤兒「圖片」：孤兒原檔，加上沒有原檔的衍生檔
+var orphanOriginalStems = new Dictionary<string, BlobItem>(StringComparer.Ordinal);
+foreach (var b in originals)
 {
     if (referenced.Contains(b.Name)) continue;
-
-    var age = now - (b.Properties.CreatedOn ?? b.Properties.LastModified ?? now);
-    if (age.TotalHours < minAgeHours) { tooNew++; continue; }
-
+    if (!OldEnough(b)) { tooNew++; continue; }
     orphans.Add(b);
+    if (ImageVariants.PathHasVariants(b.Name)) orphanOriginalStems[ImageVariants.StemOf(b.Name)] = b;
+}
+
+// 容器裡實際存在的原檔 stem（不分有沒有被引用、夠不夠老），用來分辨「原檔不見了」與「原檔還在只是太新」。
+var existingOriginalStems = new HashSet<string>(
+    originals.Where(o => ImageVariants.PathHasVariants(o.Name)).Select(o => ImageVariants.StemOf(o.Name)),
+    StringComparer.Ordinal);
+
+// 要連帶刪掉的衍生檔（跟著孤兒原檔）與它們的容量，只為了報告與實際刪除。
+var attachedVariants = new List<BlobItem>();
+var strayVariants = new List<BlobItem>();     // 容器裡沒有原檔的衍生檔（不論是否孤兒，用於比例分母）
+var strayOrphans = 0;
+foreach (var v in variants)
+{
+    ImageVariants.TryGetOriginalStem(v.Name, out var stem);
+    if (referenced.Contains(v.Name) || referencedStems.Contains(stem)) continue;      // 原檔還在用
+
+    if (orphanOriginalStems.ContainsKey(stem)) { attachedVariants.Add(v); continue; }  // 跟著孤兒原檔走
+
+    if (existingOriginalStems.Contains(stem)) { tooNew++; continue; }                   // 原檔在、只是還在保護期
+
+    strayVariants.Add(v);
+    if (!OldEnough(v)) { tooNew++; continue; }
+    orphans.Add(v);
+    strayOrphans++;
 }
 
 long Size(BlobItem b) => b.Properties.ContentLength ?? 0;
@@ -164,6 +212,7 @@ long Size(BlobItem b) => b.Properties.ContentLength ?? 0;
 Console.WriteLine();
 if (tooNew > 0)
     Console.WriteLine($"· 略過 {tooNew} 個還在保護期內的檔案（可能有人剛上傳、還沒按儲存）");
+Console.WriteLine($"· 容器裡 {originals.Count} 個原檔、{variants.Count} 個衍生尺寸檔（.wNNN.webp）");
 
 if (orphans.Count == 0)
 {
@@ -171,9 +220,18 @@ if (orphans.Count == 0)
     return 0;
 }
 
-var totalMb = orphans.Sum(Size) / 1024.0 / 1024.0;
-var ratio = (double)orphans.Count / Math.Max(blobs.Count, 1);
-Console.WriteLine($"孤兒檔 {orphans.Count} 個（佔容器的 {ratio:P0}），合計 {totalMb:F1} MB：\n");
+var totalMb = (orphans.Sum(Size) + attachedVariants.Sum(Size)) / 1024.0 / 1024.0;
+
+// 🔴 比例的算法：**以「圖片」為單位，不是 blob 數。** 分子＝孤兒原檔 ＋ 沒有原檔的孤兒衍生檔；
+//    分母＝原檔數 ＋ 沒有原檔的衍生檔數。有原檔的衍生檔既不進分子也不進分母 ——
+//    否則補完衍生尺寸之後容器的檔案數變成 5 倍，同樣一個孤兒率的分母被稀釋、閥門鬆五倍；
+//    而用原檔數當分母，2026-09-16 那組數字（4613／4616＝100%、3439／4616＝75%）仍然可以直接比。
+var ratioDenominator = originals.Count + strayVariants.Count;
+var ratio = (double)orphans.Count / Math.Max(ratioDenominator, 1);
+Console.WriteLine(
+    $"孤兒 {orphans.Count} 個（佔 {ratioDenominator} 張圖的 {ratio:P0}；"
+    + $"其中孤兒原檔 {orphans.Count - strayOrphans}、無原檔的衍生檔 {strayOrphans}），"
+    + $"連同跟著原檔走的 {attachedVariants.Count} 個衍生檔合計 {totalMb:F1} MB：\n");
 foreach (var b in orphans.OrderBy(x => x.Name).Take(50))
 {
     var when = (b.Properties.CreatedOn ?? b.Properties.LastModified)?.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) ?? "?";
@@ -199,28 +257,38 @@ if (!doDelete)
 if (ratio > 0.2 && !args_.Contains("--force"))
 {
     Console.Error.WriteLine(
-        $"\n✗ 拒絕刪除：孤兒檔佔了容器的 {ratio:P0}（{orphans.Count} / {blobs.Count}）。\n"
+        $"\n✗ 拒絕刪除：孤兒佔了 {ratioDenominator} 張圖的 {ratio:P0}（{orphans.Count} / {ratioDenominator}）。\n"
         + "  正常情況下孤兒檔只有零星幾個。這個比例幾乎一定代表**連到了錯的資料庫** ——\n"
         + "  例如空的測試庫、或還沒匯入內容的環境，而它與正式內容共用同一個儲存體。\n"
         + "  先確認上面印出的資料庫名稱是對的。真的要刪請加 --force（請先看過完整清單）。\n");
     return 1;
 }
 
-Console.WriteLine($"\n🔴 開始刪除 {orphans.Count} 個檔案…");
-var deleted = 0;
+// 刪的清單：孤兒本身 ＋ 孤兒原檔的四個衍生檔。
+// ⚠️ 衍生檔一律以「命名慣例」直接刪四個（DeleteIfExists，不存在就算了），不是只刪上面掃到的那幾個 ——
+//    掃描當下可能剛好有衍生檔還沒寫齊或剛被補上。
+var toDelete = new List<string>();
 foreach (var b in orphans)
+{
+    toDelete.Add(b.Name);
+    if (ImageVariants.PathHasVariants(b.Name)) toDelete.AddRange(ImageVariants.AllVariantPaths(b.Name));
+}
+toDelete = toDelete.Distinct(StringComparer.Ordinal).ToList();
+
+Console.WriteLine($"\n🔴 開始刪除 {orphans.Count} 張圖（含衍生檔共 {toDelete.Count} 個 blob）…");
+var deleted = 0;
+foreach (var name in toDelete)
 {
     try
     {
-        await client.GetBlobClient(b.Name).DeleteIfExistsAsync();
-        deleted++;
+        if (await client.GetBlobClient(name).DeleteIfExistsAsync()) deleted++;
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"  ✗ {b.Name}：{ex.Message}");
+        Console.Error.WriteLine($"  ✗ {name}：{ex.Message}");
     }
 }
-Console.WriteLine($"✓ 已刪除 {deleted} / {orphans.Count} 個。");
+Console.WriteLine($"✓ 已刪除 {deleted} 個 blob（{orphans.Count} 張圖）。");
 return 0;
 
 // 從一段 JSON 裡收出所有指向本容器的檔案。

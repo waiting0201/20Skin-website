@@ -150,13 +150,31 @@ public interface IBlobStorageService
 
     /// <summary>驗證不通過時把已上傳的 blob 刪掉 —— 光是拒絕寫記錄會留下無主檔案。</summary>
     Task DeleteAsync(string containerName, string blobPath, CancellationToken ct = default);
+
+    /// <summary>
+    /// 寫入一個 blob（覆寫同名檔），並一併設定 Content-Type 與長效 <c>Cache-Control</c>。
+    /// 目前只給衍生尺寸用（<see cref="Skin20.Api.Common.ImageVariants"/>）。
+    /// 🔴 <b>失敗會往外丟</b>（不像 <see cref="DeleteAsync"/> 吞掉）：呼叫端要靠它得知「衍生尺寸沒寫齊」。
+    /// </summary>
+    Task UploadAsync(
+        string containerName, string blobPath, byte[] content, string contentType, string cacheControl,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// 刪一張<b>圖片</b>：原檔，加上它的四個衍生尺寸（<see cref="Skin20.Api.Common.ImageVariants"/>）。
+    /// 🔴 所有「刪圖片」的地方都要走這一支，不要直接 <see cref="DeleteAsync"/> 原檔 ——
+    /// 否則衍生檔變成永遠不會被清掉的孤兒（它們沒有任何欄位指著，對帳工具只會當成「原檔孤兒的附屬」）。
+    /// 同樣不往外丟例外。
+    /// </summary>
+    Task DeleteImageAsync(string containerName, string blobPath, CancellationToken ct = default);
 }
 
 /// <summary>
 /// <see cref="IBlobStorageService.InspectAsync"/> 的結果。<see cref="Head"/> 只是前面一小段
-/// 位元組供 magic bytes 判定，不是整份內容。
+/// 位元組供 magic bytes 判定，不是整份內容；<see cref="Content"/> 才是整份
+/// （衍生尺寸要解碼整張圖，不想為此再下載第二次）。
 /// </summary>
-public sealed record BlobInspectionResult(byte[] Head, long ByteSize, string Sha256Hex);
+public sealed record BlobInspectionResult(byte[] Head, long ByteSize, string Sha256Hex, byte[] Content);
 
 
 /// <summary>

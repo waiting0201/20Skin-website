@@ -295,7 +295,7 @@ AND (UnpublishAt IS NULL OR UnpublishAt >  @now)
 **架構中沒有 CDN，圖片由 Blob Storage 直接服務**（[07](07-deployment.md) §3）。因此：
 
 - 上傳時就寫入長效 `Cache-Control`。**檔名是隨機唯一值，不是內容雜湊** —— 一個欄位獨佔一個 blob，不跨內容去重（[08](08-database.md) §0 決策四）。內容永遠不變，一樣可以用 `immutable` 快取
-- `srcset` 的各尺寸來自圖片欄位的 `{前綴}Variants`（JSON，[08](08-database.md) §0 決策四）。**衍生尺寸由誰產是待決項**（瀏覽器端上傳前轉檔 vs Function 端以 sharp 轉檔，[07](07-deployment.md) §3 末段）—— 前端這側兩種都吃得下，但要先定案才能寫上傳流程
+- `srcset` **依檔名慣例組出來**，不讀 `{前綴}Variants`（2026-10-02 定案：Function 端產，**依檔名慣例**，見 [07](07-deployment.md) §3）：`app/utils/responsiveImage.ts` 的 `srcsetOf()` 對 `st20skinweb/media/` 上的 jpg／png／webp 一律組四個寬度（480／800／1200／1600，要與 API 的 `ImageVariants.Widths` 一致），`IMAGE_SIZES` 依版面給 `sizes`。🔴 衍生圖缺一張就是破圖，部署順序是「API → `tools/image-variants --apply` → 前台」
 - 每張圖必須有明確的 `width`／`height`，這是 CLS 的主要來源
 - 首屏外一律 lazy load
 
@@ -487,7 +487,7 @@ apps/admin/src/router.ts               # /、/login、/:unit、/:unit/:id（base
 | 項目 | 影響 |
 |---|---|
 | **AI FAQ 開關的執行期讀取方式** | 純靜態前台要在執行期讀 `SiteSettings`（[08](08-database.md) §L）。建議：面板**開關本身**烤進 build，另留一支 `GET /site-settings/public` 供「不重新部署就能停用」的緊急關閉 —— 兩者取其嚴。需與後端一起定 |
-| **圖片衍生尺寸由誰產** | [07](07-deployment.md) §3 待決。影響上傳流程與 `Variants` 的寫入時機 |
+| ~~**圖片衍生尺寸由誰產**~~ | ✅ 2026-10-02 定案：Function 端，依檔名慣例（見 §上方 `srcset` 一條） |
 | **站內搜尋索引的大小** | 800 篇文章的索引檔實測後才知道能不能接受。壓不下來要另案評估 |
 | **build 時間與產物大小** | 950 頁 ＋ 950 份 `_payload.json`，[07](07-deployment.md) §8 列為切 DNS 前必測項 |
 | **字型子集的字元集來源** | 由 `content/*.json` 產生（§7 建議），需在建置腳本定案 |

@@ -29,8 +29,11 @@ public sealed class UploadedImage
     public int? Height { get; set; }
 
     /// <summary>
-    /// 衍生尺寸（WebP／AVIF、<c>srcset</c>）的 JSON。
-    /// ⚠️ 用 JSON 是刻意的：衍生尺寸誰來產尚未定案（docs/07 §3），兩種做法確定後都不必再做一次 migration。
+    /// 衍生尺寸的 JSON。
+    /// 🔴 <b>目前永遠是 null，也不要去寫它。</b> 2026-10-02 定案衍生尺寸由 Function 端產，
+    /// 但靠<b>檔名慣例</b>（<c>{原檔}.w480.webp</c> 等四個，見 <see cref="Skin20.Api.Common.ImageVariants"/>）
+    /// 而不是這一欄：圖片也存在於區塊 JSON 與舊站內文的 <c>src</c> 網址裡，那些地方沒有這一欄，
+    /// 只有檔名慣例能不改任何已發布快照就涵蓋全部。欄位留著是因為拿掉要一支 migration，而它沒有害處。
     /// </summary>
     public string? Variants { get; set; }
 }

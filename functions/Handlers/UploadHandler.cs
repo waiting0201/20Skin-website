@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Skin20.Api.Common;
 using Skin20.Api.Models.Dtos;
 using Skin20.Api.Services;
@@ -24,7 +25,8 @@ namespace Skin20.Api.Handlers;
 /// 授權集中在 <c>AppRouter</c>。本 Handler 完全不碰資料庫。
 /// </para>
 /// </summary>
-public sealed class UploadHandler(IBlobStorageService blobStorage, IConfiguration configuration)
+public sealed class UploadHandler(
+    IBlobStorageService blobStorage, IConfiguration configuration, ILogger<UploadHandler> logger)
 {
     /// <summary>
     /// 公開圖片容器：只放圖片，內容等同對外發佈（docs/11 §9 第 3 條）。
@@ -89,6 +91,25 @@ public sealed class UploadHandler(IBlobStorageService blobStorage, IConfiguratio
                 ErrorCodes.UploadSize, $"檔案大小超過上限（{MaxImageBytes / 1024 / 1024} MB）。");
         }
 
+        // 🔴 衍生尺寸（ImageVariants）先編碼、再搬正式路徑：解不開的圖在這一步就失敗，
+        //    只需要清掉 incoming/ 那個暫存檔；反過來的話要多清一個已經在正式路徑的原檔。
+        //    ⚠️ 副檔名以 magic bytes 判定的為準（detection.Extension），不是使用者送來的檔名。
+        IReadOnlyList<ImageVariants.Variant> variants = [];
+        if (ImageVariants.HasVariants(detection.Extension))
+        {
+            try
+            {
+                // 解碼＋四次縮放編碼是純 CPU 工作，丟到執行緒池，不佔著請求執行緒。
+                variants = await Task.Run(() => ImageVariants.Generate(inspection.Content), ct);
+            }
+            catch (ImageVariantException ex)
+            {
+                await blobStorage.DeleteAsync(publicContainer, dto.BlobPath, ct);
+                logger.LogWarning(ex, "圖片無法產生衍生尺寸：{BlobPath}", dto.BlobPath);
+                throw AppException.BadRequest(ErrorCodes.UploadType, "圖片無法解碼，請換一張圖片再試。");
+            }
+        }
+
         // 🔴 不以內容雜湊命名、不做去重（docs/08 §0 決策五）。一個欄位獨佔一個 blob：
         //    沒有 MediaUsages 之後「還有誰在用這個檔案」無從查起，去重會讓內容存檔時的
         //    「刪掉換掉的舊檔」變成可能刪掉別人正在用的檔案。多存一份位元組比斷圖便宜。
@@ -98,8 +119,27 @@ public sealed class UploadHandler(IBlobStorageService blobStorage, IConfiguratio
         var publicUrl = await blobStorage.PromoteAsync(
             publicContainer, dto.BlobPath, finalBlobPath, detection.ContentType, ct);
 
+        // 🔴 衍生尺寸寫不齊，整個回報就必須失敗並清乾淨。前台假設「blob 網域上的每一張 jpg／png／webp
+        //    都有四個尺寸」，半套的狀態＝某些寬度的破圖，而且沒有任何錯誤訊息。
+        //    ⚠️ 清理用獨立的逾時，不吃 ct：失敗的常見原因就是用戶端斷線（ct 已取消），
+        //    用它去清等於什麼都沒清。
+        try
+        {
+            await Task.WhenAll(variants.Select(v => blobStorage.UploadAsync(
+                publicContainer, v.Path(finalBlobPath), v.Data,
+                ImageVariants.ContentType, ImageVariants.CacheControl, ct)));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "衍生尺寸寫入失敗，回報取消並清除：{BlobPath}", finalBlobPath);
+            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await blobStorage.DeleteImageAsync(publicContainer, finalBlobPath, cleanup.Token);
+            throw;
+        }
+
         var dimensions = MediaSniffer.TryReadDimensions(detection.ContentType, inspection.Head);
 
+        // ⚠️ Variants 刻意留 null：衍生尺寸靠檔名慣例（ImageVariants），不寫資料庫。
         return new OkObjectResult(ApiResponse.Ok(
             new UploadedImageDto(finalBlobPath, publicUrl, dto.Alt, dimensions?.Width, dimensions?.Height, null),
             "上傳成功。"));
