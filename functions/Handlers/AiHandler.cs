@@ -93,6 +93,26 @@ public sealed class AiHandler(
     /// <summary>模型答不出來時輸出的 sentinel（<b>不要靠解析自然語言判斷</b>）。</summary>
     private const string NoAnswerSentinel = "NO_ANSWER";
 
+    /// <summary>
+    /// 沒照格式的拒答（模型沒輸出 <see cref="NoAnswerSentinel"/>，而是用中文說「無法回答」）。
+    /// <para>
+    /// 🔴 <b>2026-10-01 實測撞到</b>：「做幾次一定會變白？」回了一句「無法回答」，
+    /// 而 API 把它當成命中 —— 前台會顯示「無法回答」再附三個來源連結。重跑 4 次都正常，是偶發的。
+    /// </para>
+    /// <para>
+    /// ⚠️ 這是 sentinel 之外的<b>安全網</b>，不是主要判斷，所以只認「整則就只有這麼一句」：
+    /// 長度上限壓得很低，否則「目前無法提供價格，費用由…」這種正常回答會被誤殺。
+    /// </para>
+    /// </summary>
+    private const int BareRefusalMaxLength = 30;
+
+    private static readonly Regex BareRefusal = new(
+        @"無法回答|無法提供|無法回覆|不知道|不清楚|沒有(相關)?(的)?(資料|資訊|內容)|找不到(相關)?",
+        RegexOptions.Compiled);
+
+    internal static bool IsBareRefusal(string answer) =>
+        answer.Length <= BareRefusalMaxLength && BareRefusal.IsMatch(answer);
+
     private static readonly Regex SourceLine = new(@"^\s*SOURCES\s*[:：]\s*(.+)$",
         RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -144,7 +164,8 @@ public sealed class AiHandler(
 
         var answer = StripSourceLine(raw, out var citedIndexes).Trim();
 
-        if (answer.Length == 0 || answer.Contains(NoAnswerSentinel, StringComparison.OrdinalIgnoreCase))
+        if (answer.Length == 0 || answer.Contains(NoAnswerSentinel, StringComparison.OrdinalIgnoreCase)
+            || IsBareRefusal(answer))
             return await MissAsync(question, "no_match");
 
         // 🔴 護欄是機率性的，所以在 prompt 之外再加一道**確定性**的輸出掃描。
