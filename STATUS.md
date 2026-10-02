@@ -5,7 +5,7 @@
 > 分工：本檔記錄**狀態**；[`docs/`](docs/README.md) 的十二份文件記錄各領域的**規格與施工標準**；
 > [`CLAUDE.md`](CLAUDE.md) 記錄**專案規範、關鍵數字與已定案決策**。三份不要互相抄，各司其職。
 
-**最後更新**：2026-10-01
+**最後更新**：2026-10-02
 
 ---
 
@@ -91,15 +91,75 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 | ~~程式~~ | ~~AI 問答實跑驗證（14 題驗收題組、校準 `AiIndex__MinScore`）~~ ✅ 2026-10-02 14/14、門檻 0.65 | 下一節 |
 | 內容 | AI 問答：6 則 FAQ 的 AI 摘要版重複兩次、「懷孕可以做嗎」的「詳見上方」—— 請院方在後台改 | 下一節 |
 | ~~程式~~ | ~~單元測試、`openapi.yaml`、首頁版位順序／開關、八大專科入口、NAP~~ ✅ 2026-10-01 完成 | 下方「2026-10-01」 |
-| 文件 | docs/10 與程式碼的 10 處出入（快取標頭、AI 摘要長度、錯誤碼表等），以 `docs/openapi.yaml` 為準 | 下方「2026-10-01」 |
-| 程式 | 本機 docker 建庫腳本 | §四 |
+| ~~文件~~ | ~~docs/10 與程式碼的 10 處出入（快取標頭、AI 摘要長度、錯誤碼表等），以 `docs/openapi.yaml` 為準~~ ✅ 2026-10-02 | 下方「2026-10-01」 |
+| ~~程式~~ | ~~本機 docker 建庫腳本~~ ✅ 2026-10-02 `scripts/local-db.sh` | §四 |
 | 上線設定 | 🔴 **SMTP 一個鍵都沒設** —— `/contact/` 不會寄信 | §七 |
 | 上線設定 | 🔴 `api.20skin.tw` 自訂網域 ＋ CORS 正式來源 ＋ reCAPTCHA 網域清單（缺一，切 DNS 當天表單與後台停擺） | §七 |
 | 上線設定 | 正式網域前若有 Cloudflare，確認不擋 AI 爬蟲 | §七 |
-| 驗證 | CWV 與 SSR 終點延遲、冷啟動、CORS preflight／5xx、遷移回滾演練 | §七 |
+| ~~驗證~~ | ~~CWV 與 SSR 終點延遲、冷啟動、CORS preflight／5xx、遷移回滾演練~~ ✅ 2026-10-02 都量了，結果見下一節 | 下方「2026-10-02」 |
+| ~~🔴 程式~~ | ~~**頁面在瀏覽器 hydration 時把 API 全部再打一次，打失敗就把算繪好的頁換成 503**~~ ✅ 2026-10-02 修好（未部署） | 下方「2026-10-02」 |
+| 程式 | 手機 LCP 4.8–10.5 秒：圖片沒有衍生尺寸（卡在 §八「圖片衍生尺寸誰產」）＋ `/blog/` 第一張卡片是 `loading="lazy"` | 下方「2026-10-02」 |
+| 🔴 上線設定 | 正式站 AI 問答的頻率限制實際是 **10 次／60 分**。程式已改成收底線鍵名（未部署）；**還要在 Function App 設 `RateLimit__PublicQuota__ai_ask__MaxRequests=20`、`…__WindowMinutes=10`** | 下方「2026-10-02」 |
 | 院方內容 | 28 項療程的療程時間／術後照護／禁忌症（**最大瓶頸**）、13 位醫師資料、8 則案例的揭露欄位、法務條文 | §二、§八 |
 | 院方資料 | 院區經緯度、交通停車、門診時段書面確認、`product*.php` 清單、Search Console | §八 |
 | 待決定 | FAQ 五大分類兩份對不上、`llms.txt` 範圍、密碼輪替規則、圖片衍生尺寸、允赫齒科納不納入 | §八 |
+
+---
+
+### 2026-10-02：能直接做的驗證與工具
+
+| 項目 | 結果 |
+|---|---|
+| **本機建庫腳本** | ✅ `scripts/local-db.sh`（`up`／`create`／`migrate`／`list`／`drop`／`rehearse`／`rehearse-data`）。`drop` 只收 `Skin20_` 開頭、再驗定序與建立日期 —— 同一台 SQL Server 上的 `20Skin` 是**別的專案** |
+| **遷移回滾演練** | ✅ **空庫**：19 支逐支 Down 全過、退到 0 資料表收乾淨、再進到最新與第一次**結構＋各表列數完全相同**（約 45 秒）。<br>✅ **帶真資料**（開發庫的 COPY_ONLY 副本）：退最近 12 支再進回來，結構與列數相同。<br>🔴 **退第 13 支（`AddConcernToConcernRelation`）會失敗**：它的 Down 把 CHECK 收回 1–13，而資料裡已有 24 筆 RelationType 14（Msg 547）。**Down 沒有寫錯，是資料讓它退不回去** —— 回滾的實際邊界是 `RestoreAboutSubpageUrlPaths` 之後那幾支，不是「任何一支都能退」。<br>⚠️ **每一支遷移各自一個交易**：中途失敗會停在半路（前面已退的不會自動回來），不是整批還原。<br>⚠️ 指紋只比結構與列數，**比不出值被改過**（例如 `NormalizeSortOrder` 的 Down 還原不了原本的排序值） |
+| **CORS** | ✅ preflight：白名單來源回 204 ＋ 完整的 `allow-origin`／`-credentials`／`-methods`／`-headers`，非白名單來源一個 CORS 標頭都沒有；400、404 的錯誤回應也都帶。<br>🟡 **5xx 沒有直接觀察到**（在正式環境造不出來又不能弄壞東西）。程式碼裡沒有任何 CORS 處理，全部是 App Service 平台層加的，所以與狀態碼無關 —— 這是推論，不是實測 |
+| **SSR 終點延遲** | 從台灣量（到 westus2 RTT 66 ms，扣掉連線與 TLS 之後的**伺服器端時間**）：一般頁 **0.35–0.6 秒**、`/search/` **1.1–1.8 秒**、靜態檔 0.08 秒、301 約 0.3 秒。API 端（App Insights 7 天 943 筆）p50 **16 ms**、p95 321 ms |
+| **冷啟動** | Function App **沒有 always-ready 執行個體**（`alwaysReady: []`），會縮到零。閒置後第一個請求 API 端 **2.7–3.7 秒**；前台首頁第一次打到 **5.9 秒**（SSR function 冷 ＋ API 冷疊在一起）。⚠️ SSR function 那一側**沒有接 App Insights**，只量得到 API 這一半 |
+| **CWV**（Lighthouse 12，對 `20skin.4webdemo.com`） | 桌機 perf 76–92、手機 **68–79**；SEO 全 100、CLS 全 0、TBT ≈ 0。🔴 **手機 LCP 4.8–10.5 秒**（標準 2.5）：首頁主視覺 748 KB、`/blog/` 卡片圖單張 540–630 KB，Lighthouse 估可省 1.2–2.9 MB/頁。根因是**沒有衍生尺寸**（§八待決定）；另外 `/blog/` 的 LCP 元素帶 `loading="lazy"`、Blob 是另一個來源沒有 preconnect |
+
+🔴 **量 CWV 時抓到的真問題：hydration 會把 API 整輪再打一次。**
+頁面在 setup 最上層直接 `await getClinics()` 這類函式（底下是裸的 `$fetch`），**沒有包 `useAsyncData`**，
+所以 SSR 算好的資料不會傳進 payload，瀏覽器 hydration 時 setup 重跑、從瀏覽器把同一批 API 再打一次。
+三個後果：
+1. **每一次瀏覽都是兩倍的 API／SQL 負載**（決策 14 量的「每頁一次往返」其實是兩次）
+2. **瀏覽器端那一輪失敗，已經算繪好的頁面會被換成 503 錯誤頁並加上 `noindex`** ——
+   實測：`*.azurestaticapps.net` 不在 CORS 白名單，Lighthouse 在那個網域上看到的每一頁都是
+   「503 網站暫時無法顯示」＋ noindex（SEO 61–69、CLS 0.87 都是它造成的假象）。
+   **切 DNS 當天若 CORS 漏了 `20skin.tw`，Googlebot（會執行 JS）看到的就是全站 noindex**，
+   比 checklist 寫的「表單與後台停擺」嚴重得多。暫時性的 API 失誤（逾時 8 秒）也會觸發同一件事
+3. 瀏覽器那一輪會吃到公開端點的 `max-age=300`（見 `CacheControl.cs`），與「發布即時可見」有出入
+✅ **2026-10-02 修好（Tim 指定，尚未部署）**：集中改在 `useContentApi.ts` 的 `fetchEnvelope`，21 個模板一個都沒動 ——
+伺服器端把成功的回應寫進 `payload.data.$contentApi`、同一請求內同一個鍵只打一次；瀏覽器在 hydration 期間讀 payload，不打 API。
+驗證（本機 `nuxt dev`，API 指正式站、`localhost` 不在 CORS 白名單＝最壞情況）：10 種頁面 **hydration 期間 API 請求 0、
+沒有 503、Vue hydration mismatch 警告 0**；typecheck、`verify:css`、`verify:seo-head` 全過。
+連帶：文章內頁原本對同一篇打兩次 `/content`（標頭與內文各一次），現在一次。
+⚠️ **代價是 payload**：HTML gzip 由 7–8 KB 長到約 **65–75 KB**（payload 本身 58–65 KB）。這些資料原本瀏覽器
+一樣要下載（hydration 那一輪 API），只是從「好幾趟跨太平洋的請求、可能失敗」變成「跟著 HTML 一起來」。
+為了壓它做了兩件事：
+- `recordsByIds()`（`/content/batch`）**丟掉 `bodyBlocks`** —— 首頁最新文章那 11 篇連整篇內文一起抓，payload 裡 94 KB，比其餘全部加起來還多；三個呼叫端都只畫卡片
+- 內容紀錄進 payload 前拿掉 `seo`／`fields`／`relations[]` 第一層的 null 與沒人讀的欄位（效果小，gzip 本來就壓得掉 null）。**伺服器算繪用的也是瘦過的那份**，hydration 一致靠構造保證
+剩下的大頭是 `/treatment`（gz 13 KB）與 `/term`（gz 11 KB，406 筆裡 393 筆是標籤，幾乎每頁都載）。
+🟡 **部署後要重量一次 CWV**（尤其手機 LCP）。
+🟡 順手看到：首頁 SSR 時對 14 位醫師各打一次 `/article?authorDoctorId=…&pageSize=100`（伺服器端負載，不進 payload 的大頭），值得另外看
+🟡 順手看到：`nuxt dev` 下 `/team/` 是 500 —— dev 才跑的資料檢查說篩選列寫死的專長「注射微整」在後台醫師標籤裡找不到（正式站不跑這段檢查，所以 200，但那個篩選按下去是空清單）。內容問題，與這次無關
+
+🔴 **正式站 AI 問答的頻率限制不是設計值**（子代理對 docs/10 時發現，2026-10-02 以 `az` 覆核）：
+Function App 只有 `RateLimit__PublicQuota__MaxRequests=10`／`WindowMinutes=60`，沒有 `ai-ask` 專屬的鍵，
+所以 `/ai/ask` 實際是**每個 IP 每小時 10 次、超過鎖一小時**（決策 28 寫 20 次／10 分）。
+院內共用一個對外 IP 時，全院合計一小時 10 題。`/contact`、`/questions/miss` 同樣是 10／60。
+✅ **程式已修（2026-10-02，未部署）**：`RateLimitService` 改成先讀底線鍵（`ai_ask`）、再讀連字號鍵（本機相容）、最後落全域；
+`local.settings.example.json` 改成底線版。資料庫的計數鍵（`{bucket}:{ip}`）沒動，既有計數不受影響。
+🔴 **部署之後還要設 app setting**：`RateLimit__PublicQuota__ai_ask__MaxRequests=20`、`RateLimit__PublicQuota__ai_ask__WindowMinutes=10`
+（2026-10-02 嘗試設定時被工具權限擋下，待 Tim 執行）。
+
+✅ **`page.legal.edit` 現在真的生效了**（2026-10-02，未部署）：法務頁（`SuperAdminOnly`）的守門由「只看 `is_superadmin`」改成
+「要有 `page.legal.edit`」（超級管理員照舊通過），並補上原本沒擋的**發布／下架、排程、SEO、排序**。
+⚠️ 行為變化：種子裡只有超級管理員持有這個碼，所以**內容編輯不能再發布／下架法務頁、行銷與內容編輯不能再改法務頁的 SEO** ——
+那原本是漏洞。要讓某個角色維護法務頁，到角色頁勾「編輯法務頁」現在才有效果。
+✅ **`/ai/ask` 看 `aifaq.enabled` 了**：不是 `true` 就回 503 `AI_UNAVAILABLE`，在讀 body、機器人驗證、頻率限制與 Gemini 之前就擋，關掉不花錢。
+後端新增 30 個測試，**223 個全綠**。
+已修：`openapi.yaml` 的轉址迴圈狀態碼（400 → 409）與改密碼下限（8 → 6）；`CacheControl.cs`、`ApiResponse.cs`、
+`ContentHandler.cs` 三處講「重建失效」「分頁雙模式」「重建時頁面消失」的過期註解。
 
 ---
 
@@ -125,10 +185,8 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 **還沒做的**：
 - ✅ ~~「品牌理念摘要」是寫死的~~ —— **Tim 定案拿掉後台的挑選器**（2026-10-01）。前台那一區維持寫死的版面；
   後台那張卡片只剩拖曳與顯示開關（決策 23）
-- 🟡 **docs/10 與程式碼的其餘出入**（以 `docs/openapi.yaml` 為準）：快取標頭（公開端點實際多數有 `max-age=300`、
-  後台沒有統一 `no-store`）、`seo.aiSummary` 實際驗 20–300 字（docs 寫 40–60）、`AUTH_MUST_CHANGE_PASSWORD`
-  已無人丟出、`GET /admin/ai-index` 沒列、`handoff.reason` 有兩個值沒有程式路徑、article 分頁沒有 `totalPages`、
-  `/seo/*` 不走信封、成功一律 200、term 新增／刪除的權限其實在 Handler 內依 `termType` 再判一次
+- ✅ ~~**docs/10 與程式碼的其餘出入**~~（2026-10-02）—— 以程式碼為準全面對齊：快取標頭逐端點列表、AI 摘要 20–300、`AUTH_MUST_CHANGE_PASSWORD` 標已移除、補 `GET /admin/ai-index`、`handoff.reason` 只剩 `no_match`／`needs_doctor`、兩種分頁形狀、`/seo/*` 不走信封、成功一律 200、`term` 權限在 Handler 依 `termType` 再判，錯誤碼表與 §3.4 路徑一併校正。
+  🔴 對出來的程式／設定問題（未修）：正式 Function App **沒設 `RateLimit__PublicQuota__ai-ask__*`**，AI 問答實際是 10 次／60 分；`page.legal.edit` 沒有任何程式路徑讀它；`/ai/ask` 不看 `aifaq.enabled`；`openapi.yaml` 把 301 自我迴圈／轉址鏈寫成 400（程式是 409）
 
 ---
 
@@ -323,7 +381,7 @@ typecheck、verify:css、admin build 通過；**面板開關關著，還沒在�
 
 | 缺口 | 說明 |
 |---|---|
-| 🔴 **`aifaq.enabled` 曾被匯入腳本蓋成 `true`** | 種子刻意是 `false`（docs/04 §4：AI 未串接前不對外顯示，「一顆點下去沒反應的常駐按鈕比沒有按鈕更糟」），但搬遷前的 `app/data/site-settings.ts` 寫死 `true`（樣稿要展示那個面板），匯入腳本把它一起搬了過去。2026-09-12 發現並修掉 —— **功能開關不是內容，不由匯入決定**。本機 `Skin20_Dev` 已改回 `false`；🔴 **正式庫上線前要確認這個值** |
+| 🔴 **`aifaq.enabled` 曾被匯入腳本蓋成 `true`** | 種子刻意是 `false`（docs/04 §4：AI 未串接前不對外顯示，「一顆點下去沒反應的常駐按鈕比沒有按鈕更糟」），但搬遷前的 `app/data/site-settings.ts` 寫死 `true`（樣稿要展示那個面板），匯入腳本把它一起搬了過去。2026-09-12 發現並修掉 —— **功能開關不是內容，不由匯入決定**。本機 `Skin20_Dev` 已改回 `false`。⚠️ **2026-10-02 起正式庫是 `true`，是 Tim 刻意打開的**（AI 問答驗收完成），不是匯入又蓋掉 |
 | ~~**圖片尚未上傳到 Blob**~~ | ✅ **2026-09-14 完成**，61 個 blob 已在 `st20skinweb/media`。⚠️ 需要 az 身分對該帳戶有 `Storage Blob Data Contributor` —— **訂閱層級的 Owner 不等於 Blob 資料層存取權**，這兩件事在 Azure 是分開的 |
 | **13 位醫師的個人資料是空的** | 14 位裡**只有黃勇學**有簡介、學歷經歷、證照、專長領域（type 2）與著作講座；其餘 13 位這五項全空（2026-09-16 對正式庫逐位核對）。<br>⚠️ **頁面本身沒壞**：模板對缺欄位整段不渲染，「專長領域」還會退回列表用的 type 1 標籤，而專長療程／文章／看診時段／同院區醫師都是靠**反向關聯與院區資料**帶出來的，所以每一頁仍有實質內容。<br>⚠️ 因此**沒有比照空療程頁加 `noIndex`**，14 位全數收進 sitemap —— 這是刻意的，但若院方長期不補，13 頁的內容深度會明顯低於黃勇學那頁。<br>🔴 **需要院方提供**：與 28 個療程頁的內容缺口同一性質（§八）|
 | **27 個療程頁沒有內容** | 28 項裡只有 1 項有 `facts`。顯示「內容建置中」，已加 `noIndex` 且不輸出 `MedicalProcedure`。⚠️ 適應症與許可證字號 28 項都補齊了，**缺的是療程時間／術後照護／禁忌症**，要醫師寫（§八）|
@@ -974,7 +1032,7 @@ schema 的真實來源是 `functions/Data/Migrations/`（docs/07 §5）。
 ~~內容匯入（約 800 篇）~~ ✅ **2026-09-14 完成，實數 1100 篇**（`tools/legacy-import/`）。
 ~~`efbundle` 的 CI 步驟~~ ✅ **2026-09-14 完成並實跑**（`api` workflow）。
 
-剩下：本機開發用的 `docker` 建庫腳本（目前是手動指令）
+~~本機開發用的 `docker` 建庫腳本~~ ✅ **2026-10-02**：`scripts/local-db.sh`（含遷移回滾演練，見上方「2026-10-02」）
 
 ---
 
@@ -1477,7 +1535,7 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
 - [x] ~~**`/api/fallback` 部署得起來、接得到 SQL**~~ — ✅ 2026-09-11。`dotnet-isolated:9.0` 在 SWA 上可用（docs/07 §8 原本標「不通就退 8.0」的疑慮解除）
 - [x] ~~**`/api/fallback` 真的轉得成**（`x-ms-original-url` 帶不帶得到 query string）~~ — ✅ **2026-09-15 端到端真命中**。
       `share_info.php?no=842` → 301 → `/blog/share-842/`（**query string 帶得到**）、`doctor.php` → `/team/`、`contact.php` → `/clinics/`
-- [ ] 跨來源鏈路 — 🟡 **一半驗過**：2026-09-15 對正式 Function App 打一支帶 `Origin` 的壞 token，
+- [x] 跨來源鏈路 — ✅ **2026-10-02 preflight 驗完**（見「2026-10-02」；5xx 為推論）。原紀錄：🟡 **一半驗過**：2026-09-15 對正式 Function App 打一支帶 `Origin` 的壞 token，
       **401 有帶 `access-control-allow-origin` 與 `-credentials`**（這是最容易漏、又最難除錯的一種）。
       **preflight（OPTIONS）與 5xx 還沒驗**
 - [ ] Managed Identity 連 SQL 與 Blob — 🟡 **SQL 那半已證明**：Function App 的設定裡**只有 `SQL_SERVER`／`SQL_DATABASE`、沒有任何連線字串**，
@@ -1511,9 +1569,9 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
       擋下它的是比例安全閥。修了兩處（收集器認得 `src`／`url`、SQL 的 `WHERE` 也要涵蓋）
       之後才降到 1 個。**這件事的教訓寫在該目錄 README：正常情況下孤兒是個位數，
       出現三位數就是工具錯了。**
-- [ ] 冷啟動對 301（現在走前台 catch-all → `GET /redirects/resolve`）、前台 SSR 與後台操作的實際延遲
+- [x] 冷啟動對 301（現在走前台 catch-all → `GET /redirects/resolve`）、前台 SSR 與後台操作的實際延遲 —— ✅ 2026-10-02 量了：冷 2.7–5.9 秒、熱 0.35–0.6 秒。**要不要開 always-ready 執行個體（會產生固定費用）待決定**
 - [x] ~~`api/` 實際可用的 .NET 版本~~ — ✅ **`dotnet-isolated:9.0` 實測可用**（同第一條，2026-09-11 起一直在服務 301）
-- [ ] 遷移在正式資料庫的實際行為（先在可丟棄的庫演練一次完整遷移與回滾）
+- [x] 遷移在正式資料庫的實際行為（先在可丟棄的庫演練一次完整遷移與回滾）—— ✅ 2026-10-02 `scripts/local-db.sh rehearse`／`rehearse-data`。帶資料最多退得回 12 支（見「2026-10-02」）
 - [ ] 全站 404 掃描、301 迴圈檢查、結構化資料驗證、CWV — 🟡 **三項已驗，只剩 CWV**：
       **① 轉址**：兩份 CSV 的 **808 個目標**逐一對建置產物比對，全部有對應頁面、**零 301→404**；
       站內連結零斷鏈（`verify:links` 掃 1848 頁 / 120289 條）。
@@ -1521,7 +1579,7 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
       麵包屑 `position` 全連續、FAQPage 結構完整。型別分佈也對得上專案數字
       （`Physician` 13 ＋ `Person` 1 ＝ 14 位團隊成員；`MedicalProcedure` 只有 1 筆，
       對應 27 頁建置中不輸出）。**修掉一筆**：首頁 `MedicalOrganization` 缺 `url` 與 `logo`（見 §八）。
-      **③ CWV 還沒做。**
+      **③ CWV**：✅ 2026-10-02 量了 —— 🔴 **手機 LCP 不及格**（4.8–10.5 秒），見「2026-10-02」。
 - [x] ~~種子密碼 `Admin@123` 更換~~ —— **Tim 判定沒問題（2026-09-16），不列為上線阻斷項。**
       ⚠️ 據此成立的事實仍要記著：決策 10 拿掉了 IP 白名單與雙因素，所以**帳密是唯一憑證**，
       而登入次數限制只以帳號計數（擋不到密碼噴灑）。剩下的防線是 reCAPTCHA v3 與那個次數限制。

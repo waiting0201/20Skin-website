@@ -63,16 +63,28 @@ public sealed class RateLimitService(
     /// </para>
     /// <para>
     /// 設定鍵：<c>RateLimit__PublicQuota__{bucket}__MaxRequests</c>／<c>__WindowMinutes</c>。
-    /// ⚠️ bucket 名帶連字號（<c>ai-ask</c>）在 app setting 裡是合法的，不要為此改 bucket 名 ——
-    /// 那會把 <c>LoginThrottles</c> 裡已經累積的計數丟掉。
+    /// 🔴 <b>bucket 名裡的連字號在 Linux 的 Function App 不能當 app setting 名稱</b>
+    /// （<c>ai-ask</c> 的鍵設不進去，2026-10-02 查到正式站因此一直落在全域 10 次／60 分）。
+    /// 所以<b>底線形式優先</b>（<c>ai_ask</c>），再退回連字號形式（本機 local.settings.json
+    /// 沒有這個限制，舊的設定照樣有效），最後才是全域。
+    /// ⚠️ 不要為此改 bucket 名 —— 那會把 <c>LoginThrottles</c> 裡已經累積的計數丟掉。
     /// </para>
     /// </summary>
     private (int MaxRequests, TimeSpan Window) QuotaFor(string bucket)
     {
-        var max = ParseInt(configuration[$"RateLimit:PublicQuota:{bucket}:MaxRequests"], _publicQuotaMaxRequests);
-        var minutes = ParseInt(
-            configuration[$"RateLimit:PublicQuota:{bucket}:WindowMinutes"], (int)_publicQuotaWindow.TotalMinutes);
+        var max = ResolveQuotaValue(configuration, bucket, "MaxRequests", _publicQuotaMaxRequests);
+        var minutes = ResolveQuotaValue(configuration, bucket, "WindowMinutes", (int)_publicQuotaWindow.TotalMinutes);
         return (max, TimeSpan.FromMinutes(minutes));
+    }
+
+    /// <summary>底線鍵 → 連字號鍵 → 全域預設。值不是整數時視同沒設，繼續往下找。</summary>
+    internal static int ResolveQuotaValue(IConfiguration configuration, string bucket, string name, int fallback)
+    {
+        var underscoreKey = $"RateLimit:PublicQuota:{bucket.Replace('-', '_')}:{name}";
+        if (int.TryParse(configuration[underscoreKey], out var fromUnderscore)) return fromUnderscore;
+
+        var rawKey = $"RateLimit:PublicQuota:{bucket}:{name}";
+        return ParseInt(configuration[rawKey], fallback);
     }
 
     private readonly string? _lockoutAlertEmail = configuration["Alerts:LoginLockoutEmail"];

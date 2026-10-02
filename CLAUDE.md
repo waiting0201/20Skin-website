@@ -102,6 +102,8 @@ scripts/
   build-pdf.sh         HTML → PDF
   build-mockup-fonts.sh   中文襯線字型子集
   build-mockup3-hero.py   mockup3 Hero 底圖（只裁切，不調色）
+  local-db.sh          本機 docker SQL Server：建庫＋遷移、拋棄式庫、遷移回滾演練
+                       🔴 drop 只收 Skin20_ 開頭 —— 同一台上的 `20Skin` 是別的專案
 ```
 
 ---
@@ -206,6 +208,11 @@ node tools/admin-e2e/publish-flow.mjs  # 🔴 會改資料：改一筆 → 發�
 # API 煙霧測試（改完 API 或後台資料層一定要跑，說明見 tools/api-smoke/README.md）
 node tools/api-smoke/read.mjs                  # 唯讀，可對任何環境跑
 node tools/api-smoke/write.mjs                 # 🔴 會真的改資料，只能對用完即丟的資料庫跑
+
+# 本機資料庫（docker 的 SQL Server；密碼讀 SKIN20_SA_PASSWORD 或容器自己的設定）
+./scripts/local-db.sh up && ./scripts/local-db.sh create   # 起容器 → 建 20skin-website ＋ 套用遷移
+./scripts/local-db.sh rehearse         # 拋棄式庫：逐支 Down 到 0 再進回來比對（改了遷移就跑）
+./scripts/local-db.sh rehearse-data 3  # 開發庫副本帶真資料退最近 3 支再進回來
 
 # 重新產出 PDF（改完 output/*.html 之後）
 ./scripts/build-pdf.sh
@@ -391,6 +398,13 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    `apps/web/app/data/*.ts` 仍是**形狀轉接層**（欄位怎麼排、叫什麼名字是前台的契約），
    只是資料來源由內聯的 JSON 換成 API —— 那 2397 行的對映幾乎沒有改，
    因為端點刻意回傳與匯出相同的 `ContentRecord` 形狀（逐筆比對驗證過）。
+
+   🔴 **SSR 取到的資料進 payload，hydration 時瀏覽器不再打 API**（2026-10-02，`useContentApi.ts` 的 `fetchEnvelope`）。
+   在此之前 setup 在瀏覽器重跑會把 API 整輪再打一次，**那一輪失敗就把算繪好的頁換成 503 ＋ `noindex`**
+   （CORS 少一個來源、API 逾時一次都會觸發，而 Googlebot 會執行 JS）。
+   ⚠️ 已經包 `useAsyncData` 的呼叫要傳 `hydrate: false`，否則同一份資料在 payload 裡出現兩次；
+   **新寫的頁面不要再包 `useAsyncData`**。⚠️ 代價是 HTML 變大（gzip 約 65–75 KB），
+   所以**清單或卡片不要取內文**（`recordsByIds()` 已丟掉 `bodyBlocks`）。
 
    ⚠️ **同一個請求內只取一次。** 一頁常有三四個模組都要 `term`（療程要分類、
    文章要標籤、FAQ 要分類），去重掛在 `useNuxtApp()` 上 —— **掛在模組層級會變成
@@ -733,6 +747,9 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    **不要把輸入框加回來**。
    ⚠️ 舊站每個院區其實有兩個帳號（門診／自費美容），據點只有一欄，目前填的是門診那組；
    另一組記在 `tools/legacy-import/contact.json`。
+   🔴 **頻率限制的 app setting 用底線**：`RateLimit__PublicQuota__ai_ask__*`（Linux 的 Function App 設不進帶連字號的名稱，
+   2026-10-02 前正式站因此一直是全域的 10 次／60 分）。程式也收連字號版，只為了本機相容。
+   ⚠️ `aifaq.enabled` 關掉時端點回 503 `AI_UNAVAILABLE`（2026-10-02 起；在此之前關掉只藏面板，端點照樣回答、照樣花錢）。
    ⚠️ 上線前置：Gemini 專案要**切到付費**（免費層 RPM 一撞就是 429，體感等於功能壞掉）、
    Function App 的 MI 要有 `system-state` 容器的 `Storage Blob Data Contributor`、
    **`AiIndexRefreshCron` 少設會讓整個 Function App 索引不到任何 function**。

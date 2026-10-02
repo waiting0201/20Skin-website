@@ -40,10 +40,9 @@ namespace Skin20.Api.Handlers;
 /// <b>「編輯已發布內容 → 回草稿」</b：docs/11 §7 規則 2 的狀態圖明確畫出
 /// <c>已發布 ──edit──▶ 草稿</c> 這條邊，本檔逐字照此實作：<see cref="UpdateAsync"/> 與
 /// <see cref="UpdateRelationsAsync"/> 若目標原本是「已發布」，儲存後改回「草稿」，
-/// <c>PublishedVersionId</c> 保持不動，前台在下一次重建前仍看得到舊版；下一次重建则会
-/// 因為 <c>Status≠3</c> 而讓該頁暫時從產物中消失，直到重新送審核准。這與 docs/09 §3
-/// 「建置期直接查 <c>ContentItems</c> 目前欄位值」的事實一致——schema 沒有第二份「已發布快照」
-/// 可供建置查詢，這是目前 schema 下最安全的作法。
+/// <c>PublishedVersionId</c> 保持不動 —— 公開端點讀的是那一版已發布快照（決策 14），
+/// 所以頁面<b>不會</b>從網站上消失，前台照樣看到舊版，直到再按一次發布。
+/// ⚠️ 原本這裡寫的「下一次重建會讓該頁暫時消失」是靜態建置時代的行為，已不成立。
 /// </item>
 /// <item>
 /// <b>三個逐單元例外的實作方式</b（docs/10 §3.3）：法務三頁與分類／標籤的差異權限，
@@ -409,6 +408,8 @@ public sealed class ContentHandler(
         var ct = req.HttpContext.RequestAborted;
         var entity = await LoadAsync(unit, contentId, tracking: true, ct) ?? throw AppException.NotFound("內容");
 
+        RequireLegalPageGuard(req, entity);
+
         var blobsBefore = CollectBlobPaths(entity);
 
         var body = await ReadJsonAsync<SeoSaveRequest>(req, ct);
@@ -575,6 +576,7 @@ public sealed class ContentHandler(
         var entity = await LoadAsync(unit, contentId, tracking: true, ct) ?? throw AppException.NotFound("內容");
 
         RequireOwnership(req, entity);
+        RequireLegalPageGuard(req, entity);
 
         var body = await ReadJsonAsync<ScheduleRequest>(req, ct);
 
@@ -596,6 +598,8 @@ public sealed class ContentHandler(
         var contentId = ParseId(id);
         var ct = req.HttpContext.RequestAborted;
         var entity = await LoadAsync(unit, contentId, tracking: true, ct) ?? throw AppException.NotFound("內容");
+
+        RequireLegalPageGuard(req, entity);
 
         var body = await ReadJsonAsync<PublishRequest>(req, ct);
         var userId = RequestContext.UserId(req);
@@ -664,6 +668,9 @@ public sealed class ContentHandler(
         var entities = await db.ContentItems
             .Where(ci => ci.ContentType == contentType && ids.Contains(ci.Id))
             .ToListAsync(ct);
+
+        // 法務頁的排序值也算「改動頁面」，逐筆過同一道關卡。
+        foreach (var entity in entities) RequireLegalPageGuard(req, entity);
 
         var isDoctorNonAdmin = !RequestContext.IsSuperAdmin(req) && RequestContext.Roles(req).Contains(RoleCodes.Doctor);
         if (isDoctorNonAdmin)
@@ -747,7 +754,7 @@ public sealed class ContentHandler(
         var contentId = ParseId(id);
         // ⚠️ 這支端點的路由沒有帶查詢字串（見 Routing/AppRouter.Admin.cs），加上
         //    VersionPrune Timer 保證每筆內容最多 30 版（docs/11 §11），回傳平面陣列
-        //    （docs/10 §2 分頁雙模式的「不帶分頁參數」那一種）已足夠，不需要另外分頁。
+        //    已足夠，不需要另外分頁（這是例外 —— 其餘後台清單一律分頁，docs/10 §2）。
         var (items, _) = await _read.ListVersionsAsync(contentId, 1, Paging.MaxPageSize, CancellationToken.None);
         var dtos = items
             .Select(v => new VersionListItemDto(v.Id, v.VersionNo, v.Title, v.Note, v.CreatedByUserId, v.CreatedAt))
@@ -1042,11 +1049,25 @@ public sealed class ContentHandler(
             throw AppException.Forbidden("僅能編輯本人負責的內容。");
     }
 
-    /// <summary>法務三頁限超級管理員（docs/10 §3.3、docs/02 §4）。</summary>
-    private static void RequireLegalPageGuard(HttpRequest req, ContentItem item)
+    /// <summary>
+    /// 法務頁（<c>Page.SuperAdminOnly</c>）要有 <c>page.legal.edit</c>（docs/10 §3.3、docs/02 §4）。
+    ///
+    /// <para>
+    /// 🔴 <b>判定的是權限碼，不是「是不是超級管理員」</b>：種子只有超級管理員握有這個碼
+    /// （<see cref="HasPermission"/> 對超級管理員一律放行），所以預設行為不變；
+    /// 但院方在後台的角色畫面把它授予別的角色之後，那個角色才真的編得動 ——
+    /// 原本寫成只看 <c>is_superadmin</c>，這個權限碼整個沒有人讀，授予了也沒有用。
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>所有會改動頁面的路徑都要呼叫它</b>，不只是 <see cref="UpdateAsync"/>：
+    /// 發布／下架、排程、SEO、關聯、排序、刪除、還原版本。漏掉任何一條，
+    /// 有 <c>seo.edit</c> 或 <c>*.publish</c> 的角色就能繞過去改法務頁。
+    /// </para>
+    /// </summary>
+    internal static void RequireLegalPageGuard(HttpRequest req, ContentItem item)
     {
-        if (item is Page { SuperAdminOnly: true } && !RequestContext.IsSuperAdmin(req))
-            throw AppException.Forbidden("法務頁面僅限超級管理員編輯。");
+        if (item is Page { SuperAdminOnly: true } && !HasPermission(req, PermissionCodes.PageLegalEdit))
+            throw AppException.Forbidden("法務頁面需要「編輯法務頁」權限。");
     }
 
     private static bool HasPermission(HttpRequest req, string code)

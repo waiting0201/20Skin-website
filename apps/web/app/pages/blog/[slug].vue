@@ -39,13 +39,11 @@ const relatedCategoryLabels = new Map(
     [r.slug, (await getArticleCategory(r.categorySlug))?.label ?? ''] as const)),
 )
 
-// ⚠️ **內文是動態載入的**（一篇一個 chunk，見 data/articles.ts 的 getArticleBody）。
-//    用 useAsyncData 取，預渲染時會被寫進這一頁的 HTML 與 _payload.json，
-//    讀者不會多發一個請求。直接在 setup 裡 await 也能過，但那樣內文就不會進 payload，
-//    hydration 時會再抓一次 chunk。
-const { data: body } = await useAsyncData(`article-body:${slug}`, () => getArticleBody(slug), {
-  default: (): ArticleBodyBlock[] => [],
-})
+// ⚠️ 內文與上面的標頭取的是同一筆 `/content?path=`：SSR 時 `useContentApi` 在同一個請求內
+//    只打一次，hydration 時直接讀 payload（2026-10-02）。
+//    🔴 **不要再包 `useAsyncData`** —— 那會讓整篇內文在 payload 裡出現兩次
+//    （它存一份解析過的，取值層再存一份原始紀錄）。
+const body = shallowRef<ArticleBodyBlock[]>(await getArticleBody(slug))
 
 // 目錄只收 H2（有 id 的才會被連結，H3 是段落內的次標題，mockup 本來就不放進目錄）。
 const toc = computed(() => (body.value ?? []).filter(

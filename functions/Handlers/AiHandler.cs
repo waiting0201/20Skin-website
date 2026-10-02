@@ -12,6 +12,7 @@ using Skin20.Api.Data;
 using Skin20.Api.Models.Dtos;
 using Skin20.Api.Models.Entities;
 using Skin20.Api.Services;
+using Skin20.Api.Services.Dapper;
 
 namespace Skin20.Api.Handlers;
 
@@ -47,6 +48,7 @@ public sealed class AiHandler(
     IQuestionInboxWriter questionInbox,
     IBotCheckService botCheck,
     IRateLimitService rateLimit,
+    ISiteSettingReadService siteSettings,
     Skin20DbContext db,
     IMemoryCache cache,
     IConfiguration configuration,
@@ -124,6 +126,15 @@ public sealed class AiHandler(
 
     public async Task<IActionResult> AskAsync(HttpRequest req)
     {
+        // 🔴 開關要排在**最前面**，早於讀 body、機器人驗證、頻率限制與任何 Gemini 呼叫：
+        //    關掉的功能不該花任何一分錢（嵌入與生成都是計價的），也不該佔用 reCAPTCHA 與
+        //    LoginThrottles 的額度。前台面板雖然看 `aifaq.enabled` 決定要不要顯示，但那只是
+        //    「按鈕不出現」—— 端點是公開的，直接打 API 的人與舊頁面的快取都繞得過去。
+        // ⚠️ 讀不到這個鍵視為關閉（種子預設就是 false）；讀取本身失敗則照常丟 500，
+        //    不要在這裡吞掉例外後放行 —— 那會讓「資料庫連不上」變成「功能被打開」。
+        if (!await IsEnabledAsync())
+            throw new AppException(ErrorCodes.AiUnavailable, "線上諮詢暫時無法回覆，請稍後再試。", 503);
+
         var body = await ReadBodyAsync(req);
 
         var question = body.Question?.Trim() ?? "";
@@ -185,6 +196,13 @@ public sealed class AiHandler(
             sources,
             new AiHandoff(false, null),
             Disclaimer)));
+    }
+
+    /// <summary>全站設定 <c>aifaq.enabled</c>。每次都讀（單鍵的主鍵查詢），不做快取 —— 院方關掉開關時要立即生效。</summary>
+    private async Task<bool> IsEnabledAsync()
+    {
+        var raw = await siteSettings.GetValueAsync("aifaq.enabled");
+        return bool.TryParse(raw, out var enabled) && enabled;
     }
 
     /// <summary>

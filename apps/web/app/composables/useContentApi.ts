@@ -57,12 +57,134 @@ type FetchOutcome<T> =
   /** 沒拿到：連不上、逾時、5xx。**這不代表資料不存在。** */
   | { ok: false, data: null }
 
+/** payload 裡放 SSR 取值結果的那一格。 */
+const PAYLOAD_KEY = '$contentApi'
+
+type Query = Record<string, string | number | undefined>
+
+/** 同一組 path＋query 一定得到同一個鍵（參數順序不影響）。 */
+function requestKey(path: string, query: Query): string {
+  const qs = Object.entries(query)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${v}`)
+    .join('&')
+  return qs ? `${path}?${qs}` : path
+}
+
+/**
+ * 🔴 **SSR 拿到的結果要交給瀏覽器，hydration 時不可以再打一次 API。**
+ *
+ * 頁面是在 setup 最上層直接 `await getClinics()` 這類函式，沒有包 `useAsyncData` ——
+ * 所以 hydration 時 setup 會在瀏覽器裡整個重跑一次。2026-10-02 之前這一層照樣打 API，
+ * 三個後果（STATUS.md「2026-10-02」）：
+ *   1. 每一次瀏覽都是兩倍的 API／SQL 負載；
+ *   2. **瀏覽器那一輪失敗，算繪好的頁面會被換成 503 錯誤頁並帶上 `noindex`** ——
+ *      CORS 白名單少了一個來源、或 API 逾時一次，Googlebot（會執行 JS）看到的就是那一頁；
+ *   3. 瀏覽器那一輪會吃到公開端點的 `max-age=300`。
+ *
+ * 作法：伺服器端把**成功的**回應寫進 `payload.data`，瀏覽器在 hydration 期間
+ * 同一個鍵就直接讀 payload。hydration 結束之後（站內換頁）照常打 API。
+ *
+ * ⚠️ payload 只會有這一頁 SSR 時真的取過的東西 —— 這一層本來就「每一頁只取自己要的」
+ *    （見檔頭第 3 點），所以不會變成全站快照。
+ * ⚠️ 已經用 `useAsyncData` 包住的呼叫（站內搜尋）要傳 `hydrate: false`，
+ *    否則同一份資料會在 payload 裡出現兩次。
+ * ⚠️ 失敗不寫進 payload：伺服器那一輪失敗的話，頁面早就是 503 或降級版了。
+ */
 async function fetchEnvelope<T>(
   path: string,
-  query: Record<string, string | number | undefined>,
+  query: Query,
+  opts: { hydrate?: boolean, omitFields?: string[] } = {},
 ): Promise<FetchOutcome<T>> {
+  // ⚠️ 兩個 composable 都要在第一個 await 之前取 —— 之後 Nuxt 的 context 可能已經不在了。
+  const nuxtApp = useNuxtApp()
   const base = useRuntimeConfig().public.apiBaseUrl
+  const hydrate = opts.hydrate !== false
+  const key = requestKey(path, query)
+  const store = (nuxtApp.payload.data[PAYLOAD_KEY] ??= {}) as Record<string, unknown>
 
+  if (import.meta.client) {
+    if (hydrate && nuxtApp.isHydrating && key in store) {
+      return { ok: true, data: store[key] as T | null }
+    }
+    return requestEnvelope<T>(base, path, query, opts.omitFields)
+  }
+
+  // 伺服器端：同一個請求內同一個鍵只真的打一次（例如文章內頁的標頭與內文取的是同一筆）。
+  // ⚠️ 掛在 nuxtApp 上＝每個請求一份；掛在模組層級會變成跨請求共用（決策 14）。
+  const app = nuxtApp as unknown as { _contentApiInflight?: Map<string, Promise<FetchOutcome<unknown>>> }
+  app._contentApiInflight ??= new Map()
+  const inflight = app._contentApiInflight.get(key)
+  if (inflight) return inflight as Promise<FetchOutcome<T>>
+
+  const pending = requestEnvelope<T>(base, path, query, opts.omitFields).then((outcome) => {
+    if (hydrate && outcome.ok) store[key] = outcome.data
+    return outcome
+  })
+  app._contentApiInflight.set(key, pending)
+  return pending
+}
+
+/** 前台一個地方都沒讀的頂層欄位。 */
+const UNUSED_RECORD_KEYS = ['ownerUserId', 'homeSections']
+/** `seo` 裡前台沒讀的欄位（後台的稽核資訊）。 */
+const UNUSED_SEO_KEYS = ['updatedByUserId', 'updatedAt']
+
+function dropNulls(obj: Record<string, unknown>, drop: string[] = []): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== null && !drop.includes(k)) out[k] = v
+  }
+  return out
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+function slimRecord(r: Record<string, unknown>, omitFields: string[]): Record<string, unknown> {
+  if (!('fields' in r)) return r
+  const out: Record<string, unknown> = { ...r }
+  for (const k of UNUSED_RECORD_KEYS) delete out[k]
+  if (isRecord(r.seo)) out.seo = dropNulls(r.seo, UNUSED_SEO_KEYS)
+  if (isRecord(r.fields)) out.fields = dropNulls(r.fields, omitFields)
+  if (Array.isArray(r.relations)) {
+    out.relations = r.relations.map((x) => (isRecord(x) ? dropNulls(x) : x))
+  }
+  return out
+}
+
+/**
+ * 🔴 **內容紀錄進 payload 之前先瘦身**（2026-10-02）。
+ *
+ * SSR 結果整包進 payload 之後，首頁 HTML 由 gzip 8 KB 長到 116 KB —— 大頭是 `/term`
+ * （406 筆、211 KB，其中 393 筆是標籤），而它幾乎每一頁都要載。空間主要被
+ * 每一筆都帶著、多半是 null 的 `seo` 區塊吃掉。
+ *
+ * 規則刻意保守：只拿掉 `seo`／`fields`／`relations[]` **第一層**值為 null 的屬性，
+ * 加上前台沒讀的幾個欄位；不遞迴進區塊 JSON，頂層的 null（`slug`、`summary`…）也不動。
+ * 前台讀這些欄位一律是 `?? 預設值`／`!= null`，null 與「沒有這個鍵」是同一件事。
+ *
+ * 🔴 **伺服器端算繪用的也是瘦過的這一份**，不是只有 payload —— 兩邊吃同一份資料，
+ *    hydration 的一致性靠構造保證，而不是靠「每個讀取點都恰好把 null 與 undefined 當成一樣」。
+ *    ⚠️ 新增讀取點時若要區分「明確是 null」，要用 `== null`，不可以用 `=== null`。
+ */
+function slim<T>(data: T, omitFields: string[] = []): T {
+  if (Array.isArray(data)) return data.map((x) => (isRecord(x) ? slimRecord(x, omitFields) : x)) as T
+  if (isRecord(data)) {
+    if (Array.isArray(data.items)) return { ...data, items: slim(data.items, omitFields) } as T
+    return slimRecord(data, omitFields) as T
+  }
+  return data
+}
+
+async function requestEnvelope<T>(
+  base: string,
+  path: string,
+  query: Query,
+  omitFields: string[] = [],
+): Promise<FetchOutcome<T>> {
   try {
     const envelope = await $fetch<Envelope<T>>(base + path, {
       query: Object.fromEntries(Object.entries(query).filter(([, v]) => v !== undefined)),
@@ -72,7 +194,7 @@ async function fetchEnvelope<T>(
       timeout: 8000,
       retry: 1,
     })
-    return { ok: true, data: envelope.success ? (envelope.data ?? null) : null }
+    return { ok: true, data: envelope.success ? slim(envelope.data ?? null, omitFields) : null }
   }
   catch (error) {
     // 404 是「後端明確說沒有這一筆」，不是故障 —— 要與連不上分開。
@@ -192,17 +314,23 @@ export async function contentByPath(path: string): Promise<ContentRecord | null>
 }
 
 /**
- * 依 id 批次取（含內文）。
+ * 依 id 批次取（**不含內文**）。
  *
  * ⚠️ 給「關聯目標需要的欄位不只標題」的情況用 —— 療程卡片要顯示關聯文章的封面與
  *    日期，而 `relations[]` 只帶 slug／title／urlPath。文章 1100 筆，不可能為了
  *    11 筆關聯把整批載回來。
  * ⚠️ 找不到的 id 會被靜默略過（已下架的關聯目標是正常情況）。
  */
+/**
+ * 🔴 **`bodyBlocks` 在這一層就丟掉**（2026-10-02）：三個呼叫端（首頁最新文章、療程與困擾的
+ *    關聯文章）都只畫卡片，而端點回的是整篇內文 —— 首頁那 11 篇在 payload 裡佔 94 KB，
+ *    比其餘所有資料加起來還多。真的要內文的地方請用 `contentByPath()`。
+ */
 export const recordsByIds = (ids: number[]) =>
   ids.length === 0
     ? Promise.resolve<ContentRecord[]>([])
-    : apiGet<ContentRecord[]>('/content/batch', { ids: ids.join(',') }).then((r) => r ?? [])
+    : fetchEnvelope<ContentRecord[]>('/content/batch', { ids: ids.join(',') }, { omitFields: ['bodyBlocks'] })
+        .then((r) => r.data ?? [])
 
 /** 首頁的七個版位（已核准快照）。取不到回空陣列。 */
 export const homeSections = () =>
@@ -243,6 +371,7 @@ export async function searchSite(keyword: string): Promise<{ ok: boolean, hits: 
   const q = keyword.trim()
   if (!q) return { ok: true, hits: [] }
 
-  const outcome = await fetchEnvelope<SearchHit[]>('/search', { q })
+  // 已經包在 search.vue 的 useAsyncData 裡，由它負責 hydration。
+  const outcome = await fetchEnvelope<SearchHit[]>('/search', { q }, { hydrate: false })
   return { ok: outcome.ok, hits: outcome.data ?? [] }
 }
