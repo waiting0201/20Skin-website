@@ -181,7 +181,7 @@ export interface LegalDoc {
   seo: ReturnType<typeof seoOverridesOf>
 }
 
-const LEGAL_SLUGS: LegalDoc['slug'][] = ['privacy', 'terms', 'medical-disclaimer']
+export const LEGAL_SLUGS: LegalDoc['slug'][] = ['privacy', 'terms', 'medical-disclaimer']
 
 export async function getLegalDocs(): Promise<LegalDoc[]> {
   const index = await pageIndex()

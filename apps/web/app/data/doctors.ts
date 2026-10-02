@@ -94,7 +94,7 @@ export interface Doctor {
 // ⚠️ 反向關聯（這位醫師出現在哪些療程）要從療程那一端掃回來 ——
 //    雙向關聯一律單向存（docs/08 §D），不是資料缺漏。
 
-import { REL, TERM, UNIT, bySlug, img, inboundRelations, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termBy, type ContentRecord } from './_content'
+import { REL, TERM, UNIT, bySlug, img, inboundRelations, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termBy, type ContentRecord } from './_content'
 
 interface BioDocument {
   heroRole: string | null
@@ -205,23 +205,17 @@ function toDoctor(ctx: DoctorContext, record: ContentRecord): Doctor {
   }
 }
 
-export async function getDoctors(): Promise<Doctor[]> {
+/**
+ * 組出醫師清單。`articlesByAuthor` 只放**需要文章清單的那幾位**，其餘的 `articles` 是空陣列。
+ */
+async function buildDoctors(articlesByAuthor: Map<number, ContentRecord[]>): Promise<Doctor[]> {
   const [doctors, treatments, terms, clinics] = await Promise.all([
     loadUnit(UNIT.doctor),
     loadUnit(UNIT.treatment),
-    loadUnit(UNIT.term),
+    loadCategoryTerms(),
     loadUnit(UNIT.clinic),
   ])
-
-  // 每位醫師署名的文章各自向 API 要。⚠️ 14 位醫師＝14 次查詢，但每次只回那幾篇；
-  //    相對於「撈 1100 篇回來自己分組」，傳輸量差三個數量級。
-  const byAuthor = await Promise.all(
-    doctors.map(async (d) => [d.id, (await articlePage(1, 100, { authorDoctorId: d.id })).items] as const),
-  )
-  const ctx: DoctorContext = {
-    treatments, terms, clinics,
-    articlesByAuthor: new Map(byAuthor),
-  }
+  const ctx: DoctorContext = { treatments, terms, clinics, articlesByAuthor }
 
   return doctors
     .slice()
@@ -229,8 +223,24 @@ export async function getDoctors(): Promise<Doctor[]> {
     .map((record) => toDoctor(ctx, record))
 }
 
+/**
+ * 全部醫師，**不含各自的文章清單**（`articles` 一律是空陣列）。
+ *
+ * 🔴 **文章清單只有醫師個人頁會畫，要用 `findDoctor()`**（2026-10-02）。
+ *    原本這裡對 14 位醫師各打一次 `/article?authorDoctorId=…&pageSize=100` ——
+ *    首頁、醫師列表、據點頁每開一次就是 14 次查詢，結果還整包進 hydration payload，
+ *    而那三頁一篇都沒有顯示。
+ */
+export function getDoctors(): Promise<Doctor[]> {
+  return buildDoctors(new Map())
+}
+
+/** 單一位醫師，**含**他署名的文章（只查這一位）。 */
 export async function findDoctor(slug: string): Promise<Doctor | undefined> {
-  return (await getDoctors()).find((d) => d.slug === slug)
+  const record = (await loadUnit(UNIT.doctor)).find((d) => d.slug === slug)
+  if (!record) return undefined
+  const { items } = await articlePage(1, 100, { authorDoctorId: record.id })
+  return (await buildDoctors(new Map([[record.id, items]]))).find((d) => d.slug === slug)
 }
 
 export async function doctorsByClinic(clinicSlug: ClinicSlug, physiciansOnly = false): Promise<Doctor[]> {

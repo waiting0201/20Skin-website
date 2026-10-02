@@ -86,7 +86,7 @@ export interface HomeClinic {
 //    只有主視覺輪播沒有可引用的內容，走版位的 Settings JSON。
 // ⚠️ 版位勾到草稿時匯出端已經濾掉（content-export），這裡拿到的都是已發布的。
 
-import { UNIT, img, loadUnit } from './_content'
+import { UNIT, img, loadCategoryTerms, loadUnit } from './_content'
 import { concernIconFor } from './_presentation'
 import { getClinics, type ClinicHoursTableRow } from './clinics'
 import { getClinicNap } from './navigation'
@@ -135,7 +135,7 @@ export async function getHomeData() {
   const [sections, treatments, terms, doctors, clinics, nap] = await Promise.all([
     homeSections() as Promise<HomeSection[]>,
     loadUnit(UNIT.treatment),
-    loadUnit(UNIT.term),
+    loadCategoryTerms(),
     loadUnit(UNIT.doctor),
     // ⚠️ 用 `getClinics()` 而不是 `loadUnit(UNIT.clinic)` —— 它已經把營業時間組成
     //    表格列了（`hoursTableOf`）。在這裡自己再組一次就是第二份實作。

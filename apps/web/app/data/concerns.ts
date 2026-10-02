@@ -110,7 +110,7 @@ export interface Concern {
 //    （ContentRelations.Note 是逐筆的推薦理由，不是整段引言）。
 
 import {
-  REL, TERM, UNIT, img, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termsOf,
+  REL, TERM, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termsOf,
   type ContentRecord,
 } from './_content'
 import { formatDisplayDate } from './articles'
@@ -243,7 +243,7 @@ export async function getConcerns(): Promise<Concern[]> {
   const [concerns, treatments, terms, doctors, faqs] = await Promise.all([
     loadUnit(UNIT.concern),
     loadUnit(UNIT.treatment),
-    loadUnit(UNIT.term),
+    loadCategoryTerms(),
     loadUnit(UNIT.doctor),
     loadUnit(UNIT.faq),
   ])
@@ -263,7 +263,7 @@ export async function getConcerns(): Promise<Concern[]> {
 
 /** 困擾總覽頁的「四大療程分類」導覽卡。由分類與其療程推導，不另存一份。 */
 export async function getConcernTreatmentCategories() {
-  const [terms, treatments] = await Promise.all([loadUnit(UNIT.term), loadUnit(UNIT.treatment)])
+  const [terms, treatments] = await Promise.all([loadCategoryTerms(), loadUnit(UNIT.treatment)])
   return termsOf(terms, TERM.treatmentCategory).map((term) => {
     const first = treatments.find((t) => t.fields.categoryTermId === term.id)
     return {
@@ -284,7 +284,7 @@ export async function getConcernTreatmentCategories() {
 export async function getConcernOverviewArticles(): Promise<ConcernArticleRef[]> {
   const [{ items }, terms, doctors] = await Promise.all([
     articlePage(1, 3, { latest: true }),
-    loadUnit(UNIT.term),
+    loadCategoryTerms(),
     loadUnit(UNIT.doctor),
   ])
 

@@ -109,6 +109,19 @@ public sealed class PublicContentHandler(
         var rows = await content.ListAsync((byte)type);
         var list = await ShapeAsync(rows, stripHeavy: true);
 
+        // `GET /term?termType=1,2,3`：只要分類、不要 393 筆標籤（2026-10-02）。
+        // ⚠️ 前台把 SSR 的取值結果放進 hydration payload，而幾乎每一頁都要查分類 ——
+        //    整包 406 筆送下去，首頁 payload 光這一支就 gzip 11 KB，大多數頁面一筆標籤都用不到。
+        // ⚠️ 在塑形之後篩：termType 在 fields 裡，與讀取路徑無關，也不必動 SQL。
+        //    沒帶或解析不出任何合法值＝不篩，與舊行為相同。
+        if (type == ContentType.Term && ParseTermTypes(req.Query["termType"]) is { Count: > 0 } termTypes)
+        {
+            list = list
+                .Where(o => o["fields"]?["termType"]?.GetValueKind() == JsonValueKind.Number
+                    && termTypes.Contains(o["fields"]!["termType"]!.GetValue<int>()))
+                .ToList();
+        }
+
         CacheControl.Public(httpContextAccessor.HttpContext?.Response);
         return new OkObjectResult(ApiResponse.Ok(list));
     }
@@ -550,6 +563,20 @@ public sealed class PublicContentHandler(
         UnitTypes.TryGetValue(unit, out var type)
             ? type
             : throw AppException.NotFound($"內容單元 {unit}");
+
+    /// <summary>
+    /// <c>termType=1,2,3</c> → {1,2,3}。非數字或超出 byte 範圍的片段略過；全部不合法＝空集合（不篩）。
+    /// </summary>
+    internal static HashSet<int> ParseTermTypes(string? raw)
+    {
+        var result = new HashSet<int>();
+        if (string.IsNullOrWhiteSpace(raw)) return result;
+        foreach (var part in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (int.TryParse(part, out var v) && v is > 0 and <= byte.MaxValue) result.Add(v);
+        }
+        return result;
+    }
 
     private static (int Page, int PageSize) ReadPaging(HttpRequest req)
     {

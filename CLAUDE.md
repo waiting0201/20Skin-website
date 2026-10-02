@@ -405,6 +405,10 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    ⚠️ 已經包 `useAsyncData` 的呼叫要傳 `hydrate: false`，否則同一份資料在 payload 裡出現兩次；
    **新寫的頁面不要再包 `useAsyncData`**。⚠️ 代價是 HTML 變大（gzip 約 65–75 KB），
    所以**清單或卡片不要取內文**（`recordsByIds()` 已丟掉 `bodyBlocks`）。
+   🔴 **頁面只用到一點，就不要載整包**——SSR 取過的一切都會跟著 HTML 送出去：
+   查分類用 `loadCategoryTerms()`（不是 `loadUnit(UNIT.term)`，那包 393 筆標籤）、
+   只要連結用 `unitIndex()`、只數數量用原始清單而不是 `getTreatments()` 這種會組整套物件的函式、
+   醫師的文章清單只有 `findDoctor()` 會帶（`getDoctors()` 的 `articles` 一律是空陣列）。
 
    ⚠️ **同一個請求內只取一次。** 一頁常有三四個模組都要 `term`（療程要分類、
    文章要標籤、FAQ 要分類），去重掛在 `useNuxtApp()` 上 —— **掛在模組層級會變成

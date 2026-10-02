@@ -41,10 +41,10 @@ export interface FaqItem {
 
 // ── 資料來源：content/faqs.json ＋ terms.json（docs/09 §3）────────────────
 
-import { TERM, UNIT, loadUnit, termsOf, type ContentRecord } from './_content'
+import { TERM, UNIT, loadCategoryTerms, loadUnit, termsOf, type ContentRecord } from './_content'
 
 export async function getFaqCategories(): Promise<FaqCategory[]> {
-  const terms = await loadUnit(UNIT.term)
+  const terms = await loadCategoryTerms()
   return termsOf(terms, TERM.faqCategory).map((t) => ({
     slug: t.slug as string,
     label: t.title,
@@ -55,7 +55,7 @@ const categorySlugOf = (terms: ContentRecord[], record: ContentRecord): string =
   terms.find((t) => t.id === record.fields.categoryTermId)?.slug ?? ''
 
 export async function getFaqItems(): Promise<FaqItem[]> {
-  const [faqs, terms] = await Promise.all([loadUnit(UNIT.faq), loadUnit(UNIT.term)])
+  const [faqs, terms] = await Promise.all([loadUnit(UNIT.faq), loadCategoryTerms()])
   return faqs
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)

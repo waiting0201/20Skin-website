@@ -135,7 +135,7 @@ SSR 之後那個位置給了 Nuxt。它負責的 1000 條 301 改由前台的 `p
 
 | 端點 | 說明 |
 |---|---|
-| `GET /{unit}` | 九個單元的列表（不含內文）。⚠️ **`article` 會自動分頁**（預設每頁 12、上限 100）—— 1100 筆一次送出沒有任何呼叫端需要。回 `{ items, page, pageSize, totalCount }`，**沒有 `totalPages`**（與後台的分頁形狀不同，見 §2）。支援 `?sort=latest`（只認這個值）、`?categoryTermId=`、`?tagTermId=`、`?authorDoctorId=`，這些參數只對 `article` 有效。其餘八個單元回平面陣列 |
+| `GET /{unit}` | 九個單元的列表（不含內文）。⚠️ **`article` 會自動分頁**（預設每頁 12、上限 100）—— 1100 筆一次送出沒有任何呼叫端需要。回 `{ items, page, pageSize, totalCount }`，**沒有 `totalPages`**（與後台的分頁形狀不同，見 §2）。支援 `?sort=latest`（只認這個值）、`?categoryTermId=`、`?tagTermId=`、`?authorDoctorId=`，這些參數只對 `article` 有效。其餘八個單元回平面陣列。<br>⚠️ **`term` 支援 `?termType=1,2,3`**（2026-10-02）：只回指定型別（1 療程分類、2 文章分類、3 FAQ 分類、4 文章標籤），不合法的值略過、全不合法＝不篩。前台查分類一律帶它 —— 整包 406 筆裡 393 筆是標籤，而 SSR 的取值結果會進 hydration payload |
 | `GET /content?path=…` | 依網址取單筆，**含內文**。網址全站唯一（[08](08-database.md) §B-1），所以這是內頁最直接的查法 |
 | `GET /content/batch?ids=…` | 依 id 批次取（上限 100，超過只取前 100；不存在或不可見的 id 靜默略過，不回 404）。給「關聯目標需要的欄位不只標題」用 —— 療程卡片要關聯文章的封面與日期，而 `relations[]` 只帶 slug／title／urlPath |
 | `GET /article/popular-tags?limit=` | 側欄熱門標籤，**依實際引用篇數在 SQL 層聚合**。`limit` 1–50，其餘值一律 12 |

@@ -95,20 +95,23 @@ function requestKey(path: string, query: Query): string {
 async function fetchEnvelope<T>(
   path: string,
   query: Query,
-  opts: { hydrate?: boolean, omitFields?: string[] } = {},
+  opts: { hydrate?: boolean, omitFields?: string[], lite?: boolean } = {},
 ): Promise<FetchOutcome<T>> {
   // ⚠️ 兩個 composable 都要在第一個 await 之前取 —— 之後 Nuxt 的 context 可能已經不在了。
   const nuxtApp = useNuxtApp()
   const base = useRuntimeConfig().public.apiBaseUrl
   const hydrate = opts.hydrate !== false
-  const key = requestKey(path, query)
+  // 🔴 瘦身方式要算進鍵裡：同一個 `/page`，頁尾要精簡版、`/about/` 要完整版 ——
+  //    共用一個鍵的話，hydration 會讓 `/about/` 讀到精簡版，整區靜默消失。
+  const shape = opts.lite ? '#lite' : opts.omitFields?.length ? `#-${opts.omitFields.join(',')}` : ''
+  const key = requestKey(path, query) + shape
   const store = (nuxtApp.payload.data[PAYLOAD_KEY] ??= {}) as Record<string, unknown>
 
   if (import.meta.client) {
     if (hydrate && nuxtApp.isHydrating && key in store) {
       return { ok: true, data: store[key] as T | null }
     }
-    return requestEnvelope<T>(base, path, query, opts.omitFields)
+    return requestEnvelope<T>(base, path, query, opts)
   }
 
   // 伺服器端：同一個請求內同一個鍵只真的打一次（例如文章內頁的標頭與內文取的是同一筆）。
@@ -118,7 +121,7 @@ async function fetchEnvelope<T>(
   const inflight = app._contentApiInflight.get(key)
   if (inflight) return inflight as Promise<FetchOutcome<T>>
 
-  const pending = requestEnvelope<T>(base, path, query, opts.omitFields).then((outcome) => {
+  const pending = requestEnvelope<T>(base, path, query, opts).then((outcome) => {
     if (hydrate && outcome.ok) store[key] = outcome.data
     return outcome
   })
@@ -179,11 +182,27 @@ function slim<T>(data: T, omitFields: string[] = []): T {
   return data
 }
 
+/** 只留連結需要的欄位（標題、網址）。給頁尾這種只畫連結的地方用。 */
+const LITE_KEYS = ['id', 'unit', 'slug', 'urlPath', 'title', 'sortOrder']
+
+function shapeData<T>(data: T, opts: { omitFields?: string[], lite?: boolean }): T {
+  if (opts.lite && Array.isArray(data)) {
+    return data.map((x) => {
+      if (!isRecord(x)) return x
+      const out: Record<string, unknown> = Object.fromEntries(LITE_KEYS.filter((k) => k in x).map((k) => [k, x[k]]))
+      // 分類與標籤要靠 termType 分辨（slug 會跨型別撞名，見 `termBy`），這一欄留著。
+      if (isRecord(x.fields) && x.fields.termType !== undefined) out.fields = { termType: x.fields.termType }
+      return out
+    }) as T
+  }
+  return slim(data, opts.omitFields ?? [])
+}
+
 async function requestEnvelope<T>(
   base: string,
   path: string,
   query: Query,
-  omitFields: string[] = [],
+  opts: { omitFields?: string[], lite?: boolean } = {},
 ): Promise<FetchOutcome<T>> {
   try {
     const envelope = await $fetch<Envelope<T>>(base + path, {
@@ -194,7 +213,7 @@ async function requestEnvelope<T>(
       timeout: 8000,
       retry: 1,
     })
-    return { ok: true, data: envelope.success ? slim(envelope.data ?? null, omitFields) : null }
+    return { ok: true, data: envelope.success ? shapeData(envelope.data ?? null, opts) : null }
   }
   catch (error) {
     // 404 是「後端明確說沒有這一筆」，不是故障 —— 要與連不上分開。
@@ -235,8 +254,8 @@ export async function apiGet<T>(
  *
  * ⚠️ 文章不要用這一支 —— 它有 1100 筆，一定要分頁（{@link articlePage}）。
  */
-export async function unitRecords(unit: string): Promise<ContentRecord[]> {
-  const outcome = await fetchEnvelope<ContentRecord[]>(`/${unit}`, {})
+export async function unitRecords(unit: string, query: Query = {}): Promise<ContentRecord[]> {
+  const outcome = await fetchEnvelope<ContentRecord[]>(`/${unit}`, query)
   if (!outcome.ok) {
     throw createError({
       statusCode: 503,
@@ -331,6 +350,20 @@ export const recordsByIds = (ids: number[]) =>
     ? Promise.resolve<ContentRecord[]>([])
     : fetchEnvelope<ContentRecord[]>('/content/batch', { ids: ids.join(',') }, { omitFields: ['bodyBlocks'] })
         .then((r) => r.data ?? [])
+
+/**
+ * 某個單元的**精簡清單**：每筆只有 id／slug／urlPath／title／sortOrder（分類與標籤另帶
+ * `fields.termType`），沒有其餘 fields 與 seo。
+ * 取不到回空陣列（給頁尾這種裝飾性的地方用，拿不到就降級）。
+ *
+ * ⚠️ 要畫內容的地方不要用它 —— 拿到的紀錄 `fields` 是 undefined。
+ */
+export type IndexRecord = Pick<ContentRecord, 'id' | 'unit' | 'slug' | 'urlPath' | 'title' | 'sortOrder'>
+  & { fields?: { termType?: number } }
+
+export const unitIndex = (unit: string, query: Query = {}) =>
+  fetchEnvelope<IndexRecord[]>(`/${unit}`, query, { lite: true })
+    .then((r) => r.data ?? [])
 
 /** 首頁的七個版位（已核准快照）。取不到回空陣列。 */
 export const homeSections = () =>

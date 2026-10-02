@@ -288,9 +288,12 @@ export async function getClinicOptions(): Promise<{ slug: ClinicSlug; name: stri
 }
 
 export async function getClinics(): Promise<Clinic[]> {
-  const [clinics, faqs, nap] = await Promise.all([
-    loadUnit(UNIT.clinic), loadUnit(UNIT.faq), getClinicNap(),
-  ])
+  const [clinics, nap] = await Promise.all([loadUnit(UNIT.clinic), getClinicNap()])
+  // 🔴 只取被院區關聯到的那幾題 FAQ，不要 `loadUnit(UNIT.faq)`（2026-10-02）——
+  //    首頁與據點頁都會呼叫這一支，整個 FAQ 單元（gzip 5 KB）跟著進 hydration payload，
+  //    而兩個院區合計只關聯了幾題。
+  const faqIds = [...new Set(clinics.flatMap((c) => relationsOf(c, REL.clinicToFaq).map((r) => r.toContentItemId)))]
+  const faqs = await recordsByIds(faqIds)
   return clinics
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)

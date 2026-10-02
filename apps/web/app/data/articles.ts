@@ -36,7 +36,7 @@ export interface ArticleCategory {
 /** 四個分類 slug 為定案值（docs/01-sitemap.md §1、CLAUDE.md）。 */
 // ── 資料來源：content/articles.json ＋ terms.json（docs/09 §3）───────────
 
-import { REL, TERM, UNIT, img, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termsOf, type ContentRecord } from './_content'
+import { REL, TERM, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termsOf, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
 
 const toImage = (value: unknown, fallbackAlt = ''): ArticleImage => {
@@ -45,7 +45,7 @@ const toImage = (value: unknown, fallbackAlt = ''): ArticleImage => {
 }
 
 export async function getArticleCategories(): Promise<ArticleCategory[]> {
-  const terms = await loadUnit(UNIT.term)
+  const terms = await loadCategoryTerms()
   return termsOf(terms, TERM.articleCategory).map((t) => ({
     slug: t.slug as ArticleCategorySlug,
     label: t.title,
@@ -96,8 +96,21 @@ export interface ArticleTagRef {
  *    那會直接印在 `/blog/tag/{slug}/` 的標題上。
  */
 export async function getTagLabel(slug: string): Promise<string> {
-  const terms = await loadUnit(UNIT.term)
-  return termsOf(terms, TERM.articleTag).find((t) => t.slug === slug)?.title ?? slug
+  const tags = await loadTagIndex()
+  return tags.find((t) => t.slug === slug)?.title ?? slug
+}
+
+/**
+ * 393 筆文章標籤的**精簡清單**（只有 id／slug／title），給標籤頁依 slug 查 id 與名稱用。
+ *
+ * 🔴 不要用 `loadUnit(UNIT.term)`（2026-10-02）：那是整包 406 筆、每筆帶 seo 與 fields，
+ *    gzip 11 KB 進 hydration payload，而標籤頁只要查一個 slug。
+ * ⚠️ 文章卡片上的標籤**不靠這份**，是從文章自己的關聯讀的（`REL.articleToTag` 的 toSlug／toTitle）。
+ * ⚠️ API 還沒部署 `termType` 篩選時會回全部型別 —— 這裡自己再篩一次（slug 會跨型別撞名）。
+ */
+function loadTagIndex() {
+  return unitIndex(UNIT.term, { termType: TERM.articleTag })
+    .then((rows) => rows.filter((t) => t.fields?.termType === TERM.articleTag))
 }
 
 export interface ArticleImage {
@@ -243,8 +256,9 @@ function toArticle(ctx: ArticleContext, record: ContentRecord): Article {
  *    改成：列表走分頁端點、內頁走 by-path、篩選（分類／標籤／作者）交給 API。
  */
 async function articleContext(): Promise<ArticleContext> {
+  // ⚠️ 只要分類：`ctx.terms` 只拿來查 categoryTermId，標籤來自文章自己的關聯。
   const [terms, doctors, treatments, concerns] = await Promise.all([
-    loadUnit(UNIT.term),
+    loadCategoryTerms(),
     loadUnit(UNIT.doctor),
     loadUnit(UNIT.treatment),
     loadUnit(UNIT.concern),
@@ -380,12 +394,15 @@ async function listPage(
   page: number,
   opts: { categorySlug?: string, tagSlug?: string } = {},
 ): Promise<PagedArticles> {
-  const terms = await loadUnit(UNIT.term)
+  const [terms, tags] = await Promise.all([
+    loadCategoryTerms(),
+    opts.tagSlug ? loadTagIndex() : Promise.resolve([]),
+  ])
   const categoryTermId = opts.categorySlug
     ? termsOf(terms, TERM.articleCategory).find((t) => t.slug === opts.categorySlug)?.id
     : undefined
   const tagTermId = opts.tagSlug
-    ? termsOf(terms, TERM.articleTag).find((t) => t.slug === opts.tagSlug)?.id
+    ? tags.find((t) => t.slug === opts.tagSlug)?.id
     : undefined
 
   const result = await articlePage(page, ARTICLES_PER_PAGE, {

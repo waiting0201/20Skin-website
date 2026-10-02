@@ -4,9 +4,13 @@
 // mockup 只給了黃勇學一份完整內容，其餘 13 位僅有 name/slug/jobTitle/tags/clinics。
 // 本頁每一段落都以 v-if 檢查資料是否存在，缺資料就整段不渲染，不補假內容
 // （app/data/doctors.ts 開頭已說明原因）。
-import { getDoctors } from '~/data/doctors'
+import { findDoctor, getDoctors } from '~/data/doctors'
 
-const [DOCTORS, CLINICS] = await Promise.all([getDoctors(), getClinics()])
+// ⚠️ 這一位要用 `findDoctor()` —— 只有它會帶文章清單；`getDoctors()` 的 `articles` 一律是空陣列
+//    （2026-10-02，免得首頁、醫師列表、據點頁每次都替 14 位醫師各查一次文章）。
+//    `DOCTORS` 只拿來找同院區的其他醫師，不需要文章。
+const routeSlug = useRoute().params.slug as string
+const [DOCTORS, CLINICS, doctorWithArticles] = await Promise.all([getDoctors(), getClinics(), findDoctor(routeSlug)])
 
 // ⚠️ 據點在 <template> 裡被查好幾次，而 template 不能 await ——
 //    在 setup 先取好，用同步 find。
@@ -15,7 +19,7 @@ import { getClinics } from '~/data/clinics'
 
 const route = useRoute()
 const slug = route.params.slug as string
-const doctor = DOCTORS.find((d) => d.slug === slug)
+const doctor = doctorWithArticles
 
 if (!doctor) {
   throw createError({ statusCode: 404, statusMessage: '找不到這位成員' })

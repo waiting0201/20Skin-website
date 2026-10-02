@@ -104,6 +104,31 @@ export function loadUnit(unit: UnitName): Promise<ContentRecord[]> {
 }
 
 /**
+ * 只有**分類**（療程／文章／FAQ 三種，13 筆），不含 393 筆文章標籤。**同一個請求內只取一次。**
+ *
+ * 🔴 **只查分類的地方一律用這一支，不要用 `loadUnit(UNIT.term)`**（2026-10-02）。
+ *    SSR 的取值結果會進 hydration payload，而幾乎每一頁都要查分類 ——
+ *    整包 406 筆送下去，首頁 payload 光 term 就 gzip 11 KB，多數頁面一筆標籤都用不到。
+ *    真的要標籤（文章卡片、標籤頁）才用 `loadUnit(UNIT.term)`。
+ * ⚠️ 從這一份 `find` 標籤一定找不到 —— 那不會報錯，只會讓標籤名稱變成空字串。
+ */
+export function loadCategoryTerms(): Promise<ContentRecord[]> {
+  const nuxtApp = useNuxtApp() as unknown as { _contentCache?: Map<string, Promise<ContentRecord[]>> }
+  nuxtApp._contentCache ??= new Map()
+
+  const key = 'term:categories'
+  const cached = nuxtApp._contentCache.get(key)
+  if (cached) return cached
+
+  const types = [TERM.treatmentCategory, TERM.articleCategory, TERM.faqCategory].join(',')
+  const pending = unitRecords(UNIT.term, { termType: types })
+    // ⚠️ API 還沒部署篩選參數時會回整包 —— 前台自己再篩一次，結果一樣。
+    .then((rows) => rows.filter((r) => r.fields.termType !== TERM.articleTag))
+  nuxtApp._contentCache.set(key, pending)
+  return pending
+}
+
+/**
  * 前台用得到的全站設定。
  *
  * 🔴 **只有 `GET /site-settings/public` 回的那幾個鍵，不是整張 SiteSettings。**

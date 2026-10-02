@@ -190,7 +190,7 @@ const doctorHung: RelatedDoctor = {
 //    前台原本那句「內容建置中」因此不再需要 —— 正式站不該有一個只寫著建置中的頁面。
 
 import {
-  REL, TERM, UNIT, img, loadUnit, parseBlocks, relationsOf, termsOf, type ContentRecord,
+  REL, TERM, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, termsOf, type ContentRecord,
   seoOverridesOf,
 } from './_content'
 import { eyebrowFor } from './_presentation'
@@ -310,7 +310,7 @@ function toTreatment(ctx: TreatmentContext, record: ContentRecord): Treatment {
 export async function getTreatments(): Promise<Treatment[]> {
   const [records, terms, doctors, faqs] = await Promise.all([
     loadUnit(UNIT.treatment),
-    loadUnit(UNIT.term),
+    loadCategoryTerms(),
     loadUnit(UNIT.doctor),
     loadUnit(UNIT.faq),
   ])
@@ -329,7 +329,7 @@ export async function getTreatments(): Promise<Treatment[]> {
 }
 
 export async function getTreatmentCategories(): Promise<TreatmentCategory[]> {
-  const [terms, treatments] = await Promise.all([loadUnit(UNIT.term), getTreatments()])
+  const [terms, treatments] = await Promise.all([loadCategoryTerms(), getTreatments()])
 
   return termsOf(terms, TERM.treatmentCategory).map((term) => {
     const items = treatments.filter((t) => t.categorySlug === term.slug)

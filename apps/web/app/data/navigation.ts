@@ -25,7 +25,7 @@ export const EXTERNAL = {
 //    改一個選項不需要工程介入 —— 這正是它進資料庫的理由。
 
 import { UNIT, loadUnit } from './_content'
-import { getLegalDocs } from './pages'
+import { LEGAL_SLUGS } from './pages'
 
 interface MenuNode {
   label: string
@@ -149,11 +149,20 @@ export async function getClinicLineContacts(): Promise<{ name: string; url: stri
     .filter((c) => c.url.length > 0)
 }
 
+/**
+ * 頁尾的法務連結。
+ *
+ * 🔴 用精簡清單（`unitIndex`），不要 `getLegalDocs()`（2026-10-02）——
+ *    頁尾每一頁都有，而 `getLegalDocs()` 會載整個頁面單元，跟著每一頁的 hydration payload
+ *    多帶 gzip 5 KB，只為了三個連結的標題與網址。
+ * ⚠️ 順序與 slug 清單和 `getLegalDocs()` 共用 `LEGAL_SLUGS`，兩邊不會分岔。
+ */
 export async function getLegalLinks(): Promise<NavItem[]> {
-  return (await getLegalDocs()).map((doc) => ({
-    label: doc.navLabel,
-    href: doc.path,
-  }))
+  const pages = await unitIndex(UNIT.page)
+  return LEGAL_SLUGS.map((slug) => {
+    const record = pages.find((p) => p.slug === slug)
+    return { label: record?.title ?? '', href: record?.urlPath ?? `/${slug}/` }
+  })
 }
 
 // 🔴 `SOCIAL_LINKS` 2026-09-18 移除 —— 頁尾的社群連結改讀全站設定的 `footer.social.json`

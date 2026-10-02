@@ -7,9 +7,8 @@
 //
 // header／footer／浮動諮詢鈕已經在 layouts/default.vue，這裡只放 <main id="main"> 的內容。
 import { HOURS_WEEKDAY_LABELS, getHomeData } from '~/data/home'
-import { getDoctors } from '~/data/doctors'
+import { UNIT, loadUnit } from '~/data/_content'
 import { getSiteSettings } from '~/data/site-settings'
-import { getTreatments } from '~/data/treatments'
 import { ORIGIN } from '~/composables/usePageHead'
 
 // 這三個數字**推導、不要手寫**。2026-09-15 修：原本寫死「27項療程」，
@@ -20,8 +19,12 @@ import { ORIGIN } from '~/composables/usePageHead'
 // ⚠️ 安喬（許媖琄）是藝術總監、不是醫師，所以醫師數要用 isPhysician 濾過。
 // 「14 位醫師」是 CLAUDE.md 關鍵數字明確列為錯誤的敘述（13 位醫師＋1 位藝術總監），
 // mockup 原文就寫錯了，結構化資料不要跟著錯。
+// 🔴 療程與醫師在這一頁**只用來數數量**，所以拿原始清單，不要 `getTreatments()`／`getDoctors()`
+//    （2026-10-02）—— 那兩支會把整套物件組起來（療程連帶全部 FAQ 與關聯文章），
+//    而組的過程中取到的東西全部進 hydration payload。`getHomeData()` 本來就載這兩個單元，
+//    同一個請求內不會多打 API。
 const [treatments, DOCTORS, SITE_SETTINGS, home] = await Promise.all([
-  getTreatments(), getDoctors(), getSiteSettings(), getHomeData(),
+  loadUnit(UNIT.treatment), loadUnit(UNIT.doctor), getSiteSettings(), getHomeData(),
 ])
 const { heroSlides: HERO_SLIDES, specialties: SPECIALTIES, featuredTreatments: FEATURED_TREATMENTS,
   latestArticles: LATEST_ARTICLES, featuredDoctors: FEATURED_DOCTORS, homeClinics: HOME_CLINICS,
@@ -36,7 +39,7 @@ const { heroSlides: HERO_SLIDES, specialties: SPECIALTIES, featuredTreatments: F
 //    否則換了順序或關掉一區，就會出現兩塊同色的區塊黏在一起。
 //    mockup 的節奏是主視覺之後第一塊有底色，這裡照它：第 0、2、4 個是 alt。
 const isAlt = (key: string) => SECTION_ORDER.indexOf(key) % 2 === 0
-const physicianCount = DOCTORS.filter((d) => d.isPhysician).length
+const physicianCount = DOCTORS.filter((d) => Boolean(d.fields.isPhysician)).length
 const nonPhysicianCount = DOCTORS.length - physicianCount
 
 // SEO title 取首頁主標語（hero <h1> 的純文字），不是自己編的字句。

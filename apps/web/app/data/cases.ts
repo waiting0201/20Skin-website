@@ -105,7 +105,7 @@ export interface CaseDetail {
 //    **捏造那些欄位是法規紅線**，所以它們沒有進資料庫，也就不會出現在這裡。
 //    要恢復列表，必須由院方補齊那四個欄位 —— 這是內容問題，不是程式問題。
 
-import { REL, UNIT, img, loadUnit, parseBlocks, relationsOf, seoOverridesOf, type ContentRecord } from './_content'
+import { REL, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, seoOverridesOf, type ContentRecord } from './_content'
 
 const toImage = (value: unknown, fallbackAlt = ''): Image => {
   const i = img(value)
@@ -128,13 +128,13 @@ const narrativeOf = (record: ContentRecord) =>
 export async function getCaseList(): Promise<CaseListItem[]> {
   // ⚠️ 這一頁因此從「取一個單元」變成三個（療程 ＋ 分類與標籤，後者 406 筆／約 210 KB）。
   //    不做快取（決策 14），所以每個請求都是真的往返 —— 但 `/treatments/`、`/concerns/`、
-  //    `/faq/`、`/blog/` 早就都是這樣取的（`loadUnit(UNIT.term)`），這裡跟著同一個做法，
+  //    `/faq/`、`/blog/` 早就都是這樣取的（`loadCategoryTerms()`），這裡跟著同一個做法，
   //    不另外發明一條「只在有兩筆以上案例時才載」的捷徑：那會讓 `category` 的有無取決於
   //    資料筆數，是「在 dev 用一筆資料測都對、上線才壞」的那種陷阱。
   const [cases, treatments, terms] = await Promise.all([
     loadUnit(UNIT.case),
     loadUnit(UNIT.treatment),
-    loadUnit(UNIT.term),
+    loadCategoryTerms(),
   ])
 
   return cases
