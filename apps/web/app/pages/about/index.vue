@@ -35,7 +35,7 @@ usePageHead({
         <div class="about-hero__copy">
           <span class="u-eyebrow">OUR PHILOSOPHY</span>
           <h1 class="about-hero__title">品牌理念</h1>
-          <p class="about-hero__lede">自然不是一個固定的樣板，而是每一張臉本來的協調感。療程的目的是把它整理回來，不是換掉它。</p>
+          <p class="about-hero__lede">自然不是一個固定的樣板，以東方骨架整體規劃，保留自己原本自然年輕的樣子，透過美學規劃，保留整體的協調感。</p>
         </div>
 
         <div class="about-hero__media">
