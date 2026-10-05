@@ -45,6 +45,9 @@ export const faqUnit: UnitDefinition = {
       label: 'AI 摘要版答案',
       type: 'textarea',
       required: true,
+      // 🔴 Faqs.AiAnswer 是 NOT NULL ＋ CK_Faqs_AiAnswer_NotEmpty，API 建立時就要（ApplyFaqFields）。
+      //    少了這個旗標，新增對話框不會問這一格，而送出一定被擋。
+      requiredOnCreate: true,
       group: '答案',
       riskScan: true,
       hint: '60–100 字，要能單獨看懂（不能寫「如上所述」）——搜尋引擎與 AI 只讀這一段，沒填這一題就不會被它們取用。',

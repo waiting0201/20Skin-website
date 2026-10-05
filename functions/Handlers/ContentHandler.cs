@@ -1842,21 +1842,21 @@ public sealed class ContentHandler(
     private static void ApplyFaqFields(Faq faq, JsonElement f, bool isCreate)
     {
         if (JInt(f, "categoryTermId") is int categoryTermId) faq.CategoryTermId = categoryTermId;
-        else if (isCreate) throw AppException.BadRequest(ErrorCodes.ValidationRequired, "categoryTermId 為必填欄位。");
+        else if (isCreate) throw AppException.BadRequest(ErrorCodes.ValidationRequired, "「分類」為必填欄位。");
 
         var webAnswer = JStr(f, "webAnswer");
         if (webAnswer is { Length: > 0 }) faq.WebAnswer = webAnswer;
-        else if (isCreate) throw AppException.BadRequest(ErrorCodes.ValidationRequired, "webAnswer 為必填欄位。");
+        else if (isCreate) throw AppException.BadRequest(ErrorCodes.ValidationRequired, "「網頁版答案」為必填欄位。");
 
         var aiAnswer = JStr(f, "aiAnswer");
         if (aiAnswer is { Length: > 0 })
         {
-            if (aiAnswer.Length > 500) throw AppException.BadRequest(ErrorCodes.ValidationRange, "aiAnswer 長度不可超過 500 字。");
+            if (aiAnswer.Length > 500) throw AppException.BadRequest(ErrorCodes.ValidationRange, "「AI 摘要版答案」不可超過 500 字。");
             faq.AiAnswer = aiAnswer;
         }
         else if (isCreate)
         {
-            throw AppException.BadRequest(ErrorCodes.ValidationRequired, "aiAnswer 為必填欄位——它是 FAQPage JSON-LD 與 AI 語料匯出的唯一來源。");
+            throw AppException.BadRequest(ErrorCodes.ValidationRequired, "「AI 摘要版答案」為必填欄位。");
         }
 
         if (JDateOnly(f, "lastReviewedOn") is DateOnly lastReviewedOn) faq.LastReviewedOn = lastReviewedOn;
