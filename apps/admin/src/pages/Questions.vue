@@ -92,14 +92,18 @@ const faqCategoryOptions = ref<{ value: string; label: string }[]>([])
 //    （`categoryTermSeedKey` 這個鍵在 API 與單元宣告裡都不存在，是純粹的遺留字串。）
 //
 //    改成先展開一張小表單，把 API 要求的三樣問齊再送。
+// 🔴 **修完之後仍然必定失敗了一段時間**：API 還要求 `aiAnswer` 非空
+//    （NOT NULL ＋ CK_Faqs_AiAnswer_NotEmpty），而這裡寫死送 `''`。
+//    同一個漏洞也在 FAQ 清單的新增對話框（units/faq.ts 少了 requiredOnCreate）。
 const draftFor = ref<QuestionInboxRecord | null>(null)
-const draftForm = reactive({ categoryTermId: '', webAnswer: '', slug: '' })
+const draftForm = reactive({ categoryTermId: '', webAnswer: '', aiAnswer: '', slug: '' })
 const draftErrors = ref<Record<string, string>>({})
 
 function openDraft(item: QuestionInboxRecord) {
   draftFor.value = item
   draftForm.categoryTermId = ''
   draftForm.webAnswer = ''
+  draftForm.aiAnswer = ''
   draftForm.slug = `faq-${Date.now()}`
   draftErrors.value = {}
   actionError.value = ''
@@ -115,6 +119,8 @@ async function createFaqDraft() {
   const errors: Record<string, string> = {}
   if (!draftForm.categoryTermId) errors.categoryTermId = '請選一個 FAQ 分類——API 在建立時就要求它。'
   if (!draftForm.webAnswer.trim()) errors.webAnswer = '網頁版答案為必填，可以先寫一句草稿之後再改。'
+  if (!draftForm.aiAnswer.trim()) errors.aiAnswer = 'AI 摘要版答案為必填，可以先寫一句草稿之後再改。'
+  else if (draftForm.aiAnswer.trim().length > 500) errors.aiAnswer = 'AI 摘要版答案不可超過 500 字。'
   const slugProblem = validateSlug(draftForm.slug)
   if (slugProblem) errors.slug = slugProblem
   else if (!draftForm.slug.trim()) errors.slug = 'slug 為必填。'
@@ -137,7 +143,7 @@ async function createFaqDraft() {
         fields: {
           categoryTermId: draftForm.categoryTermId,
           webAnswer: draftForm.webAnswer,
-          aiAnswer: '',
+          aiAnswer: draftForm.aiAnswer.trim(),
           lastReviewedOn: new Date().toISOString().slice(0, 10),
         },
       },
@@ -318,6 +324,12 @@ async function remove(item: QuestionInboxRecord) {
                       <textarea v-model="draftForm.webAnswer" class="adm-textarea" :class="{ 'is-invalid': draftErrors.webAnswer }" />
                       <p v-if="draftErrors.webAnswer" class="adm-field__error" role="alert">{{ draftErrors.webAnswer }}</p>
                       <p class="adm-field__hint">先寫一句草稿就好，建立後在 FAQ 編輯畫面繼續補（建議 150–400 字）。</p>
+                    </div>
+                    <div class="adm-field adm-field--span2" data-error-key="aiAnswer">
+                      <label class="adm-field__label">AI 摘要版答案<span class="adm-field__required">＊</span></label>
+                      <textarea v-model="draftForm.aiAnswer" class="adm-textarea" :class="{ 'is-invalid': draftErrors.aiAnswer }" />
+                      <p v-if="draftErrors.aiAnswer" class="adm-field__error" role="alert">{{ draftErrors.aiAnswer }}</p>
+                      <p class="adm-field__hint">60–100 字，要能單獨看懂——搜尋引擎與 AI 只讀這一段。同樣可以先寫草稿，之後再補。</p>
                     </div>
                   </div>
                   <div class="adm-inline-actions">
