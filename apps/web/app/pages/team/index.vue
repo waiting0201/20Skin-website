@@ -213,7 +213,7 @@ function siteLabel(doctor: (typeof ALL_DOCTORS)[number]) {
 
       <p class="c-note team-note">
         <span class="c-note__icon" aria-hidden="true">&#9432;</span>
-        團隊共 {{ ALL_DOCTORS.length }} 位成員，其中 {{ physicianCount }} 位為醫師，安喬（許媖琄）為藝術總監兼執行長、亦為「新中式美學」創始人，不具醫師身分、不從事醫療行為。
+        團隊共 {{ ALL_DOCTORS.length }} 位成員，其中 {{ physicianCount }} 位為醫師，安喬為藝術總監兼執行長、亦為「新中式美學」創始人，不具醫師身分、不從事醫療行為。
       </p>
     </div>
   </section>

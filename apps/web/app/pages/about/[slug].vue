@@ -89,7 +89,7 @@ usePageHead({
     <section class="section" id="origin">
       <div class="container story-origin__layout">
         <figure class="story-origin__media">
-          <img src="/assets/img/doctor-anqiao.jpg" alt="安喬（許媖琄），20SKIN 美醫集團執行長・藝術總監" width="700" height="921" loading="lazy">
+          <img src="/assets/img/doctor-anqiao.jpg" alt="安喬，20SKIN 美醫集團執行長・藝術總監" width="700" height="921" loading="lazy">
         </figure>
 
         <div class="story-origin__body">
@@ -100,7 +100,7 @@ usePageHead({
             </div>
           </div>
 
-          <p class="story-origin__role">安喬（許媖琄）｜執行長・藝術總監・「新中式美學」創始人</p>
+          <p class="story-origin__role">安喬｜執行長・藝術總監・「新中式美學」創始人</p>
 
           <p class="story-origin__lead">新中式美學不是療程，而是一套判斷標準。她的養成背景在美學與造型，而非醫學；進到門診後最直接的觀察是：討論經常停在單一部位，很少有人先問「這張臉整體想給人什麼印象」。</p>
 

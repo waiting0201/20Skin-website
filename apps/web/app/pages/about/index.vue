@@ -55,7 +55,7 @@ usePageHead({
         </div>
         <blockquote class="about-quote__body">
           <p class="about-quote__text">以古為師，<br>將東方的美學藝術，<br>與「醫美微整形」創新結合。</p>
-          <cite class="about-quote__cite">安喬（許媖琄）｜執行長・「新中式美學」創始人</cite>
+          <cite class="about-quote__cite">安喬｜執行長・「新中式美學」創始人</cite>
         </blockquote>
       </div>
     </section>
