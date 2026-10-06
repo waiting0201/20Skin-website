@@ -166,7 +166,8 @@ public sealed class GeminiService(
             new GeminiContent([new GeminiPart(systemInstruction)]),
             [new GeminiTurn("user", [new GeminiPart(userMessage)])],
             // ⚠️ 低溫度是護欄的一部分，不是調味：這個場景要的是「照著片段講」，不是創意。
-            new GenerationConfig(0.2, 800,
+            //    2026-10-06 由 0.2 再壓到 0.1（回答要貼近原文，見 AiHandler 的【貼近原文】）。
+            new GenerationConfig(0.1, 1200,
                 ThinkingLevel is { } level ? new ThinkingConfig(level) : null));
 
         var response = await PostAsync<GenerateRequest, GenerateResponse>(

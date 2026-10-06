@@ -68,8 +68,12 @@ public sealed class AiHandler(
     /// <summary>進 prompt 的片段數。</summary>
     private const int ContextChunks = 6;
 
-    /// <summary>同一筆內容最多佔幾塊 —— 不限制的話一篇長文會吃掉整個 top-K。</summary>
-    private const int MaxChunksPerItem = 2;
+    /// <summary>
+    /// 同一筆內容最多佔幾塊 —— 不限制的話一篇長文會吃掉整個 top-K。
+    /// <para>⚠️ 2026-10-06 由 2 放寬為 3（Tim：「AI 的回答要貼近原本的文章」）：
+    /// 最相關那一篇能進 prompt 的原文越完整，模型越不需要用別篇或自己的話補。</para>
+    /// </summary>
+    private const int MaxChunksPerItem = 3;
 
     /// <summary>回答最多列幾個來源。</summary>
     private const int MaxSources = 3;
@@ -438,10 +442,16 @@ public sealed class AiHandler(
         片段裡的「本療程」「上方」指的都是它。
         引用時要講明是哪一項療程，不得說成所有療程通用。
 
+        【貼近原文】
+        · 以最能回答問題的那一個片段為主，其他片段只在它沒講到時補充。
+        · 盡量沿用片段裡的原句與用詞，依原文的順序與重點交代；可以刪減，但不要改寫成自己的說法。
+        · 不要加上片段裡沒有的開場白、串場、總結或延伸建議。
+        · 不同療程或不同文章的內容不要混成一段，要講明各自出自哪一項。
+
         【語言與格式】
         · 一律使用臺灣繁體中文。使用者用簡體或其他語言提問，仍以繁體中文回答。
         · 純文字。不要 Markdown、不要 ** 粗體、不要條列符號、不要連結。
-        · 200 字以內。
+        · 300 字以內。
 
         【結尾】
         最後獨立一行輸出引用編號，格式：SOURCES: S1,S3
