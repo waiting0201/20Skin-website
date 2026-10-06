@@ -172,6 +172,7 @@ public static class AiIndexFormat
     /// <summary>
     /// 關鍵字最短長度（正規化後的字元數）。
     /// <para>⚠️ 兩個字的「雷射」「皮秒」「痘疤」太泛用，比到的標題動輒上百筆。</para>
+    /// <para>例外是<b>整句只有兩個字的實詞</b>，見 <see cref="ShortKeyword"/>。</para>
     /// </summary>
     private const int LexicalMinChars = 3;
 
@@ -256,15 +257,16 @@ public static class AiIndexFormat
     {
         var matched = new HashSet<int>();
         var q = NormalizeForMatch(question);
-        if (q.Length < LexicalMinChars) return matched;
-
-        var titles = new Dictionary<int, string>();
-        foreach (var c in chunks) titles.TryAdd(c.Ci, NormalizeForMatch(c.Ti));
 
         var grams = new HashSet<string>();
         for (var n = LexicalMinChars; n <= LexicalMinChars + 1; n++)
             for (var i = 0; i + n <= q.Length; i++)
                 grams.Add(q.Substring(i, n));
+        var shortKeyword = ShortKeyword(q);
+        if (grams.Count == 0 && shortKeyword is null) return matched;
+
+        var titles = new Dictionary<int, string>();
+        foreach (var c in chunks) titles.TryAdd(c.Ci, NormalizeForMatch(c.Ti));
 
         foreach (var gram in grams)
         {
@@ -281,7 +283,54 @@ public static class AiIndexFormat
             if (hits.Count is > 0 and <= LexicalMaxItems) matched.UnionWith(hits);
         }
 
+        if (shortKeyword is not null)
+        {
+            // 標題或內文含這個詞的內容（以內容筆數計上限，不是塊數）。
+            var hits = new HashSet<int>();
+            foreach (var (ci, title) in titles)
+                if (title.Contains(shortKeyword, StringComparison.Ordinal)) hits.Add(ci);
+            foreach (var c in chunks)
+            {
+                if (hits.Count > LexicalMaxItems) break;
+                if (!hits.Contains(c.Ci) && NormalizeForMatch(c.X).Contains(shortKeyword, StringComparison.Ordinal))
+                    hits.Add(c.Ci);
+            }
+
+            if (hits.Count is > 0 and <= LexicalMaxItems) matched.UnionWith(hits);
+        }
+
         return matched;
+    }
+
+    /// <summary>
+    /// 問句去掉頭尾的虛詞之後只剩兩個字（「饅化」「饅化是什麼」「什麼是饅化」）時，那兩個字就是關鍵字。
+    ///
+    /// <para>
+    /// 🔴 <b>為什麼需要它</b>（2026-10-06 回報）：「預防饅化」查得到、「饅化」查不到。
+    /// 前者切得出 3、4 字片段比中「預防饅化」系列的 7 個標題；後者只有兩個字，一個片段都沒有，
+    /// 而「饅化」是自創詞，語意向量也幾乎沒有東西可比 —— 與「青萃光」同一個問題，只是更短。
+    /// </para>
+    /// <para>
+    /// ⚠️ <b>不可以放寬成「所有 2 字片段」</b>：長句會切出一堆跨詞或泛用的片段。
+    /// 驗收題 #11「你們有賣防曬乳嗎」會切出「防曬」（8 筆標題），把一題該答不出來的推過門檻。
+    /// 只剩兩個字代表使用者打的<b>就是</b>這個詞，沒有猜的成分。
+    /// </para>
+    /// <para>
+    /// 🔴 <b>這一個詞連內文一起比</b>，不只比標題（與 3、4 字片段不同）：「饅化」的正解是 FAQ
+    /// 「什麼是『預饅防化』？」—— 標題是文字遊戲，「饅化」只出現在內文的「饅化現象」；
+    /// 而標題含「預防饅化」的 7 篇是主站舊文，不可引用，加了分也不算命中。
+    /// 2026-10-06 正式索引實測：只打「饅化」最高 0.610，差 0.04 沒過門檻 0.65。
+    /// 「內文什麼詞都有」的顧慮由 <see cref="LexicalMaxItems"/> 擋（「肉毒」「雷射」在內文裡遠超過 30 筆）。
+    /// </para>
+    /// <para>⚠️ 只修剪頭尾，不挖掉中間的虛詞 —— 「我該擦什麼藥」挖完會變成「擦藥」，那不是使用者打的詞。
+    /// <see cref="LexicalMaxItems"/> 照樣適用，所以只打「雷射」「皮秒」不會加分。</para>
+    /// </summary>
+    private static string? ShortKeyword(string normalizedQuestion)
+    {
+        var core = normalizedQuestion.AsSpan();
+        while (core.Length > 0 && FunctionChars.Contains(core[0])) core = core[1..];
+        while (core.Length > 0 && FunctionChars.Contains(core[^1])) core = core[..^1];
+        return core.Length == LexicalMinChars - 1 ? core.ToString() : null;
     }
 
     /// <summary>全形轉半形、轉小寫、只留文字與數字（標點與空白會讓「DermaV 青萃光」與「DermaV青萃光」比不到）。</summary>
