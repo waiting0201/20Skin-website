@@ -110,8 +110,8 @@
 
 - 一次最多 100 筆；**以 `slug` 為冪等鍵**（同 slug 再傳＝更新）→ 0 支 migration。
 - 欄位對應 `functions/Models/Entities/ContentModels.cs` 的 `Faq`：`slug`、`question`（Title）、`webAnswer`、
-  `aiAnswer`（必填，`CK_Faqs_AiAnswer_NotEmpty`）、`categorySlug`（見下方「分類規則」）、
-  選填 `relatedTreatmentSlugs`。
+  `aiAnswer`（必填，`CK_Faqs_AiAnswer_NotEmpty`）、分類（`category` 中文名稱 **或** `categorySlug`，擇一，見 §2.2）、
+  選填相關療程（`relatedTreatments` 中文名稱 **或** `relatedTreatmentSlugs`）。
 - 寫入後**直接發布**，走 `ContentHandler` 既有的發布流程（版本快照、`SearchText` 重算）—— **不另寫一份**，
   否則公開端點讀快照讀不到（決策 14）。之後由既有的 `AiIndexRefresh` 進 AI 索引。
 - `ReviewedBy` **留空**、`LastReviewedOn` 填上傳日 —— 那一欄對外代表「由誰確認過」，沒有人看過不能填醫師名。
@@ -128,9 +128,14 @@
   現有 FAQ 的 `slug／question／reviewed`（`ReviewedBy` 有沒有值）。**不快取**，後台一改，下一次查詢就看得到。
   connector 對應指令：`categories`、`treatments`、`faqs`（可加 `--json`，交給 OpenClaw 產生 FAQ 時直接挑）。
 - **預檢** `PUT /integrations/faq?dryRun=true`：跑完全部驗證、逐筆回報結果，但不寫入。connector：`push-faq --check`。
-- **比對用 slug，不用名稱**：分類改名不影響上傳。上傳時把 slug 解析成 `CategoryTermId` 存進去（FK），
-  所以之後後台改 slug，**已上傳的題目不受影響**，只有沿用舊 slug 的新上傳會被退回。
-- 比對不到 → 該筆 `rejected`，原因附上**網站當下可用的分類 slug 清單**。
+- **名稱與 slug 都收**（Tim 定案 2026-10-17）：`category`（中文名稱，Trim 後**完全相同**才算，不做模糊比對）
+  或 `categorySlug`，擇一必填；兩個都給時必須指向同一個分類，否則退回。
+  理由：OpenClaw 與院方人員想的都是中文名稱，而 slug 可能是院方新增時沒改的值（見下方實況）。
+  療程同理：`relatedTreatments`（名稱）或 `relatedTreatmentSlugs`。
+  ⚠️ 名稱沒有唯一約束 —— 同類型裡出現兩個同名分類時，用名稱上傳的那筆退回並要求改用 slug，不猜。
+- 上傳時解析成 `CategoryTermId` 存進去（FK），所以之後後台改名或改 slug，**已上傳的題目不受影響**；
+  只有沿用舊名稱／舊 slug 的新上傳會被退回。
+- 比對不到 → 該筆 `rejected`，原因附上**網站當下可用的分類（名稱＋slug）**。
 - **換分類**：同 slug、改 `categorySlug` 重傳即可（upsert 會更新 `CategoryTermId`）。已有 `ReviewedBy` 的題目上傳會被退回（§3.5），那些要在後台改分類。
 - **刪除分類**：既有規則已擋下 —— `ContentHandler.DeleteAsync` 對仍被引用的 term 回 409
   「仍有 N 筆內容引用此分類／標籤，無法刪除」。院方要先把題目換到別的分類再刪，**不會出現孤兒 FAQ**。
@@ -154,7 +159,7 @@
   - 🔴 **「疾病相關」是院方 2026-10-15 在後台自己新增的**，證實分類真的會被院方增修 —— 但 slug 沿用了新增對話框的佔位值
     （`apps/admin/src/components/ListPage.vue` 的 `defaultSlug()` ＝ `untitled-${Date.now()}`），
     所以正式站上已經有 `/faq/untitled-1792027590012/` 這個網址，而且收進 sitemap。
-    院內上傳時得填這串 slug 才歸得進去 —— **只靠 slug 比對對院方不友善**，見下方待決。
+    已處理：上傳改為也收中文名稱；後台也不再讓會成為網址的 slug 停在暫用值（§7）。
 
 ### 2.3 院內怎麼用
 
@@ -250,13 +255,16 @@ connector 附指令 `node connector.mjs push-faq faqs.json`（JSON 範例與欄�
 4. `push-faq` 傳 3 筆（新增／同 slug 更新／缺 `aiAnswer`）→ 回報正確；`/faq/` 與分類頁看得到。
 5. `node tools/api-smoke/read.mjs` 全綠；接真 OpenClaw 後跑 `ai-index-inspect --query` 題組比對。
 
-## 7. 待決
+## 7. 已定案（2026-10-17）
 
-1. **上傳的分類要不要也接受「名稱」**（例：`"category": "疾病相關"`）：OpenClaw 與院方人員想的都是中文名稱，
-   而 slug 可能是 `untitled-…` 這種佔位值。做法是 `categorySlug` 與 `category`（名稱，完全相同才算）擇一必填，兩者都給時必須指向同一個分類。
-   代價是名稱在後台改了之後，用舊名稱的上傳會被退回（與 slug 改了一樣，退回時附可用清單）。
-2. **`untitled-…` 佔位 slug 是後台的問題，不只是本提案的**：新增對話框給佔位值、使用者沒改就存檔，網址就這樣上線。
-   要嘛新增時強制改掉（驗證拒絕 `untitled-` 開頭），要嘛至少在清單上標示出來。「疾病相關」那一筆目前 0 題，現在改 slug 只影響一個空的分類頁。
+1. **上傳的分類與療程接受中文名稱**（Tim 定案）—— 寫進 §2.2 與院方文件 8-1／8-4。
+2. **後台不再讓會成為網址的 slug 停在暫用值**（Tim 定案，**已實作**，不屬於本提案、可單獨上線）：
+   - API `ContentHandler.NormalizeAndValidateSlug` 對 FAQ 以外的單元拒收 `untitled-` 開頭（新增與更新都擋）；
+   - 後台新增對話框對會成為網址的單元**不再預填暫用值**，改成空白要使用者自己填；FAQ 照舊預填（它不產生網址）；
+   - `validateSlug` 同一條規則，紅字出現在那一格。
+   - ⚠️ 正式站「疾病相關」（`/faq/untitled-1792027590012/`，0 題）部署後**下一次在後台存檔就會被要求改 slug**。
+     改了之後舊網址要不要補 301，看它是否已被搜尋引擎收錄。
+   - FAQ 那 15 筆 `untitled-…` 不受影響（FAQ 不產生網址）。
 
 ## 8. 待向院方確認
 
