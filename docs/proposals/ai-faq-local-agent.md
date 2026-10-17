@@ -108,8 +108,15 @@
 
 ### 2.1 `PUT /integrations/faq`（新 `functions/Handlers/FaqIntegrationHandler.cs`，同一把整合鑰匙）
 
-- 一次最多 100 筆；**以 `slug` 為冪等鍵**（同 slug 再傳＝更新）→ 0 支 migration。
-- 欄位對應 `functions/Models/Entities/ContentModels.cs` 的 `Faq`：`slug`、`question`（Title）、`webAnswer`、
+- 一次最多 100 筆。**院方不提供 slug**（Tim 定案 2026-10-17），**以問題文字為冪等鍵**，0 支 migration：
+  - 比對 `ContentItems.Title`（FAQ 的問題）：Trim、連續空白壓成一個之後**完全相同**才算，不做模糊比對。
+  - 對到**一筆** → 更新；對不到 → 新增，slug 由伺服器產生（`faq-{unix 毫秒}-{批次內序號}`，同 `Questions.vue` 建草稿的格式）；
+    對到**兩筆以上** → 退回（請院方先在後台整理）；同一批裡問題重複 → 只收第一筆。
+  - **為什麼不用 slug 當鍵**：FAQ 的 slug 在資料庫**沒有唯一約束**（`UQ_ContentItems_UrlPath` 只管有網址的，FAQ 的 `UrlPath` 是 NULL），
+    院方取到一個剛好存在的 slug 就會**靜默蓋掉另一題**；而且正式站已有 15 筆 FAQ 是 `untitled-…`，院方根本不會知道要沿用哪一串。
+    問題文字相同就是同一題，覆寫是預期行為。
+  - 代價：改了問題的用字會被當成新題目，舊的那題留著（上傳不刪除）。改現有題目的問題文字走後台。
+- 欄位對應 `functions/Models/Entities/ContentModels.cs` 的 `Faq`：`question`（Title）、`webAnswer`、
   `aiAnswer`（必填，`CK_Faqs_AiAnswer_NotEmpty`）、分類（`category` 中文名稱 **或** `categorySlug`，擇一，見 §2.2）、
   選填相關療程（`relatedTreatments` 中文名稱 **或** `relatedTreatmentSlugs`）。
 - 寫入後**直接發布**，走 `ContentHandler` 既有的發布流程（版本快照、`SearchText` 重算）—— **不另寫一份**，
@@ -125,7 +132,7 @@
 
 - **查詢端點** `GET /integrations/faq/catalog`（同一把整合鑰匙）回三份清單：
   FAQ 分類（`TermType.FaqCategory`、可見）的 `name／slug`、療程的 `name／slug`、
-  現有 FAQ 的 `slug／question／reviewed`（`ReviewedBy` 有沒有值）。**不快取**，後台一改，下一次查詢就看得到。
+  現有 FAQ 的 `question／分類／reviewed`（`ReviewedBy` 有沒有值）。**不快取**，後台一改，下一次查詢就看得到。
   connector 對應指令：`categories`、`treatments`、`faqs`（可加 `--json`，交給 OpenClaw 產生 FAQ 時直接挑）。
 - **預檢** `PUT /integrations/faq?dryRun=true`：跑完全部驗證、逐筆回報結果，但不寫入。connector：`push-faq --check`。
 - **名稱與 slug 都收**（Tim 定案 2026-10-17）：`category`（中文名稱，Trim 後**完全相同**才算，不做模糊比對）
@@ -209,8 +216,8 @@ connector 附指令 `node connector.mjs push-faq faqs.json`（JSON 範例與欄�
 
 整合鑰匙外流就能在網站上發布內容，所以這支端點要比照公開表單的標準防守：
 - **只能新增或更新 FAQ**，不能刪除，也碰不到其他內容單元。
-- 🔴 **不覆寫人工確認過的 FAQ**：同 slug 的既有 FAQ 若已填 `ReviewedBy`（有人簽過名），該筆一律 `rejected`。
-  否則院內一次 slug 撞名，就會蓋掉醫師確認過的答案。
+- 🔴 **不覆寫人工確認過的 FAQ**：問題文字對到的既有 FAQ 若已填 `ReviewedBy`（有人簽過名），該筆一律 `rejected`。
+  否則院內一次上傳就能蓋掉醫師確認過的答案（正式站 51 題裡有 25 題已簽名）。
 - 每筆照樣過 `RiskTerms` ＋ 金額掃描，命中就 `rejected` 並回報命中哪個字。
 - 只收純文字：去掉 HTML 標籤，欄位長度上限比照後台表單（`webAnswer` 400 字、`aiAnswer` 100 字的規格見 docs/04 §2，上限放寬一倍容錯）。
 - 頻率限制另開 bucket（例：每小時 10 次批次）。
@@ -243,7 +250,7 @@ connector 附指令 `node connector.mjs push-faq faqs.json`（JSON 範例與欄�
 ## 5. 定案後要同步的文件
 
 - CLAUDE.md：改寫決策 28（agent 路徑、允許 agent 知識、退回 Gemini、護欄只剩確定性掃描、附法規註記）；
-  新增「院內整合」決策（Service Bus 院內主動連出、sessions 配對、整合鑰匙、FAQ 以 slug upsert 並直接發布、`ReviewedBy` 留空）。
+  新增「院內整合」決策（Service Bus 院內主動連出、sessions 配對、整合鑰匙、FAQ 以問題文字 upsert 並直接發布、`ReviewedBy` 留空）。
 - docs/04 §4、docs/02 §6（「AI 介接方式未定」作廢）、docs/07（Service Bus 資源、MI 角色、SAS 範圍、app settings）、
   docs/10 與 `openapi.yaml`（`/agent/heartbeat`、`/integrations/faq`、`/integrations/faq/catalog`）、STATUS.md。
 
@@ -252,7 +259,7 @@ connector 附指令 `node connector.mjs push-faq faqs.json`（JSON 範例與欄�
 1. 本機 `func start` ＋ 開發用 Service Bus namespace ＋ connector 接一個假的 OpenAI 相容服務 → `curl POST /ai/ask` 拿到 agent 的答案與來源。
 2. 停掉 connector → 60 秒後 `/ai/ask` 自動走 Gemini；回覆超過 30 秒 → 該題走 Gemini、遲到的回覆被丟棄。
 3. 假 agent 回「保證有效」→ 被掃描改成未命中文案。
-4. `push-faq` 傳 3 筆（新增／同 slug 更新／缺 `aiAnswer`）→ 回報正確；`/faq/` 與分類頁看得到。
+4. `push-faq` 傳 4 筆（新增／同問題更新／問題對到已簽名的題目／缺 `aiAnswer`）→ 回報正確；`/faq/` 與分類頁看得到。
 5. `node tools/api-smoke/read.mjs` 全綠；接真 OpenClaw 後跑 `ai-index-inspect --query` 題組比對。
 
 ## 7. 已定案（2026-10-17）
