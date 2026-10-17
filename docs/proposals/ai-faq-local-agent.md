@@ -179,14 +179,35 @@ connector 附指令 `node connector.mjs push-faq faqs.json`（JSON 範例與欄�
 - 開自動更新（作業系統、Node、OpenClaw）。
 - 那台機器同時接 Telegram：`website` agent 與 Telegram 用的 agent **分開**，網站這條路徑碰不到 Telegram 那一個的工具與記憶。
 
-## 4. 定案後要同步的文件
+## 4. 網站端要提供給院方的資訊
+
+給院方的文件（`output/20SKIN-院內AI助理串接說明`）第 02 章列的是同一份清單；這裡多記「怎麼產生、注意什麼」。
+
+| 項目 | 什麼時候給 | 怎麼產生 | 注意 |
+|---|---|---|---|
+| 連接程式 `tools/clinic-agent-connector/` | 開始設定前 | 實作產出：`connector.mjs`（`check`／`run`／`status`／`push-faq`）、`connector.config.example.json`、`install-service.ps1`／`install-launchd.sh`／`install-systemd.sh` | 院方文件已寫死這幾個指令與檔名，**實作要照著做**，改名就要同步改院方文件 |
+| 網站整合鑰匙 | 開始設定前 | `openssl rand -base64 32` 產生；SHA-256 雜湊寫進 Function App 的 `Integration__ClinicKeySha256` | 明文**不留在我們這邊**（交付後刪除），只留雜湊 |
+| 收題連線字串 | 開始設定前 | `ai-jobs` 佇列建一條**只有 Listen** 的 SAS policy，取其連線字串（`az servicebus queue authorization-rule create --rights Listen` → `keys list`） | entity 層級，不是 namespace 層級 |
+| 回答連線字串 | 開始設定前 | `ai-replies` 佇列建一條**只有 Send** 的 SAS policy | 同上 |
+| 網站 API 位址 | 開始設定前 | `https://api.20skin.tw/api/v1`，預填在範例設定檔 | 自訂網域上線前要改成 `*.azurewebsites.net` 那一個 |
+| FAQ 分類代稱清單 | 開始上傳 FAQ 前 | `GET /term` 篩出 FAQ 分類，輸出「名稱｜slug」 | 🔴 STATUS「FAQ 五大分類兩份對不上」**要先定案**，否則給出去的清單之後會變 |
+| 療程代稱清單 | 開始上傳 FAQ 前 | `GET /treatment`，輸出「名稱｜slug」 | 28 項 |
+| 網站現有 FAQ 清單 | 開始上傳 FAQ 前 | `GET /admin/faq` 匯出「slug｜問題｜`ReviewedBy` 有沒有值」 | 院方靠它避開撞名、沿用代稱更新；已確認（有 `ReviewedBy`）的那些上傳時會被退回（§3.5） |
+| 回答規範文字 | 已附在院方文件第 03 章 | 由 `AiHandler.SystemInstruction` 改寫成院方看得懂的版本 | 改了 `SystemInstruction` 的規則要同步院方文件 |
+| 聯合測試題組 | 聯合測試前 | 沿用 `ai-index-inspect --query` 的驗收題組，補到約 20 題（加入價格、保證療效、懷孕、指定醫師、要求忽略指示這幾類） | 同一份題組在切換前後各跑一次比對 |
+| 聯絡窗口 | 開始設定前 | 指定一位聯絡人 | 鑰匙外流時的停用流程由這個人接 |
+
+**交付方式**：鑰匙與兩組連線字串用一次性的加密連結交付，不走 Telegram、LINE、email；清單類（分類、療程、FAQ、題組）可以一般方式寄送。
+三份清單會隨網站內容變動，院方需要時重新匯出一次即可。
+
+## 5. 定案後要同步的文件
 
 - CLAUDE.md：改寫決策 28（agent 路徑、允許 agent 知識、退回 Gemini、護欄只剩確定性掃描、附法規註記）；
   新增「院內整合」決策（Service Bus 院內主動連出、sessions 配對、整合鑰匙、FAQ 以 slug upsert 並直接發布、`ReviewedBy` 留空）。
 - docs/04 §4、docs/02 §6（「AI 介接方式未定」作廢）、docs/07（Service Bus 資源、MI 角色、SAS 範圍、app settings）、
   docs/10 與 `openapi.yaml`（`/agent/heartbeat`、`/integrations/faq`）、STATUS.md。
 
-## 5. 驗證（實作時）
+## 6. 驗證（實作時）
 
 1. 本機 `func start` ＋ 開發用 Service Bus namespace ＋ connector 接一個假的 OpenAI 相容服務 → `curl POST /ai/ask` 拿到 agent 的答案與來源。
 2. 停掉 connector → 60 秒後 `/ai/ask` 自動走 Gemini；回覆超過 30 秒 → 該題走 Gemini、遲到的回覆被丟棄。
@@ -194,7 +215,7 @@ connector 附指令 `node connector.mjs push-faq faqs.json`（JSON 範例與欄�
 4. `push-faq` 傳 3 筆（新增／同 slug 更新／缺 `aiAnswer`）→ 回報正確；`/faq/` 與分類頁看得到。
 5. `node tools/api-smoke/read.mjs` 全綠；接真 OpenClaw 後跑 `ai-index-inspect --query` 題組比對。
 
-## 6. 待向院方確認
+## 7. 待向院方確認
 
 1. 那台機器是否 24 小時開機。
 2. FAQ 能否提供穩定的 slug，以及對得上站上分類的 `categorySlug`。
