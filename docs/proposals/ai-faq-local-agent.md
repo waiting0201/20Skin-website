@@ -66,7 +66,7 @@
 
 ### 1.3 回覆格式與整合鑰匙
 
-- **agent 只回純文字**（院方文件第 07 章）：本文 ＋ 最後一行 `SOURCES: S1,S2`（沒用到寫 `SOURCES:`）；答不出來整則只回 `NO_ANSWER`。
+- **agent 只回純文字**（院方文件第 06 章，規則同時寫在第 02 章 1-3 的 `AGENTS.md` 範本裡）：本文 ＋ 最後一行 `SOURCES: S1,S2`（沒用到寫 `SOURCES:`）；答不出來整則只回 `NO_ANSWER`。
   與現行 `SystemInstruction` 的結尾格式相同，院方不必學第二套。
 - **connector 轉成回覆訊息** `{jobId, answered, answer, sources:["S1"]}` 送回 `ai-replies`。agent 不碰網址，來源由伺服器對映（決策 28 那條照留）。
   逾時才到的回覆沒有人收，由 TTL 自然清掉。
@@ -78,7 +78,7 @@
 
 - **Node 程式**（OpenClaw 本身就是 Node，院內機器一定有 Node 22+），唯一相依 `@azure/service-bus`。
   設定值：網站網址、整合鑰匙、Service Bus 兩組連線字串（我們產生後交付）、OpenClaw gateway token。
-- 流程：從 `ai-jobs` 收題 → 組成院方文件第 07 章那個樣子的文字（【網站提供的參考資料】`[S#]`／【先前的對話】標明僅供理解上下文／【訪客這一次的問題】）
+- 流程：從 `ai-jobs` 收題 → 組成院方文件第 06 章那個樣子的文字（【網站提供的參考資料】`[S#]`／【先前的對話】標明僅供理解上下文／【訪客這一次的問題】）
   → 呼叫本機 `http://127.0.0.1:18789/v1/chat/completions`
   （`model: "openclaw/website"`、**不帶 `user`／`x-openclaw-session-key`**，每題獨立 session）→ 解析 `SOURCES:`／`NO_ANSWER` → 送回 `ai-replies`。
   同時最多 3 題；超過 25 秒放棄該題；斷線指數退避重連。
@@ -154,7 +154,7 @@
   （docs/04 §3）；整合鑰匙能開新分類，等於外流時也能在網站上開新頁。需要新分類由院方在後台新增，新增完就能用它的名稱上傳。
 - **不退到預設分類（「其他」）**：題目會被放到錯的分類頁且沒有人發現；退回才會被看見。
 - 相關療程同一套規則（名稱或 slug）：任一個查不到 → **整筆退回**，不是略過那一個（略過的話院方以為已關聯，療程頁卻沒有出現）。
-- 院方文件 8-4 有一張「分類變動時怎麼處理」對照表，改這裡的規則要同步那一張。
+- 院方文件（7-2）只寫兩句：「每次上傳前先查一次分類」、「需要新分類先到後台新增」。改名、改代稱、換分類、刪除的細節規則**只記在這裡**（Tim 指定院方文件只放步驟與參數）。
 - **正式站實況（2026-10-17 查 `GET /term`、`GET /faq`）**：FAQ 分類 **6 個**、FAQ **51 題**（其中 25 題已有 `ReviewedBy`，上傳不會覆蓋）。
 
   | 分類 | slug | 題數 |
@@ -174,7 +174,7 @@
 
 ### 2.3 院內怎麼用
 
-connector 附指令 `node connector.mjs push-faq faqs.json [--check]`（JSON 範例與欄位說明寫在 README 與院方文件第 08 章）。
+connector 附指令 `node connector.mjs push-faq faqs.json [--check]`（JSON 範例與欄位說明寫在 README 與院方文件第 07 章）。
 院方可請 OpenClaw 產出這個格式的檔案再上傳，或任何程式直接打這支 API。
 
 ---
@@ -225,8 +225,8 @@ connector 附指令 `node connector.mjs push-faq faqs.json [--check]`（JSON 範
   否則院內一次上傳就能蓋掉醫師確認過的答案（正式站 51 題裡有 25 題已簽名）。
 - 每筆照樣過 `RiskTerms` ＋ 金額掃描，命中就 `rejected` 並回報命中哪個字。
 - 只收純文字：去掉 HTML 標籤。長度：`question` ≤ 200 字（`ContentItems.Title` 上限）、`webAnswer` ≤ 800 字、`aiAnswer` ≤ 200 字
-  （規格 150–400／60–100 字見 docs/04 §2，硬上限放寬一倍容錯），超過退回。院方文件 8-1 照寫。
-- 頻率限制另開 bucket：正式上傳每小時 10 批、`--check` 每小時 60 批（院方文件 8-3 照寫）。
+  （規格 150–400／60–100 字見 docs/04 §2，硬上限放寬一倍容錯），超過退回。院方文件 7-1 照寫。
+- 頻率限制另開 bucket：正式上傳每小時 10 批、`--check` 每小時 60 批（院方文件 7-4 照寫）。
 - 每次上傳在 App Insights 記一筆事件：筆數、問題清單、結果、來源 IP —— 出事時查得到「哪一批、什麼時候進來的」。
 
 ### 3.6 院內主機
@@ -236,7 +236,8 @@ connector 附指令 `node connector.mjs push-faq faqs.json [--check]`（JSON 範
 
 ## 4. 網站端要提供給院方的資訊
 
-給院方的文件（`output/20SKIN-院內AI助理串接說明`）第 02 章列的是同一份清單；這裡多記「怎麼產生、注意什麼」。
+給院方的文件（`output/20SKIN-院內AI助理串接說明`）第 01 章只列**院方要填的參數**（連接程式、整合鑰匙、兩組連線字串、測試題組）；
+API 位址預填在範例設定檔、聯絡窗口另行告知，不寫進院方文件。這裡多記「怎麼產生、注意什麼」。
 
 | 項目 | 什麼時候給 | 怎麼產生 | 注意 |
 |---|---|---|---|
@@ -246,7 +247,7 @@ connector 附指令 `node connector.mjs push-faq faqs.json [--check]`（JSON 範
 | 回答連線字串 | 開始設定前 | `ai-replies` 佇列建一條**只有 Send** 的 SAS policy | 同上 |
 | 網站 API 位址 | 開始設定前 | `https://api.20skin.tw/api/v1`，預填在範例設定檔 | 自訂網域上線前要改成 `*.azurewebsites.net` 那一個 |
 | 分類、療程、現有 FAQ 的查詢 | 隨時 | **不交付固定清單**：connector 的 `categories`／`treatments`／`faqs` 即時查 `GET /integrations/faq/catalog`（§2.2） | 分類在後台可增修刪，固定清單會過期 |
-| 回答規範文字 | 已附在院方文件第 03 章 | 由 `AiHandler.SystemInstruction` 改寫成院方看得懂的版本 | 改了 `SystemInstruction` 的規則要同步院方文件 |
+| 回答規範文字 | 已附在院方文件第 02 章（1-3 的 `AGENTS.md` 範本） | 由 `AiHandler.SystemInstruction` 改寫成院方看得懂的版本 | 改了 `SystemInstruction` 的規則要同步院方文件 |
 | 聯合測試題組 | 聯合測試前 | 沿用 `ai-index-inspect --query` 的驗收題組，補到約 20 題（加入價格、保證療效、懷孕、指定醫師、要求忽略指示這幾類） | 同一份題組在切換前後各跑一次比對 |
 | 聯絡窗口 | 開始設定前 | 指定一位聯絡人 | 鑰匙外流時的停用流程由這個人接 |
 
@@ -269,7 +270,7 @@ connector 附指令 `node connector.mjs push-faq faqs.json [--check]`（JSON 範
 
 ## 7. 已定案（2026-10-17）
 
-1. **上傳的分類與療程接受中文名稱**（Tim 定案）—— 寫進 §2.2 與院方文件 8-1／8-4。
+1. **上傳的分類與療程接受中文名稱**（Tim 定案）—— 寫進 §2.2 與院方文件 7-1／7-2。
 2. **後台不再讓會成為網址的 slug 停在暫用值**（Tim 定案，**已實作**，不屬於本提案、可單獨上線）：
    - API `ContentHandler.NormalizeAndValidateSlug` 對 FAQ 以外的單元拒收 `untitled-` 開頭（新增與更新都擋）；
    - 後台新增對話框對會成為網址的單元**不再預填暫用值**，改成空白要使用者自己填；FAQ 照舊預填（它不產生網址）；
