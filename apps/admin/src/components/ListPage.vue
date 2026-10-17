@@ -31,7 +31,7 @@ import type { AdminRecord, ContentStatus, UnitKey } from '@/types'
 import { STATUS_LABEL } from '@/types'
 import type { UnitField } from '@/unit-schema'
 import { UNIT_REGISTRY } from '@/units'
-import { validateSlug } from '@/validation'
+import { PLACEHOLDER_SLUG_PREFIX, validateSlug } from '@/validation'
 import { revealFirstError } from '@/scroll-to-error'
 import { useDragSort } from '@/drag-sort'
 import { rememberListView, recallListView } from '@/list-state'
@@ -347,11 +347,15 @@ function defaultFieldsFor(): Record<string, unknown> {
 
 /**
  * 新增時的預設 slug。
- * ⚠️ 不從標題推導 —— 標題是中文，而 slug 只收 `a-z0-9-`。給一個一定合法的
- * 佔位值，讓使用者在對話框裡改成有意義的英文網址。
+ * ⚠️ 不從標題推導 —— 標題是中文，而 slug 只收 `a-z0-9-`。
+ * 🔴 **會成為網址的單元一律留空，讓使用者自己填**。原本九個單元都給暫用值
+ *    `untitled-{時間}`，結果 2026-10-15 院方新增的 FAQ 分類沒改就存檔，
+ *    `/faq/untitled-1792027590012/` 就這樣上線、進了 sitemap。現在暫用值會被擋下
+ *    （`validateSlug` 與 API 都擋），預先填進去只會讓人多刪一次。
+ *    FAQ 不產生網址（slug 只是頁內錨點），照舊給暫用值，省得編輯者替每一題想英文。
  */
 function defaultSlug(): string {
-  return `untitled-${Date.now()}`
+  return def.value.producesUrl ? '' : `${PLACEHOLDER_SLUG_PREFIX}${Date.now()}`
 }
 
 async function openCreate(override: Record<string, unknown> = {}) {
@@ -393,9 +397,9 @@ function createFieldBool(key: string): boolean {
 function validateCreate(): boolean {
   const errors: Record<string, string> = {}
   if (!createForm.title.trim()) errors.title = '標題為必填。'
-  const slugProblem = validateSlug(createForm.slug)
+  const slugProblem = validateSlug(createForm.slug, def.value.producesUrl)
   if (slugProblem) errors.slug = slugProblem
-  else if (!createForm.slug.trim()) errors.slug = 'slug 為必填。'
+  else if (!createForm.slug.trim()) errors.slug = '網址代稱為必填。'
 
   for (const field of createFields.value) {
     if (field.type === 'boolean') continue // checkbox 一定有值（true／false）
@@ -415,7 +419,7 @@ async function submitCreate() {
   await createDraft({ ...createForm.fields, ...createOverride.value }, createForm.title.trim(), createForm.slug.trim())
 }
 
-async function createDraft(overrideFields: Record<string, unknown> = {}, title = '未命名', slug = defaultSlug()) {
+async function createDraft(overrideFields: Record<string, unknown>, title: string, slug: string) {
   creating.value = true
   errorMessage.value = ''
   try {
@@ -474,11 +478,13 @@ async function createDraft(overrideFields: Record<string, unknown> = {}, title =
           </div>
           <div class="adm-field adm-field--span2" data-error-key="slug">
             <label class="adm-field__label">網址代稱（Slug）<span class="adm-field__required">＊</span></label>
-            <input v-model="createForm.slug" class="adm-input" :class="{ 'is-invalid': createErrors.slug }" type="text" maxlength="160">
+            <input v-model="createForm.slug" class="adm-input" :class="{ 'is-invalid': createErrors.slug }" type="text" maxlength="160" :placeholder="def.producesUrl ? '例：disease' : undefined">
             <p v-if="createErrors.slug" class="adm-field__error" role="alert">{{ createErrors.slug }}</p>
-            <p class="adm-field__hint">
-              這一頁網址的最後一段，只能用小寫英文、數字與連字號（-）。
-              預設先給一組暫用的（中文標題推不出英文網址），建立後可以再改。
+            <p v-if="def.producesUrl" class="adm-field__hint">
+              這一頁網址的最後一段，只能用小寫英文、數字與連字號（-）。中文標題推不出英文網址，請自己取一個有意義的。
+            </p>
+            <p v-else class="adm-field__hint">
+              常見問題頁上的定位用代稱，不會成為網址。預設先給一組暫用的，可以不改。
             </p>
           </div>
 

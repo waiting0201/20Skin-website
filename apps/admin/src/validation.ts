@@ -57,7 +57,18 @@ function isBlank(value: unknown): boolean {
 
 // ── slug ──────────────────────────────────────────────────────────────
 
-export function validateSlug(raw: string): string | null {
+/**
+ * 新增對話框給 FAQ 的暫用 slug 前綴（`ListPage.vue` 的 `defaultSlug()`）。
+ * 與 API 的 `ContentHandler.PlaceholderSlugPrefix` 是同一個值。
+ */
+export const PLACEHOLDER_SLUG_PREFIX = 'untitled-'
+
+/**
+ * @param producesUrl 這個單元的 slug 會不會成為網址（FAQ 以外都會）。
+ *   🔴 會的話不收暫用值：2026-10-15 正式站上新增的 FAQ 分類沒改它就存檔，
+ *   `/faq/untitled-1792027590012/` 就這樣上線。API 也擋，這裡是讓紅字出現在那一格。
+ */
+export function validateSlug(raw: string, producesUrl = false): string | null {
   const slug = raw.trim().toLowerCase()
   if (!slug) return null
   if (slug.length > SLUG_MAX) return `網址代稱不可超過 ${SLUG_MAX} 字（目前 ${slug.length} 字）。`
@@ -65,6 +76,9 @@ export function validateSlug(raw: string): string | null {
     // ⚠️ 底線是最常踩的一個：blog 站搬過來的 71 篇原始 slug 用底線，
     //    API 只收連字號（CLAUDE.md 決策 2）。訊息裡直接點名它。
     return '網址代稱只能用小寫英文、數字與連字號（-），不可有底線、空白、中文，也不可以用連字號開頭或結尾。'
+  }
+  if (producesUrl && slug.startsWith(PLACEHOLDER_SLUG_PREFIX)) {
+    return '網址代稱還是暫用值，請改成有意義的英文（例：disease），它會成為這一頁的網址。'
   }
   return null
 }
@@ -277,7 +291,7 @@ export function validateBody(
   // ⚠️ **不要用 `def.producesUrl` 當條件。** FAQ 不輸出獨立網址，但 API 的新增與
   //    更新都是 `NormalizeAndValidateSlug(..., required: true)` —— 空字串一樣被退回
   //    （它是 `/faq/` 的頁內錨點，docs/08 §C-6）。九個單元一律要驗。
-  const slugProblem = validateSlug(form.slug)
+  const slugProblem = validateSlug(form.slug, def.producesUrl)
   if (slugProblem) errors.slug = slugProblem
   else if (slugRequired && isBlank(form.slug)) {
     errors.slug = def.producesUrl ? '網址代稱為必填——它決定這一頁的網址。' : '網址代稱為必填——它是常見問題頁上的定位用代稱。'

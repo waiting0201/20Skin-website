@@ -180,7 +180,7 @@ public sealed class ContentHandler(
         var summary = ReadSummary(body);
         var fieldsEl = TypeFieldsOf(body);
 
-        var slug = NormalizeAndValidateSlug(JStr(body, "slug"), required: true);
+        var slug = NormalizeAndValidateSlug(JStr(body, "slug"), required: true, producesUrl: unit != UnitCodes.Faq);
 
         var userId = RequestContext.UserId(req);
         var isDoctorNonAdmin = !RequestContext.IsSuperAdmin(req) && RequestContext.Roles(req).Contains(RoleCodes.Doctor);
@@ -311,7 +311,7 @@ public sealed class ContentHandler(
                     if (term.TermType != TermType.ArticleTag && !string.Equals(newSlug, term.Slug, StringComparison.Ordinal))
                         RequireTermManagePermission(req, term.TermType);
                 }
-                entity.Slug = NormalizeAndValidateSlug(newSlug, required: true);
+                entity.Slug = NormalizeAndValidateSlug(newSlug, required: true, producesUrl: unit != UnitCodes.Faq);
             }
         }
 
@@ -1363,7 +1363,16 @@ public sealed class ContentHandler(
     private static int ParseVersionNo(string versionNo)
         => int.TryParse(versionNo, out var n) ? n : throw AppException.BadRequest(ErrorCodes.ValidationFormat, "版本號格式錯誤。");
 
-    private static string? NormalizeAndValidateSlug(string? raw, bool required)
+    /// <summary>後台新增對話框給 FAQ 的暫用 slug 前綴（<c>apps/admin/src/components/ListPage.vue</c> 的 <c>defaultSlug()</c>）。</summary>
+    internal const string PlaceholderSlugPrefix = "untitled-";
+
+    /// <param name="producesUrl">
+    /// 這個單元的 slug 會不會成為網址（FAQ 以外都會）。
+    /// 🔴 會成為網址的單元不收 <c>untitled-</c> 開頭的暫用值 —— 2026-10-15 正式站上院方新增的
+    /// FAQ 分類「疾病相關」沒改暫用值就存檔，<c>/faq/untitled-1792027590012/</c> 因此上線、進了 sitemap。
+    /// 更新時一樣擋：既有的暫用值要在下一次存檔時改掉，而不是一直留著。
+    /// </param>
+    internal static string? NormalizeAndValidateSlug(string? raw, bool required, bool producesUrl = true)
     {
         if (string.IsNullOrWhiteSpace(raw))
         {
@@ -1376,6 +1385,8 @@ public sealed class ContentHandler(
             throw AppException.BadRequest(ErrorCodes.ValidationRange, "slug 長度不可超過 160 字。");
         if (!SlugPattern.IsMatch(slug))
             throw AppException.BadRequest(ErrorCodes.ValidationFormat, "slug 只能包含小寫英數字與連字號，且不可開頭或結尾為連字號。");
+        if (producesUrl && slug.StartsWith(PlaceholderSlugPrefix, StringComparison.Ordinal))
+            throw AppException.BadRequest(ErrorCodes.ValidationFormat, "網址代稱還是暫用值，請改成有意義的英文（它會成為這一頁的網址）。");
         return slug;
     }
 
