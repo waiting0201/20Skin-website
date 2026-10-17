@@ -118,16 +118,28 @@
 - 逐筆回報 `created／updated／rejected(原因)`，一筆錯不擋整批。
 - **不做刪除**：沒傳到的舊題不會被下架（避免一次漏傳就整批消失），要下架由後台處理。
 
-### 2.2 分類規則：只收網站上已經有的分類
+### 2.2 分類規則：以網站「當下」的分類為準
 
-- `categorySlug` 對「分類與標籤」裡**屬於 FAQ 分類**、且可見的那些 term 比對（slug 完全相同）。
-  比對不到 → 該筆 `rejected`，原因寫明「分類「{slug}」網站上沒有」並附上**目前可用的 slug 清單**，院方不必另外查。
-- **不自動建立分類**：分類會開出 `/faq/{category}/` 獨立頁，名稱、介紹文案與 SEO 都是「分類與標籤」模型維護的
-  （docs/04 §3：題庫模組引用之，不自行維護第二份清單）。整合鑰匙若能開新分類，等於外流時也能在網站上開新頁。
+**前提**：FAQ 分類是後台「分類與標籤」的資料，院方管理者可以隨時新增、改名、改 slug、刪除。
+所以**不交付固定清單**（交出去就開始過期），改成院內隨時能查網站當下的清單。
+
+- **查詢端點** `GET /integrations/faq/catalog`（同一把整合鑰匙）回三份清單：
+  FAQ 分類（`TermType.FaqCategory`、可見）的 `name／slug`、療程的 `name／slug`、
+  現有 FAQ 的 `slug／question／reviewed`（`ReviewedBy` 有沒有值）。**不快取**，後台一改，下一次查詢就看得到。
+  connector 對應指令：`categories`、`treatments`、`faqs`（可加 `--json`，交給 OpenClaw 產生 FAQ 時直接挑）。
+- **預檢** `PUT /integrations/faq?dryRun=true`：跑完全部驗證、逐筆回報結果，但不寫入。connector：`push-faq --check`。
+- **比對用 slug，不用名稱**：分類改名不影響上傳。上傳時把 slug 解析成 `CategoryTermId` 存進去（FK），
+  所以之後後台改 slug，**已上傳的題目不受影響**，只有沿用舊 slug 的新上傳會被退回。
+- 比對不到 → 該筆 `rejected`，原因附上**網站當下可用的分類 slug 清單**。
+- **換分類**：同 slug、改 `categorySlug` 重傳即可（upsert 會更新 `CategoryTermId`）。已有 `ReviewedBy` 的題目上傳會被退回（§3.5），那些要在後台改分類。
+- **刪除分類**：既有規則已擋下 —— `ContentHandler.DeleteAsync` 對仍被引用的 term 回 409
+  「仍有 N 筆內容引用此分類／標籤，無法刪除」。院方要先把題目換到別的分類再刪，**不會出現孤兒 FAQ**。
+- **不自動建立分類**：分類會開出 `/faq/{category}/` 獨立頁，名稱、介紹文案與 SEO 由「分類與標籤」模型維護
+  （docs/04 §3）；整合鑰匙能開新分類，等於外流時也能在網站上開新頁。需要新分類由院方在後台新增，再查 `categories` 拿 slug。
 - **不退到預設分類（「其他」）**：題目會被放到錯的分類頁且沒有人發現；退回才會被看見。
-- 真的需要新分類：由後台有 `term` 權限的人在「分類與標籤」新增，院方重新索取分類清單後重傳。院方文件 8-4 寫了這個流程。
-- `relatedTreatmentSlugs` 同一套規則：任一個療程 slug 查不到 → **整筆退回**，不是略過那一個（略過的話院方以為已關聯，療程頁卻沒有出現）。
-- ⚠️ 前提是 STATUS「FAQ 五大分類兩份對不上」先定案（§4）。
+- `relatedTreatmentSlugs` 同一套規則：任一個查不到 → **整筆退回**，不是略過那一個（略過的話院方以為已關聯，療程頁卻沒有出現）。
+- 院方文件 8-4 有一張「分類變動時怎麼處理」對照表，改這裡的規則要同步那一張。
+- ⚠️ STATUS「FAQ 五大分類兩份對不上」仍要先定案 —— 那是**初始**分類對不對的問題，與後續變動無關。
 
 ### 2.3 院內怎麼用
 
@@ -196,27 +208,24 @@ connector 附指令 `node connector.mjs push-faq faqs.json`（JSON 範例與欄�
 
 | 項目 | 什麼時候給 | 怎麼產生 | 注意 |
 |---|---|---|---|
-| 連接程式 `tools/clinic-agent-connector/` | 開始設定前 | 實作產出：`connector.mjs`（`check`／`run`／`status`／`push-faq`）、`connector.config.example.json`、`install-service.ps1`／`install-launchd.sh`／`install-systemd.sh` | 院方文件已寫死這幾個指令與檔名，**實作要照著做**，改名就要同步改院方文件 |
+| 連接程式 `tools/clinic-agent-connector/` | 開始設定前 | 實作產出：`connector.mjs`（`check`／`run`／`status`／`push-faq [--check]`／`categories`／`treatments`／`faqs [--json]`）、`connector.config.example.json`、`install-service.ps1`／`install-launchd.sh`／`install-systemd.sh` | 院方文件已寫死這幾個指令與檔名，**實作要照著做**，改名就要同步改院方文件 |
 | 網站整合鑰匙 | 開始設定前 | `openssl rand -base64 32` 產生；SHA-256 雜湊寫進 Function App 的 `Integration__ClinicKeySha256` | 明文**不留在我們這邊**（交付後刪除），只留雜湊 |
 | 收題連線字串 | 開始設定前 | `ai-jobs` 佇列建一條**只有 Listen** 的 SAS policy，取其連線字串（`az servicebus queue authorization-rule create --rights Listen` → `keys list`） | entity 層級，不是 namespace 層級 |
 | 回答連線字串 | 開始設定前 | `ai-replies` 佇列建一條**只有 Send** 的 SAS policy | 同上 |
 | 網站 API 位址 | 開始設定前 | `https://api.20skin.tw/api/v1`，預填在範例設定檔 | 自訂網域上線前要改成 `*.azurewebsites.net` 那一個 |
-| FAQ 分類代稱清單 | 開始上傳 FAQ 前 | `GET /term` 篩出 FAQ 分類，輸出「名稱｜slug」（上傳只收這份清單上的分類，§2.2） | 🔴 STATUS「FAQ 五大分類兩份對不上」**要先定案**，否則給出去的清單之後會變 |
-| 療程代稱清單 | 開始上傳 FAQ 前 | `GET /treatment`，輸出「名稱｜slug」 | 28 項 |
-| 網站現有 FAQ 清單 | 開始上傳 FAQ 前 | `GET /admin/faq` 匯出「slug｜問題｜`ReviewedBy` 有沒有值」 | 院方靠它避開撞名、沿用代稱更新；已確認（有 `ReviewedBy`）的那些上傳時會被退回（§3.5） |
+| 分類、療程、現有 FAQ 的查詢 | 隨時 | **不交付固定清單**：connector 的 `categories`／`treatments`／`faqs` 即時查 `GET /integrations/faq/catalog`（§2.2） | 分類在後台可增修刪，固定清單會過期 |
 | 回答規範文字 | 已附在院方文件第 03 章 | 由 `AiHandler.SystemInstruction` 改寫成院方看得懂的版本 | 改了 `SystemInstruction` 的規則要同步院方文件 |
 | 聯合測試題組 | 聯合測試前 | 沿用 `ai-index-inspect --query` 的驗收題組，補到約 20 題（加入價格、保證療效、懷孕、指定醫師、要求忽略指示這幾類） | 同一份題組在切換前後各跑一次比對 |
 | 聯絡窗口 | 開始設定前 | 指定一位聯絡人 | 鑰匙外流時的停用流程由這個人接 |
 
-**交付方式**：鑰匙與兩組連線字串用一次性的加密連結交付，不走 Telegram、LINE、email；清單類（分類、療程、FAQ、題組）可以一般方式寄送。
-三份清單會隨網站內容變動，院方需要時重新匯出一次即可。
+**交付方式**：鑰匙與兩組連線字串用一次性的加密連結交付，不走 Telegram、LINE、email；測試題組可以一般方式寄送。
 
 ## 5. 定案後要同步的文件
 
 - CLAUDE.md：改寫決策 28（agent 路徑、允許 agent 知識、退回 Gemini、護欄只剩確定性掃描、附法規註記）；
   新增「院內整合」決策（Service Bus 院內主動連出、sessions 配對、整合鑰匙、FAQ 以 slug upsert 並直接發布、`ReviewedBy` 留空）。
 - docs/04 §4、docs/02 §6（「AI 介接方式未定」作廢）、docs/07（Service Bus 資源、MI 角色、SAS 範圍、app settings）、
-  docs/10 與 `openapi.yaml`（`/agent/heartbeat`、`/integrations/faq`）、STATUS.md。
+  docs/10 與 `openapi.yaml`（`/agent/heartbeat`、`/integrations/faq`、`/integrations/faq/catalog`）、STATUS.md。
 
 ## 6. 驗證（實作時）
 
