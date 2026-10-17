@@ -54,7 +54,8 @@
 
 1. **前段（不變）**：`aifaq.enabled` 開關、驗證、reCAPTCHA、頻率限制、嵌入、檢索。
 2. **生成**：
-   - 心跳 60 秒內有更新 → 送 job `{jobId, question, history, references:[{id:"S1",title,text}], createdAt}` 到 `ai-jobs`，
+   - 心跳 60 秒內有更新 → 送 job `{jobId, question, history, references:[{id:"S1",title,text}], createdAt}` 到 `ai-jobs`
+     （`question` ≤ 300 字、`history` 沿用 `MaxHistoryTurns`＝4 則、每則 ≤ 500 字，與 Gemini 路徑同一套上限），
      `AcceptSessionAsync("ai-replies", jobId)` 等回覆，最多 30 秒。
    - 心跳過期、或 30 秒沒等到 → **退回現行 Gemini 路徑**（`IAiChatService.CompleteAsync`，只依站內內容），記 App Insights 事件。
    - agent 路徑下「沒有可引用片段就判未命中」不適用（否則 agent 的知識永遠用不到）。
@@ -65,7 +66,9 @@
 
 ### 1.3 回覆格式與整合鑰匙
 
-- 回覆：`{jobId, answered, answer, sources:["S1"]}`。agent 不碰網址，來源由伺服器對映（決策 28 那條照留）。
+- **agent 只回純文字**（院方文件第 07 章）：本文 ＋ 最後一行 `SOURCES: S1,S2`（沒用到寫 `SOURCES:`）；答不出來整則只回 `NO_ANSWER`。
+  與現行 `SystemInstruction` 的結尾格式相同，院方不必學第二套。
+- **connector 轉成回覆訊息** `{jobId, answered, answer, sources:["S1"]}` 送回 `ai-replies`。agent 不碰網址，來源由伺服器對映（決策 28 那條照留）。
   逾時才到的回覆沒有人收，由 TTL 自然清掉。
 - 整合鑰匙（心跳與 FAQ 上傳共用）：header `X-Integration-Key`，Function App 只存 SHA-256 雜湊
   （app setting `Integration__ClinicKeySha256`）。不走後台帳密 —— 登入有 reCAPTCHA，機器過不了；後台帳號權限也太大。
@@ -75,8 +78,9 @@
 
 - **Node 程式**（OpenClaw 本身就是 Node，院內機器一定有 Node 22+），唯一相依 `@azure/service-bus`。
   設定值：網站網址、整合鑰匙、Service Bus 兩組連線字串（我們產生後交付）、OpenClaw gateway token。
-- 流程：從 `ai-jobs` 收題 → 呼叫本機 `http://127.0.0.1:18789/v1/chat/completions`
-  （`model: "openclaw/website"`、**不帶 `user`／`x-openclaw-session-key`**，每題獨立 session）→ 解析 → 送回 `ai-replies`。
+- 流程：從 `ai-jobs` 收題 → 組成院方文件第 07 章那個樣子的文字（【網站提供的參考資料】`[S#]`／【先前的對話】標明僅供理解上下文／【訪客這一次的問題】）
+  → 呼叫本機 `http://127.0.0.1:18789/v1/chat/completions`
+  （`model: "openclaw/website"`、**不帶 `user`／`x-openclaw-session-key`**，每題獨立 session）→ 解析 `SOURCES:`／`NO_ANSWER` → 送回 `ai-replies`。
   同時最多 3 題；超過 25 秒放棄該題；斷線指數退避重連。
 - 附 README：安裝成常駐服務（Windows 服務／launchd／systemd）、怎麼確認在線。
 
@@ -91,16 +95,16 @@
 ### 1.6 院方的步驟
 
 1. **新增網站專用 agent**：在 `agents.entries` 加 `website`（新版是以 id 為鍵的物件；舊版是 `agents.list` 陣列，以 `openclaw config schema` 為準）：
-   - `tools.deny` 列 exec／write／edit／apply_patch／browser／訊息類；`tools.elevated.enabled: false`；只留讀取。
+   - `tools.allow: ["read"]`；`tools.deny` 列 `exec`／`process`／`write`／`edit`／`apply_patch`／`browser`／`message`／`gateway`；`tools.elevated.enabled: false`。
    - ⚠️ 各 agent 的 workspace 是分開的 —— 院內知識若在 `main` 的 workspace，要**複製或指向**到 `website`，否則它答不出來。
    - 系統指示：繁體中文、不報價、不保證療效、不知道就說不知道、依格式回來源編號。
    - ✅ 確認：跟 `website` 聊幾句答得出院內資訊；叫它「傳一則 Telegram 訊息」做不到。
 2. **打開問答入口**：`gateway.http.endpoints.chatCompletions.enabled: true`，重新啟動。只給本機連，**不開防火牆、不接 tunnel**。
-3. **安裝 connector**：填設定值、設開機自動啟動。✅ connector 的狀態指令顯示「已連上」。
+3. **安裝 connector**：填設定值 → `check` 全部 ✓ → `run` → 裝成開機自動啟動、重開機後 `status` 顯示「在線」。
 4. **一起測試**：我們問 20 題常見問題，院方一起看答案，沒問題才開。
 
 上線後：那台**不能關機、不能睡眠**（關掉時網站自動改回 Gemini，不會壞）；鑰匙外流要立刻通知換鑰；
-調整 agent 的知識後網站答案會立刻改變，重要修改先在 Telegram 自己問過。
+調整 agent 的知識後網站答案會立刻改變，重要修改先對 `website` agent 自己問過（院方文件 2-2 的測試指令；**不是在 Telegram 問** —— 那是另一個 agent）。
 
 ---
 
@@ -143,13 +147,13 @@
 - 上傳時解析成 `CategoryTermId` 存進去（FK），所以之後後台改名或改 slug，**已上傳的題目不受影響**；
   只有沿用舊名稱／舊 slug 的新上傳會被退回。
 - 比對不到 → 該筆 `rejected`，原因附上**網站當下可用的分類（名稱＋slug）**。
-- **換分類**：同 slug、改 `categorySlug` 重傳即可（upsert 會更新 `CategoryTermId`）。已有 `ReviewedBy` 的題目上傳會被退回（§3.5），那些要在後台改分類。
+- **換分類**：問題文字不變、改填新的分類重傳即可（upsert 會更新 `CategoryTermId`）。已有 `ReviewedBy` 的題目上傳會被退回（§3.5），那些要在後台改分類。
 - **刪除分類**：既有規則已擋下 —— `ContentHandler.DeleteAsync` 對仍被引用的 term 回 409
   「仍有 N 筆內容引用此分類／標籤，無法刪除」。院方要先把題目換到別的分類再刪，**不會出現孤兒 FAQ**。
 - **不自動建立分類**：分類會開出 `/faq/{category}/` 獨立頁，名稱、介紹文案與 SEO 由「分類與標籤」模型維護
-  （docs/04 §3）；整合鑰匙能開新分類，等於外流時也能在網站上開新頁。需要新分類由院方在後台新增，再查 `categories` 拿 slug。
+  （docs/04 §3）；整合鑰匙能開新分類，等於外流時也能在網站上開新頁。需要新分類由院方在後台新增，新增完就能用它的名稱上傳。
 - **不退到預設分類（「其他」）**：題目會被放到錯的分類頁且沒有人發現；退回才會被看見。
-- `relatedTreatmentSlugs` 同一套規則：任一個查不到 → **整筆退回**，不是略過那一個（略過的話院方以為已關聯，療程頁卻沒有出現）。
+- 相關療程同一套規則（名稱或 slug）：任一個查不到 → **整筆退回**，不是略過那一個（略過的話院方以為已關聯，療程頁卻沒有出現）。
 - 院方文件 8-4 有一張「分類變動時怎麼處理」對照表，改這裡的規則要同步那一張。
 - **正式站實況（2026-10-17 查 `GET /term`、`GET /faq`）**：FAQ 分類 **6 個**、FAQ **51 題**（其中 25 題已有 `ReviewedBy`，上傳不會覆蓋）。
 
@@ -170,7 +174,7 @@
 
 ### 2.3 院內怎麼用
 
-connector 附指令 `node connector.mjs push-faq faqs.json`（JSON 範例與欄位說明寫在 README）。
+connector 附指令 `node connector.mjs push-faq faqs.json [--check]`（JSON 範例與欄位說明寫在 README 與院方文件第 08 章）。
 院方可請 OpenClaw 產出這個格式的檔案再上傳，或任何程式直接打這支 API。
 
 ---
@@ -188,7 +192,8 @@ connector 附指令 `node connector.mjs push-faq faqs.json`（JSON 範例與欄�
 | OpenClaw gateway token | 院內 connector 設定檔、OpenClaw 設定 | 🔴 **等同 OpenClaw 擁有者**（官方文件） | 院內 agent 被完整接管 | `openclaw` 重新產生 token |
 
 規則：
-- 網站端**一律不存明文鑰匙**；院內的設定檔權限設成只有執行 connector 的帳號讀得到（`chmod 600`／Windows ACL），**不可放進雲端同步資料夾**。
+- 網站端**一律不存明文鑰匙**；院內的 connector 資料夾**不可放進雲端同步資料夾**（Dropbox／Google 雲端硬碟／iCloud）。
+  檔案權限與專用作業系統帳號**不列為院方要求**（Tim 指定，院方文件只寫基本環境）。
 - **輪替不停機**：Function 同時接受兩組雜湊（`Integration__ClinicKeySha256` 與 `…Next`），換鑰時先加新的、院內換好再拿掉舊的。
   Service Bus 每個 policy 本來就有主／次兩把金鑰，同樣先換一把。建議每 6–12 個月，或經手人員異動時換。
 - **一鍵關掉**：`aifaq.enabled` 照舊關整個問答；另設 `Ai__ChatProvider=gemini` 只關院內路徑。FAQ 上傳以拿掉雜湊關閉。
@@ -219,13 +224,13 @@ connector 附指令 `node connector.mjs push-faq faqs.json`（JSON 範例與欄�
 - 🔴 **不覆寫人工確認過的 FAQ**：問題文字對到的既有 FAQ 若已填 `ReviewedBy`（有人簽過名），該筆一律 `rejected`。
   否則院內一次上傳就能蓋掉醫師確認過的答案（正式站 51 題裡有 25 題已簽名）。
 - 每筆照樣過 `RiskTerms` ＋ 金額掃描，命中就 `rejected` 並回報命中哪個字。
-- 只收純文字：去掉 HTML 標籤，欄位長度上限比照後台表單（`webAnswer` 400 字、`aiAnswer` 100 字的規格見 docs/04 §2，上限放寬一倍容錯）。
-- 頻率限制另開 bucket（例：每小時 10 次批次）。
-- 每次上傳在 App Insights 記一筆事件：筆數、slug 清單、結果、來源 IP —— 出事時查得到「哪一批、什麼時候進來的」。
+- 只收純文字：去掉 HTML 標籤。長度：`question` ≤ 200 字（`ContentItems.Title` 上限）、`webAnswer` ≤ 800 字、`aiAnswer` ≤ 200 字
+  （規格 150–400／60–100 字見 docs/04 §2，硬上限放寬一倍容錯），超過退回。院方文件 8-1 照寫。
+- 頻率限制另開 bucket：正式上傳每小時 10 批、`--check` 每小時 60 批（院方文件 8-3 照寫）。
+- 每次上傳在 App Insights 記一筆事件：筆數、問題清單、結果、來源 IP —— 出事時查得到「哪一批、什麼時候進來的」。
 
 ### 3.6 院內主機
 
-- 用**專用的作業系統帳號**跑 OpenClaw 與 connector，不用管理者帳號。
 - 開自動更新（作業系統、Node、OpenClaw）。
 - 那台機器同時接 Telegram：`website` agent 與 Telegram 用的 agent **分開**，網站這條路徑碰不到 Telegram 那一個的工具與記憶。
 
@@ -276,7 +281,7 @@ connector 附指令 `node connector.mjs push-faq faqs.json`（JSON 範例與欄�
 ## 8. 待向院方確認
 
 1. 那台機器是否 24 小時開機。
-2. FAQ 能否提供穩定的 slug，以及對得上站上分類的 `categorySlug`。
+2. 院方後台誰負責維護 FAQ 分類（新增分類時要記得取有意義的英文代稱）。
 3. OpenClaw 單題回應時間、可同時處理幾題。
 
 ## 參考
