@@ -103,6 +103,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 | 院方內容 | 28 項療程的療程時間／術後照護／禁忌症（**最大瓶頸**）、13 位醫師資料、8 則案例的揭露欄位、法務條文 | §二、§八 |
 | 院方資料 | 院區經緯度、交通停車、門診時段書面確認、`product*.php` 清單、Search Console | §八 |
 | 待決定 | FAQ 五大分類兩份對不上、`llms.txt` 範圍、密碼輪替規則、圖片衍生尺寸、允赫齒科納不納入 | §八 |
+| 提案（未實作） | **AI FAQ 連本地端**：AI 問答改由院內 OpenClaw 回答 ＋ FAQ 批次上傳接口。2026-10-17 規劃完、**Tim 指示先不實作**；定案前決策 28 照舊 | [docs/proposals/ai-faq-local-agent.md](docs/proposals/ai-faq-local-agent.md) |
 
 ---
 
