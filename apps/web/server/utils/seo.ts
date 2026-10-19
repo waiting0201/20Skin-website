@@ -9,21 +9,14 @@
 // ⚠️ **同源代理，不是轉址到 api 網域。** 爬蟲拿到的 sitemap 必須與網站同一個 origin，
 //    否則 Search Console 會判定「sitemap 的位置與它收錄的網址不符」而整份忽略。
 //
-// ⚠️ `origin` 由這一層帶過去 —— 只有它知道這個請求打到的是正式站、測試站還是
-//    SWA 預覽環境，三個是不同的主機名。
-//    🔴 這正是 2026-09-16 那個 bug 的教訓：`postbuild.mjs` 把主機名寫死成
-//    `https://20skin.tw`，而 CI 用的是 `20skin.4webdemo.com`，結果整份 sitemap 被清空。
-//    主機名一律從請求推導，不要寫死。
+// 🔴 `origin` 一律是正式網域（shared/site.ts 的 SITE_ORIGIN），與 canonical 同一個值。
+//    2026-09-16～10-19 曾改成從請求的 `x-forwarded-host` 推導，結果在 SWA 後面拿到的是
+//    內部的 `*.azurewebsites.net`，正式站整份 sitemap 指向那個主機名（Search Console 會忽略）。
+//    ⚠️ 當初改成推導的理由（`postbuild.mjs` 寫死主機名、CI 網域不同而把 sitemap 清空）
+//    已經不存在 —— postbuild 過濾器隨 SSR 化拿掉了，verify:links 讀 sitemap 時也會把主機名換掉。
 
 import type { H3Event } from 'h3'
-
-/** 這個請求是打到哪個網域的。反向代理（SWA）下要看 `x-forwarded-*`。 */
-function requestOrigin(event: H3Event): string {
-  const headers = getRequestHeaders(event)
-  const host = headers['x-forwarded-host'] ?? headers.host ?? '20skin.tw'
-  const proto = headers['x-forwarded-proto'] ?? 'https'
-  return `${proto}://${host}`
-}
+import { SITE_ORIGIN } from '#shared/site'
 
 /**
  * 代理一支 `/seo/*`。
@@ -40,7 +33,7 @@ export async function proxySeo(event: H3Event, path: string, contentType: string
 
   try {
     const body = await $fetch<string>(`${base}/seo/${path}`, {
-      query: { origin: requestOrigin(event) },
+      query: { origin: SITE_ORIGIN },
       responseType: 'text',
       timeout: 8000,
       retry: 1,

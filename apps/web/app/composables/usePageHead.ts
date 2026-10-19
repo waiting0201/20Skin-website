@@ -5,8 +5,10 @@
 
 const SITE_NAME = '20SKIN 美醫集團'
 
-/** 正式網域。JSON-LD 的 url／logo 也要絕對網址，所以對外開放。 */
-export const ORIGIN = 'https://20skin.tw'
+import { SITE_ORIGIN } from '#shared/site'
+
+/** 正式網域。JSON-LD 的 url／logo 也要絕對網址，所以對外開放。⚠️ 值在 shared/site.ts（sitemap 也用同一個）。 */
+export const ORIGIN = SITE_ORIGIN
 
 /**
  * 後台 SEO 區塊（`SeoMeta`，docs/08 §B-4）填的覆寫值。
