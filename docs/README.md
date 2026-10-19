@@ -23,9 +23,9 @@
 | — | [openapi.yaml](openapi.yaml) | **OpenAPI 3.1 規格**（手寫，2026-10-01）— 65 個 operation；改路由要同步 |
 | 11 | [backend-design](11-backend-design.md) | **後端施工標準** — 分層鐵律、集中式路由與預設拒絕、EF Core ＋ Dapper 分工、工作流狀態機、Coding Checklist |
 
-## 提案（未定案，不要照著改程式）
+## 提案（不採用，留作紀錄）
 
-- [proposals/ai-faq-local-agent.md](proposals/ai-faq-local-agent.md) — **AI FAQ 連本地端**：AI 問答改由院內 OpenClaw 回答（Azure Service Bus，院內主動連出）＋ FAQ 批次上傳接口（2026-10-17）
+- [proposals/ai-faq-local-agent.md](proposals/ai-faq-local-agent.md) — **AI FAQ 連本地端**：AI 問答改由院內 OpenClaw 回答 ＋ FAQ 批次上傳接口。2026-10-17 規劃，**2026-10-19 決定不整合**，AI 問答維持 Gemini（決策 28）
 
 ## 原始資料
 
