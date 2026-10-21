@@ -23,7 +23,7 @@ const [category, treatment] = await Promise.all([
 ])
 
 if (!category || !treatment) {
-  throw createError({ statusCode: 404, statusMessage: '找不到這個療程' })
+  throw await notFoundUnlessRedirected({ statusMessage: '找不到這個療程' })
 }
 
 // 是否有可用的細節內容（facts／indications／mechanism 等）。

@@ -17,7 +17,7 @@ const slug = route.params.category as string
 const category = FAQ_CATEGORIES.find((c) => c.slug === slug)
 
 if (!category) {
-  throw createError({ statusCode: 404, statusMessage: '找不到這個 FAQ 分類' })
+  throw await notFoundUnlessRedirected({ statusMessage: '找不到這個 FAQ 分類' })
 }
 
 // ⚠️ 原本這裡有 `definePageMeta({ validate })`，2026-09-15 拿掉。
@@ -29,7 +29,7 @@ const items = await faqItemsByCategory(category.slug)
 
 usePageHead({
   title: `${category.label}｜常見問題`,
-  description: `門診中最常被問到、與「${category.label}」有關的 ${items.length} 則問題，並標註審閱者與更新月份。`,
+  description: `門診中最常被問到、與「${category.label}」有關的 ${items.length} 則問題，並標註更新月份。`,
   pageCss: '/assets/pages/16-faq.css',
   path: `/faq/${category.slug}/`,
   jsonLd: [
@@ -61,7 +61,7 @@ usePageHead({
       <div class="faq-hero__copy">
         <span class="u-eyebrow">FAQ</span>
         <h1 class="faq-hero__title">{{ category.label }}</h1>
-        <p class="faq-hero__lede">門診中最常被問到、與「{{ category.label }}」有關的 {{ items.length }} 則問題，並標註審閱者與更新月份。</p>
+        <p class="faq-hero__lede">門診中最常被問到、與「{{ category.label }}」有關的 {{ items.length }} 則問題，並標註更新月份。</p>
 
         <form class="faq-search__form" action="/search/" method="get" role="search">
           <label class="visually-hidden" for="faqQuery">搜尋常見問題</label>
@@ -91,8 +91,8 @@ usePageHead({
             <details v-for="item in items" :key="item.question" class="c-faq__item">
               <summary class="c-faq__q">{{ item.question }}</summary>
               <div class="c-faq__a">
-                <p>{{ item.webAnswer }}</p>
-                <span class="c-faq__meta">最後更新 {{ item.lastReviewedOn.slice(0, 7) }}｜{{ item.reviewedBy }}審閱</span>
+                <p v-for="(para, k) in item.webParagraphs" :key="k">{{ para }}</p>
+                <span class="c-faq__meta">最後更新 {{ item.lastReviewedOn.slice(0, 7) }}<template v-if="item.reviewedBy">｜{{ item.reviewedBy }}審閱</template></span>
               </div>
             </details>
           </div>

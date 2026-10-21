@@ -18,7 +18,7 @@ const slug = route.params.slug as string
 const clinic = CLINICS.find((c) => c.slug === slug)
 
 if (!clinic) {
-  throw createError({ statusCode: 404, statusMessage: '找不到這個院區' })
+  throw await notFoundUnlessRedirected({ statusMessage: '找不到這個院區' })
 }
 
 const otherClinic = CLINICS.find((c) => c.slug !== clinic.slug)

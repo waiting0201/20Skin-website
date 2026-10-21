@@ -19,7 +19,7 @@ const slug = route.params.slug as string
 const story = STORY_PAGES[slug]
 
 if (!story) {
-  throw createError({ statusCode: 404, statusMessage: '找不到這篇品牌故事' })
+  throw await notFoundUnlessRedirected({ statusMessage: '找不到這篇品牌故事' })
 }
 
 // ⚠️ 原本這裡有 `definePageMeta({ validate })` —— 理由同 faq/[category].vue：

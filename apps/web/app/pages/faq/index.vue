@@ -25,7 +25,7 @@ const itemsByCategory = new Map(
 
 usePageHead({
   title: '常見問題',
-  description: '門診最常被問到的 24 個問題，依主題分類整理，並標註審閱者與更新月份。',
+  description: `門診最常被問到的 ${FAQ_ITEMS.length} 個問題，依主題分類整理，並標註更新月份。`,
   pageCss: '/assets/pages/16-faq.css',
   path: '/faq/',
   jsonLd: [
@@ -55,7 +55,7 @@ usePageHead({
       <div class="faq-hero__copy">
         <span class="u-eyebrow">FAQ</span>
         <h1 class="faq-hero__title">常見問題</h1>
-        <p class="faq-hero__lede">門診最常被問到的 24 個問題，依主題分類整理，並標註審閱者與更新月份。</p>
+        <p class="faq-hero__lede">門診最常被問到的 {{ FAQ_ITEMS.length }} 個問題，依主題分類整理，並標註更新月份。</p>
 
         <form class="faq-search__form" action="/search/" method="get" role="search">
           <label class="visually-hidden" for="faqQuery">搜尋常見問題</label>
@@ -109,8 +109,8 @@ usePageHead({
             <details v-for="item in itemsByCategory.get(cat.slug) ?? []" :key="item.question" class="c-faq__item">
               <summary class="c-faq__q">{{ item.question }}</summary>
               <div class="c-faq__a">
-                <p>{{ item.webAnswer }}</p>
-                <span class="c-faq__meta">最後更新 {{ item.lastReviewedOn.slice(0, 7) }}｜{{ item.reviewedBy }}審閱</span>
+                <p v-for="(para, k) in item.webParagraphs" :key="k">{{ para }}</p>
+                <span class="c-faq__meta">最後更新 {{ item.lastReviewedOn.slice(0, 7) }}<template v-if="item.reviewedBy">｜{{ item.reviewedBy }}審閱</template></span>
               </div>
             </details>
           </div>

@@ -31,6 +31,12 @@ export interface FaqItem {
   categorySlug: string
   /** WebAnswer，nvarchar(max)，150–400 字，頁面顯示用。 */
   webAnswer: string
+  /**
+   * WebAnswer 依換行拆成的段落，頁面渲染用這一份。
+   * ⚠️ 2026-10-21 匯入的 FAQ統整.xlsx 有 50 多題是「一句說明＋條列」，
+   *    整段塞進單一 `<p>` 的話換行會被摺成空白，條列擠成一行。
+   */
+  webParagraphs: string[]
   /** AiAnswer，nvarchar(500)，60–100 字，FAQPage JSON-LD 唯一來源。 */
   aiAnswer: string
   /** LastReviewedOn，date。 */
@@ -59,15 +65,20 @@ export async function getFaqItems(): Promise<FaqItem[]> {
   return faqs
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
-    .map((record) => ({
-      question: record.title,
-      categorySlug: categorySlugOf(terms, record),
-      webAnswer: (record.fields.webAnswer as string) ?? '',
-      aiAnswer: (record.fields.aiAnswer as string) ?? '',
-      lastReviewedOn: (record.fields.lastReviewedOn as string) ?? '',
-      // ⚠️ 2026-09-11 起是 Faqs.ReviewedBy 的真欄位，不再是前台寫死的字串。
-      reviewedBy: (record.fields.reviewedBy as string) ?? '',
-    }))
+    .map((record) => {
+      const webAnswer = (record.fields.webAnswer as string) ?? ''
+      return {
+        question: record.title,
+        categorySlug: categorySlugOf(terms, record),
+        webAnswer,
+        webParagraphs: webAnswer.split(/\r?\n/).map((s) => s.trim()).filter(Boolean),
+        aiAnswer: (record.fields.aiAnswer as string) ?? '',
+        lastReviewedOn: (record.fields.lastReviewedOn as string) ?? '',
+        // ⚠️ 2026-09-11 起是 Faqs.ReviewedBy 的真欄位，不再是前台寫死的字串。
+        //    多數題目留空（院方後台新增的、xlsx 匯入的），頁面要能不顯示審閱者。
+        reviewedBy: ((record.fields.reviewedBy as string) ?? '').trim(),
+      }
+    })
 }
 
 export async function faqItemsByCategory(slug: string): Promise<FaqItem[]> {

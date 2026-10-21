@@ -18,7 +18,7 @@ const slug = route.params.slug as string
 const article = await getArticleBySlug(slug)
 
 if (!article) {
-  throw createError({ statusCode: 404, statusMessage: 'Article Not Found' })
+  throw await notFoundUnlessRedirected({ statusMessage: 'Article Not Found' })
 }
 
 // 🔴 `await` 不可省。`getArticleCategory` 在資料層改成執行期取值之後是 **async**，

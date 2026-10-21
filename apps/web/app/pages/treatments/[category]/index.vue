@@ -20,7 +20,7 @@ const [treatmentCategories, treatments, category] = await Promise.all([
 ])
 
 if (!category) {
-  throw createError({ statusCode: 404, statusMessage: '找不到這個療程分類' })
+  throw await notFoundUnlessRedirected({ statusMessage: '找不到這個療程分類' })
 }
 
 const items = treatments.filter((t) => t.categorySlug === category.slug)

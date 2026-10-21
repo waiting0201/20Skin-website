@@ -22,7 +22,7 @@ const slug = route.params.slug as string
 const doctor = doctorWithArticles
 
 if (!doctor) {
-  throw createError({ statusCode: 404, statusMessage: '找不到這位成員' })
+  throw await notFoundUnlessRedirected({ statusMessage: '找不到這位成員' })
 }
 
 // 🔴 院區名稱查據點清單，**不要再寫回一份寫死的對照表**（2026-09-18）——

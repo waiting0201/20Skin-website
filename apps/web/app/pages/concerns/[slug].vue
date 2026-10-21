@@ -15,7 +15,7 @@ const CONCERNS = await getConcerns()
 const concern = CONCERNS.find((c) => c.slug === slug)
 
 if (!concern) {
-  throw createError({ statusCode: 404, statusMessage: '找不到這個困擾頁面', fatal: true })
+  throw await notFoundUnlessRedirected({ statusMessage: '找不到這個困擾頁面', fatal: true })
 }
 
 const jsonLdBlocks = computed(() => {

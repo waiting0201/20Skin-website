@@ -18,7 +18,7 @@ const slug = route.params.slug as string
 const item = await findCaseDetail(slug)
 
 if (!item) {
-  throw createError({ statusCode: 404, statusMessage: '找不到這個案例頁面', fatal: true })
+  throw await notFoundUnlessRedirected({ statusMessage: '找不到這個案例頁面', fatal: true })
 }
 
 const moreCases = computed(() =>
