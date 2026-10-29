@@ -176,7 +176,8 @@ public sealed class AiHandler(
         }
 
         var context = hits.ToList();
-        var raw = await chat.CompleteAsync(SystemInstruction, BuildUserMessage(question, body.History, context));
+        var userMessage = BuildUserMessage(question, body.History, context);
+        var raw = await chat.CompleteAsync(SystemInstruction, userMessage);
 
         var answer = StripSourceLine(raw, out var citedIndexes).Trim();
 
@@ -186,11 +187,30 @@ public sealed class AiHandler(
 
         // 🔴 護欄是機率性的，所以在 prompt 之外再加一道**確定性**的輸出掃描。
         //    命中就整則丟棄改用未命中文案 —— 寧可少答一題。
+        // ⚠️ 命中時先帶著命中的字重寫**一次**（2026-10-29「新中式美學」查不到）：
+        //    片段原文自己就帶著禁用字（FAQ「回到自己 10 年前最好的狀態」），而【貼近原文】
+        //    要模型照抄 —— 不重寫的話，只要正解片段含一個「最好」，那個問題就永遠答不出來。
+        //    重寫後仍命中才判未命中，護欄本身不放寬。
         var unsafeReason = await UnsafeReasonAsync(answer);
         if (unsafeReason is not null)
         {
-            logger.LogWarning("AI 回答命中輸出護欄（{Reason}），改以未命中處理。", unsafeReason);
-            return await MissAsync(question, "needs_doctor");
+            logger.LogInformation("AI 回答命中輸出護欄（{Reason}），重寫一次。", unsafeReason);
+
+            raw = await chat.CompleteAsync(SystemInstruction,
+                userMessage + $"\n你上一次的回答{unsafeReason}，違反【絕對禁止】第 4、5 點。"
+                + "請只把那幾個字換成中性說法（例如「最好的狀態」改為「理想的狀態」），其餘照原規則重新回答。");
+            answer = StripSourceLine(raw, out citedIndexes).Trim();
+
+            if (answer.Length == 0 || answer.Contains(NoAnswerSentinel, StringComparison.OrdinalIgnoreCase)
+                || IsBareRefusal(answer))
+                return await MissAsync(question, "no_match");
+
+            unsafeReason = await UnsafeReasonAsync(answer);
+            if (unsafeReason is not null)
+            {
+                logger.LogWarning("AI 回答重寫後仍命中輸出護欄（{Reason}），改以未命中處理。", unsafeReason);
+                return await MissAsync(question, "needs_doctor");
+            }
         }
 
         var sources = ResolveSources(citedIndexes, context);
@@ -445,6 +465,9 @@ public sealed class AiHandler(
         【貼近原文】
         · 以最能回答問題的那一個片段為主，其他片段只在它沒講到時補充。
         · 盡量沿用片段裡的原句與用詞，依原文的順序與重點交代；可以刪減，但不要改寫成自己的說法。
+        · 例外：原句含【絕對禁止】第 5 點的字詞時（例如「最好的狀態」），
+          只把那幾個字換成中性說法（「理想的狀態」），其餘照抄。
+          片段裡用引號標出的品牌口號照引，例如「最大的改變是不變」。
         · 不要加上片段裡沒有的開場白、串場、總結或延伸建議。
         · 不同療程或不同文章的內容不要混成一段，要講明各自出自哪一項。
 
