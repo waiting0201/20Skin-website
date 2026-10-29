@@ -119,6 +119,10 @@ public sealed class AiHandler(
     internal static bool IsBareRefusal(string answer) =>
         answer.Length <= BareRefusalMaxLength && BareRefusal.IsMatch(answer);
 
+    private static bool IsRefusal(string answer) =>
+        answer.Length == 0 || answer.Contains(NoAnswerSentinel, StringComparison.OrdinalIgnoreCase)
+        || IsBareRefusal(answer);
+
     private static readonly Regex SourceLine = new(@"^\s*SOURCES\s*[:：]\s*(.+)$",
         RegexOptions.Multiline | RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -168,10 +172,14 @@ public sealed class AiHandler(
         // ⚠️ 看 MatchScore（含標題關鍵字加分）—— 只打產品名的問句語意分數天生偏低（AiIndexFormat.LexicalBonus）。
         var hasCitableHit = hits.Any(h => h.Chunk.Q && h.MatchScore >= threshold);
 
+        // ⚠️ 「查不到」有三條路，前台看到的是同一句話、QuestionInbox 也是同一種紀錄 ——
+        //    只有這裡的 log 分得出來，所以三條都以「AI 問答未命中［原因］」開頭並帶問題原文。
+        //    10/06 就是因為分不出來，只修了檢索（饅化），漏掉同一天已經出現的輸出護欄（2026-10-29）。
+        //    查法：traces | where message startswith "AI 問答未命中"
         if (!hasCitableHit)
         {
-            logger.LogInformation("AI 問答未命中（最高分 {Top:F3}、門檻 {Threshold:F2}）",
-                hits.Count > 0 ? hits[0].MatchScore : 0, threshold);
+            logger.LogInformation("AI 問答未命中［分數不足］最高分 {Top:F3}、門檻 {Threshold:F2}｜問題：{Question}",
+                hits.Count > 0 ? hits[0].MatchScore : 0, threshold, question);
             return await MissAsync(question, "no_match");
         }
 
@@ -181,9 +189,11 @@ public sealed class AiHandler(
 
         var answer = StripSourceLine(raw, out var citedIndexes).Trim();
 
-        if (answer.Length == 0 || answer.Contains(NoAnswerSentinel, StringComparison.OrdinalIgnoreCase)
-            || IsBareRefusal(answer))
+        if (IsRefusal(answer))
+        {
+            logger.LogInformation("AI 問答未命中［模型拒答］｜問題：{Question}", question);
             return await MissAsync(question, "no_match");
+        }
 
         // 🔴 護欄是機率性的，所以在 prompt 之外再加一道**確定性**的輸出掃描。
         //    命中就整則丟棄改用未命中文案 —— 寧可少答一題。
@@ -194,21 +204,24 @@ public sealed class AiHandler(
         var unsafeReason = await UnsafeReasonAsync(answer);
         if (unsafeReason is not null)
         {
-            logger.LogInformation("AI 回答命中輸出護欄（{Reason}），重寫一次。", unsafeReason);
+            logger.LogInformation("AI 回答命中輸出護欄（{Reason}），重寫一次｜問題：{Question}", unsafeReason, question);
 
             raw = await chat.CompleteAsync(SystemInstruction,
                 userMessage + $"\n你上一次的回答{unsafeReason}，違反【絕對禁止】第 4、5 點。"
                 + "請只把那幾個字換成中性說法（例如「最好的狀態」改為「理想的狀態」），其餘照原規則重新回答。");
             answer = StripSourceLine(raw, out citedIndexes).Trim();
 
-            if (answer.Length == 0 || answer.Contains(NoAnswerSentinel, StringComparison.OrdinalIgnoreCase)
-                || IsBareRefusal(answer))
-                return await MissAsync(question, "no_match");
-
-            unsafeReason = await UnsafeReasonAsync(answer);
-            if (unsafeReason is not null)
+            if (IsRefusal(answer))
             {
-                logger.LogWarning("AI 回答重寫後仍命中輸出護欄（{Reason}），改以未命中處理。", unsafeReason);
+                logger.LogInformation("AI 問答未命中［模型拒答（重寫後）］｜問題：{Question}", question);
+                return await MissAsync(question, "no_match");
+            }
+
+            var retryReason = await UnsafeReasonAsync(answer);
+            if (retryReason is not null)
+            {
+                logger.LogWarning("AI 問答未命中［輸出護欄］第一次{First}、重寫後{Retry}｜問題：{Question}",
+                    unsafeReason, retryReason, question);
                 return await MissAsync(question, "needs_doctor");
             }
         }
