@@ -90,6 +90,16 @@ public sealed class AiHandler(
 
     private const string RiskTermCacheKey = "AiHandler.RiskTerms";
 
+    /// <summary>
+    /// 含 <c>RiskTerms</c> 禁用字、但 AI 回答的輸出護欄<b>不擋</b>的說法（Tim 定案 2026-10-29：「最好的狀態」不用擋）。
+    /// <para>
+    /// 「回到自己 10 年前最好的狀態」講的是使用者自己，不是療效或院所的最高級比較。
+    /// ⚠️ 只放寬 AI 回答這一道，<b>不動 <c>RiskTerms</c> 表</b> —— 後台編輯器的即時提示照樣標出來。
+    /// ⚠️ 加詞要整個說法，不可以只放一個字（放「最好」等於把那個禁用字整個拿掉）。
+    /// </para>
+    /// </summary>
+    private static readonly string[] AllowedPhrases = ["最好的狀態"];
+
     /// <summary>未命中時的固定回覆。🔴 <b>不讓模型自由發揮</b> —— 那正是它會開始編造的時刻。</summary>
     private const string NoAnswerText =
         "這個問題我在站內資料裡找不到夠明確的說明。建議您透過 LINE 詢問或預約門診，由醫師為您評估。";
@@ -208,7 +218,7 @@ public sealed class AiHandler(
 
             raw = await chat.CompleteAsync(SystemInstruction,
                 userMessage + $"\n你上一次的回答{unsafeReason}，違反【絕對禁止】第 4、5 點。"
-                + "請只把那幾個字換成中性說法（例如「最好的狀態」改為「理想的狀態」），其餘照原規則重新回答。");
+                + "請只把那幾個字換成中性說法（例如「效果最好」改為「效果較明顯」），其餘照原規則重新回答。");
             answer = StripSourceLine(raw, out citedIndexes).Trim();
 
             if (IsRefusal(answer))
@@ -309,13 +319,15 @@ public sealed class AiHandler(
     /// 含有「免費」「推薦」這種在衛教回答裡完全正常的字，拿來當硬性攔截會誤殺。
     /// </para>
     /// <para>價格另外用金額樣式判斷，因為「多少錢」不是某個固定字詞。</para>
+    /// <para>比對前先拿掉 <see cref="AllowedPhrases"/> —— 含禁用字、但 Tim 判定不必擋的說法。</para>
     /// </summary>
     private async Task<string?> UnsafeReasonAsync(string answer)
     {
         if (MoneyPattern.IsMatch(answer)) return "出現金額";
 
+        var scanned = AllowedPhrases.Aggregate(answer, (text, phrase) => text.Replace(phrase, ""));
         var terms = await GetRiskTermsAsync();
-        var hit = terms.FirstOrDefault(t => answer.Contains(t, StringComparison.Ordinal));
+        var hit = terms.FirstOrDefault(t => scanned.Contains(t, StringComparison.Ordinal));
         return hit is null ? null : $"出現高風險字詞「{hit}」";
     }
 
@@ -478,8 +490,9 @@ public sealed class AiHandler(
         【貼近原文】
         · 以最能回答問題的那一個片段為主，其他片段只在它沒講到時補充。
         · 盡量沿用片段裡的原句與用詞，依原文的順序與重點交代；可以刪減，但不要改寫成自己的說法。
-        · 例外：原句含【絕對禁止】第 5 點的字詞時（例如「最好的狀態」），
-          只把那幾個字換成中性說法（「理想的狀態」），其餘照抄。
+        · 例外：原句含【絕對禁止】第 5 點的字詞時（例如「效果最好」），
+          只把那幾個字換成中性說法（「效果較明顯」），其餘照抄。
+          「最好的狀態」不在此限，可照引。
           片段裡用引號標出的品牌口號照引，例如「最大的改變是不變」。
         · 不要加上片段裡沒有的開場白、串場、總結或延伸建議。
         · 不同療程或不同文章的內容不要混成一段，要講明各自出自哪一項。
