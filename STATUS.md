@@ -82,7 +82,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 
 ---
 
-## 📋 剩下的事（2026-10-01 盤點）
+## 📋 剩下的事（2026-10-01 盤點，2026-11-06 覆核）
 
 程式功能大致完成，剩下的多半卡在院方與上線設定。細節在各節，這裡只當索引：
 
@@ -93,17 +93,17 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
 | ~~程式~~ | ~~單元測試、`openapi.yaml`、首頁版位順序／開關、八大專科入口、NAP~~ ✅ 2026-10-01 完成 | 下方「2026-10-01」 |
 | ~~文件~~ | ~~docs/10 與程式碼的 10 處出入（快取標頭、AI 摘要長度、錯誤碼表等），以 `docs/openapi.yaml` 為準~~ ✅ 2026-10-02 | 下方「2026-10-01」 |
 | ~~程式~~ | ~~本機 docker 建庫腳本~~ ✅ 2026-10-02 `scripts/local-db.sh` | §四 |
-| 上線設定 | 🔴 **SMTP 一個鍵都沒設** —— `/contact/` 不會寄信 | §七 |
+| 上線設定 | 🔴 **SMTP 一個鍵都沒設** —— `/contact/` 不會寄信（2026-11-06 以 `az` 再確認仍沒有） | §七 |
 | 上線設定 | 🔴 `api.20skin.tw` 自訂網域 ＋ CORS 正式來源 ＋ reCAPTCHA 網域清單（缺一，切 DNS 當天表單與後台停擺） | §七 |
 | 上線設定 | 正式網域前若有 Cloudflare，確認不擋 AI 爬蟲 | §七 |
 | ~~驗證~~ | ~~CWV 與 SSR 終點延遲、冷啟動、CORS preflight／5xx、遷移回滾演練~~ ✅ 2026-10-02 都量了，結果見下一節 | 下方「2026-10-02」 |
-| ~~🔴 程式~~ | ~~**頁面在瀏覽器 hydration 時把 API 全部再打一次，打失敗就把算繪好的頁換成 503**~~ ✅ 2026-10-02 修好（未部署） | 下方「2026-10-02」 |
-| 程式 | 手機 LCP 4–11 秒：圖片沒有衍生尺寸。✅ 2026-10-02 Tim 定案「Function 端產」，程式已完成，**部署順序：API → 補產 4612 張 → 前台** | 下方「圖片衍生尺寸」 |
-| 🔴 上線設定 | 正式站 AI 問答的頻率限制實際是 **10 次／60 分**。程式已改成收底線鍵名（未部署）；**還要在 Function App 設 `RateLimit__PublicQuota__ai_ask__MaxRequests=20`、`…__WindowMinutes=10`** | 下方「2026-10-02」 |
+| ~~🔴 程式~~ | ~~**頁面在瀏覽器 hydration 時把 API 全部再打一次，打失敗就把算繪好的頁換成 503**~~ ✅ 2026-10-02 修好，已部署 | 下方「2026-10-02」 |
+| ~~程式~~ | ~~手機 LCP 4–11 秒：圖片沒有衍生尺寸~~ ✅ 2026-10-02 Function 端產，已部署並補產完成。🟡 **CWV 尚未重量** | 下方「圖片衍生尺寸」 |
+| ~~🔴 上線設定~~ | ~~正式站 AI 問答的頻率限制實際是 10 次／60 分~~ ✅ 程式已部署；`RateLimit__PublicQuota__ai_ask__MaxRequests=20`、`…__WindowMinutes=10` 已設（2026-11-06 以 `az` 實查） | 下方「2026-10-02」 |
 | 院方內容 | 28 項療程的療程時間／術後照護／禁忌症（**最大瓶頸**）、13 位醫師資料、8 則案例的揭露欄位、法務條文 | §二、§八 |
 | 院方資料 | 院區經緯度、交通停車、門診時段書面確認、`product*.php` 清單、Search Console | §八 |
-| 待決定 | FAQ 五大分類兩份對不上、`llms.txt` 範圍、密碼輪替規則、圖片衍生尺寸、允赫齒科納不納入 | §八 |
-| 程式（未部署） | 後台新增時不再讓會成為網址的 slug 停在暫用值 `untitled-…`（API 與後台都擋，FAQ 除外）。起因：正式站院方自建的 FAQ 分類「疾病相關」網址是 `/faq/untitled-1792027590012/`、已進 sitemap。🔴 **部署後要在後台把那一筆的網址代稱改掉**（0 題；舊網址是否補 301 看有無被收錄） | [docs/proposals/ai-faq-local-agent.md](docs/proposals/ai-faq-local-agent.md) §7 |
+| 待決定 | FAQ 五大分類兩份對不上、`llms.txt` 範圍、密碼輪替規則、允赫齒科納不納入、always-ready 執行個體（冷啟動 2.7–5.9 秒，固定費用） | §八 |
+| ~~程式~~ | ~~後台新增時不再讓會成為網址的 slug 停在暫用值 `untitled-…`~~ ✅ 已部署；「疾病相關」已改成 `/faq/disease/`，sitemap 不再有 `untitled-`（2026-11-06 實查）。舊網址是否補 301 看有無被收錄 | [docs/proposals/ai-faq-local-agent.md](docs/proposals/ai-faq-local-agent.md) §7 |
 | ~~提案~~ | ~~**AI FAQ 連本地端**（院內 OpenClaw）~~ 2026-10-19 決定**不整合**，AI 問答維持 Gemini（決策 28）。院方串接說明 PDF 作廢、不要交付 | [docs/proposals/ai-faq-local-agent.md](docs/proposals/ai-faq-local-agent.md) |
 
 ---
@@ -130,7 +130,7 @@ AI FAQ 開關也接上了那三支執行期端點。詳見 §三。
    **切 DNS 當天若 CORS 漏了 `20skin.tw`，Googlebot（會執行 JS）看到的就是全站 noindex**，
    比 checklist 寫的「表單與後台停擺」嚴重得多。暫時性的 API 失誤（逾時 8 秒）也會觸發同一件事
 3. 瀏覽器那一輪會吃到公開端點的 `max-age=300`（見 `CacheControl.cs`），與「發布即時可見」有出入
-✅ **2026-10-02 修好（Tim 指定，尚未部署）**：集中改在 `useContentApi.ts` 的 `fetchEnvelope`，21 個模板一個都沒動 ——
+✅ **2026-10-02 修好（Tim 指定，已部署）**：集中改在 `useContentApi.ts` 的 `fetchEnvelope`，21 個模板一個都沒動 ——
 伺服器端把成功的回應寫進 `payload.data.$contentApi`、同一請求內同一個鍵只打一次；瀏覽器在 hydration 期間讀 payload，不打 API。
 驗證（本機 `nuxt dev`，API 指正式站、`localhost` 不在 CORS 白名單＝最壞情況）：10 種頁面 **hydration 期間 API 請求 0、
 沒有 503、Vue hydration mismatch 警告 0**；typecheck、`verify:css`、`verify:seo-head` 全過。
@@ -150,7 +150,7 @@ hydration 期間 API 請求 0、不再塌成 503／noindex。
 與 `/treatment` 是大頭，正解是 API 提供精簡欄位的清單，或前台只載用得到的 termType。
 ⚠️ 這是拿正確性換來的：修之前那批資料瀏覽器也要下載，只是在 hydration 之後才抓，所以沒算進 FCP —— 而且抓失敗就整頁變 503。
 
-✅ **payload 第二輪瘦身（2026-10-02，未部署）**——各頁 payload gzip（本機、接開發庫）：
+✅ **payload 第二輪瘦身（2026-10-02，已部署）**——各頁 payload gzip（本機、接開發庫）：
 
 | 頁面 | 第一輪後 | 現在 |
 |---|---|---|
@@ -197,12 +197,12 @@ LCP 元素全是 Blob 上的原圖（首頁主視覺 748 KB），要等 §八「
 Function App 只有 `RateLimit__PublicQuota__MaxRequests=10`／`WindowMinutes=60`，沒有 `ai-ask` 專屬的鍵，
 所以 `/ai/ask` 實際是**每個 IP 每小時 10 次、超過鎖一小時**（決策 28 寫 20 次／10 分）。
 院內共用一個對外 IP 時，全院合計一小時 10 題。`/contact`、`/questions/miss` 同樣是 10／60。
-✅ **程式已修（2026-10-02，未部署）**：`RateLimitService` 改成先讀底線鍵（`ai_ask`）、再讀連字號鍵（本機相容）、最後落全域；
+✅ **程式已修（2026-10-02，已部署）**：`RateLimitService` 改成先讀底線鍵（`ai_ask`）、再讀連字號鍵（本機相容）、最後落全域；
 `local.settings.example.json` 改成底線版。資料庫的計數鍵（`{bucket}:{ip}`）沒動，既有計數不受影響。
 🔴 **部署之後還要設 app setting**：`RateLimit__PublicQuota__ai_ask__MaxRequests=20`、`RateLimit__PublicQuota__ai_ask__WindowMinutes=10`
-（2026-10-02 嘗試設定時被工具權限擋下，待 Tim 執行）。
+（2026-10-02 嘗試設定時被工具權限擋下）—— ✅ **已設，2026-11-06 以 `az` 實查值為 20／10**。
 
-✅ **`page.legal.edit` 現在真的生效了**（2026-10-02，未部署）：法務頁（`SuperAdminOnly`）的守門由「只看 `is_superadmin`」改成
+✅ **`page.legal.edit` 現在真的生效了**（2026-10-02，已部署）：法務頁（`SuperAdminOnly`）的守門由「只看 `is_superadmin`」改成
 「要有 `page.legal.edit`」（超級管理員照舊通過），並補上原本沒擋的**發布／下架、排程、SEO、排序**。
 ⚠️ 行為變化：種子裡只有超級管理員持有這個碼，所以**內容編輯不能再發布／下架法務頁、行銷與內容編輯不能再改法務頁的 SEO** ——
 那原本是漏洞。要讓某個角色維護法務頁，到角色頁勾「編輯法務頁」現在才有效果。
@@ -386,10 +386,10 @@ manifest 每筆多記一欄切塊版本，版本不同就逐輪重切（舊塊�
 - 「懷孕可以做嗎」在 `/faq/treatment/` 上寫著「詳見上方『禁忌症與注意事項』」，那一頁上方沒有禁忌症。
 
 ~~剩下的：打開 `aifaq.enabled`（院方決定時機）。~~ 2026-10-02 實查已打開。
-已順手修兩處（未部署）：log 的 Gemini 錯誤內容由 400 字放寬到 2000 字（原本剛好把 `quotaId` 切掉）；
+已順手修兩處（已部署）：log 的 Gemini 錯誤內容由 400 字放寬到 2000 字（原本剛好把 `quotaId` 切掉）；
 嵌入中途失敗時保留這一輪已完成的批次，不再整輪丟掉。
 新增 `tools/ai-index-inspect --query`（校準用）與 `--save-to`（本機用正式索引作答）。
-✅ **轉 LINE 諮詢改成依院區分流**（Tim 定案 2026-10-01，未部署）：面板列出「四季診所、二林四季皮膚科」
+✅ **轉 LINE 諮詢改成依院區分流**（Tim 定案 2026-10-01，已部署）：面板列出「四季診所、二林四季皮膚科」
 各自的 LINE，來自據點的「LINE 連結」（正式資料兩筆都有值：`lin.ee/mJ6rUaa`、`@xat.0000144991.qy6`，後者帳號名稱是「20Skin醫美集團」）。
 typecheck、verify:css、admin build 通過；**面板開關關著，還沒在瀏覽器裡看過那一行**。
 ⚠️ 待院方確認：據點填的是**門診諮詢**那組；AI 面板上的問題多半是自費療程，要改成「自費美容專人諮詢」
@@ -1634,7 +1634,7 @@ navigationFallback，那 7 條實際上永遠走設定檔，資料庫只是備�
 - [x] 跨來源鏈路 — ✅ **2026-10-02 preflight 驗完**（見「2026-10-02」；5xx 為推論）。原紀錄：🟡 **一半驗過**：2026-09-15 對正式 Function App 打一支帶 `Origin` 的壞 token，
       **401 有帶 `access-control-allow-origin` 與 `-credentials`**（這是最容易漏、又最難除錯的一種）。
       **preflight（OPTIONS）與 5xx 還沒驗**
-- [ ] Managed Identity 連 SQL 與 Blob — 🟡 **SQL 那半已證明**：Function App 的設定裡**只有 `SQL_SERVER`／`SQL_DATABASE`、沒有任何連線字串**，
+- [x] Managed Identity 連 SQL 與 Blob — ✅ **Blob 那半見下方「Blob 直傳鏈路」**：2026-09-16 已以 MI 簽出 user delegation SAS 並實跑上傳。原紀錄：🟡 **SQL 那半已證明**：Function App 的設定裡**只有 `SQL_SERVER`／`SQL_DATABASE`、沒有任何連線字串**，
       而 `GET /site-settings/public` 2026-09-15 讀得回真資料 → 連線只可能走受控識別。**Blob 那半（user delegation key 簽 SAS）還沒驗**
 - [x] ~~build 產物大小~~ — ✅ **59.1 MB / 3885 個檔案**（2026-09-15 重建後實計，含每路由一份的 `_payload.json`）。上限是 SWA **Standard 的 500 MB**，不是 250 MB。⚠️ `du -sh` 會報 71 MB，那是磁碟區塊不是檔案大小
 - [x] ~~全站 `nuxt generate` 時間~~ —— **已不適用**：2026-09-16 改成執行期 SSR，沒有全站預渲染這一步
