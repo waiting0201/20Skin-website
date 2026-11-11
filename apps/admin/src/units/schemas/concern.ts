@@ -15,8 +15,8 @@ export const concernRecommendationIntroSchema: StructuredSchema = {
   root: {
     kind: 'object',
     fields: [
-      { key: 'treatmentsIntro', label: '「建議療程」開場白', node: { kind: 'string', multiline: true }, riskScan: true },
-      { key: 'treatmentsNote', label: '「建議療程」註記', node: { kind: 'string', multiline: true }, riskScan: true },
+      { key: 'treatmentsIntro', label: '「建議療程」開場白', node: { kind: 'string', multiline: true } },
+      { key: 'treatmentsNote', label: '「建議療程」註記', node: { kind: 'string', multiline: true } },
       { key: 'doctorsIntro', label: '「諮詢醫師」開場白', node: { kind: 'string', multiline: true } },
     ],
   },

@@ -426,14 +426,6 @@ const taxonomy = {
     )
     return rows.map((r) => ({ value: String(r.id), label: r.title }))
   },
-
-  /**
-   * 編輯器的高風險字詞即時提示（docs/02 §5）。
-   * ⚠️ 這是提示不是閘門 —— 掃到字詞不影響能不能送審，送審時 API 會自己再掃一次。
-   */
-  async riskTerms(): Promise<string[]> {
-    return (await request<string[]>('/admin/risk-term')) ?? []
-  },
 }
 
 // ── 內容 CRUD ─────────────────────────────────────────────────────────

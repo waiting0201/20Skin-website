@@ -199,16 +199,3 @@ function nodeToBlock(node: DocNode): Block | null {
   }
 }
 
-/** 編輯器裡的所有文字（高風險字詞掃描用）。 */
-export function plainTextOf(blocks: unknown): string {
-  if (!Array.isArray(blocks)) return ''
-  const parts: string[] = []
-  for (const b of blocks as Block[]) {
-    if (!b || typeof b !== 'object') continue
-    for (const k of ['text', 'caption']) if (typeof b[k] === 'string') parts.push(b[k] as string)
-    if (Array.isArray(b.items)) parts.push(...(b.items as unknown[]).map(str))
-    if (Array.isArray(b.headers)) parts.push(...(b.headers as unknown[]).map(str))
-    if (Array.isArray(b.rows)) for (const r of b.rows as unknown[]) if (Array.isArray(r)) parts.push(...r.map(str))
-  }
-  return parts.join('\n')
-}

@@ -15,7 +15,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { Editor, EditorContent, VueNodeViewRenderer } from '@tiptap/vue-3'
 import { createBodyExtensions } from '../body-editor-extensions'
-import { blocksToDoc, docToBlocks, plainTextOf, type DocNode } from '../body-blocks-doc'
+import { blocksToDoc, docToBlocks, type DocNode } from '../body-blocks-doc'
 import { createPendingImage, isPendingImage, releasePendingImage, validateImageFile } from '../image-value'
 import { ACCEPTED_IMAGE_TYPES } from '../api/upload'
 import BodyFigureView from './BodyFigureView.vue'
@@ -26,7 +26,6 @@ const props = defineProps<{
   /** 錯誤鍵前綴（＝欄位鍵）。 */
   path: string
   errors: Record<string, string>
-  riskTerms?: string[]
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [unknown] }>()
@@ -134,13 +133,6 @@ function insertTable() {
 const nestedErrors = computed(() =>
   Object.entries(props.errors).filter(([k]) => k.startsWith(`${props.path}[`)).map(([, v]) => v),
 )
-
-const riskHits = computed(() => {
-  const terms = props.riskTerms ?? []
-  if (!terms.length) return []
-  const text = plainTextOf(props.modelValue)
-  return terms.filter((t) => text.includes(t))
-})
 </script>
 
 <template>
@@ -189,8 +181,5 @@ const riskHits = computed(() => {
 
     <p v-if="imageError" class="adm-field__error" role="alert">{{ imageError }}</p>
     <p v-for="(msg, i) in nestedErrors" :key="i" class="adm-field__error" role="alert">{{ msg }}</p>
-    <p v-if="riskHits.length" class="adm-risk-hit">
-      ⚠️ 偵測到高風險字詞：<strong>{{ riskHits.join('、') }}</strong>——不會擋下輸入，請再確認一次措辭。
-    </p>
   </div>
 </template>

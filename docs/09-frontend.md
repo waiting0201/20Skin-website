@@ -391,7 +391,7 @@ apps/admin/src/router.ts               # /、/login、/:unit、/:unit/:id（base
 ### 富文本與高風險字詞
 
 - 編輯器輸出走白名單清洗，貼上時去樣式。**內文以區塊結構儲存**（`BodyBlocks`，JSON）
-- **高風險字詞即時警示**（[02](02-backend-cms.md) §5 第二層防護）：字詞清單由 `RiskTerms` 在登入後取回並快取。**警示不阻擋輸入**，命中結果隨送審單送出，存進 `ContentReviews.RiskFlags` 供審核者重點檢視
+- ~~高風險字詞即時警示~~ —— **2026-11-11 拿掉**（Tim 指定，[02](02-backend-cms.md) §5）。後台不再載入字詞清單
 
 ---
 

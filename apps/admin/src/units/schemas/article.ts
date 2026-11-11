@@ -40,7 +40,7 @@ export const articleBodySchema: StructuredSchema = {
           node: {
             kind: 'object',
             fields: [
-              { key: 'text', label: '文字', node: { kind: 'string', multiline: true }, required: true, riskScan: true },
+              { key: 'text', label: '文字', node: { kind: 'string', multiline: true }, required: true },
             ],
           },
         },
@@ -80,7 +80,7 @@ export const articleBodySchema: StructuredSchema = {
           node: {
             kind: 'object',
             fields: [
-              { key: 'text', label: '文字', node: { kind: 'string', multiline: true }, required: true, riskScan: true },
+              { key: 'text', label: '文字', node: { kind: 'string', multiline: true }, required: true },
             ],
           },
         },
@@ -105,7 +105,7 @@ export const articleBodySchema: StructuredSchema = {
             kind: 'object',
             fields: [
               { key: 'ordered', label: '編號清單', node: { kind: 'boolean' }, hint: '不勾＝項目符號。' },
-              { key: 'items', label: '項目', node: { kind: 'array', itemLabel: '項目', item: { kind: 'string' } }, riskScan: true },
+              { key: 'items', label: '項目', node: { kind: 'array', itemLabel: '項目', item: { kind: 'string' } } },
             ],
           },
         },
@@ -140,7 +140,7 @@ export const articleBodySchema: StructuredSchema = {
                 ] },
                 required: true,
               },
-              { key: 'text', label: '文字', node: { kind: 'string', multiline: true }, required: true, riskScan: true },
+              { key: 'text', label: '文字', node: { kind: 'string', multiline: true }, required: true },
             ],
           },
         },

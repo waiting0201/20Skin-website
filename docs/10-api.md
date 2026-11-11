@@ -285,7 +285,7 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 | `GET|POST /admin/user`、`PUT|DELETE /admin/user/{id}` | `account.manage` | 帳號管理（限超級管理員）。`DELETE` 是**停用**（軟刪除），不可停用自己（409 `CONFLICT_STATE`）。密碼下限 6 碼 |
 | `PUT /admin/user/{id}/password` | `account.manage` | 重設密碼 |
 | `GET /admin/role`、`PUT /admin/role/{id}/permissions` | `account.manage` | 角色權限設定（限超級管理員） |
-| `GET /admin/risk-term` | **登入即可** | 啟用中的高風險字詞清單，供編輯器即時提示（[02](02-backend-cms.md) §5）。⚠️ **是提示不是閘門**。送審 2026-09-17 拿掉之後（決策 20），**伺服器端不再重掃**，這是唯一的一道 |
+| `GET /admin/risk-term` | **登入即可** | 啟用中的高風險字詞清單。⚠️ **後台 2026-11-11 起不再呼叫**（編輯器提示拿掉，[02](02-backend-cms.md) §5）；端點保留，表仍供 AI 問答的輸出護欄使用 |
 | `GET /admin/export/{kind}` | `settings.edit` | 預覽 `faq.json`／`llms.txt`／`llms-full.txt`（每型別最多 20 筆等限制）。**正式產物是執行期的公開 `/seo/*`**（§3.1），此端點只供後台畫面預覽。舊敘述「實際產物在建置期產生」已作廢（決策 6）。其他 `kind` 回 400 `VALIDATION_FORMAT` |
 
 **未列於上表的 `/admin/*` 路徑一律拒絕（403；沒帶 token 時先回 401）。** 新增後台端點時必須同步補進路由表與權限表兩處（[11](11-backend-design.md) §5.3）。
@@ -341,7 +341,7 @@ sitemap 必須與它收錄的網址同一個 origin，否則 Search Console 會�
 🔴 **「發布權與編輯權分離」2026-09-17 起不再成立。** 舊敘述「這是三段式工作流的前提，
 療程、案例、FAQ 三類內容不得跳過審核直接上線」**已作廢** —— 內容編輯現在自己就能發布。
 這是刻意的取捨（見上方方框），不是漏改。
-⚠️ [02](02-backend-cms.md) §5 的兩層防護只剩第二層（高風險字詞提示）。
+⚠️ [02](02-backend-cms.md) §5 的兩層防護都已不在（送審 2026-09-17 移除、字詞提示 2026-11-11 移除）。
 醫療廣告法規相關敘述請以主管機關函釋及院方法務意見為準。
 
 ⚠️ **設定類不走審核，儲存即生效，而且沒有留痕**（不做操作日誌，2026-09-11 定案）。`SiteSettings`、`MenuItems`、`RolePermissions` 與帳號異動誰改了什麼，事後查不到，唯一控管是「限超級管理員」這道權限門檻（[08](08-database.md) §I）。

@@ -24,8 +24,6 @@ const props = defineProps<{
   /** 錯誤鍵的前綴（＝欄位鍵）。 */
   path: string
   errors: Record<string, string>
-  /** 高風險字詞（只有內文編輯器會用到）。 */
-  riskTerms?: string[]
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [unknown] }>()
@@ -98,7 +96,6 @@ const undeclared = computed(() => {
       :disabled="disabled"
       :path="path"
       :errors="errors"
-      :risk-terms="riskTerms"
       @update:model-value="(v) => emit('update:modelValue', v)"
     />
 

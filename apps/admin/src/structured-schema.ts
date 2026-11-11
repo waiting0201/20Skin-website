@@ -39,8 +39,6 @@ export interface StructuredField {
   hint?: string
   /** 空值就擋下送出。⚠️ 只標 API 或前台真的需要的，不要把「建議填」也標成必填。 */
   required?: boolean
-  /** 高風險字詞掃描（docs/02 §5）。只對 string 節點有意義。 */
-  riskScan?: boolean
 }
 
 export interface StructuredVariant {

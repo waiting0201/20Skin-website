@@ -27,8 +27,8 @@ export const treatmentIndicationsSchema: StructuredSchema = {
           item: {
             kind: 'object',
             fields: [
-              { key: 'title', label: '名稱', node: { kind: 'string' }, required: true, riskScan: true },
-              { key: 'desc', label: '說明', node: { kind: 'string', multiline: true }, riskScan: true },
+              { key: 'title', label: '名稱', node: { kind: 'string' }, required: true },
+              { key: 'desc', label: '說明', node: { kind: 'string', multiline: true } },
             ],
           },
         },
@@ -46,7 +46,7 @@ export const treatmentMechanismSchema: StructuredSchema = {
     kind: 'object',
     fields: [
       { key: 'heading', label: '區段標題', node: { kind: 'string' } },
-      { key: 'paragraphs', label: '段落', node: { kind: 'array', itemLabel: '段落', item: { kind: 'string' } }, riskScan: true },
+      { key: 'paragraphs', label: '段落', node: { kind: 'array', itemLabel: '段落', item: { kind: 'string' } } },
       { key: 'image', label: '搭配圖', node: { kind: 'image', shape: 'content-image' }, hint: '建議 1200×900（4:3）。' },
     ],
   },
@@ -74,7 +74,7 @@ export const treatmentStepsSchema: StructuredSchema = {
           hint: '⚠️ 前台照這個數字顯示，不是照順序自動編號——搬動之後記得改。',
         },
         { key: 'title', label: '步驟名稱', node: { kind: 'string' }, required: true },
-        { key: 'desc', label: '說明', node: { kind: 'string', multiline: true }, riskScan: true },
+        { key: 'desc', label: '說明', node: { kind: 'string', multiline: true } },
       ],
     },
   },
@@ -93,7 +93,7 @@ export const treatmentAftercareSchema: StructuredSchema = {
       kind: 'object',
       fields: [
         { key: 'when', label: '時間', node: { kind: 'string', placeholder: '例如：當天、3 天內、一週後' }, required: true },
-        { key: 'desc', label: '照護說明', node: { kind: 'string', multiline: true }, required: true, riskScan: true },
+        { key: 'desc', label: '照護說明', node: { kind: 'string', multiline: true }, required: true },
       ],
     },
   },
@@ -107,8 +107,8 @@ export const treatmentContraindicationsSchema: StructuredSchema = {
   root: {
     kind: 'object',
     fields: [
-      { key: 'items', label: '禁忌症項目', node: { kind: 'array', itemLabel: '項目', item: { kind: 'string' } }, riskScan: true },
-      { key: 'note', label: '備註', node: { kind: 'string', multiline: true }, riskScan: true },
+      { key: 'items', label: '禁忌症項目', node: { kind: 'array', itemLabel: '項目', item: { kind: 'string' } } },
+      { key: 'note', label: '備註', node: { kind: 'string', multiline: true } },
     ],
   },
 }

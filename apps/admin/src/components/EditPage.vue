@@ -63,7 +63,6 @@ const bodyDirty = ref(false)
 const seoDirty = ref(false)
 
 const fieldOptions = reactive<Record<string, { value: string; label: string }[]>>({})
-const riskTerms = ref<string[]>([])
 
 // 送出前的驗證結果：{ 欄位鍵: 訊息 }。規則在 src/validation.ts，與 API 逐條對應。
 // ⚠️ 只在按下儲存時算一次，不做逐字即時驗證 —— 打到一半就滿螢幕紅字，
@@ -238,14 +237,7 @@ async function load() {
   }
 }
 
-onMounted(async () => {
-  // 高風險字詞只是輔助提示，取不到不該擋住編輯（docs/02 §5）。
-  // ⚠️ 與 load() 併發：它與本文無關，排在前面等於白白多一趟往返的等待。
-  const risk = adminApi.taxonomy.riskTerms()
-    .then((terms) => { riskTerms.value = terms })
-    .catch((e) => { console.error('載入高風險字詞清單失敗，字詞警示這一輪不作用', e) })
-  await Promise.all([risk, load()])
-})
+onMounted(load)
 
 watch([() => props.unit, () => props.id], load)
 watch(bodyForm, () => { if (!suppressDirty) bodyDirty.value = true }, { deep: true })
@@ -261,12 +253,6 @@ function onBeforeUnloadHandler(e: BeforeUnloadEvent) {
 }
 onMounted(() => window.addEventListener('beforeunload', onBeforeUnloadHandler))
 onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnloadHandler))
-
-// ── 高風險字詞即時警示：只標示，不阻擋輸入（docs/02-backend-cms.md §5）──
-function riskHitsFor(text: unknown): string[] {
-  if (typeof text !== 'string' || !text) return []
-  return riskTerms.value.filter((t) => text.includes(t))
-}
 
 // ── 儲存 ──────────────────────────────────────────────────────────────
 const savingBody = ref(false)
@@ -730,7 +716,6 @@ async function removeRecord() {
                   :disabled="!canEditBody"
                   :path="field.key"
                   :errors="bodyErrors"
-                  :risk-terms="riskTerms"
                   @update:model-value="(v) => (bodyForm.fields[field.key] = v)"
                 />
 
@@ -827,13 +812,6 @@ async function removeRecord() {
                 <p v-if="(field.minLength || field.maxLength) && field.type !== 'structured'" class="adm-field__count">
                   {{ String(bodyForm.fields[field.key] ?? '').length }} 字
                   <span v-if="field.minLength && field.maxLength">（建議 {{ field.minLength }}–{{ field.maxLength }} 字）</span>
-                </p>
-                <!-- ⚠️ structured 欄位的高風險字詞掃描改在 StructuredField 裡逐格做
-                     （這裡的值是物件不是字串，掃不到東西）。送審時伺服器仍會自己重掃，
-                     那才是真正記進 ContentReviews.RiskFlags 的那一份。 -->
-                <p v-if="field.riskScan && field.type !== 'structured' && riskHitsFor(bodyForm.fields[field.key]).length" class="adm-risk-hit">
-                  ⚠️ 偵測到高風險字詞：<strong>{{ riskHitsFor(bodyForm.fields[field.key]).join('、') }}</strong>
-                  ——不會擋下輸入，但送審時會一併記錄供審核者重點檢視。
                 </p>
               </div>
             </div>

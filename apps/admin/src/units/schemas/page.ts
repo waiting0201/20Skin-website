@@ -141,7 +141,7 @@ export const pageStorySchema: StructuredSchema = {
             kind: 'object',
             fields: [
               { key: 'q', label: '問題', node: { kind: 'string', multiline: true }, required: true },
-              { key: 'a', label: '回答', node: { kind: 'string', multiline: true }, required: true, riskScan: true },
+              { key: 'a', label: '回答', node: { kind: 'string', multiline: true }, required: true },
             ],
           },
         },
