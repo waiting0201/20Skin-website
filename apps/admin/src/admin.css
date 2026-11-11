@@ -60,6 +60,7 @@
    17. RWD 斷點總覽
    18. 拖曳排序            .adm-drag-handle／.is-dragging／.is-drop-*
    19. 返回列表            .adm-page__back
+   20. 內文編輯器          .adm-rte／.adm-rte-figure（文章、困擾、案例的 bodyBlocks）
    ========================================================================= */
 
 
@@ -1048,3 +1049,77 @@
    編輯畫面回到該單元列表的逃生口。⚠️ 它是 <RouterLink>，不是 history.back()：
    直接貼網址進來的人沒有上一頁，而麵包屑在窄螢幕會被擠掉。 */
 .adm-page__back { margin-bottom: var(--sp-3); }
+
+/* ── 20. 內文編輯器（BodyBlocksEditor／BodyFigureView）─────────────────────
+   文章、困擾、案例的內文：一個編輯器打到底（Tim 指定 2026-11-11）。
+   ⚠️ 編輯區的字級與段距刻意貼近前台內文（07-article-detail.css），
+      讓人在後台看到的段落節奏大致就是前台的樣子；但不照抄，前台的樣式不進後台。 */
+.adm-rte { border: 1px solid var(--line); border-radius: var(--adm-radius); background: var(--surface, #fff); }
+.adm-rte.is-disabled { background: var(--surface-alt); }
+.adm-rte__toolbar {
+  position: sticky; top: calc(var(--adm-topbar-h) + var(--adm-page-head-h, 0px)); z-index: 5;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1);
+  padding: var(--sp-2); border-bottom: 1px solid var(--line); background: var(--surface-alt);
+  border-radius: var(--adm-radius) var(--adm-radius) 0 0;
+}
+.adm-rte__block { width: auto; min-width: 9.5em; padding-block: 4px; }
+.adm-rte__sep { width: 1px; align-self: stretch; margin: 2px var(--sp-1); background: var(--line); }
+.adm-rte__btn {
+  padding: 4px 10px; border: 1px solid transparent; border-radius: var(--radius-sm, 4px);
+  background: none; color: var(--ink); font: inherit; font-size: var(--fs-xs); cursor: pointer;
+}
+.adm-rte__btn:hover:not(:disabled) { border-color: var(--line); background: #fff; }
+.adm-rte__btn.is-active { border-color: var(--brand-600); background: var(--brand-050); color: var(--brand-700); }
+.adm-rte__btn:disabled { color: var(--ink-50); cursor: default; }
+.adm-rte__btn--danger { color: var(--adm-danger); }
+.adm-rte__anchor {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--line); background: var(--adm-info-bg);
+  font-size: var(--fs-xs);
+}
+.adm-rte__anchor .adm-input { width: 16em; padding-block: 4px; }
+.adm-rte > .adm-field__error, .adm-rte > .adm-risk-hit { margin: 0 var(--sp-3) var(--sp-3); }
+
+.adm-rte__content .ProseMirror {
+  min-height: 320px; padding: var(--sp-4) var(--sp-5);
+  font-size: var(--fs-base, 1rem); line-height: 1.9; outline: none;
+}
+.adm-rte__content .ProseMirror > * + * { margin-top: var(--sp-3); }
+.adm-rte__content .ProseMirror h2 { margin-top: var(--sp-6); font-family: var(--font-serif); font-size: 1.375rem; line-height: 1.5; }
+.adm-rte__content .ProseMirror h3 { margin-top: var(--sp-5); font-family: var(--font-serif); font-size: 1.125rem; line-height: 1.5; }
+.adm-rte__content .ProseMirror > :first-child { margin-top: 0; }
+.adm-rte__content .ProseMirror ul { padding-left: 1.5em; list-style: disc; }
+.adm-rte__content .ProseMirror ol { padding-left: 1.5em; list-style: decimal; }
+.adm-rte__content .ProseMirror li + li { margin-top: var(--sp-1); }
+.adm-rte__content .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder); float: left; height: 0; color: var(--ink-50); pointer-events: none;
+}
+/* 前言：前台是大一級的字（.article-lead）。 */
+.adm-rte__lead { font-size: 1.125rem; color: var(--ink-70); }
+/* 提示框：前台 .c-note 是上下細線；後台多一個左側標籤，讓人分得出「說明」與「注意」。 */
+.adm-rte__note { padding: var(--sp-2) var(--sp-3); border-block: 1px solid var(--line); background: var(--adm-info-bg); }
+.adm-rte__note::before { content: 'ⓘ 說明　'; color: var(--adm-info); font-size: var(--fs-xs); }
+.adm-rte__note[data-variant="warn"] { background: var(--adm-warn-bg); }
+.adm-rte__note[data-variant="warn"]::before { content: '⚠ 注意　'; color: var(--adm-warn); }
+.adm-rte__raw { padding: var(--sp-3); border: 1px dashed var(--line); color: var(--ink-50); font-size: var(--fs-xs); }
+.adm-rte__content .ProseMirror-selectednode.adm-rte__raw { outline: 2px solid var(--brand-600); }
+
+.adm-rte__content table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.adm-rte__content th, .adm-rte__content td { padding: var(--sp-2); border: 1px solid var(--line); vertical-align: top; }
+.adm-rte__content th { background: var(--surface-alt); font-weight: 600; text-align: left; }
+.adm-rte__content .selectedCell { background: var(--brand-050); }
+.adm-rte__content .tableWrapper { overflow-x: auto; }
+
+/* 圖片區塊 */
+.adm-rte-figure { margin-block: var(--sp-4); padding: var(--sp-3); border: 1px solid var(--line); border-radius: var(--adm-radius); background: var(--surface-alt); }
+.adm-rte-figure.is-selected { outline: 2px solid var(--brand-600); }
+.adm-rte-figure__bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+.adm-rte-figure__grip { margin-right: auto; color: var(--ink-50); font-size: var(--fs-xs); cursor: grab; user-select: none; }
+.adm-rte-figure__frame { max-width: 640px; }
+.adm-rte-figure.is-wide .adm-rte-figure__frame { max-width: none; }
+.adm-rte-figure__frame img { display: block; width: 100%; height: auto; }
+.adm-rte-figure__empty {
+  width: 100%; padding: var(--sp-6); border: 1px dashed var(--line); background: #fff;
+  color: var(--ink-50); font: inherit; cursor: pointer;
+}
+.adm-rte-figure__fields { display: grid; gap: var(--sp-2); margin-top: var(--sp-2); }

@@ -117,6 +117,11 @@ export interface UnitField {
   structuredWire?: StructuredSchema['wire']
   /** 高風險字詞即時警示要掃描的欄位（docs/02-backend-cms.md §5）。 */
   riskScan?: boolean
+  /**
+   * 這一欄還是空的時候，用舊欄位換算出一份起始值（困擾與案例的 `bodyBlocks`，
+   * 見 units/schemas/legacy-body.ts）。只影響編輯畫面帶入的值，存檔才會寫進資料庫。
+   */
+  legacyValue?: (serverFields: Record<string, unknown>) => unknown
 }
 
 /** docs/08-database.md §D `ContentRelations.RelationType` 對照表。 */

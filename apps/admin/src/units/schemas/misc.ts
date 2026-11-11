@@ -84,6 +84,7 @@ export const clinicTransportSchema: StructuredSchema = {
 
 /**
  * 案例的 `narrative`：**一個欄位裝了五個子結構**（cases.ts:99-108）。
+ * 2026-11-11 起後台只編其中兩個（facts、doctorQuote），其餘三個由內文取代，見 retiredKeys。
  *
  * ⚠️ `facts` 是**九個固定鍵的物件**，不是陣列（療程的 facts 才是陣列）。
  *    前台是逐鍵渲染成表格的列（cases/[slug].vue:90-102），所以鍵名一個都不能改。
@@ -93,7 +94,11 @@ export const clinicTransportSchema: StructuredSchema = {
 export const caseNarrativeSchema: StructuredSchema = {
   wire: 'json-string',
   emptyIsNull: true,
-  preview: '案例細節頁的主體：基本資料表、敘述段落、療程時間軸、當事人回饋、醫師的話。',
+  preview: '案例細節頁的個案條件表與醫師說明。敘述、療程歷程與個案自述請寫在下方的「內文」。',
+  // 🔴 敘述段落／療程時間軸／當事人回饋 2026-11-11 起改由「內文」（bodyBlocks）負責（Tim 指定）。
+  //    這三個鍵**仍在這一欄裡原樣往返**（寫入一律展開原物件，決策 17），只是不再顯示 ——
+  //    前台在內文為空時還會讀它們。列在這裡是為了不讓畫面出現「另有 3 項內容」那句提示。
+  retiredKeys: ['sections', 'timeline', 'testimonial'],
   root: {
     kind: 'object',
     fields: [
@@ -116,40 +121,6 @@ export const caseNarrativeSchema: StructuredSchema = {
           ],
         },
       },
-      {
-        key: 'sections',
-        label: '敘述段落',
-        node: {
-          kind: 'array',
-          itemLabel: '段落區塊',
-          summaryKeys: ['heading'],
-          item: {
-            kind: 'object',
-            fields: [
-              { key: 'heading', label: '小標', node: { kind: 'string' }, required: true },
-              { key: 'paragraphs', label: '內容', node: { kind: 'array', itemLabel: '段落', item: { kind: 'string' } }, riskScan: true },
-            ],
-          },
-        },
-      },
-      {
-        key: 'timeline',
-        label: '療程時間軸',
-        node: {
-          kind: 'array',
-          itemLabel: '時間點',
-          summaryKeys: ['when', 'title'],
-          item: {
-            kind: 'object',
-            fields: [
-              { key: 'when', label: '時間', node: { kind: 'string' }, required: true },
-              { key: 'title', label: '標題', node: { kind: 'string' } },
-              { key: 'text', label: '說明', node: { kind: 'string', multiline: true }, riskScan: true },
-            ],
-          },
-        },
-      },
-      { key: 'testimonial', label: '當事人回饋', node: { kind: 'string', multiline: true }, riskScan: true },
       {
         key: 'doctorQuote',
         label: '醫師的話',

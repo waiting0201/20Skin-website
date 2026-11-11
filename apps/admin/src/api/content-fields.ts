@@ -26,7 +26,7 @@
 import type { UnitKey } from '../types'
 import { UNIT_REGISTRY } from '../units'
 import type { UnitField } from '../unit-schema'
-import { parseStructured, toWire, type StructuredSchema } from '../structured-schema'
+import { isEmptyValue, parseStructured, toWire, type StructuredSchema } from '../structured-schema'
 
 /**
  * 這一欄該用哪一份 schema。`page.bodyBlocks` 依 slug 分派，其餘用固定的那一份。
@@ -149,6 +149,11 @@ export function fieldsFromServer(
     // 區塊 JSON → 已 parse 的 JS 值（parse 不了就保持字串＝原始 JSON 模式）。
     if (field.type === 'structured') {
       out[field.key] = parseStructured(resolveSchema(field, context), source[field.key])
+    }
+    // 舊版型 → 新內文的起始值（只在新欄位是空的時候；換算規則見 units/schemas/legacy-body.ts）。
+    if (field.legacyValue && isEmptyValue(out[field.key])) {
+      const legacy = field.legacyValue(source)
+      if (!isEmptyValue(legacy)) out[field.key] = legacy
     }
   }
 

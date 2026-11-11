@@ -184,6 +184,11 @@ pnpm --filter web verify:seo-head  # JSON-LD 的 </script> 跳脫與覆寫容錯
 node --experimental-strip-types --import ./tools/content-roundtrip/register.mjs \
      tools/content-roundtrip/check.mjs
 
+# 改了內文編輯器的換算（apps/admin/src/body-blocks-doc.ts、body-editor-extensions.ts）一定要跑（決策 32）——
+# 正式資料的 bodyBlocks → 編輯器文件 → ProseMirror schema → 區塊，與原值深度相等比對（1083 篇）。
+node --experimental-strip-types --import ./tools/content-roundtrip/register.mjs \
+     tools/content-roundtrip/editor-check.mjs
+
 # 九個內容單元那 21 個區塊 JSON 欄位的唯讀稽核（非法 JSON／雙重編碼／schema 沒描述的鍵）
 node tools/content-audit/audit-json-fields.mjs
 
@@ -517,6 +522,7 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    使用者把內容刪光的那一刻整格欄位就消失，人還在編輯中。清空後按儲存才收起來。
    ⚠️ 它**做不成表單**：JSON-LD 的欄位由 `@type` 決定，宣告不出一份 schema；
    而該有的結構化資料 21 個模板本來就各自自動產生了。零筆資料有值（2026-09-18 實查）。
+   ✅ **文章、困擾、案例的內文 2026-11-11 起不再走區塊表單**，改成單一編輯器，見決策 32。
 18. **後台不收「一整段程式碼」**（2026-09-17）。追蹤碼欄位只收 GA4／GTM 的**識別碼**
    （`G-XXXXXXXX`／`GTM-XXXXXXX`），由前台套官方 snippet 模板。
    🔴 收整段 `<script>` 等於**任何能改設定的人都可以在全站每一頁對每一位訪客執行任意 JavaScript**，
@@ -883,3 +889,27 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
 - 數字要有來源。估算與實數分開標示：寫「約 800 篇」時 `docs/research/` 要查得到怎麼算的；寫實數要註明量測日期與方法
 - 估算與實數分開標示。實數寫「實數」，估算給範圍
 - 醫療廣告法規相關敘述一律附註「請以主管機關函釋及院方法務意見為準」
+
+32. **文章、肌膚困擾、案例的內文＝單一編輯器**（Tim 指定 2026-11-11：「內文不要像現在這樣用分段的方式，
+   要用一個編輯器就好，像一般部落格編輯那樣」「肌膚困擾跟案例的內文也是一樣要改」）。
+   TipTap 2.27（`apps/admin/src/components/BodyBlocksEditor.vue`），工具列：段落／H2／H3／前言／提示框兩種、
+   兩種清單、插入圖片、表格。
+   🔴 **資料庫存的仍是原本的區塊陣列**（`ArticleBodyBlock`），編輯器只是另一種看法 ——
+   換算在 `body-blocks-doc.ts`，前台、`AiChunker` 的文章路徑、站內搜尋都沒有動。
+   由 `tools/content-roundtrip/editor-check.mjs` 用正式資料驗（1083 篇全數往返一致）。
+   🔴 **仍是純文字**（決策 17，Tim 2026-11-11 再確認「維持純文字」）：沒有粗體、斜體、連結。
+   ⚠️ 段落的 `runs` 原樣保留，**但那一段文字被改過就丟掉** —— runs 是舊站行內格式的另一份文字，
+   改過字之後它是過期的。沒改過的段落一個鍵都不動。
+   ⚠️ **載入時不寫回表單**：只有使用者真的動過才換算，沒動過的文章按儲存（例如只改 SEO）送出的是原值。
+   🔴 **困擾與案例各多一欄 `BodyBlocks`**（migration `ConcernCaseBodyBlocks`，只加欄位、可回滾），
+   前台改用同一支 `components/BodyBlocks.vue` 渲染，並多載一支 `07-article-detail.css`
+   （`usePageHead` 的 `pageCss` 因此可以是陣列；verify:css 依列出的每一支放行 class）。
+   ⚠️ **代價**：困擾頁的成因表格、類型卡片、就醫提醒框，案例頁的時間軸，這些 mockup 版型在
+   改用新內文之後就不再出現 —— 內文是文章的樣式。這是 Tim 選的方向（另一案是保留版型、只簡化輸入）。
+   ⚠️ **舊欄位保留不刪、後台不再送**（困擾的 `Symptoms`／`Causes`／`SelfCheckGuide`／`WhenToSeeDoctor`、
+   案例 `Narrative` 裡的 `sections`／`timeline`／`testimonial`）：**`bodyBlocks` 是空陣列時前台與 AiChunker
+   退回舊版型**，兩邊的判斷要一致。案例的 `Narrative` 仍負責 `facts` 與 `doctorQuote`。
+   ⚠️ **沒有資料 migration**：內文還是空的時候，後台打開那一筆會先把舊欄位換算進編輯器
+   （`units/schemas/legacy-body.ts`），**存檔＋發布之後**才換成新版型。正式資料只有 acne 與一筆案例需要。
+   ⚠️ `AiChunker.Version` 因此 4 → 5。
+

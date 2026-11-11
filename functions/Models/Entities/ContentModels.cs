@@ -166,6 +166,16 @@ public sealed class Concern : ContentItem
     public string? WhenToSeeDoctor { get; set; }
 
     /// <summary>
+    /// 內文（JSON 區塊陣列，與 <see cref="Article.BodyBlocks"/> 同一套形狀）。
+    /// <para>
+    /// 2026-11-11 起後台以單一編輯器維護這一欄（Tim 指定），取代上面四個固定版型區。
+    /// ⚠️ 那四欄<b>保留不刪</b>：這一欄為空時前台退回舊版型渲染，
+    /// 而 CI 是先遷移後部署，中間那一段新 schema 配舊程式也要讀得到東西。
+    /// </para>
+    /// </summary>
+    public string? BodyBlocks { get; set; }
+
+    /// <summary>
     /// 「建議療程」與「諮詢醫師」兩個區段的引言與註記（區塊 JSON）。
     /// <para>
     /// ⚠️ 這兩個區段的內容來自 <c>ContentRelations</c>，但區段本身的引言文字不屬於任何一筆關聯
@@ -240,6 +250,16 @@ public sealed class Case : ContentItem
 
     /// <summary>敘述。</summary>
     public string? Narrative { get; set; }
+
+    /// <summary>
+    /// 內文（JSON 區塊陣列，與 <see cref="Article.BodyBlocks"/> 同一套形狀）。
+    /// <para>
+    /// 2026-11-11 起取代 <see cref="Narrative"/> 裡的 <c>sections</c>／<c>timeline</c>／<c>testimonial</c>
+    /// （Tim 指定）。<c>Narrative</c> 的 <c>facts</c> 與 <c>doctorQuote</c> 仍由那一欄負責。
+    /// ⚠️ 這一欄為空時前台退回舊的三段，所以 <c>Narrative</c> 裡的舊值不清掉。
+    /// </para>
+    /// </summary>
+    public string? BodyBlocks { get; set; }
 
     /// <summary>個案差異聲明。</summary>
     public string IndividualVarianceStatement { get; set; } = string.Empty;

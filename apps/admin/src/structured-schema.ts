@@ -80,6 +80,16 @@ export interface StructuredSchema {
   emptyIsNull?: boolean
   /** 編輯畫面上的一句話：這一欄在前台長什麼樣子。 */
   preview?: string
+  /**
+   * 不用遞迴表單，改用專用的編輯器。
+   *
+   * - `body-blocks`：單一的內文編輯器（`BodyBlocksEditor.vue`，Tim 指定 2026-11-11）。
+   *   形狀仍然是 `root` 宣告的區塊陣列 —— 驗證（validation.ts）與 round-trip 照舊走 `root`，
+   *   只有「畫面怎麼呈現」換掉。
+   */
+  editor?: 'body-blocks'
+  /** 已改由別的欄位負責、但仍原樣往返的鍵。畫面上不提示「另有 N 項內容」。 */
+  retiredKeys?: string[]
 }
 
 // ── 空值 ──────────────────────────────────────────────────────────────

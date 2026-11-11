@@ -77,6 +77,12 @@ export interface CaseDetail {
     doctorHref: string | null
     recovery: string
   }
+  /**
+   * 單一編輯器寫的內文（2026-11-11 起，Tim 指定）。**有內容時取代下面的敘述段落、
+   * 療程歷程與個案自述**，頁面改用文章內頁的區塊渲染（`BodyBlocks.vue`）。
+   * ⚠️ 空陣列＝還沒在新編輯器存過，退回舊的三段。判斷要與 `AiChunker.CaseSections` 一致。
+   */
+  body: ArticleBodyBlock[]
   sections: { heading: string; paragraphs: string[] }[]
   timeline: CaseTimelineItem[]
   testimonial: string
@@ -105,6 +111,7 @@ export interface CaseDetail {
 //    **捏造那些欄位是法規紅線**，所以它們沒有進資料庫，也就不會出現在這裡。
 //    要恢復列表，必須由院方補齊那四個欄位 —— 這是內容問題，不是程式問題。
 
+import type { ArticleBodyBlock } from './articles'
 import { REL, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, seoOverridesOf, type ContentRecord } from './_content'
 
 const toImage = (value: unknown, fallbackAlt = ''): Image => {
@@ -118,6 +125,11 @@ interface NarrativeDocument {
   timeline: CaseTimelineItem[] | null
   testimonial: string | null
   doctorQuote: CaseDetail['doctorQuote'] | null
+}
+
+const bodyOf = (record: ContentRecord): ArticleBodyBlock[] => {
+  const parsed = parseBlocks<unknown>(record.fields.bodyBlocks, [])
+  return Array.isArray(parsed) ? (parsed as ArticleBodyBlock[]) : []
 }
 
 const narrativeOf = (record: ContentRecord) =>
@@ -211,6 +223,7 @@ export async function getCaseDetails(): Promise<CaseDetail[]> {
     lede: record.summary ?? '',
     shootingConditions: (f.shootingConditions as string) ?? '',
     facts: n.facts ?? ({} as CaseDetail['facts']),
+    body: bodyOf(record),
     sections: n.sections ?? [],
     timeline: n.timeline ?? [],
     testimonial: n.testimonial ?? '',

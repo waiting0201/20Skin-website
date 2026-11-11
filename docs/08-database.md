@@ -316,7 +316,11 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 
 ### C-3 `Concerns`
 
-`Symptoms`（症狀描述）、`Causes`（成因）、`SelfCheckGuide`（自我判斷指引）、`WhenToSeeDoctor`（何時該就醫）、`Cover` 內嵌圖片欄位
+`Symptoms`（症狀描述）、`Causes`（成因）、`SelfCheckGuide`（自我判斷指引）、`WhenToSeeDoctor`（何時該就醫）、`Cover` 內嵌圖片欄位、
+`BodyBlocks`（內文，JSON 區塊陣列，與 `Articles.BodyBlocks` 同形狀；2026-11-11 加，nullable）
+
+> ⚠️ 2026-11-11 起後台只維護 `BodyBlocks`（單一編輯器，CLAUDE.md 決策 32）。前面四欄保留不刪，
+> `BodyBlocks` 為空時前台退回舊版型。
 
 「建議療程（多選＋排序＋推薦理由）」走 §D 的 `ContentRelations`，`RelationType=5`，用上該表的 `SortOrder` 與 `Note`。**`Note` 欄位存在的唯一理由就是這個推薦理由**。
 
@@ -344,7 +348,9 @@ INDEX (`Status`, `SubmittedAt`) —— 審核佇列畫面的主查詢
 
 ### C-5 `Cases` ＋ `CaseImages`
 
-`Cases`：`TreatmentId` int NOT NULL FK → `Treatments`、`SessionsText`（次數與週期）、`Narrative`（敘述）
+`Cases`：`TreatmentId` int NOT NULL FK → `Treatments`、`SessionsText`（次數與週期）、`Narrative`（敘述）、
+`BodyBlocks`（內文，JSON 區塊陣列；2026-11-11 加，nullable。取代 `Narrative` 裡的 `sections`／`timeline`／`testimonial`，
+後者保留，`BodyBlocks` 為空時前台退回它們。CLAUDE.md 決策 32）
 
 **法規揭露欄位，四欄一律 NOT NULL**：
 

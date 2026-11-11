@@ -63,6 +63,12 @@ export interface ConcernArticleRef {
 }
 
 export interface ConcernDetail {
+  /**
+   * 單一編輯器寫的內文（2026-11-11 起，Tim 指定）。**有內容時取代下面四個固定版型區**
+   * （症狀／成因／自我判斷／何時就醫），頁面改用文章內頁的區塊渲染（`BodyBlocks.vue`）。
+   * ⚠️ 空陣列＝這一筆還沒在新編輯器存過，退回舊的四區。判斷要與 `AiChunker.ConcernSections` 一致。
+   */
+  body: ArticleBodyBlock[]
   symptomHeading: string
   symptomMedia: Image
   symptomParagraphs: string[]
@@ -113,7 +119,7 @@ import {
   REL, TERM, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termsOf,
   type ContentRecord,
 } from './_content'
-import { formatDisplayDate } from './articles'
+import { formatDisplayDate, type ArticleBodyBlock } from './articles'
 import { CONCERN_EYEBROW, concernIconFor } from './_presentation'
 
 const toImage = (value: unknown, fallbackAlt = ''): Image => {
@@ -143,6 +149,9 @@ function toConcern(ctx: ConcernContext, record: ContentRecord): Concern {
   const causes = parseBlocks<{ heading: string | null; intro: string | null; facts: ConcernFact[] } | null>(f.causes, null)
   const selfCheck = parseBlocks<{ heading: string | null; intro: string | null; types: ConcernType[] } | null>(f.selfCheckGuide, null)
   const warn = parseBlocks<{ heading: string | null; items: string[] } | null>(f.whenToSeeDoctor, null)
+  const parsedBody = parseBlocks<unknown>(f.bodyBlocks, [])
+  // ⚠️ 不是陣列就當成沒有：`v-for` 跑字串會逐字元迭代，整區變成一排空白。
+  const body = Array.isArray(parsedBody) ? (parsedBody as ArticleBodyBlock[]) : []
   const intro = parseBlocks<RecommendationIntro>(f.recommendationIntro, {
     treatmentsIntro: null, treatmentsNote: null, doctorsIntro: null,
   })
@@ -171,8 +180,9 @@ function toConcern(ctx: ConcernContext, record: ContentRecord): Concern {
       image: toImage(d.fields.photo, d.title),
     }))
 
-  const detail: ConcernDetail | undefined = symptoms || causes || selfCheck || warn
+  const detail: ConcernDetail | undefined = body.length || symptoms || causes || selfCheck || warn
     ? {
+        body,
         symptomHeading: symptoms?.heading ?? '',
         symptomMedia: toImage(symptoms?.media),
         symptomParagraphs: symptoms?.paragraphs ?? [],

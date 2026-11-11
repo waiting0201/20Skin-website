@@ -49,9 +49,10 @@ public static class AiChunker
     /// </para>
     /// <para>1：初版（2026-09-18）。2：據點的營業時間與地址獨立成塊（2026-10-01）。
     /// 3：療程專屬 FAQ 標上療程名稱、醫師空白欄位不輸出（2026-10-01）。
-    /// 4：收錄範圍改用 <c>Indexability.IsAiEligible</c>，內容未寫完的療程也進語料（2026-10-02）。</para>
+    /// 4：收錄範圍改用 <c>Indexability.IsAiEligible</c>，內容未寫完的療程也進語料（2026-10-02）。
+    /// 5：困擾與案例改讀 <c>bodyBlocks</c>（單一編輯器，2026-11-11），空的才退回舊的固定區。</para>
     /// </summary>
-    public const int Version = 4;
+    public const int Version = 5;
 
     /// <summary>
     /// 主站舊文的權重（<c>fields.sourceSite == 1</c>，692 篇社群行銷貼文）。
@@ -308,6 +309,15 @@ public static class AiChunker
 
     private static IEnumerable<Section> ConcernSections(JsonObject f)
     {
+        // 2026-11-11 起困擾的內文由單一編輯器維護（bodyBlocks，與文章同一套區塊）。
+        // ⚠️ 判斷「有沒有」要與前台 `concerns.ts` 一致：陣列非空才算，否則退回舊的四區 ——
+        //    兩邊不一致的話，AI 讀到的是前台已經不顯示的那一份。
+        if (HasBlocks(f["bodyBlocks"]))
+        {
+            foreach (var section in BodyBlockSections(f["bodyBlocks"], null)) yield return section;
+            yield break;
+        }
+
         yield return HeadedSection(f["symptoms"], "常見症狀", node => Join(Strings(node, "paragraphs")));
 
         yield return HeadedSection(f["causes"], "成因", node =>
@@ -430,16 +440,24 @@ public static class AiChunker
             yield return new Section("個案基本資料", Collapse(string.Join("。", parts)));
         }
 
-        foreach (var section in Items(narrative?["sections"]))
+        // 2026-11-11 起敘述段落／時間軸／回饋改由 bodyBlocks 維護；有就只讀它（理由同困擾）。
+        if (HasBlocks(f["bodyBlocks"]))
         {
-            yield return new Section(
-                Text(section, "heading"),
-                Collapse(Flatten(section?["paragraphs"])));
+            foreach (var section in BodyBlockSections(f["bodyBlocks"], null)) yield return section;
         }
+        else
+        {
+            foreach (var section in Items(narrative?["sections"]))
+            {
+                yield return new Section(
+                    Text(section, "heading"),
+                    Collapse(Flatten(section?["paragraphs"])));
+            }
 
-        var timeline = Join(Items(narrative?["timeline"])
-            .Select(i => $"{Text(i, "when")} {Text(i, "title")}：{Text(i, "text")}"));
-        if (timeline.Length > 0) yield return new Section("療程時間軸", timeline);
+            var timeline = Join(Items(narrative?["timeline"])
+                .Select(i => $"{Text(i, "when")} {Text(i, "title")}：{Text(i, "text")}"));
+            if (timeline.Length > 0) yield return new Section("療程時間軸", timeline);
+        }
 
         var variance = Text(f, "individualVarianceStatement");
         if (variance.Length > 0) yield return new Section("個別差異說明", variance);
@@ -580,6 +598,8 @@ public static class AiChunker
     // ════════════════════════════════════════════════════════════════════
 
     /// <summary>區塊欄位在快照裡是<b>一個 JSON 字串</b>（API 存的是 <c>GetRawText()</c>），要再 parse 一次。</summary>
+    private static bool HasBlocks(JsonNode? value) => ParseMaybeJsonString(value) is JsonArray { Count: > 0 };
+
     private static JsonNode? ParseMaybeJsonString(JsonNode? value)
     {
         if (value is null || value.GetValueKind() == JsonValueKind.Null) return null;

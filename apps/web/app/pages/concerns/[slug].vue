@@ -35,8 +35,9 @@ const jsonLdBlocks = computed(() => {
   }
 
   if (concern!.detail) {
-    medicalCondition.signOrSymptom = concern!.detail.types.map((t) => t.title)
-    medicalCondition.cause = concern!.detail.causesFacts.map((f) => f.label)
+    // ⚠️ 改用單一內文的困擾沒有「類型」與「成因」的結構可取，空陣列就不輸出這兩個屬性。
+    if (concern!.detail.types.length) medicalCondition.signOrSymptom = concern!.detail.types.map((t) => t.title)
+    if (concern!.detail.causesFacts.length) medicalCondition.cause = concern!.detail.causesFacts.map((f) => f.label)
     medicalCondition.possibleTreatment = concern!.detail.treatments.map((t) => ({
       '@type': 'MedicalTherapy',
       name: t.name,
@@ -56,7 +57,8 @@ usePageHead({
   description: concern.detail
     ? `${concern.title}的成因、自我判斷指引與建議療程方向，由 20SKIN 美醫集團皮膚科專科醫師團隊提供之照護說明。`
     : `${concern.title}的成因與判斷指引，由 20SKIN 美醫集團皮膚科專科醫師團隊提供之照護說明。`,
-  pageCss: '/assets/pages/02-concern-detail.css',
+  // ⚠️ 07 是內文區塊（BodyBlocks）的樣式 —— 困擾改用單一內文編輯器之後與文章共用（2026-11-11）。
+  pageCss: ['/assets/pages/02-concern-detail.css', '/assets/pages/07-article-detail.css'],
   path: `/concerns/${concern.slug}/`,
   jsonLd: jsonLdBlocks.value,
 })
@@ -115,6 +117,18 @@ usePageHead({
   </section>
 
   <template v-if="concern.detail">
+    <!-- =====================================================================
+         1–4. 內文（單一編輯器，2026-11-11 起）—— 有內容就取代下面的四個固定版型區
+         ===================================================================== -->
+    <section v-if="concern.detail.body.length" class="section">
+      <div class="container container--narrow">
+        <article class="article-content">
+          <BodyBlocks :blocks="concern.detail.body" />
+        </article>
+      </div>
+    </section>
+
+    <template v-else>
     <!-- =====================================================================
          1. 症狀描述
          ===================================================================== -->
@@ -199,6 +213,8 @@ usePageHead({
         </div>
       </div>
     </section>
+
+    </template>
 
     <!-- =====================================================================
          5. 針對此困擾的建議療程（主要轉換出口）

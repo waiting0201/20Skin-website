@@ -31,7 +31,8 @@ usePageHead({
   seo: item.seo,
   title: `${item.title}｜案例分享`,
   description: `${item.facts.condition}${item.title}紀錄，${item.facts.sessions}、${item.facts.period}。反應因個人體質與膚況而異，需經醫師面診評估。`,
-  pageCss: '/assets/pages/15-case-detail.css',
+  // ⚠️ 07 是內文區塊（BodyBlocks）的樣式 —— 案例改用單一內文編輯器之後與文章共用（2026-11-11）。
+  pageCss: ['/assets/pages/15-case-detail.css', '/assets/pages/07-article-detail.css'],
   path: `/cases/${item.slug}/`,
   jsonLd: breadcrumbJsonLd([
     { label: '首頁', href: '/' },
@@ -109,7 +110,16 @@ usePageHead({
     <!-- =====================================================================
          4. 內文（法規揭露：個案差異聲明）
          ===================================================================== -->
-    <article class="case-content">
+    <!-- 單一編輯器的內文（2026-11-11 起）。有內容就取代下面的敘述段落／療程歷程／個案自述；
+         ⚠️ 個案差異聲明是法規揭露欄位，兩條路徑都要渲染，不可以跟著內文一起被取代。 -->
+    <article v-if="item.body.length" class="article-content">
+      <BodyBlocks :blocks="item.body" />
+      <div class="c-note c-note--warn">
+        <span class="c-note__icon" aria-hidden="true">&#9888;</span>
+        <p>{{ item.individualVarianceStatement }}</p>
+      </div>
+    </article>
+    <article v-else class="case-content">
       <template v-for="section in item.sections" :key="section.heading">
         <h2>{{ section.heading }}</h2>
         <p v-for="(p, i) in section.paragraphs" :key="i">{{ p }}</p>

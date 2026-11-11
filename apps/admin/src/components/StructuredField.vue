@@ -14,6 +14,7 @@
 
 import { computed, reactive, watch } from 'vue'
 import StructuredNode from './StructuredNode.vue'
+import BodyBlocksEditor from './BodyBlocksEditor.vue'
 import { collectUndeclared, isRawMode, type StructuredSchema } from '../structured-schema'
 
 const props = defineProps<{
@@ -23,6 +24,8 @@ const props = defineProps<{
   /** 錯誤鍵的前綴（＝欄位鍵）。 */
   path: string
   errors: Record<string, string>
+  /** 高風險字詞（只有內文編輯器會用到）。 */
+  riskTerms?: string[]
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [unknown] }>()
@@ -53,8 +56,11 @@ const raw = computed(() => isRawMode(props.modelValue))
 
 /** schema 沒有描述、但資料裡確實存在的鍵。 */
 const undeclared = computed(() => {
-  if (!props.schema || raw.value) return []
-  return [...collectUndeclared(props.schema.root, props.modelValue)]
+  // ⚠️ 內文編輯器自己處理未宣告的鍵（body-blocks-doc.ts 的 extra），不在這裡提示 ——
+  //    那邊的規則是「段落文字改過，舊的 runs 就丟掉」，這一句「原樣保留」在那裡不成立。
+  if (!props.schema || raw.value || props.schema.editor) return []
+  const retired = new Set(props.schema.retiredKeys ?? [])
+  return [...collectUndeclared(props.schema.root, props.modelValue)].filter((k) => !retired.has(k))
 })
 </script>
 
@@ -83,6 +89,17 @@ const undeclared = computed(() => {
       :value="String(modelValue ?? '')"
       :disabled="disabled"
       @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
+    />
+
+    <!-- 內文：單一編輯器（取代一列一列的區塊表單）-->
+    <BodyBlocksEditor
+      v-else-if="schema?.editor === 'body-blocks'"
+      :model-value="modelValue"
+      :disabled="disabled"
+      :path="path"
+      :errors="errors"
+      :risk-terms="riskTerms"
+      @update:model-value="(v) => emit('update:modelValue', v)"
     />
 
     <!-- 表單模式 -->

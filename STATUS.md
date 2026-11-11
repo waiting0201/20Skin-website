@@ -530,6 +530,16 @@ Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/ad
 發布聚合狀態、301 的 CSV 匯入匯出
 與衝突／迴圈檢查、robots.txt 的 `Disallow: /admin` 防呆、NAP 一致性比對。
 
+### ✅ 2026-11-11：文章／困擾／案例的內文改成單一編輯器（決策 32）——🟡 尚未部署
+
+- 後台：TipTap 編輯器取代一列一列的區塊表單；純文字、無行內格式。
+- API：`Concerns.BodyBlocks`、`Cases.BodyBlocks` 兩欄（migration `ConcernCaseBodyBlocks`，本機 `rehearse` 通過）；
+  `AiChunker.Version` 4 → 5（部署後會逐輪重切困擾與案例）。
+- 前台：困擾頁、案例頁在 `bodyBlocks` 有內容時改用文章內文樣式渲染，空的時候照舊。
+- 驗證（本機）：`editor-check.mjs` 1083/1083、`check.mjs` 1186 筆一致、`admin-e2e/check.mjs` 39/40
+  （唯一失敗是本機「分類與標籤」第 1 頁排序值重複，與這次無關）、困擾頁「存新內文→發布→看前台→還原」實跑通過。
+- 🟡 **上線後要做**：在後台打開 acne 與那筆案例，看過換算進來的內文、存檔、發布 —— 不做的話前台維持舊版型（不會壞）。
+
 ### ✅ 2026-09-18：必填沒填時，紅字在那一格下面，畫面也跳過去（決策 31）
 
 Tim：「後台的驗證，如果有必填沒填，紅色警訊要顯示在那個欄位下，然後畫面要跳到那邊」。

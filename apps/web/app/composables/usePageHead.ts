@@ -34,7 +34,12 @@ export interface PageHeadOptions {
   title: string
   description: string
   /** 這一頁吃哪一支 mockup 頁面樣式，例如 '/assets/pages/16-faq.css'。 */
-  pageCss?: string
+  /**
+   * 這一頁吃哪一支（或哪幾支）mockup 頁面樣式。
+   * ⚠️ 陣列是給「共用另一頁區塊」的頁面用的：困擾與案例的內文用的是文章內頁的樣式
+   *    （`components/BodyBlocks.vue`，2026-11-11）。verify:css 依這裡列的每一支放行 class。
+   */
+  pageCss?: string | string[]
   /** 目前路徑，用來組 canonical，例如 '/faq/'。 */
   path: string
   /** OG 分享圖的絕對或站內路徑。 */
@@ -121,7 +126,7 @@ export function usePageHead(options: PageHeadOptions) {
       // 該頁專屬樣式。base.css 在 nuxt.config 全站掛上，這裡只加頁面層。
       // ⚠️ 一定要過 stampAsset —— /assets/* 是一年 immutable，沒有版號就改不動了
       //    （SSR 之後 postbuild 改寫不到算繪出來的 HTML，見 scripts/build-asset-version.mjs）。
-      ...(options.pageCss ? [{ rel: 'stylesheet', href: stampAsset(options.pageCss) }] : []),
+      ...[options.pageCss ?? []].flat().map((href) => ({ rel: 'stylesheet', href: stampAsset(href) })),
     ],
     script: blocks.map((block) => ({
       type: 'application/ld+json',

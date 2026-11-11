@@ -5,6 +5,7 @@
 //
 //   ① 摺疊列顯示的是原始代碼（`lead`、`why-ages-faster`、`info`）而不是內容
 //   ② `collapsible` 宣告了卻沒有人讀 —— 28 個區塊的文章一次渲染 104 個輸入欄位
+//   （①② 是舊的區塊表單；文章／困擾／案例的內文 2026-11-11 起換成單一編輯器）
 //   ③ 本機 dev 的 `/assets/base.css` 與 logo 一律 404（設計 token 全部落回預設值）
 //
 // ⚠️ 要驗的是「開得起來、讀得懂、擋得住」。內容真的寫得進去、前台真的跟著變，
@@ -51,59 +52,55 @@ for (const label of ['規格數據列', '儀器／原廠資訊', '適應症', '�
   await step(`${label} → 表單`, () => assertStructured(page, label))
 }
 
-section('文章內文：七種區塊的清單')
+section('文章內文：單一編輯器')
+// Tim 指定 2026-11-11：「內文不要像現在這樣用分段的方式，要用一個編輯器就好」。
+// ⚠️ 存進去的仍是區塊陣列（換算的正確性由 tools/content-roundtrip/editor-check.mjs 用正式資料驗），
+//    這裡只驗畫面：編輯器開得起來、內容真的載進去了、沒有前台渲染不出來的格式按鈕。
 await step('開得起編輯頁', () => openEdit(page, 'article', ids.article))
-await step('內文 → 表單', () => assertStructured(page, '內文'))
-await step('有區塊列', async () => {
-  const n = await page.locator('.adm-struct__row').count()
-  if (!n) throw new Error('一個區塊列都沒有')
-  return `${n} 個區塊`
+await step('內文是一個編輯器，不是一列一列的區塊表單', async () => {
+  const field = fieldByLabel(page, '內文')
+  await field.locator('.adm-rte .ProseMirror').waitFor({ timeout: 20000 })
+  const rows = await field.locator('.adm-struct__row').count()
+  if (rows) throw new Error(`還有 ${rows} 個舊的區塊列`)
+  if (await field.locator('.adm-struct__raw').count()) throw new Error('掉進原始 JSON 模式了')
+  return '是'
 })
-await step('摺疊列讀得出「型別 ＋ 內容」', async () => {
-  // 🔴 這一條擋的是①：摘要要顯示「前言　眼周皮膚厚度…」，
-  //    不是 `lead`；標題要顯示標題文字，不是錨點 id。
-  const rows = await page.locator('.adm-struct__summary').allInnerTexts()
-  const bad = rows.filter((t) => /^(lead|paragraph|heading|figure|table|list|note)$/.test(t.trim()))
-  if (bad.length) throw new Error(`${bad.length} 列顯示的是原始型別代碼：${bad.slice(0, 3).join('、')}`)
-  const looksLikeAnchor = rows.filter((t) => /^標題\s+[a-z0-9-]+$/.test(t.trim()))
-  if (looksLikeAnchor.length) throw new Error(`${looksLikeAnchor.length} 列的標題顯示的是錨點 id：${looksLikeAnchor[0]}`)
-  return JSON.stringify(rows[0]?.slice(0, 32) ?? '')
+await step('既有內容載得進來（有段落、有標題）', async () => {
+  const pm = fieldByLabel(page, '內文').locator('.ProseMirror')
+  const ps = await pm.locator(':scope > p').count()
+  const hs = await pm.locator(':scope > h2, :scope > h3').count()
+  const figs = await pm.locator('.adm-rte-figure').count()
+  if (!ps) throw new Error('一個段落都沒有——內容沒有載進編輯器')
+  return `段落 ${ps}・標題 ${hs}・圖片 ${figs}`
 })
-await step('預設收合（區塊多的時候不要一次全開）', async () => {
-  // 🔴 這一條擋的是②。
-  const open = await page.locator('.adm-struct__row-body').count()
-  if (open > 0) throw new Error(`預設就展開了 ${open} 列`)
-  return '0 列展開'
+await step('🔴 工具列沒有粗體／斜體／連結（前台的段落是純文字，決策 17）', async () => {
+  const bar = fieldByLabel(page, '內文').locator('.adm-rte__toolbar')
+  const bad = await bar.locator('button', { hasText: /粗體|斜體|連結|^B$|^I$/ }).count()
+  if (bad) throw new Error(`有 ${bad} 顆前台渲染不出來的格式按鈕`)
+  return '沒有'
 })
-await step('展開一列只開那一列', async () => {
-  await page.locator('.adm-struct__toggle').first().click()
-  await page.waitForTimeout(400)
-  const bodies = await page.locator('.adm-struct__row-body').count()
-  if (bodies !== 1) throw new Error(`展開了 ${bodies} 列`)
-  const inputs = await page.locator('.adm-struct__row-body textarea, .adm-struct__row-body input, .adm-struct__row-body select').count()
-  return `1 列、${inputs} 個欄位`
-})
-await step('全部展開／全部收合', async () => {
-  await page.locator('button', { hasText: '全部展開' }).first().click()
-  await page.waitForTimeout(800)
-  const all = await page.locator('.adm-struct__row-body').count()
-  await page.locator('button', { hasText: '全部收合' }).first().click()
-  await page.waitForTimeout(500)
-  const none = await page.locator('.adm-struct__row-body').count()
-  if (none !== 0) throw new Error(`收合後還有 ${none} 列開著`)
-  return `展開 ${all} 列 → 收合 0 列`
-})
-await step('「不由表單管理的欄位」提示', async () => {
-  // schema 沒描述到的鍵（例如 560/1083 篇文章段落上的 runs）必須原樣保留，
-  // 而且要讓編輯者知道它存在 —— 否則會有人在 JSON 模式裡把它清掉。
-  const hint = page.locator('.adm-field__hint', { hasText: '不由表單管理' })
-  return (await hint.count()) ? (await hint.first().innerText()).slice(0, 48) : '（這一筆沒有未宣告的鍵）'
+await step('游標停在大標題（H2）時出現錨點 id 欄位', async () => {
+  const field = fieldByLabel(page, '內文')
+  const h2 = field.locator('.ProseMirror > h2').first()
+  if (!(await h2.count())) return '（這一篇沒有 H2，跳過）'
+  await h2.click()
+  await page.waitForTimeout(300)
+  if (!(await field.locator('.adm-rte__anchor input').count())) throw new Error('沒有出現錨點 id 欄位')
+  return '有'
 })
 
 section('困擾與據點')
-await step('困擾：自我判斷指引 → 表單', async () => {
+await step('困擾：內文也是同一個編輯器，而且舊的四區已經換算進來', async () => {
+  // ⚠️ 這一筆的 bodyBlocks 可能還是空的（還沒在新編輯器存過）——那時編輯器要預先帶入
+  //    症狀／成因／自我判斷／何時就醫換算出來的區塊（units/schemas/legacy-body.ts）。
+  //    空的編輯器會讓人以為內容不見了，一按儲存就真的把前台那幾區換成空白。
   await openEdit(page, 'concern', ids.concern)
-  return await assertStructured(page, '自我判斷指引')
+  const field = fieldByLabel(page, '內文')
+  await field.locator('.adm-rte .ProseMirror').waitFor({ timeout: 20000 })
+  const hs = await field.locator('.ProseMirror > h2').count()
+  if (!hs) throw new Error('編輯器裡沒有任何標題——舊欄位沒有換算進來')
+  if (await fieldByLabel(page, '自我判斷指引').count()) throw new Error('舊的「自我判斷指引」表單還在')
+  return `${hs} 個大標題`
 })
 await step('據點：交通與停車 → 表單', async () => {
   await openEdit(page, 'clinic', ids.clinic)
@@ -443,41 +440,33 @@ await step('標題清空後按儲存：捲回標題欄、紅字在它下面、�
   return `${JSON.stringify((await err.innerText()).slice(0, 12))}　y=${Math.round(box.y)}`
 })
 
-await step('🔴 摺疊起來的區塊會自己展開（不然紅字根本沒有渲染）', async () => {
-  // 摺疊列是 `v-if` 不是 `v-show`（長文章唯一的效能措施）——收起來的那一列
-  // 裡面的紅字**不存在於 DOM**。使用者看到的會是「說有欄位沒填，但整頁找不到紅字」。
+await step('內文清空後按儲存：紅字在內文下面、畫面跳過去', async () => {
+  // ⚠️ 不寫任何資料：驗證沒過在第一步就 return（見本段開頭）。清空之後用「復原」還原表單。
   await openEdit(page, 'article', ids.article)
-  const body = fieldByLabel(page, '內文')
-  const row = body
-    .locator('.adm-struct__row')
-    .filter({ has: page.locator('.adm-struct__summary', { hasText: '段落' }) })
-    .first()
-  if (!(await row.count())) return '（這一篇沒有段落區塊，跳過）'
-
-  await row.locator('.adm-struct__toggle').click()
-  await page.waitForTimeout(600)
-  const text = row.locator('[data-error-key$=".text"]').locator('textarea, input').first()
-  const original = await text.inputValue()
-  await text.fill('')
-
-  await page.locator('button', { hasText: '全部收合' }).first().click()
-  await page.waitForTimeout(600)
-  if (await body.locator('.adm-struct__row-body').count()) throw new Error('收合沒有生效，這一條驗不到東西')
-  await page.evaluate(() => window.scrollTo(0, 0))
+  const body = page.locator('[data-error-key="bodyBlocks"]')
+  const pm = body.locator('.ProseMirror')
+  await pm.waitFor({ timeout: 20000 })
+  await pm.click()
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A')
+  await page.keyboard.press('Backspace')
+  await page.waitForTimeout(300)
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
   await page.waitForTimeout(300)
 
   await page.locator('.adm-page__head button[form="adm-body-form"]').click()
-  await page.waitForTimeout(1800)
+  await page.waitForTimeout(1500)
 
-  const err = body.locator('.adm-struct__row-body .adm-field__error').first()
-  if (!(await err.count())) throw new Error('出錯的那一列沒有自己展開（紅字沒有渲染出來）')
-  const box = await err.boundingBox()
+  const err = body.locator(':scope > .adm-field__error')
+  if (!(await err.count())) throw new Error('內文下面沒有紅字')
+  const box = await body.boundingBox()
   const vh = page.viewportSize().height
-  if (!box || box.y < 0 || box.y + box.height > vh) {
-    throw new Error(`紅字沒有進到畫面裡（y=${Math.round(box?.y ?? -1)}、視窗高 ${vh}）`)
-  }
-  await text.fill(original) // 還原表單
-  return `${JSON.stringify((await err.innerText()).slice(0, 12))}　y=${Math.round(box.y)}`
+  if (!box || box.y + 40 < 0 || box.y > vh) throw new Error(`畫面沒有跳到內文（y=${Math.round(box?.y ?? -1)}）`)
+
+  await pm.click()
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z')
+  await page.waitForTimeout(300)
+  if (!(await pm.locator(':scope > p').count())) throw new Error('復原之後內容沒有回來')
+  return JSON.stringify((await err.innerText()).slice(0, 16))
 })
 
 section('瀏覽器')

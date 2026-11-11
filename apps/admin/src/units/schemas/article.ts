@@ -1,11 +1,16 @@
-// 文章內文的區塊編輯器。
+// 內文的區塊形狀（文章、困擾、案例共用）。
+//
+// 🔴 **畫面不是這份 schema 渲染的**：`editor: 'body-blocks'` 讓後台改用單一編輯器
+//    （`components/BodyBlocksEditor.vue`，Tim 指定 2026-11-11）。這份宣告仍然是
+//    驗證（validation.ts）與 round-trip 的依據，所以**形狀一個鍵都不能少**。
+//    改了這裡，`body-blocks-doc.ts` 的換算與 `body-editor-extensions.ts` 的節點要一起改。
 //
 // 形狀來源：`apps/web/app/data/articles.ts:112-119` 的 `ArticleBodyBlock`，
 // 渲染在 `apps/web/app/pages/blog/[slug].vue:211-246`（`v-for` ＋ `v-if` 鏈）。
 //
 // 🔴 **段落是純文字**（前台是 `{{ block.text }}`）。不支援行內粗體與連結 ——
-//    Tim 定案 2026-09-17，要加就得同時改前台的渲染與加一套 HTML 淨化，是另一件事。
-//    所以這裡不要放任何「格式」按鈕，要強調就另起一個「提示框」區塊。
+//    Tim 定案 2026-09-17，2026-11-11 改成單一編輯器時再確認一次「維持純文字」。
+//    所以編輯器不要放任何「格式」按鈕，要強調就另起一個「提示框」區塊。
 //
 // 🔴 **`wire` 是 `json-value`**：`ApplyArticleFields` 走 `ReadBodyBlocks`，
 //    最外層必須是**陣列**。這一欄與 page 的 bodyBlocks 是全部 21 欄裡唯二不送字串的。
@@ -18,7 +23,8 @@ import type { StructuredSchema } from '../../structured-schema'
 export const articleBodySchema: StructuredSchema = {
   wire: 'json-value',
   emptyIsNull: true,
-  preview: '文章內頁的本文，由上到下一個區塊接一個區塊。段落是純文字，不支援粗體與行內連結。',
+  editor: 'body-blocks',
+  preview: '用工具列切換段落、標題、清單，插入圖片與表格。文字不支援粗體與連結；要強調請改用「提示框」。',
   root: {
     kind: 'array',
     itemLabel: '區塊',
@@ -142,3 +148,6 @@ export const articleBodySchema: StructuredSchema = {
     },
   },
 }
+
+/** 困擾與案例的內文與文章同一套區塊（前台共用 `components/BodyBlocks.vue`）。 */
+export const bodyBlocksSchema = articleBodySchema

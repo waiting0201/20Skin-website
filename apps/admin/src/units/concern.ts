@@ -1,12 +1,8 @@
 // 單元宣告：肌膚困擾 Concern。docs/08-database.md §C-3。
 import type { UnitDefinition } from '../unit-schema'
-import {
-  concernCausesSchema,
-  concernRecommendationIntroSchema,
-  concernSelfCheckSchema,
-  concernSymptomsSchema,
-  concernWhenToSeeDoctorSchema,
-} from './schemas/concern'
+import { concernRecommendationIntroSchema } from './schemas/concern'
+import { bodyBlocksSchema } from './schemas/article'
+import { concernLegacyBody } from './schemas/legacy-body'
 
 export const concernUnit: UnitDefinition = {
   key: 'concern',
@@ -20,12 +16,19 @@ export const concernUnit: UnitDefinition = {
     { key: 'updatedAt', label: '更新時間', render: 'date' },
   ],
   fields: [
-    // ⚠️ 不是必填（2026-09-18，同療程那兩欄）：正式資料 8 筆裡 7 筆是空的，
-    //    而必填會讓那 7 筆連換圖都存不了，紅字卻指著這一欄。
-    { key: 'symptoms', label: '症狀描述', type: 'structured', group: '內容', hint: '建議填寫：空著的話，困擾頁不會出現這一區。', structured: concernSymptomsSchema },
-    { key: 'causes', label: '成因', type: 'structured', group: '內容', structured: concernCausesSchema },
-    { key: 'selfCheckGuide', label: '自我判斷指引', type: 'structured', group: '內容', structured: concernSelfCheckSchema },
-    { key: 'whenToSeeDoctor', label: '何時該就醫', type: 'structured', group: '內容', structured: concernWhenToSeeDoctorSchema },
+    // 🔴 內文＝單一編輯器（Tim 指定 2026-11-11），取代原本的症狀／成因／自我判斷／何時就醫四欄。
+    //    那四欄**不在畫面上、也不再送出**，資料庫裡的舊值留著（前台在內文為空時退回舊版型）。
+    //    內文還是空的時候，編輯器先帶入那四欄換算出來的區塊，存檔後才生效。
+    // ⚠️ 不是必填（理由同 2026-09-18 那次）：8 筆裡 7 筆是空的，必填會讓它們連換圖都存不了。
+    {
+      key: 'bodyBlocks',
+      label: '內文',
+      type: 'structured',
+      group: '內容',
+      structured: bodyBlocksSchema,
+      legacyValue: concernLegacyBody,
+      hint: '空著的話，困擾頁只會顯示上方的簡述與下方的建議療程。',
+    },
     {
       key: 'recommendationIntro',
       label: '建議療程／諮詢醫師的區段引言',

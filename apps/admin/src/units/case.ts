@@ -3,6 +3,8 @@
 // 只有資料庫約束擋得住）。這裡在 UI 層一併標成必填，兩層防護對齊。
 import type { UnitDefinition } from '../unit-schema'
 import { caseNarrativeSchema } from './schemas/misc'
+import { bodyBlocksSchema } from './schemas/article'
+import { caseLegacyBody } from './schemas/legacy-body'
 
 export const caseUnit: UnitDefinition = {
   key: 'case',
@@ -18,7 +20,10 @@ export const caseUnit: UnitDefinition = {
   fields: [
     { key: 'treatmentId', label: '對應療程', type: 'relation-single', required: true, optionsFromUnit: 'treatment', group: '基本資料', requiredOnCreate: true },
     { key: 'sessionsText', label: '次數與週期', type: 'text', group: '基本資料' },
-    { key: 'narrative', label: '敘述', type: 'structured', group: '基本資料', structured: caseNarrativeSchema },
+    { key: 'narrative', label: '個案條件與醫師說明', type: 'structured', group: '基本資料', structured: caseNarrativeSchema },
+    // 🔴 內文＝單一編輯器（Tim 指定 2026-11-11），取代 narrative 裡的敘述段落／療程時間軸／當事人回饋。
+    //    那三個鍵仍在 narrative 裡原樣往返（不顯示），前台在內文為空時退回舊的三段。
+    { key: 'bodyBlocks', label: '內文', type: 'structured', group: '內容', structured: bodyBlocksSchema, legacyValue: caseLegacyBody },
     {
       key: 'individualVarianceStatement',
       label: '個案差異聲明',

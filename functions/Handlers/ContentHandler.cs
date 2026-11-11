@@ -1423,7 +1423,7 @@ public sealed class ContentHandler(
     }
 
     /// <summary>
-    /// 區塊內文欄位（<c>Article.BodyBlocks</c>／<c>Page.BodyBlocks</c>）的讀取。
+    /// 區塊內文欄位（<c>Article</c>／<c>Concern</c>／<c>Case</c>／<c>Page</c> 的 <c>BodyBlocks</c>）的讀取。
     ///
     /// <para>
     /// 🔴 <b>這一欄的讀與寫原本不對稱，而那會把內文毀掉。</b>
@@ -1728,6 +1728,7 @@ public sealed class ContentHandler(
         ["selfCheckGuide"] = c.SelfCheckGuide,
         ["whenToSeeDoctor"] = c.WhenToSeeDoctor,
         ["recommendationIntro"] = c.RecommendationIntro,
+        ["bodyBlocks"] = c.BodyBlocks,
         ["cover"] = ImageFields(c.Cover),
     };
 
@@ -1738,6 +1739,8 @@ public sealed class ContentHandler(
         if (f.TryGetProperty("selfCheckGuide", out _)) c.SelfCheckGuide = JStr(f, "selfCheckGuide");
         if (f.TryGetProperty("whenToSeeDoctor", out _)) c.WhenToSeeDoctor = JStr(f, "whenToSeeDoctor");
         if (f.TryGetProperty("recommendationIntro", out _)) c.RecommendationIntro = JStr(f, "recommendationIntro");
+        if (f.TryGetProperty("bodyBlocks", out var bodyEl))
+            c.BodyBlocks = ReadBodyBlocks(bodyEl, JsonValueKind.Array, "困擾內文");
         if (f.TryGetProperty("cover", out _)) c.Cover = JImage(f, "cover");
     }
 
@@ -1786,6 +1789,7 @@ public sealed class ContentHandler(
         ["treatmentId"] = c.TreatmentId,
         ["sessionsText"] = c.SessionsText,
         ["narrative"] = c.Narrative,
+        ["bodyBlocks"] = c.BodyBlocks,
         ["individualVarianceStatement"] = c.IndividualVarianceStatement,
         ["hasWrittenConsent"] = c.HasWrittenConsent,
         ["consentReference"] = c.ConsentReference,
@@ -1806,6 +1810,8 @@ public sealed class ContentHandler(
 
         if (f.TryGetProperty("sessionsText", out _)) c.SessionsText = JStr(f, "sessionsText");
         if (f.TryGetProperty("narrative", out _)) c.Narrative = JStr(f, "narrative");
+        if (f.TryGetProperty("bodyBlocks", out var bodyEl))
+            c.BodyBlocks = ReadBodyBlocks(bodyEl, JsonValueKind.Array, "案例內文");
 
         // 🔴 四個法規揭露欄位一律 NOT NULL 且不得為空字串（docs/08 §C-5）：建立時必填；
         //    更新時若省略則保留原值，避免表單漏帶欄位而靜默清空法遵資料。
@@ -2087,6 +2093,7 @@ public sealed class ContentHandler(
                 break;
             case Concern c:
                 Add(c.Cover);
+                CollectBlobPathsFromJson(c.BodyBlocks, paths);
                 break;
             case Article a:
                 Add(a.Cover);
@@ -2094,6 +2101,7 @@ public sealed class ContentHandler(
                 break;
             case Case cs:
                 foreach (var i in cs.Images) Add(i.Image);
+                CollectBlobPathsFromJson(cs.BodyBlocks, paths);
                 break;
             case Clinic cl:
                 foreach (var photo in cl.Photos) Add(photo.Image);

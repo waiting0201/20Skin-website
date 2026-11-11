@@ -210,42 +210,7 @@ usePageHead({
          內文
          ===================================================================== -->
     <article v-if="body?.length" class="article-content">
-      <template v-for="(block, i) in body" :key="i">
-        <p v-if="block.type === 'lead'" class="article-lead">{{ block.text }}</p>
-        <h2 v-else-if="block.type === 'heading' && block.level === 2" :id="block.id">{{ block.text }}</h2>
-        <h3 v-else-if="block.type === 'heading' && block.level === 3">{{ block.text }}</h3>
-        <p v-else-if="block.type === 'paragraph'">{{ block.text }}</p>
-        <figure v-else-if="block.type === 'figure'" class="article-figure" :class="{ 'article-figure--wide': block.wide }">
-          <div class="article-figure__frame">
-            <img :src="block.image.src" :srcset="srcsetOf(block.image.src)" :sizes="IMAGE_SIZES.full" :alt="block.image.alt" :width="block.image.width" :height="block.image.height" loading="lazy">
-          </div>
-          <figcaption>{{ block.caption }}</figcaption>
-        </figure>
-        <div v-else-if="block.type === 'table'" class="article-table-wrap">
-          <table class="article-table">
-            <thead>
-              <tr>
-                <th v-for="h in block.headers" :key="h" scope="col">{{ h }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(row, r) in block.rows" :key="r">
-                <td v-for="(cell, c) in row" :key="c">{{ cell }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <ol v-else-if="block.type === 'list' && block.ordered" class="article-list">
-          <li v-for="(item, li) in block.items" :key="li">{{ item }}</li>
-        </ol>
-        <ul v-else-if="block.type === 'list' && !block.ordered" class="article-list">
-          <li v-for="(item, li) in block.items" :key="li">{{ item }}</li>
-        </ul>
-        <div v-else-if="block.type === 'note'" class="c-note" :class="{ 'c-note--warn': block.variant === 'warn' }">
-          <span class="c-note__icon" aria-hidden="true">{{ block.variant === 'warn' ? '⚠' : 'ⓘ' }}</span>
-          <p>{{ block.text }}</p>
-        </div>
-      </template>
+      <BodyBlocks :blocks="body" />
     </article>
 
       <!-- =====================================================================

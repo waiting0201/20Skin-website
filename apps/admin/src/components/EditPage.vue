@@ -730,6 +730,7 @@ async function removeRecord() {
                   :disabled="!canEditBody"
                   :path="field.key"
                   :errors="bodyErrors"
+                  :risk-terms="riskTerms"
                   @update:model-value="(v) => (bodyForm.fields[field.key] = v)"
                 />
 

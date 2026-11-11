@@ -2240,6 +2240,9 @@ namespace Skin20.Api.Data.Migrations
                 {
                     b.HasBaseType("Skin20.Api.Models.Entities.ContentItem");
 
+                    b.Property<string>("BodyBlocks")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("ConsentReference")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -2334,6 +2337,9 @@ namespace Skin20.Api.Data.Migrations
             modelBuilder.Entity("Skin20.Api.Models.Entities.Concern", b =>
                 {
                     b.HasBaseType("Skin20.Api.Models.Entities.ContentItem");
+
+                    b.Property<string>("BodyBlocks")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Causes")
                         .HasColumnType("nvarchar(max)");
