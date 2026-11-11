@@ -199,10 +199,19 @@ jobs:
           #    要 `--retry-all-errors` 才會。前台是 HTTP/2 串流經 Cloudflare，
           #    而 smoke test 打的是**部署切換後的第一個請求**（成功的幾次都要 5–6 秒
           #    冷啟動），正是最容易被中途掐斷的一刻。
+          #
+          # 🔴 **輸出不可以是 `-o /dev/null`，要寫到一般檔案。** 重試之前 curl 會先把
+          #    輸出檔截斷，而 Linux 對 /dev/null 截斷會失敗 —— 於是第一次拿到「帶內容的
+          #    錯誤回應」（例如遷移那幾秒的 503）時，重試本身就以 exit 23 結束，
+          #    **`--retry` 從來沒有真的重試過**。2026-11-11 在 ubuntu:24.04 的 curl 8.5.0
+          #    重現（macOS 的 curl 不會，本機測不出來）：/dev/null → exit 23、暫存檔 → 200。
+          #    09-17 那次 1.17 秒的 exit 23 多半也是這一個，不是傳輸被掐斷。
           probe() {
-            local url="$1" want="$2" code rc
-            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+            local url="$1" want="$2" code rc body
+            body=$(mktemp)
+            code=$(curl -sS -o "$body" -w '%{http_code}' --max-time 30 \
                      --retry 3 --retry-delay 5 --retry-all-errors --retry-connrefused "$url") || rc=$?
+            rm -f "$body"
             if [ -n "${rc:-}" ]; then
               echo "::error::GET ${url} —— curl 自己失敗（exit ${rc}），三次重試都沒過"
               return 1

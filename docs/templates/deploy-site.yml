@@ -134,7 +134,8 @@ jobs:
         run: |
           BASE="${{ vars.SITE_URL }}"
           for P in "/" "/treatments/laser/" "/admin/"; do
-            CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 --retry 3 --retry-delay 5 "$BASE$P")
+            # ⚠️ 有 --retry 時不可用 -o /dev/null：Linux 上重試前截斷 /dev/null 會失敗（exit 23），見 .github/workflows/web.yml
+            CODE=$(curl -sS -o "$(mktemp)" -w '%{http_code}' --max-time 30 --retry 3 --retry-delay 5 "$BASE$P")
             echo "GET $BASE$P → $CODE"
             [ "$CODE" = "200" ] || { echo "::error::$P 回應 $CODE"; exit 1; }
           done

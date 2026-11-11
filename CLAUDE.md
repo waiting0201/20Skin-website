@@ -31,6 +31,10 @@ pnpm-workspace.yaml    packages = apps/*
                        **一律再加 `--retry-all-errors --retry-connrefused`**，
                        且**不可以寫成 `CODE=$(curl …)`** —— `bash -e` 之下 curl 自己失敗
                        會讓步驟當場結束，連它的錯誤訊息都印不出來，事後查不出打到什麼
+                       🔴 **有 `--retry` 時輸出不可以是 `-o /dev/null`**（2026-11-11 重現）：
+                       重試前 curl 要截斷輸出檔，Linux 截斷 /dev/null 失敗 → exit 23。
+                       也就是第一次拿到帶內容的 503，**重試本身就把步驟弄紅**，`--retry` 等於沒有作用。
+                       寫到 `mktemp` 的暫存檔。⚠️ macOS 的 curl 不會，本機測不出來
 apps/
   web/                 前台：Nuxt 3 **執行期 SSR**（21 個模板，每個請求即時算繪）
                        ⚠️ 2026-09-16 由「純靜態預渲染」改成 SSR，見決策 6
