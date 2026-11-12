@@ -73,6 +73,7 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
         string unit, ContentType contentType, int page, int pageSize,
         byte? status, int? categoryTermId, string? keyword, int? ownerUserId,
         byte? termType = null,
+        byte? pageKind = null,
         CancellationToken ct = default)
     {
         if (!UnitTables.TryGetValue(unit, out var meta))
@@ -101,6 +102,15 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
         //    沒有這個篩選等於「要維護療程分類只能靠關鍵字猜名字」。
         var termTypeFilter = unit == UnitCodes.Term
             ? "(@TermType IS NULL OR u.TermType = @TermType)"
+            : "(1 = 1)";
+
+        // 「頁面」的型別篩選（1 自由頁／2 系統頁，2026-11-12）。
+        // 後台的頁面清單只列自由頁：系統頁（各單元的列表頁、搜尋、404…）在前台沒有任何
+        // 可編輯的內容，列出來只會被當成「該在這裡改」的地方（「診所據點」與「據點」被搞混）。
+        // 🔴 與 termType 同理，只有 page 這個單元有 PageKind 欄位。
+        // ⚠️ 不帶參數＝不篩：首頁版位、選單的頁面挑選器仍然要拿得到系統頁。
+        var pageKindFilter = unit == UnitCodes.Page
+            ? "(@PageKind IS NULL OR u.PageKind = @PageKind)"
             : "(1 = 1)";
 
         // 分類與標籤的「使用筆數」：後台清單要顯示它，刪除也靠它擋（docs/10 §3.3 —— 仍有引用回 409）。
@@ -144,6 +154,7 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
               AND (@Status IS NULL OR ci.Status = @Status)
               AND {categoryFilter}
               AND {termTypeFilter}
+              AND {pageKindFilter}
               AND (@OwnerUserId IS NULL OR ci.OwnerUserId = @OwnerUserId)
               AND (@Keyword IS NULL OR ci.Title LIKE @KeywordPattern ESCAPE '\')
             ORDER BY ci.SortOrder, ci.Id
@@ -156,6 +167,7 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
               AND (@Status IS NULL OR ci.Status = @Status)
               AND {categoryFilter}
               AND {termTypeFilter}
+              AND {pageKindFilter}
               AND (@OwnerUserId IS NULL OR ci.OwnerUserId = @OwnerUserId)
               AND (@Keyword IS NULL OR ci.Title LIKE @KeywordPattern ESCAPE '\');
             """;
@@ -166,6 +178,7 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
             Status = status,
             CategoryTermId = categoryTermId,
             TermType = termType,
+            PageKind = pageKind,
             OwnerUserId = ownerUserId,
             Keyword = keyword,
             KeywordPattern = keyword is null ? null : $"%{EscapeLike(keyword)}%",

@@ -19,6 +19,8 @@ export const clinicUnit: UnitDefinition = {
     { key: 'address', label: '地址', type: 'text', required: true, requiredOnCreate: true, group: '基本資料' },
     { key: 'phone', label: '電話', type: 'text', required: true, requiredOnCreate: true, group: '基本資料' },
     { key: 'lineUrl', label: 'LINE 連結', type: 'text', group: '基本資料' },
+    // 🔴 頂層的 summary（content-fields.ts）。據點列表與品牌理念頁的院區卡片讀的就是這一句。
+    { key: 'summary', label: '摘要', type: 'textarea', group: '基本資料', hint: '診所據點頁與品牌理念頁院區卡片上的那句說明；下方「簡介」留空時，據點頁的導言也用這一句。' },
     { key: 'latitude', label: '緯度', type: 'number', group: '地圖', hint: 'Google 地圖定位與搜尋結果會用到。', requiredOnCreate: true },
     { key: 'longitude', label: '經度', type: 'number', group: '地圖', requiredOnCreate: true },
     { key: 'mapUrl', label: '地圖連結', type: 'text', group: '地圖' },

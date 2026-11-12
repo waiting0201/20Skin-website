@@ -190,7 +190,7 @@ const doctorHung: RelatedDoctor = {
 //    前台原本那句「內容建置中」因此不再需要 —— 正式站不該有一個只寫著建置中的頁面。
 
 import {
-  REL, TERM, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, termsOf, type ContentRecord,
+  REL, TERM, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, termLede, termsOf, type ContentRecord,
   seoOverridesOf,
 } from './_content'
 import { eyebrowFor } from './_presentation'
@@ -338,7 +338,7 @@ export async function getTreatmentCategories(): Promise<TreatmentCategory[]> {
       name: term.title,
       // 英文小標由設計稿決定，不進資料庫（見 _presentation.ts）。
       eyebrow: eyebrowFor(term.slug as string),
-      lede: term.summary ?? '',
+      lede: termLede(term),
       image: toImage(term.fields.cover, term.title),
       // 數量由查詢算出，不是另存一份會過期的數字。
       count: items.length,

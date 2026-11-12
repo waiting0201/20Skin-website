@@ -24,6 +24,7 @@ export const treatmentUnit: UnitDefinition = {
     { key: 'updatedAt', label: '更新時間', render: 'date' },
   ],
   fields: [
+    { key: 'summary', label: '摘要', type: 'textarea', group: '基本資料', hint: '療程卡片上的那句簡述（療程總覽、困擾頁與案例頁的相關療程）。' },
     {
       key: 'categoryTermId',
       label: '療程分類',

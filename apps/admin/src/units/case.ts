@@ -20,6 +20,7 @@ export const caseUnit: UnitDefinition = {
   fields: [
     { key: 'treatmentId', label: '對應療程', type: 'relation-single', required: true, optionsFromUnit: 'treatment', group: '基本資料', requiredOnCreate: true },
     { key: 'sessionsText', label: '次數與週期', type: 'text', group: '基本資料' },
+    { key: 'summary', label: '摘要', type: 'textarea', group: '基本資料', hint: '案例頁標題下方的導言。' },
     { key: 'narrative', label: '個案條件與醫師說明', type: 'structured', group: '基本資料', structured: caseNarrativeSchema },
     // 🔴 內文＝單一編輯器（Tim 指定 2026-11-11），取代 narrative 裡的敘述段落／療程時間軸／當事人回饋。
     //    那三個鍵仍在 narrative 裡原樣往返（不顯示），前台在內文為空時退回舊的三段。

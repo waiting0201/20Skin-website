@@ -299,7 +299,7 @@ export function validateBody(
 
   for (const field of def.fields) {
     // 文章的「摘要」送出時是頂層的 summary，長度上限與其他欄位不同（docs/08 §B-1）。
-    if (def.key === 'article' && field.key === 'summary') {
+    if (field.key === 'summary') {
       const summary = text(form.fields[field.key])
       if (summary.length > SUMMARY_MAX) {
         errors[field.key] = `摘要長度不可超過 ${SUMMARY_MAX} 字（目前 ${summary.length} 字）。`

@@ -470,6 +470,7 @@ const content = {
           status: query.status,
           categoryId: query.categoryId,
           termType: query.termType,
+          pageKind: query.pageKind,
           ownerUserId: query.ownerUserId,
         },
       }),

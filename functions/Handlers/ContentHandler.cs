@@ -91,7 +91,10 @@ public sealed class ContentHandler(
         //    不是讓整個清單打不開。
         byte? termType = byte.TryParse(req.Query["termType"], out var tt) && tt is >= 1 and <= 4 ? tt : null;
 
-        var (rows, total) = await _read.ListAsync(unit, contentType, page, pageSize, status, categoryTermId, keyword, ownerUserId, termType, ct);
+        // 「頁面」專用的型別篩選（1 自由頁／2 系統頁）。規則同 termType：其餘單元忽略、值域外當成沒指定。
+        byte? pageKind = byte.TryParse(req.Query["pageKind"], out var pk) && pk is 1 or 2 ? pk : null;
+
+        var (rows, total) = await _read.ListAsync(unit, contentType, page, pageSize, status, categoryTermId, keyword, ownerUserId, termType, pageKind, ct);
 
         var items = rows.Select(r => new ContentListItemDto(
             r.Id, unit, r.Title, r.Slug, r.UrlPath, r.Status, StatusName((ContentStatus)r.Status),

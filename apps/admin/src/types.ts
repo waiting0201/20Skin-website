@@ -157,6 +157,8 @@ export interface ListQuery {
   categoryId?: number
   /** 只有 term 用得到：1 療程分類／2 文章分類／3 FAQ 分類／4 文章標籤。其餘單元會被 API 忽略。 */
   termType?: number
+  /** 只有「頁面」用：1 自由頁／2 系統頁。不帶＝全部。 */
+  pageKind?: number
 }
 
 /** docs/08-database.md §B-3。 */

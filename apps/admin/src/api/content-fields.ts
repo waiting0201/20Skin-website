@@ -135,7 +135,11 @@ export function fieldsFromServer(
     out.expertiseTags = split.expertiseTags
   }
 
-  if (unit === 'article') {
+  // 🔴 摘要是內容主幹的欄位（頂層 `summary`），不在各單元的子表裡。
+  //    2026-11-12 前只有文章接了這一欄，其餘單元前台照樣讀它（據點卡片的說明、
+  //    醫師頁導言、療程卡片簡述…），後台卻沒有任何地方能改。
+  //    現在凡是單元宣告了 `summary` 欄位就接上。
+  if (hasSummaryField(unit)) {
     out.summary = summary ?? ''
   }
 
@@ -158,6 +162,10 @@ export function fieldsFromServer(
   }
 
   return out
+}
+
+function hasSummaryField(unit: UnitKey): boolean {
+  return UNIT_REGISTRY[unit].fields.some((f) => f.key === 'summary')
 }
 
 function isCollectionField(field: UnitField): boolean {
@@ -195,7 +203,7 @@ export function fieldsToServer(
 
     const value = adminFields[field.key]
 
-    if (unit === 'article' && field.key === 'summary') {
+    if (field.key === 'summary') {
       summary = value === null || value === undefined ? null : String(value)
       continue
     }

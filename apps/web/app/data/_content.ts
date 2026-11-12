@@ -250,6 +250,18 @@ export function seoOverridesOf(record: { seo: Record<string, unknown> | null } |
   }
 }
 
+/**
+ * 分類的一句介紹：後台「介紹文案」（`fields.intro` 的 `{lede}`）優先，沒填才退回摘要。
+ *
+ * 🔴 2026-11-12 前這三處只讀 `summary`，而後台分類唯一能改的是「介紹文案」——
+ *    改了、發布了，前台一個字都不會變（正式站「雷射光療」分類實際分岔）。
+ *    與據點頁的導言同一條規則（clinics.ts 的 `intro?.lede ?? record.summary`）。
+ */
+export function termLede(term: ContentRecord): string {
+  const intro = parseBlocks<{ lede?: string | null } | null>(term.fields.intro, null)
+  return intro?.lede || term.summary || ''
+}
+
 export function parseBlocks<T>(value: unknown, fallback: T): T {
   if (typeof value !== 'string' || value.length === 0) return fallback
   try {

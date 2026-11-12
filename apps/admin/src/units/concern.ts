@@ -16,6 +16,7 @@ export const concernUnit: UnitDefinition = {
     { key: 'updatedAt', label: '更新時間', render: 'date' },
   ],
   fields: [
+    { key: 'summary', label: '摘要', type: 'textarea', group: '內容', hint: '困擾頁標題下方的導言，以及肌膚困擾總覽卡片上的說明。' },
     // 🔴 內文＝單一編輯器（Tim 指定 2026-11-11），取代原本的症狀／成因／自我判斷／何時就醫四欄。
     //    那四欄**不在畫面上、也不再送出**，資料庫裡的舊值留著（前台在內文為空時退回舊版型）。
     //    內文還是空的時候，編輯器先帶入那四欄換算出來的區塊，存檔後才生效。

@@ -62,7 +62,7 @@ const faqs = [
     <div class="container clist-hero__inner">
       <span class="u-eyebrow">OUR CLINICS</span>
       <h1 class="clist-hero__title">診所據點</h1>
-      <p class="clist-hero__lede">兩個院區都在彰化二林，步行可達的距離內。醫學美容與一般皮膚疾病門診分流，看診前請先確認該院區的門診時段與駐診醫師。</p>
+      <p class="clist-hero__lede">兩個院區分別位於台中市南屯區與彰化縣二林鎮。醫學美容與一般皮膚疾病門診分流，看診前請先確認該院區的門診時段與駐診醫師。</p>
     </div>
   </section>
 

@@ -137,6 +137,10 @@ async function load() {
       status: query.status || undefined,
       categoryId: query.categoryId ? Number(query.categoryId) : undefined,
       termType: query.termType ? Number(query.termType) : undefined,
+      // 🔴 頁面清單只列自由頁（2026-11-12）。系統頁（各單元的列表頁、搜尋、404…）前台不讀
+      //    它們的任何欄位，打開來沒有東西可改 —— 列出來只會被誤認成該改的地方。
+      //    首頁有自己的「首頁版位」畫面。資料沒有刪，sitemap 與選單連結仍靠那幾筆。
+      pageKind: props.unit === 'page' ? 1 : undefined,
       ownerUserId: onlyMine.value && user ? user.id : undefined,
     })
     items.value = result.items

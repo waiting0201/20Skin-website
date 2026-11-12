@@ -116,7 +116,7 @@ export interface Concern {
 //    （ContentRelations.Note 是逐筆的推薦理由，不是整段引言）。
 
 import {
-  REL, TERM, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termsOf,
+  REL, TERM, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termLede, termsOf,
   type ContentRecord,
 } from './_content'
 import { formatDisplayDate, type ArticleBodyBlock } from './articles'
@@ -279,7 +279,7 @@ export async function getConcernTreatmentCategories() {
     return {
       label: term.title,
       href: term.urlPath ?? '#',
-      excerpt: term.summary ?? '',
+      excerpt: termLede(term),
       image: toImage(first?.fields.cover ?? term.fields.cover, term.title),
     }
   })

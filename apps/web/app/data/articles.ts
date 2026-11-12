@@ -36,7 +36,7 @@ export interface ArticleCategory {
 /** 四個分類 slug 為定案值（docs/01-sitemap.md §1、CLAUDE.md）。 */
 // ── 資料來源：content/articles.json ＋ terms.json（docs/09 §3）───────────
 
-import { REL, TERM, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termsOf, type ContentRecord } from './_content'
+import { REL, TERM, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termLede, termsOf, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
 
 const toImage = (value: unknown, fallbackAlt = ''): ArticleImage => {
@@ -51,7 +51,7 @@ export async function getArticleCategories(): Promise<ArticleCategory[]> {
     label: t.title,
     // 英文小標由設計稿決定（見 _presentation.ts）。
     eyebrow: eyebrowFor(t.slug as string),
-    description: t.summary ?? '',
+    description: termLede(t),
   }))
 }
 

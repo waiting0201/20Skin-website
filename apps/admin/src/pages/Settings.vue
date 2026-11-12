@@ -10,6 +10,7 @@
 //    的 `getClinicNap()`）。所以它不是「主資料」，是一份沒有人讀的第二份：
 //    改了前台不會變，畫面上那組「與據點頁一致／不一致」的檢查，比對的是兩份
 //    其中一份根本沒在用的資料。真的要改電話地址，是改據點那一筆。
+//    ⚠️ 那一區後來只剩一句「請到據點修改」，**2026-11-12 連那張卡片也整區拿掉**（Tim 指定）。
 //    ⚠️ 設定鍵 `nap.json` 留在資料庫（同 `site.logoImage`：拿掉要一支 migration，
 //    而它沒有害處）；`PUT /admin/setting` 只更新送上來的鍵，不送就不會動到它。
 //
@@ -218,15 +219,6 @@ async function save() {
               </p>
             </div>
           </div>
-        </div>
-
-        <div class="adm-card">
-          <p class="adm-fieldset__legend">院所資訊（名稱／電話／地址）</p>
-          <p class="adm-field__hint">
-            院所的名稱、電話、地址與看診時段請到
-            <RouterLink to="/clinic">據點</RouterLink>
-            裡修改。頁尾、據點頁、首頁與聯絡我們都讀那一份，改一次全站就一致。
-          </p>
         </div>
 
         <div class="adm-card">
