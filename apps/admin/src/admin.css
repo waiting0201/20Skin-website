@@ -658,6 +658,8 @@
 }
 .adm-repeater__fields { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--sp-2); }
 .adm-repeater__remove { flex: none; }
+/* 相簿列的右欄：圖說與替代文字上下排（2026-11-12）。 */
+.adm-gallery-text { display: flex; flex-direction: column; gap: var(--sp-3); }
 
 /* -- Tags（醫師專長標籤）--------------------------------------------------- */
 /* 兩列：已加入的 chip 一列（可換行）、輸入框一列。 */

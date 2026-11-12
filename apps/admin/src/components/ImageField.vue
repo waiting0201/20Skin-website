@@ -49,6 +49,11 @@ const props = withDefaults(defineProps<{
    * ⚠️ 預設 true：新的使用處若忘了指定，寧可多一句警告，不要少一句。
    */
   deletesOldFile?: boolean
+  /**
+   * 不在這裡畫「替代文字」的輸入框 —— 由外面自己畫（相簿列把它和圖說一起放在右欄，2026-11-12）。
+   * ⚠️ 值仍然在 `modelValue.alt` 上，外面改的是同一個圖片值；這個旗標只管畫不畫。
+   */
+  hideAlt?: boolean
 }>(), { deletesOldFile: true })
 
 const emit = defineEmits<{ 'update:modelValue': [ImageValue | null] }>()
@@ -117,7 +122,7 @@ onBeforeUnmount(() => releasePendingImage(props.modelValue))
     </div>
 
     <input
-      v-if="modelValue"
+      v-if="modelValue && !hideAlt"
       class="adm-input"
       type="text"
       placeholder="替代文字（alt）——螢幕閱讀器與 SEO 都讀它"

@@ -760,14 +760,24 @@ async function removeRecord() {
                       <ImageField
                         :model-value="(item.image as ImageValue | null) ?? null"
                         :disabled="!canEditBody"
+                        hide-alt
                         @update:model-value="(v) => (item.image = v)"
                       />
-                      <!-- ⚠️ 包一層 adm-field 並給標題（2026-11-12）：原本是一個只有 placeholder 的裸輸入框，
-                           被格線拉成跟左邊的圖片欄一樣高，看起來像一大塊不知道做什麼的文字框。 -->
-                      <div class="adm-field">
-                        <label class="adm-field__label">圖說（顯示在圖片下方，可留空）</label>
-                        <input class="adm-input" type="text" :value="item.caption ?? ''" :disabled="!canEditBody"
-                          @input="item.caption = ($event.target as HTMLInputElement).value">
+                      <!-- 🔴 兩個文字欄位都放右欄（Tim 指定 2026-11-12）：替代文字原本在左邊圖片底下，
+                           右邊只有一格圖說，底下空一大片。左欄只留圖與換圖／移除。
+                           ⚠️ 替代文字是圖片值的一部分（item.image.alt），不是這一列自己的欄位 ——
+                              所以還沒選圖時不顯示，改的時候要整個換掉圖片值（ImageField 的 setAlt 同一種寫法）。 -->
+                      <div class="adm-gallery-text">
+                        <div class="adm-field">
+                          <label class="adm-field__label">圖說（顯示在圖片下方，可留空）</label>
+                          <input class="adm-input" type="text" :value="item.caption ?? ''" :disabled="!canEditBody"
+                            @input="item.caption = ($event.target as HTMLInputElement).value">
+                        </div>
+                        <div v-if="item.image" class="adm-field">
+                          <label class="adm-field__label">替代文字（畫面上看不到，給螢幕閱讀器與搜尋引擎）</label>
+                          <input class="adm-input" type="text" :value="(item.image as ImageValue).alt ?? ''" :disabled="!canEditBody"
+                            @input="item.image = { ...(item.image as ImageValue), alt: ($event.target as HTMLInputElement).value || null }">
+                        </div>
                       </div>
 
                       <!-- 逐張的額外欄位。⚠️ 案例圖片的「階段」在 API 是必填，
