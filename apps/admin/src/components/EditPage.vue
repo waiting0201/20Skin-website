@@ -611,6 +611,7 @@ async function removeRecord() {
               <div class="adm-field">
                 <label class="adm-field__label">排序值</label>
                 <input v-model.number="bodyForm.sortOrder" class="adm-input" type="number" :disabled="!canEditBody">
+                <p class="adm-field__hint">數字小的排前面。填的號碼已經有其他項目在用時，這一筆會插在它前面，後面的自動往後挪。</p>
               </div>
               <div class="adm-field">
                 <label class="adm-checkbox">

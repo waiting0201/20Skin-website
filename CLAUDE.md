@@ -600,6 +600,11 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    🔴 **前提是排序值不重複** —— migration `NormalizeSortOrder` 把每個型別重編成 0..n-1
    （值就是現在算出來的順序，**顯示順序不變**），`ContentHandler.CreateAsync` 也改成新增時
    取 `MAX(SortOrder)+1`；少了後者，正規化之後每一筆新內容都會插到整個單元的最前面。
+   🔴 **明確指定的排序值若已被佔用，後端把後面的往後挪一格**（`ContentHandler.MakeRoomForSortOrderAsync`，2026-11-12）。
+   編輯頁的「排序值」是可以自由輸入的數字，在此之前後端照單全收 —— 正式站查到「分類與標籤」4 筆撞號
+   （四種類型共用一組號碼，院方想的是「療程分類裡的第 2 個」），撞號的那幾筆拖了等於沒拖、沒有任何訊息。
+   連同 migration `RenumberSortOrder` 再正規化一次（顯示順序不變）。新增、更新、版本還原三條路都過這一道；
+   挪動不動 `UpdatedAt`（sitemap 的 lastmod 讀它）。
    ⚠️ `adminApi.content.sort()` 的 `sortOrder` 由呼叫端決定 —— 退回用陣列索引的話，
    在第 3 頁拖一次就會把那 20 筆整批洗到最前面，而畫面上看起來完全正常。
    🔴 **文章不給拖**（`listSortable: false`，Tim 定案）：前台 `/blog/`、分類頁、標籤頁一律

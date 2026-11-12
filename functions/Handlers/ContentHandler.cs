@@ -232,6 +232,8 @@ public sealed class ContentHandler(
         entity.SortOrder = JInt(body, "sortOrder")
             ?? ((await db.ContentItems.Where(ci => ci.ContentType == contentType)
                     .MaxAsync(ci => (int?)ci.SortOrder, ct) ?? -1) + 1);
+        if (JInt(body, "sortOrder") is not null)
+            await MakeRoomForSortOrderAsync(db, contentType, 0, entity.SortOrder, ct);
 
         var isArticleTagTerm = entity is Term { TermType: TermType.ArticleTag };
         // ⚠️ 文章標籤預設 IncludeInSitemap=0 ＋ SeoMeta.NoIndex=1（docs/08 §C-9）：
@@ -315,7 +317,11 @@ public sealed class ContentHandler(
             }
         }
 
-        if (JInt(body, "sortOrder") is int sortOrder) entity.SortOrder = sortOrder;
+        if (JInt(body, "sortOrder") is int sortOrder && sortOrder != entity.SortOrder)
+        {
+            await MakeRoomForSortOrderAsync(db, entity.ContentType, entity.Id, sortOrder, ct);
+            entity.SortOrder = sortOrder;
+        }
         if (JBool(body, "includeInSitemap") is bool includeInSitemap) entity.IncludeInSitemap = includeInSitemap;
 
         var isDoctorNonAdmin = !RequestContext.IsSuperAdmin(req) && RequestContext.Roles(req).Contains(RoleCodes.Doctor);
@@ -804,7 +810,12 @@ public sealed class ContentHandler(
         }
 
         if (root.TryGetProperty("summary", out _)) entity.Summary = JStr(root, "summary");
-        entity.SortOrder = JInt(root, "sortOrder") ?? entity.SortOrder;
+        if (JInt(root, "sortOrder") is int restoredSortOrder && restoredSortOrder != entity.SortOrder)
+        {
+            // ⚠️ 快照裡的排序值是當時的，現在可能已經被別筆佔用（見 MakeRoomForSortOrderAsync）。
+            await MakeRoomForSortOrderAsync(db, entity.ContentType, entity.Id, restoredSortOrder, ct);
+            entity.SortOrder = restoredSortOrder;
+        }
         entity.IncludeInSitemap = JBool(root, "includeInSitemap") ?? entity.IncludeInSitemap;
 
         if (root.TryGetProperty("fields", out var fieldsEl))
@@ -1484,6 +1495,36 @@ public sealed class ContentHandler(
     private static string? JStr(JsonElement e, string name)
         => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString() : null;
+
+    /// <summary>
+    /// 有人**明確指定**排序值時，先確保那個號碼是空的：同一個內容型別裡已經有別筆佔用，
+    /// 就把「排序值 ≥ 它」的全部往後挪一格 —— 也就是「插到這個位置」，其餘的相對順序不變。
+    ///
+    /// <para>
+    /// 🔴 <b>為什麼需要</b>：清單的拖曳排序是「當頁那幾筆原本佔住的排序值重新分配」（決策 21），
+    /// 前提是同一型別內排序值不重複。編輯頁的「排序值」是一格可以自由輸入的數字，
+    /// 在此之前後端照單全收 —— 2026-11-12 正式站查到 4 筆撞號，全部是手動輸入的
+    /// （分類與標籤四種類型共用一組號碼，院方想的是「療程分類裡的第 2 個」）。
+    /// 撞號的那幾筆拖了等於沒拖，而且沒有任何錯誤訊息。
+    /// </para>
+    /// <para>
+    /// ⚠️ 只在真的撞號時才挪，所以平常是一次 <c>EXISTS</c> 查詢、零筆更新。
+    /// ⚠️ <b>不動 <c>UpdatedAt</c></b>：被挪的那些內容沒有被編輯，而 sitemap 的 lastmod 讀它。
+    /// ⚠️ 挪動直接下 SQL、不經過變更追蹤，所以即使後面的 <c>SaveChanges</c> 失敗也無妨 ——
+    /// 留下的只是一個空號，排序值仍然不重複、順序也沒變。
+    /// </para>
+    /// </summary>
+    private static async Task MakeRoomForSortOrderAsync(
+        Skin20DbContext db, ContentType contentType, int selfId, int sortOrder, CancellationToken ct)
+    {
+        var taken = await db.ContentItems.AnyAsync(
+            ci => ci.ContentType == contentType && ci.Id != selfId && ci.SortOrder == sortOrder, ct);
+        if (!taken) return;
+
+        await db.ContentItems
+            .Where(ci => ci.ContentType == contentType && ci.Id != selfId && ci.SortOrder >= sortOrder)
+            .ExecuteUpdateAsync(u => u.SetProperty(ci => ci.SortOrder, ci => ci.SortOrder + 1), ct);
+    }
 
     private static int? JInt(JsonElement e, string name)
         => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i)
