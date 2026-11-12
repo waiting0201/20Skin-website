@@ -97,7 +97,7 @@ export const caseNarrativeSchema: StructuredSchema = {
   // 🔴 敘述段落／療程時間軸／當事人回饋 2026-11-11 起改由「內文」（bodyBlocks）負責（Tim 指定）。
   //    這三個鍵**仍在這一欄裡原樣往返**（寫入一律展開原物件，決策 17），只是不再顯示 ——
   //    前台在內文為空時還會讀它們。列在這裡是為了不讓畫面出現「另有 3 項內容」那句提示。
-  retiredKeys: ['sections', 'timeline', 'testimonial'],
+  retiredKeys: ['sections', 'timeline', 'testimonial', 'treatmentHref'],
   root: {
     kind: 'object',
     fields: [
@@ -111,7 +111,8 @@ export const caseNarrativeSchema: StructuredSchema = {
             { key: 'condition', label: '年齡與性別', node: { kind: 'string', placeholder: '例如：30–35 歲・女性' } },
             { key: 'mainConcern', label: '主要困擾', node: { kind: 'string' } },
             { key: 'treatmentName', label: '療程名稱', node: { kind: 'string' } },
-            { key: 'treatmentHref', label: '療程頁連結', node: { kind: 'string', placeholder: '/treatments/laser/picosure-pro/' }, hint: '站內路徑，要自己打對——打錯是一個死連結，不會有錯誤訊息。' },
+            // 🔴 沒有「療程頁連結」那一格（2026-11-12 拿掉）：前台改用上方「對應療程」那一筆的實際網址，
+            //    手打的路徑在療程換分類之後就過期（正式站踩到）。舊值留在資料裡原樣往返（retiredKeys）。
             { key: 'sessions', label: '次數', node: { kind: 'string' } },
             { key: 'period', label: '期間', node: { kind: 'string' } },
             { key: 'doctorName', label: '主治醫師', node: { kind: 'string' } },

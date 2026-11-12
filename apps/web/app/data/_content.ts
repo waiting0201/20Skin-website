@@ -159,6 +159,8 @@ export interface PublicSiteSettings {
   socialLinks: { label: string, url: string }[]
   /** 頁尾版權文案。同上，2026-09-18 之前前台是寫死的字串。 */
   footerCopyright: string
+  /** 預設分享縮圖的網址。API 還沒部署這個欄位時是 undefined，使用端一律當成「沒有」。 */
+  defaultOgImageUrl?: string
 }
 
 const EMPTY_SETTINGS: PublicSiteSettings = {

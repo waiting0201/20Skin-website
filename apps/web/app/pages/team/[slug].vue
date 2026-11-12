@@ -370,7 +370,9 @@ usePageHead({
 
       <ul class="doc-media">
         <li v-for="(item, i) in doctor.media" :key="i" class="doc-media__item">
-          <a class="doc-media__title ext" href="#" target="_blank" rel="noopener external">{{ item.title }}</a>
+          <!-- ⚠️ 不是連結（2026-11-12）：這份資料只有標題與出處，沒有網址，
+               原本的 `href="#"` 配 `target="_blank"` 按下去是另開一個同頁的分頁。 -->
+          <span class="doc-media__title">{{ item.title }}</span>
           <span class="doc-media__meta">{{ item.meta }}</span>
         </li>
       </ul>

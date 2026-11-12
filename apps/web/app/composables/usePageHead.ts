@@ -97,7 +97,12 @@ export function usePageHead(options: PageHeadOptions) {
 
   const title = seo?.seoTitle?.trim() || options.title
   const description = seo?.metaDescription?.trim() || options.description
-  const ogImage = seo?.ogImage?.src || options.ogImage
+  // 🔴 站名與預設分享縮圖來自後台的全站設定（app.vue 放進 useState）。2026-11-12 前兩者都不讀：
+  //    標題後綴是寫死的字串，而沒有自己分享縮圖的頁面完全不輸出 og:image。
+  //    ⚠️ 拿不到設定（API 掛掉、裝飾性資料降級）時退回寫死的站名，不讓標題變成「○○｜」。
+  const siteHead = useState<{ siteName: string, defaultOgImageUrl: string } | null>('site-head', () => null).value
+  const siteName = siteHead?.siteName?.trim() || SITE_NAME
+  const ogImage = seo?.ogImage?.src || options.ogImage || siteHead?.defaultOgImageUrl || undefined
   // ⚠️ 兩個來源是 OR：`indexable`（內容夠不夠實在，API 判的）與編輯的明確意願。
   //    任一成立就 noindex。
   const noIndex = Boolean(options.noIndex || seo?.noIndex)
@@ -110,13 +115,13 @@ export function usePageHead(options: PageHeadOptions) {
     : [])
 
   useHead({
-    title: `${title}｜${SITE_NAME}`,
+    title: `${title}｜${siteName}`,
     meta: [
       { name: 'description', content: description },
       ...(noIndex ? [{ name: 'robots', content: 'noindex, nofollow' }] : []),
       { property: 'og:type', content: 'website' },
-      { property: 'og:site_name', content: SITE_NAME },
-      { property: 'og:title', content: `${title}｜${SITE_NAME}` },
+      { property: 'og:site_name', content: siteName },
+      { property: 'og:title', content: `${title}｜${siteName}` },
       { property: 'og:description', content: description },
       { property: 'og:url', content: canonical },
       ...(ogImage ? [{ property: 'og:image', content: ogImage }] : []),

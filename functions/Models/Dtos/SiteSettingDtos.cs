@@ -59,6 +59,12 @@ public sealed class PublicSiteSettingsDto
 
     /// <summary>頁尾版權文案（設定鍵 <c>footer.copyright</c>）。同上，2026-09-18 之前前台是寫死的。</summary>
     public string FooterCopyright { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 預設分享縮圖的網址（後台全站設定的那張圖）。個別內容沒有自己的分享縮圖時，前台用它輸出 <c>og:image</c>。
+    /// 🔴 2026-11-12 前這個設定鍵不在公開端點上、前台也不讀：圖傳得上去，貼到 LINE／Facebook 仍然沒有縮圖。
+    /// </summary>
+    public string DefaultOgImageUrl { get; set; } = string.Empty;
 }
 
 /// <summary>頁尾社群連結的一筆。<c>Label</c> 同時是無障礙標籤，<c>Url</c> 決定要套哪個圖示。</summary>

@@ -60,6 +60,7 @@ const EXPECTED_HIDDEN = [
   { key: 'case.consentReference', why: '內部留存紀錄，不對外顯示' },
   { key: 'case.narrative', path: /^(sections|timeline|testimonial)/, why: '已由內文取代、後台不再顯示的舊鍵（決策 32），原樣往返' },
   { key: 'page.bodyBlocks', path: /^(teamPreview|clinics)/, why: '品牌理念頁改讀醫師與據點單元後留下的舊鍵（決策 30），原樣往返' },
+  { key: 'page.bodyBlocks', path: /^meta\[0\]$/, onlyTitles: ['新中式美學'], why: '「最後更新 …」那一項的日期由前台自動帶，手打的字不顯示' },
   { key: 'page.summary', onlyTitles: ['品牌理念', '隱私權政策', '服務條款', '醫療免責聲明'], why: '導言只有兩個長版故事頁會顯示（欄位說明已寫明）' },
 ]
 const expectedReason = (meta) => EXPECTED_HIDDEN.find((e) =>

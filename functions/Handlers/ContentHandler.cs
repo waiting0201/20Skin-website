@@ -2293,6 +2293,17 @@ public sealed class ContentHandler(
         var orphans = before.Except(after, StringComparer.Ordinal).Distinct(StringComparer.Ordinal).ToList();
         if (orphans.Count == 0) return;
 
+        // 🔴 **本機開發一律不刪實體檔案**（2026-11-12）。儲存體只有一個、所有環境共用（CLAUDE.md 決策 9），
+        //    而「沒有人引用」是對**這一個資料庫**算的 —— 本機庫裡沒人用的圖，正式站可能正在用。
+        //    同一天之內本機測試三次刪到正式站的檔案（療程原理的搭配圖、痘痘頁的插圖、首頁八個專科圖示）。
+        //    代價是本機留下孤兒檔，那由 tools/blob-reconcile 對正式資料庫對帳時處理。
+        //    真的要在本機驗清檔行為，設 `BlobCleanup__AllowInDevelopment=true` 並改指向 Azurite。
+        if (BlobCleanupDisabled)
+        {
+            logger.LogInformation("本機開發環境不刪除實體檔案，略過 {Count} 個：{Paths}", orphans.Count, string.Join(", ", orphans));
+            return;
+        }
+
         // ⚠️ 這段跑在存檔交易之後、回應之前，所以要有上限。實測過：儲存體連不上時
         // Azure SDK 的重試會讓一次 DeleteIfExists 卡數十秒，兩個檔案就把一個存檔請求
         // 拖成近一分鐘。清檔不是使用者等待的理由——逾時就放掉，留孤兒檔給對帳工具。
@@ -2311,6 +2322,14 @@ public sealed class ContentHandler(
             }
         }
     }
+
+    /// <summary>
+    /// `func start` 會把 <c>AZURE_FUNCTIONS_ENVIRONMENT</c> 設成 <c>Development</c>；正式環境沒有這個值（＝Production）。
+    /// 判斷刻意寫成「明確是 Development 才停用」—— 判斷失準時的方向是照常清檔，不是讓正式站永遠不清。
+    /// </summary>
+    internal static bool BlobCleanupDisabled =>
+        string.Equals(Environment.GetEnvironmentVariable("AZURE_FUNCTIONS_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(Environment.GetEnvironmentVariable("BlobCleanup__AllowInDevelopment"), "true", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>一次存檔用在清除舊檔上的時間上限，見 <see cref="DeleteUnreferencedBlobsAsync"/>。</summary>
     private static readonly TimeSpan CleanupBudget = TimeSpan.FromSeconds(15);

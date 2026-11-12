@@ -34,6 +34,7 @@ public sealed class SiteSettingReadService(ISqlConnectionFactory factory) : ISit
     [
         "site.name",
         "site.description",
+        "site.defaultOgImage",
         "aifaq.enabled",
         "aifaq.panelTitle",
         "aifaq.welcomeText",
@@ -70,7 +71,30 @@ public sealed class SiteSettingReadService(ISqlConnectionFactory factory) : ISit
             TrackingIds = map.GetValueOrDefault("tracking.ga4", string.Empty),
             SocialLinks = ParseSocialLinks(map.GetValueOrDefault("footer.social.json")),
             FooterCopyright = map.GetValueOrDefault("footer.copyright", string.Empty),
+            DefaultOgImageUrl = ParseImageUrl(map.GetValueOrDefault("site.defaultOgImage")),
         };
+    }
+
+    /// <summary>
+    /// <c>site.defaultOgImage</c>（上傳結果的 JSON：<c>{blobPath,url,…}</c>）→ 只取網址。
+    /// ⚠️ 解析失敗回空字串，不往上丟 —— 這一支掛掉等於全站每一頁的設定都拿不到。
+    /// </summary>
+    private static string ParseImageUrl(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return string.Empty;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            return doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object
+                && doc.RootElement.TryGetProperty("url", out var url)
+                && url.ValueKind == System.Text.Json.JsonValueKind.String
+                ? url.GetString() ?? string.Empty
+                : string.Empty;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return string.Empty;
+        }
     }
 
     /// <summary>

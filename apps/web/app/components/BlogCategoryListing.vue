@@ -163,11 +163,8 @@ usePageHead({
         </ul>
       </nav>
 
-      <div class="blog-years" role="group" aria-label="依年份篩選">
-        <a class="c-tag blog-years__link is-active" href="#">全部年份</a>
-        <a class="c-tag blog-years__link" href="#">2026</a>
-        <a class="c-tag blog-years__link" href="#">2025</a>
-      </div>
+      <!-- 🔴 「依年份篩選」那一排 2026-11-12 拿掉：三顆都是設計稿留下的 `href="#"`（年份還是寫死的 2026／2025），
+           按了不會篩。要做是 API 加年份參數＋分頁路由，在那之前不放一排假的篩選。 -->
     </div>
   </section>
 
@@ -180,7 +177,7 @@ usePageHead({
         <template v-if="paged.total">
           <article v-if="featured" class="c-card c-card--article blog-feature">
             <div class="c-card__media">
-              <img :src="featured.cover.src" :srcset="srcsetOf(featured.cover.src)" :sizes="IMAGE_SIZES.half" :alt="featured.cover.alt" :width="featured.cover.width" :height="featured.cover.height">
+              <img v-if="featured.cover.src" :src="featured.cover.src" :srcset="srcsetOf(featured.cover.src)" :sizes="IMAGE_SIZES.half" :alt="featured.cover.alt" :width="featured.cover.width" :height="featured.cover.height">
             </div>
             <div class="c-card__body">
               <span class="c-tag blog-feature__badge">精選文章</span>
@@ -197,7 +194,7 @@ usePageHead({
           <div v-if="gridArticles.length" class="grid grid--3 blog-grid">
             <article v-for="article in gridArticles" :key="article.slug" class="c-card c-card--article">
               <div class="c-card__media" :class="{ 'blog-grid__media--pad': article.cover.src.endsWith('.png') }">
-                <img :src="article.cover.src" :srcset="srcsetOf(article.cover.src)" :sizes="IMAGE_SIZES.grid3" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height" loading="lazy">
+                <img v-if="article.cover.src" :src="article.cover.src" :srcset="srcsetOf(article.cover.src)" :sizes="IMAGE_SIZES.grid3" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height" loading="lazy">
               </div>
               <div class="c-card__body">
                 <h3 class="c-card__title"><a :href="`/blog/${article.slug}/`">{{ article.title }}</a></h3>

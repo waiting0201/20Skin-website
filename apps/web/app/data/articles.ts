@@ -328,7 +328,26 @@ export async function getPopularTags(): Promise<ArticleTagRef[]> {
   return (rows ?? []).map((r) => ({ slug: r.slug, label: r.title }))
 }
 
-export const POPULAR_TREATMENTS_FOR_BLOG: RelatedTreatmentRef[] = [
+/**
+ * 側欄「熱門療程」。**挑哪三項是版面決定的（寫死的 slug），但網址、名稱、分類名稱跟著療程單元走。**
+ *
+ * 🔴 2026-11-12 前整組都是寫死的：皮秒換了分類之後連結還指向 `/treatments/laser/…`（靠 301 撐著），
+ *    分類標籤也還是舊名稱（「光療美顏」）。現在用精簡索引（只有 slug／網址／標題，不帶 fields）對回去；
+ *    對不到的那一項（下架、改網址代稱）不顯示，不留一個點了是 404 的連結。
+ * ⚠️ 圖是版面素材（去背的機台圖），不是療程的封面，留在這裡。
+ */
+export async function getPopularTreatmentsForBlog(): Promise<(RelatedTreatmentRef & { href: string })[]> {
+  const [index, terms] = await Promise.all([unitIndex(UNIT.treatment), loadCategoryTerms()])
+  return POPULAR_TREATMENTS_FOR_BLOG.flatMap((item) => {
+    const record = index.find((r) => r.slug === item.slug)
+    const categorySlug = /^\/treatments\/([^/]+)\//.exec(record?.urlPath ?? '')?.[1]
+    if (!record?.urlPath || !categorySlug) return []
+    const category = terms.find((t) => t.slug === categorySlug)
+    return [{ ...item, href: record.urlPath, categorySlug, name: record.title, categoryLabel: category?.title ?? item.categoryLabel }]
+  })
+}
+
+const POPULAR_TREATMENTS_FOR_BLOG: RelatedTreatmentRef[] = [
   {
     slug: 'picosure-pro',
     categorySlug: 'laser',

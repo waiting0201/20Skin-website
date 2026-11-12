@@ -57,6 +57,20 @@ const reviewedOnText = article.reviewedOn ? formatDisplayDate(article.reviewedOn
 
 const ORIGIN = 'https://20skin.tw'
 
+// 分享列。網址用正式網域組，不讀 window.location —— SSR 當下就要有，而且不該把
+// 預覽網域（*.azurestaticapps.net）分享出去。
+const shareUrl = `${ORIGIN}/blog/${article.slug}/`
+const shareCopied = ref(false)
+async function copyShareUrl() {
+  try {
+    await navigator.clipboard.writeText(shareUrl)
+    shareCopied.value = true
+    setTimeout(() => { shareCopied.value = false }, 2000)
+  } catch {
+    // 瀏覽器不給寫剪貼簿（非 https、權限被擋）就不動，按鈕文字維持原樣，不假裝成功。
+  }
+}
+
 usePageHead({
   // 後台 SEO 區塊的覆寫（標題／描述／OG 圖／canonical／noindex／結構化資料）。
   // ⚠️ 讀的是已核准的版本快照，所以後台改完要重新發布才會生效。
@@ -73,7 +87,10 @@ usePageHead({
       headline: article.title,
       name: article.title,
       description: article.metaDescription ?? article.summary,
-      image: ORIGIN + article.cover.src,
+      // 🔴 封面現在是 Blob 的絕對網址（內容搬進資料庫之後），直接接在網域後面會變成
+      //    `https://20skin.twhttps://st20skinweb…`（2026-11-12 查到，正式站每一篇都是）。
+      //    沒有封面的 7 篇不輸出這個屬性。
+      ...(article.cover.src ? { image: /^https?:\/\//.test(article.cover.src) ? article.cover.src : ORIGIN + article.cover.src } : {}),
       datePublished: article.displayDate,
       dateModified: article.dateModified ?? article.displayDate,
       author: article.author.doctorSlug
@@ -139,7 +156,7 @@ usePageHead({
     <div class="container">
       <div class="article-cover__inner">
         <div class="article-cover__frame">
-          <img fetchpriority="high" :src="article.cover.src" :srcset="srcsetOf(article.cover.src)" :sizes="IMAGE_SIZES.half" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height">
+          <img v-if="article.cover.src" fetchpriority="high" :src="article.cover.src" :srcset="srcsetOf(article.cover.src)" :sizes="IMAGE_SIZES.half" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height">
         </div>
         <figcaption>{{ article.summary }}</figcaption>
       </div>
@@ -278,14 +295,14 @@ usePageHead({
     </div>
 
     <!-- =====================================================================
-         分享列（純外觀，不用能運作）
+         分享列（2026-11-12 接上：原本三顆都是設計稿的外觀，按了沒有反應）
          ===================================================================== -->
     <div class="article-share">
       <span class="article-share__label">分享這篇文章</span>
       <div class="article-share__btns">
-        <button class="btn btn--line btn--sm" type="button">複製連結</button>
-        <a class="btn btn--line btn--sm" href="#" aria-label="分享到 Facebook（另開新分頁）">Facebook</a>
-        <a class="btn btn--line btn--sm" href="#" aria-label="分享到 LINE（另開新分頁）">LINE</a>
+        <button class="btn btn--line btn--sm" type="button" @click="copyShareUrl">{{ shareCopied ? '已複製' : '複製連結' }}</button>
+        <a class="btn btn--line btn--sm" :href="`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`" target="_blank" rel="noopener external" aria-label="分享到 Facebook（另開新分頁）">Facebook</a>
+        <a class="btn btn--line btn--sm" :href="`https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(shareUrl)}`" target="_blank" rel="noopener external" aria-label="分享到 LINE（另開新分頁）">LINE</a>
       </div>
     </div>
   </div>
@@ -307,7 +324,7 @@ usePageHead({
       <div class="grid grid--3">
         <article v-for="related in relatedArticles" :key="related.slug" class="c-card c-card--article">
           <div class="c-card__media" :class="{ 'blog-grid__media--pad': related.cover.src.endsWith('.png') }">
-            <img :src="related.cover.src" :srcset="srcsetOf(related.cover.src)" :sizes="IMAGE_SIZES.grid3" :alt="related.cover.alt" :width="related.cover.width" :height="related.cover.height" loading="lazy">
+            <img v-if="related.cover.src" :src="related.cover.src" :srcset="srcsetOf(related.cover.src)" :sizes="IMAGE_SIZES.grid3" :alt="related.cover.alt" :width="related.cover.width" :height="related.cover.height" loading="lazy">
           </div>
           <div class="c-card__body">
             <span class="c-tag c-card__tag">{{ relatedCategoryLabels.get(related.slug) }}</span>

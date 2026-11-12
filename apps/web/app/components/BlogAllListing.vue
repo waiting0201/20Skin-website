@@ -90,11 +90,8 @@ usePageHead({
         </ul>
       </nav>
 
-      <div class="blog-years" role="group" aria-label="依年份篩選">
-        <a class="c-tag blog-years__link is-active" href="#">全部年份</a>
-        <a class="c-tag blog-years__link" href="#">2026</a>
-        <a class="c-tag blog-years__link" href="#">2025</a>
-      </div>
+      <!-- 🔴 「依年份篩選」那一排 2026-11-12 拿掉：三顆都是設計稿留下的 `href="#"`（年份還是寫死的 2026／2025），
+           按了不會篩。要做是 API 加年份參數＋分頁路由，在那之前不放一排假的篩選。 -->
     </div>
   </section>
 
@@ -107,13 +104,13 @@ usePageHead({
         <div v-if="paged.items.length" class="grid grid--3 blog-grid">
           <article v-for="(article, i) in paged.items" :key="article.slug" class="c-card c-card--article">
             <div class="c-card__media" :class="{ 'blog-grid__media--pad': article.cover.src.endsWith('.png') }">
-              <img :src="article.cover.src" :srcset="srcsetOf(article.cover.src)" :sizes="IMAGE_SIZES.grid3" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height" :loading="i < 3 ? undefined : 'lazy'" :fetchpriority="i === 0 ? 'high' : undefined">
+              <img v-if="article.cover.src" :src="article.cover.src" :srcset="srcsetOf(article.cover.src)" :sizes="IMAGE_SIZES.grid3" :alt="article.cover.alt" :width="article.cover.width" :height="article.cover.height" :loading="i < 3 ? undefined : 'lazy'" :fetchpriority="i === 0 ? 'high' : undefined">
             </div>
             <div class="c-card__body">
               <h3 class="c-card__title"><a :href="`/blog/${article.slug}/`">{{ article.title }}</a></h3>
               <p class="c-card__excerpt">{{ article.summary }}</p>
               <div class="c-card__meta">
-                <span><a :href="article.author.doctorSlug ? `/team/${article.author.doctorSlug}/` : undefined">{{ article.author.name }}</a></span>
+                <span><a v-if="article.author.doctorSlug" :href="`/team/${article.author.doctorSlug}/`">{{ article.author.name }}</a><template v-else>{{ article.author.name }}</template></span>
                 <span>{{ formatDisplayDate(article.displayDate) }}</span>
                 <span>{{ article.readingMinutes }} 分鐘閱讀</span>
               </div>

@@ -14,6 +14,10 @@ import { getSiteSettings } from '~/data/site-settings'
 // 追蹤碼（GA4／GTM）也在這裡注入，不放 layouts/default.vue ——
 // 404 頁（error.vue）不走 default layout，放在 layout 會讓 404 沒有任何數據。
 const site = await getSiteSettings()
+// 🔴 放進 useState 讓 usePageHead **同步**讀得到（2026-11-12）：站名與預設分享縮圖在後台改得動，
+//    而 usePageHead 是每一頁 setup 裡的同步呼叫，不能在裡面再 await 一次設定。
+//    app.vue 的 setup 先於任何頁面跑完，所以頁面呼叫 usePageHead 時這裡已經有值。
+useState('site-head', () => ({ siteName: site.siteName, defaultOgImageUrl: site.defaultOgImageUrl ?? '' }))
 
 /**
  * 後台填的是**識別碼**（`G-XXXXXXXX`／`GTM-XXXXXXX`），不是程式碼片段。

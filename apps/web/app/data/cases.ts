@@ -222,7 +222,9 @@ export async function getCaseDetails(): Promise<CaseDetail[]> {
     concernHref: '',
     lede: record.summary ?? '',
     shootingConditions: (f.shootingConditions as string) ?? '',
-    facts: n.facts ?? ({} as CaseDetail['facts']),
+    // 🔴 療程連結取自「對應療程」那一筆的網址，不讀 facts 裡手打的 treatmentHref（2026-11-12）：
+    //    療程換分類後網址會變，手打的那一份不會跟（正式站的案例還指向舊分類，靠 301 撐著）。
+    facts: { ...(n.facts ?? ({} as CaseDetail['facts'])), ...(treatment?.urlPath ? { treatmentHref: treatment.urlPath } : {}) },
     body: bodyOf(record),
     sections: n.sections ?? [],
     timeline: n.timeline ?? [],

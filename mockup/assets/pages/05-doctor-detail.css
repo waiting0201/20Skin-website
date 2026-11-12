@@ -104,7 +104,9 @@
 }
 .doc-media__title { font-size: var(--fs-sm); color: var(--ink); font-weight: 500; }
 .doc-media__title:hover { color: var(--brand-600); }
-.doc-media__meta { flex: none; font-size: var(--fs-xs); color: var(--ink-50); }
+/* ⚠️ 不可以是 flex: none（2026-11-12 修）：設計稿的出處是「期刊・年月」這種短字，
+   正式資料是一整行期刊全名加卷期頁碼，不能縮就把手機版面撐出左右捲軸（390px 寬實測撐到 724px）。 */
+.doc-media__meta { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; font-size: var(--fs-xs); color: var(--ink-50); }
 
 /* -- 8. 頁尾 CTA 區 ----------------------------------------------------------- */
 .doc-cta { text-align: center; }   /* 灰底由 HTML 的 .section--alt 給 */

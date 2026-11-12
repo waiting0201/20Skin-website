@@ -3,9 +3,9 @@
 //
 // ⚠️ 三個列表頁（全部文章、分類、標籤）原本各自抄一份完全相同的側欄。
 //    加分頁之後每一種列表都會多一個 `/page/{n}/` 的路由，再抄下去就是六份。
-import { getPopularTags, POPULAR_TREATMENTS_FOR_BLOG } from '~/data/articles'
+import { getPopularTags, getPopularTreatmentsForBlog } from '~/data/articles'
 
-const POPULAR_TAGS = await getPopularTags()
+const [POPULAR_TAGS, POPULAR_TREATMENTS_FOR_BLOG] = await Promise.all([getPopularTags(), getPopularTreatmentsForBlog()])
 </script>
 
 <template>
@@ -32,12 +32,12 @@ const POPULAR_TAGS = await getPopularTags()
     <h3 class="c-heading-bar">熱門療程</h3>
     <ul class="blog-mini-list">
       <li v-for="item in POPULAR_TREATMENTS_FOR_BLOG" :key="item.slug" class="blog-mini">
-        <a class="blog-mini__media" :href="`/treatments/${item.categorySlug}/${item.slug}/`">
+        <a class="blog-mini__media" :href="item.href">
           <img :src="item.image.src" :srcset="srcsetOf(item.image.src)" :sizes="IMAGE_SIZES.thumb" :alt="item.image.alt" :width="item.image.width" :height="item.image.height" loading="lazy">
         </a>
         <div class="blog-mini__body">
           <span class="c-tag c-tag--outline">{{ item.categoryLabel }}</span>
-          <h4 class="blog-mini__title"><a :href="`/treatments/${item.categorySlug}/${item.slug}/`">{{ item.name }}</a></h4>
+          <h4 class="blog-mini__title"><a :href="item.href">{{ item.name }}</a></h4>
         </div>
       </li>
     </ul>
