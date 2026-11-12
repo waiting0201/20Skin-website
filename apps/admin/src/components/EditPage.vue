@@ -124,6 +124,9 @@ const showAiSummary = computed(() =>
 const canPublish = computed(() => can(permCtx, props.unit, 'publish'))
 const canDelete = computed(() => {
   if (record.value?.isSystemLocked) return false
+  // 🔴 頁面不給刪（Tim 定案 2026-11-12）。清單上剩下的六頁（品牌理念、兩個長版故事、三個法務頁）
+  //    各有自己的前台路由，刪掉那一筆，那個網址就只剩空殼或 404 —— 而頁面也不能新增，刪了補不回來。
+  if (props.unit === 'page') return false
   // term 的刪除限超級管理員（動 URL 結構與 301 對照表），不是通用的 `{unit}.delete`
   // 權限碼——docs/10-api.md §3.3 的逐單元例外，見 src/permissions.ts 檔頭。
   if (props.unit === 'term') return canDeleteTerm(permCtx)
@@ -759,8 +762,13 @@ async function removeRecord() {
                         :disabled="!canEditBody"
                         @update:model-value="(v) => (item.image = v)"
                       />
-                      <input class="adm-input" type="text" placeholder="圖說" :value="item.caption ?? ''" :disabled="!canEditBody"
-                        @input="item.caption = ($event.target as HTMLInputElement).value">
+                      <!-- ⚠️ 包一層 adm-field 並給標題（2026-11-12）：原本是一個只有 placeholder 的裸輸入框，
+                           被格線拉成跟左邊的圖片欄一樣高，看起來像一大塊不知道做什麼的文字框。 -->
+                      <div class="adm-field">
+                        <label class="adm-field__label">圖說（顯示在圖片下方，可留空）</label>
+                        <input class="adm-input" type="text" :value="item.caption ?? ''" :disabled="!canEditBody"
+                          @input="item.caption = ($event.target as HTMLInputElement).value">
+                      </div>
 
                       <!-- 逐張的額外欄位。⚠️ 案例圖片的「階段」在 API 是必填，
                            沒有這一段的話案例根本存不起來（docs/08 §C-5）。 -->

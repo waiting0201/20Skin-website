@@ -75,7 +75,7 @@ export const pageStorySchema: StructuredSchema = {
   root: {
     kind: 'object',
     fields: [
-      { key: 'meta', label: '標頭資訊', node: { kind: 'array', itemLabel: '項目', item: { kind: 'string' } }, hint: '例如「最後更新 2026-08-20」「閱讀時間 約 8 分鐘」。' },
+      { key: 'meta', label: '標頭資訊', node: { kind: 'array', itemLabel: '項目', item: { kind: 'string' } }, hint: '例如「閱讀時間 約 8 分鐘」。以「最後更新」開頭的那一項，日期會自動換成這一頁實際的更新日，不必手動改。' },
       // ⚠️ 這一張是 content-image（blobPath／url），與 about 的卡片圖不同形狀。
       { key: 'heroImage', label: '主視覺', node: { kind: 'image', shape: 'content-image' } },
       { key: 'heroCaption', label: '主視覺圖說', node: { kind: 'string' } },

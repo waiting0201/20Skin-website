@@ -182,6 +182,12 @@ export interface StoryPage {
   seo: ReturnType<typeof seoOverridesOf>
 }
 
+/** API 的時間是 UTC、不帶時區（`2026-11-12T10:12:24`）。換成台灣的日期 —— 直接切前十碼的話，早上八點前的更新會顯示成前一天。 */
+function taipeiDate(utc: string): string {
+  const t = Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(utc) ? utc : `${utc}Z`)
+  return Number.isNaN(t) ? utc.slice(0, 10) : new Date(t + 8 * 3600_000).toISOString().slice(0, 10)
+}
+
 const STORY_SLUGS = ['new-chinese-aesthetics', 'makeup-style']
 
 export async function getStoryPages(): Promise<Record<string, StoryPage>> {
@@ -205,7 +211,11 @@ export async function getStoryPages(): Promise<Record<string, StoryPage>> {
       eyebrow: eyebrowFor(slug),
       title: record?.title ?? '',
       lede: record?.summary ?? '',
-      meta: doc.meta ?? [],
+      // 🔴 「最後更新 2026-08-20」原本是手打的字，改了內容不會跟著變（2026-11-12）。
+      //    以「最後更新」開頭的那一項改帶這一筆實際的更新日；其餘項目（閱讀時間、確認聲明）照舊。
+      //    ⚠️ 沒有那一項的頁面不會自動多出一項 —— 要不要顯示更新日仍由院方決定。
+      meta: (doc.meta ?? []).map((m) =>
+        /^最後更新/.test(m) && record?.updatedAt ? `最後更新 ${taipeiDate(record.updatedAt)}` : m),
       heroImage: { src: hero?.src ?? '', alt: hero?.alt ?? '', w: hero?.width ?? 0, h: hero?.height ?? 0 },
       heroCaption: doc.heroCaption ?? '',
       toc: doc.toc ?? [],
