@@ -378,6 +378,12 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    `imageToJson()` 因此把形狀掛在 `PendingImage.shape` 上，`uploadPendingImages()` 上傳完照它轉回去。
    ⚠️ 在此之前後兩種形狀**新上傳的圖一律存錯**：後台預覽正常、存檔成功、前台那張 `<img>` 沒有 `src`
    （正式站品牌理念頁的院區照片踩到）。typecheck、build、兩支 round-trip 都看不到 —— 它們不經過上傳。
+   🔴 **任何把 `PendingImage` 放進區塊 JSON 的地方都要過 `imageToJson()`**。第一次修只補到欄位表單，
+   漏了內文編輯器的「插入圖片」（`BodyBlocksEditor.insertImage` 直接把 pending 塞進 attrs）——
+   症狀是「儲存成功，然後圖就不見了」（存檔後編輯器重載內容，那張圖沒有 `src`）。同日補上。
+   ⚠️ 插入的圖一律放在游標所在**那一整塊的後面**：直接 `insertContent` 在表格儲存格裡會把那一格的文字清掉（實測）。
+   ⚠️ 本機驗上傳要用關掉同源檢查的瀏覽器（儲存體的 CORS 只放行三個正式來源）；而且**本機與正式共用儲存體**，
+   測試只能「新增一張再還原」，不可以在本機換掉或移除既有的圖再發布 —— 那會刪到正式站正在用的檔案。
    ✅ **2026-09-16 起全架構沒有明文的 SQL 連線字串了。** 原本唯一那一個是 SWA 上給 `/api/fallback` 用的唯讀字串，那支 function 已刪除；Nuxt 的 SSR function **完全不碰 SQL**，它只打 API。見 [docs/07-deployment.md](docs/07-deployment.md) §3、§6
 10. **前後台同一個 SWA、同一個網域**：`20skin.tw` 前台、**`20skin.tw/admin` 後台**（Nuxt `ssr: false` 的 SPA）。API 則在另一個網域 `api.20skin.tw`，見第 7 條。
    後台路徑 `/admin/` 為客戶指定（2026-08-10），**不要再提案改成非預設路徑** —— 早期文件曾寫 `/manage/`，那是舊版。

@@ -17,6 +17,7 @@ import { Editor, EditorContent, VueNodeViewRenderer } from '@tiptap/vue-3'
 import { createBodyExtensions } from '../body-editor-extensions'
 import { blocksToDoc, docToBlocks, type DocNode } from '../body-blocks-doc'
 import { createPendingImage, isPendingImage, releasePendingImage, validateImageFile } from '../image-value'
+import { imageToJson } from '../structured-schema'
 import { ACCEPTED_IMAGE_TYPES } from '../api/upload'
 import BodyFigureView from './BodyFigureView.vue'
 
@@ -120,7 +121,17 @@ async function insertImage(event: Event) {
   imageError.value = validateImageFile(file) ?? ''
   if (imageError.value) return
   const pending = await createPendingImage(file)
-  e().insertContent({ type: 'figure', attrs: { image: pending, caption: '', wide: null } }).run()
+  // 🔴 **一定要過 `imageToJson`**，不可以把 `pending` 直接塞進 attrs（2026-11-12 修）。
+  //    它負責把這個欄位的形狀（`src-size`）掛在待上傳的圖上；少了它，上傳完成的圖以 API 的
+  //    `{blobPath,url,…}` 原樣存進去，而內文的圖前後台讀的都是 `src` —— 症狀是
+  //    「儲存成功，然後圖就不見了」：存檔後編輯器重新載入內容，那張圖沒有網址。
+  //    換圖（BodyFigureView）本來就有過這一道，漏的只有「插入」這條路。
+  // 🔴 **插在游標所在那一整塊的後面，不是游標的位置**（2026-11-12）。圖片只能放在最外層，
+  //    直接 `insertContent` 的話：游標在表格儲存格裡會把那一格的文字清掉（實測），
+  //    在段落中間會把段落切成兩段、而被改過的段落會丟掉 `runs`（決策 32）。
+  const sel = editor.value!.state.selection
+  const at = sel.$from.depth >= 1 ? sel.$from.after(1) : sel.to
+  e().insertContentAt(at, { type: 'figure', attrs: { image: imageToJson('src-size', pending, null), caption: '', wide: null } }).run()
 }
 
 function insertTable() {
