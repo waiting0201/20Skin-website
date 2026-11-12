@@ -91,3 +91,16 @@ export function caseLegacyBody(fields: Json): Block[] {
   if (s(n.testimonial)) out.push(...h2('個案自述'), ...p(s(n.testimonial)))
   return out
 }
+
+/**
+ * 療程的「原理」：`{heading, paragraphs[], image}` → 標題、各段、最後一張圖（2026-11-12）。
+ * ⚠️ 圖放在段落後面：舊版型是左文右圖，換成上下排之後圖在前面會把文字推到一屏以外。
+ */
+export function treatmentLegacyMechanism(fields: Json): Block[] {
+  const m = parse(fields.mechanism)
+  if (!m) return []
+  const paragraphs = strings(m.paragraphs).flatMap(p)
+  const image = figure(m.image)
+  if (!paragraphs.length && !image.length) return []
+  return [...h2(s(m.heading)), ...paragraphs, ...image]
+}

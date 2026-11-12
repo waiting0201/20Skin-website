@@ -140,6 +140,12 @@ export interface Treatment {
   facts?: TreatmentFact[]
   indicationsHeading?: string
   indications?: TreatmentIndication[]
+  /**
+   * 單一編輯器寫的原理（2026-11-12 起，Tim 指定）。**有內容時取代下面三個舊欄位**，
+   * 頁面改用文章內頁的區塊渲染（`BodyBlocks.vue`）。
+   * ⚠️ 空陣列＝還沒在新編輯器存過，退回舊的左右分欄。判斷要與 `AiChunker.TreatmentSections` 一致。
+   */
+  mechanismBody: ArticleBodyBlock[]
   mechanismHeading?: string
   mechanismParagraphs?: string[]
   mechanismImage?: ImageRef
@@ -191,6 +197,7 @@ const doctorHung: RelatedDoctor = {
 //    （docs/08 §C-1：「這 12 筆會長時間停在 Status=1」），草稿不匯出、也不產生頁面。
 //    前台原本那句「內容建置中」因此不再需要 —— 正式站不該有一個只寫著建置中的頁面。
 
+import type { ArticleBodyBlock } from './articles'
 import {
   REL, TERM, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, termLede, termsOf, type ContentRecord,
   seoOverridesOf,
@@ -224,6 +231,20 @@ const toImage = (value: unknown, fallbackAlt = ''): ImageRef => {
   return { src: i?.src ?? '', alt: i?.alt || fallbackAlt, width: i?.width ?? 0, height: i?.height ?? 0 }
 }
 
+const mechanismBodyOf = (record: ContentRecord): ArticleBodyBlock[] => {
+  const parsed = parseBlocks<unknown>(record.fields.mechanismBlocks, [])
+  return Array.isArray(parsed) ? (parsed as ArticleBodyBlock[]) : []
+}
+
+/** 區塊裡給人讀的文字（JSON-LD 的 howPerformed 用）。表格與圖說不算。 */
+export function bodyBlocksText(blocks: ArticleBodyBlock[]): string {
+  return blocks.flatMap((b) => {
+    if (b.type === 'list') return b.items
+    if (b.type === 'paragraph' || b.type === 'lead' || b.type === 'note') return [b.text]
+    return []
+  }).join(' ').trim()
+}
+
 function toTreatment(ctx: TreatmentContext, record: ContentRecord): Treatment {
   const f = record.fields
   const indexable = record.indexable
@@ -252,6 +273,7 @@ function toTreatment(ctx: TreatmentContext, record: ContentRecord): Treatment {
     facts: parseBlocks<TreatmentFact[]>(f.facts, []),
     indicationsHeading: indications?.heading ?? undefined,
     indications: indications?.items,
+    mechanismBody: mechanismBodyOf(record),
     mechanismHeading: mechanism?.heading ?? undefined,
     mechanismParagraphs: mechanism?.paragraphs,
     mechanismImage: mechanism?.image ? toImage(mechanism.image) : undefined,

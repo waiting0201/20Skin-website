@@ -11,7 +11,7 @@
 // 渲染 —— mockup/04-treatment-detail.html 原始碼裡「資料不足的療程請整節
 // 移除本區塊」的註記就是這樣要求的。沒有內容的療程一律顯示「內容建置中」
 // 提示＋預約 CTA，不編造適應症、原理或術後照護等醫療內容。
-import { getTreatment, getCategory, concernHref } from '~/data/treatments'
+import { getTreatment, getCategory, concernHref, bodyBlocksText } from '~/data/treatments'
 
 const route = useRoute()
 const categorySlug = route.params.category as string
@@ -34,7 +34,7 @@ const tocItems = computed(() => {
   const items: { href: string; label: string }[] = []
   if (treatment.facts?.length) items.push({ href: '#facts', label: '事實一覽' })
   if (treatment.indications?.length) items.push({ href: '#indications', label: '適應症' })
-  if (treatment.mechanismParagraphs?.length) items.push({ href: '#mechanism', label: '原理' })
+  if (treatment.mechanismBody.length || treatment.mechanismParagraphs?.length) items.push({ href: '#mechanism', label: '原理' })
   if (treatment.steps?.length) items.push({ href: '#process', label: '療程流程' })
   if (treatment.aftercare?.length) items.push({ href: '#aftercare', label: '術後照護' })
   if (treatment.precautionsList?.length) items.push({ href: '#precautions', label: '禁忌症' })
@@ -57,9 +57,16 @@ const procedureJsonLd: Record<string, unknown> = {
   '@type': 'MedicalProcedure',
   name: `${treatment.title}${treatment.nameEn ? `（${treatment.nameEn}）` : ''}`,
 }
-if (treatment.mechanismParagraphs?.length) {
-  procedureJsonLd.howPerformed = treatment.mechanismParagraphs.join(' ')
-}
+// 原理：單一編輯器的內文優先（2026-11-12），空的才退回舊的段落。與樣板下方的 v-if 同一個判斷。
+const mechanismText = treatment.mechanismBody.length
+  ? bodyBlocksText(treatment.mechanismBody)
+  : (treatment.mechanismParagraphs ?? []).join(' ')
+if (mechanismText) procedureJsonLd.howPerformed = mechanismText
+/** 編輯器的內文若不是以大標開頭，補一個預設標題 —— 否則這一區在頁面上沒有名字。 */
+const mechanismNeedsHeading = computed(() => {
+  const first = treatment.mechanismBody[0]
+  return Boolean(first) && !(first!.type === 'heading' && first!.level === 2)
+})
 if (treatment.steps?.length) {
   procedureJsonLd.preparation = treatment.steps.map((s) => `${s.title}：${s.desc}`).join(' ')
 }
@@ -89,7 +96,8 @@ usePageHead({
   seo: treatment.seo,
   title: treatment.title,
   description,
-  pageCss: '/assets/pages/04-treatment-detail.css',
+  // ⚠️ 07 是內文區塊（BodyBlocks）的樣式 —— 原理改用單一編輯器之後與文章共用（2026-11-12）。
+  pageCss: ['/assets/pages/04-treatment-detail.css', '/assets/pages/07-article-detail.css'],
   path: `/treatments/${category.slug}/${treatment.slug}/`,
   // ⚠️ 由 API 判斷，前台不自己算 —— sitemap 的收錄範圍讀同一個值
   //    （`functions/Common/Indexability.cs`）。兩邊分岔就會出現
@@ -207,7 +215,19 @@ usePageHead({
         </section>
 
         <!-- -- 原理 ------------------------------------------------------------ -->
-        <section v-if="treatment.mechanismParagraphs?.length" class="tdetail-block" id="mechanism">
+        <!-- 單一編輯器的內文（2026-11-12 起）。有內容就取代下面的左右分欄版型；
+             空的＝還沒在新編輯器存過，照舊渲染舊欄位。 -->
+        <section v-if="treatment.mechanismBody.length" class="tdetail-block" id="mechanism">
+          <div v-if="mechanismNeedsHeading" class="c-sechead">
+            <div class="c-sechead__text">
+              <h2>作用原理</h2>
+            </div>
+          </div>
+          <article class="article-content">
+            <BodyBlocks :blocks="treatment.mechanismBody" />
+          </article>
+        </section>
+        <section v-else-if="treatment.mechanismParagraphs?.length" class="tdetail-block" id="mechanism">
           <div class="c-sechead">
             <div class="c-sechead__text">
               <h2>{{ treatment.mechanismHeading }}</h2>

@@ -972,4 +972,18 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    ⚠️ **沒有資料 migration**：內文還是空的時候，後台打開那一筆會先把舊欄位換算進編輯器
    （`units/schemas/legacy-body.ts`），**存檔＋發布之後**才換成新版型。正式資料只有 acne 與一筆案例需要。
    ⚠️ `AiChunker.Version` 因此 4 → 5。
+   ✅ **療程的「原理」2026-11-12 併入**（Tim 選定方案 A）：多一欄 `Treatments.MechanismBlocks`
+   （migration `TreatmentMechanismBlocks`，只加欄位），後台同一個編輯器，前台 `#mechanism` 那一區改用 `BodyBlocks.vue`。
+   舊欄位 `Mechanism`（標題／段落／搭配圖）保留不刪、後台不再送；**新欄位是空陣列時前台與 AiChunker 退回舊的左右分欄**。
+   內文不是以大標開頭時前台補一個「作用原理」；JSON-LD 的 `howPerformed` 跟著新內文。`AiChunker.Version` 5 → 6。
+   ⚠️ 療程頁其餘區塊（適應症／流程／照護／禁忌症）仍是設計稿的卡片版型，沒有跟著換。正式資料只有 picosure-pro 有原理。
+   🔴 **編輯器每打一個字就重設整份文件**（同日修，`BodyBlocksEditor.vue`）：表單是 reactive 的，props 讀回來的是
+   發出去那個陣列的 proxy，`v === lastEmitted` 永遠 false → `setContent` → 游標被丟到文件結尾。
+   症狀是「在段落中間打字，只有第一個字在原位，其餘接到文章最後面」。比對一律 `toRaw`；由 check.mjs 的連續打字那一條把關。
+   🔴 **「已發布快照還在用哪些圖」原本掃不到內文裡的圖**（同日修，`CollectBlobPathsFromJson`）：快照的區塊欄位是
+   **JSON 字串**，掃描只走巢狀物件 —— 存一份草稿把內文的圖拿掉，線上還在用的檔案當場被刪。現在字串裡是 JSON 就再解開一層，
+   療程的舊欄位 `Mechanism` 也納入工作副本的引用清單。
+   ⚠️ 這個洞是在本機測「原理 → 還原」時踩到的：**刪掉了正式儲存體上 picosure-pro 原理的搭配圖**
+   （`2026/09/4a631bacc18fad7a498c93be94c8cdb5.jpg`，本機與正式共用儲存體）。原檔是 `mockup/assets/img/stock-clinical-hands.jpg`。
+   🔴 教訓：**本機任何「把帶圖的欄位清空或換掉再存檔／發布」的測試，刪的都是正式站的檔案** —— 決策 9 那句警告不只適用上傳。
 

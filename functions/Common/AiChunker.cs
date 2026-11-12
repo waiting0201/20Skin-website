@@ -50,9 +50,10 @@ public static class AiChunker
     /// <para>1：初版（2026-09-18）。2：據點的營業時間與地址獨立成塊（2026-10-01）。
     /// 3：療程專屬 FAQ 標上療程名稱、醫師空白欄位不輸出（2026-10-01）。
     /// 4：收錄範圍改用 <c>Indexability.IsAiEligible</c>，內容未寫完的療程也進語料（2026-10-02）。
-    /// 5：困擾與案例改讀 <c>bodyBlocks</c>（單一編輯器，2026-11-11），空的才退回舊的固定區。</para>
+    /// 5：困擾與案例改讀 <c>bodyBlocks</c>（單一編輯器，2026-11-11），空的才退回舊的固定區。
+    /// 6：療程的原理改讀 <c>mechanismBlocks</c>（單一編輯器，2026-11-12），空的才退回舊的 <c>mechanism</c>。</para>
     /// </summary>
-    public const int Version = 5;
+    public const int Version = 6;
 
     /// <summary>
     /// 主站舊文的權重（<c>fields.sourceSite == 1</c>，692 篇社群行銷貼文）。
@@ -287,7 +288,19 @@ public static class AiChunker
         yield return HeadedSection(f["indications"], "適應症", node =>
             Join(Items(node, "items").Select(i => $"{Text(i, "title")}：{Text(i, "desc")}")));
 
-        yield return HeadedSection(f["mechanism"], "療程原理", node => Join(Strings(node, "paragraphs")));
+        // 2026-11-12 起原理由單一編輯器維護（mechanismBlocks，與文章同一套區塊）。
+        // ⚠️ 判斷「有沒有」要與前台 `treatments.ts` 一致：陣列非空才算，否則退回舊的 mechanism。
+        // ⚠️ 沒有小標的開頭段落補上「療程原理」—— 這一塊混在療程的其他區段裡，
+        //    沒有標題的話檢索到了也看不出它在講原理。
+        if (HasBlocks(f["mechanismBlocks"]))
+        {
+            foreach (var section in BodyBlockSections(f["mechanismBlocks"], null))
+                yield return section.Heading.Length > 0 ? section : section with { Heading = "療程原理" };
+        }
+        else
+        {
+            yield return HeadedSection(f["mechanism"], "療程原理", node => Join(Strings(node, "paragraphs")));
+        }
 
         var duration = Text(f, "durationText");
         var sessions = Text(f, "sessionsText");

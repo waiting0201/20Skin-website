@@ -46,11 +46,19 @@ await step('登入後停在儀表板時，兩組都是收起來的', async () =>
   return `${await groups.count()} 組、全關`
 })
 
-section('療程：七個區塊 JSON 欄位')
+section('療程：六個區塊 JSON 欄位 ＋ 原理的編輯器')
 await step('開得起編輯頁', () => openEdit(page, 'treatment', ids.treatment))
-for (const label of ['規格數據列', '儀器／原廠資訊', '適應症', '原理', '療程流程', '術後照護', '禁忌症與注意事項']) {
+for (const label of ['規格數據列', '儀器／原廠資訊', '適應症', '療程流程', '術後照護', '禁忌症與注意事項']) {
   await step(`${label} → 表單`, () => assertStructured(page, label))
 }
+// Tim 指定 2026-11-12：原理比照文章內文改成單一編輯器（決策 32 的第四個欄位）。
+await step('原理是一個編輯器，不是「標題／段落／搭配圖」三格', async () => {
+  const field = fieldByLabel(page, '原理')
+  await field.locator('.adm-rte .ProseMirror').waitFor({ timeout: 20000 })
+  if (await field.locator('.adm-struct__row').count()) throw new Error('還有舊的區塊列')
+  if (await field.locator('.adm-struct__raw').count()) throw new Error('掉進原始 JSON 模式了')
+  return '是'
+})
 
 section('文章內文：單一編輯器')
 // Tim 指定 2026-11-11：「內文不要像現在這樣用分段的方式，要用一個編輯器就好」。
@@ -72,6 +80,17 @@ await step('既有內容載得進來（有段落、有標題）', async () => {
   const figs = await pm.locator('.adm-rte-figure').count()
   if (!ps) throw new Error('一個段落都沒有——內容沒有載進編輯器')
   return `段落 ${ps}・標題 ${hs}・圖片 ${figs}`
+})
+// 🔴 2026-11-12 前每打一個字編輯器就重設整份文件、游標被丟到文章結尾（BodyBlocksEditor 的
+//    proxy 比對）：只有第一個字落在原位。這裡不儲存，打完就離開。
+await step('🔴 在段落中間連續打字，字都落在游標所在的那一段', async () => {
+  const p = fieldByLabel(page, '內文').locator('.ProseMirror > p').first()
+  await p.scrollIntoViewIfNeeded()
+  await p.click()
+  await page.keyboard.type('ABCDEF測試')
+  await page.waitForTimeout(400)
+  if (!(await p.innerText()).includes('ABCDEF測試')) throw new Error('打的字沒有連續落在同一段——游標跳走了')
+  return '連續'
 })
 await step('🔴 工具列沒有粗體／斜體／連結（前台的段落是純文字，決策 17）', async () => {
   const bar = fieldByLabel(page, '內文').locator('.adm-rte__toolbar')

@@ -307,4 +307,31 @@ public class AiChunkerTests
         var text = string.Join("\n", Chunk(ContentType.Doctor, json).Select(c => c.Text));
         Assert.Contains(expected, text);
     }
+
+    [Fact]
+    public void 療程原理_有編輯器內文就只讀它_沒有小標的開頭補上療程原理()
+    {
+        // 2026-11-12：原理改成單一編輯器（mechanismBlocks）。判斷要與前台 treatments.ts 一致。
+        const string json = """
+            {"title":"皮秒","summary":"簡述","fields":{
+              "mechanism":"{\"heading\":\"舊標題\",\"paragraphs\":[\"舊版型的段落不該出現\"]}",
+              "mechanismBlocks":"[{\"type\":\"paragraph\",\"text\":\"沒有小標的開頭段落\"},{\"type\":\"heading\",\"level\":2,\"text\":\"蜂巢透鏡\"},{\"type\":\"paragraph\",\"text\":\"新內文的第二段\"}]"}}
+            """;
+        var text = string.Join("\n", Chunk(ContentType.Treatment, json).Select(c => c.Text));
+        Assert.Contains("沒有小標的開頭段落", text);
+        Assert.Contains("新內文的第二段", text);
+        Assert.Contains("療程原理", text);
+        Assert.DoesNotContain("舊版型的段落不該出現", text);
+    }
+
+    [Fact]
+    public void 療程原理_編輯器內文是空的_退回舊欄位()
+    {
+        const string json = """
+            {"title":"皮秒","summary":"簡述","fields":{
+              "mechanism":"{\"heading\":\"舊標題\",\"paragraphs\":[\"舊版型的段落\"]}",
+              "mechanismBlocks":null}}
+            """;
+        Assert.Contains("舊版型的段落", string.Join("\n", Chunk(ContentType.Treatment, json).Select(c => c.Text)));
+    }
 }

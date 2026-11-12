@@ -3021,6 +3021,9 @@ namespace Skin20.Api.Data.Migrations
                     b.Property<string>("Mechanism")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("MechanismBlocks")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("NameEn")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");

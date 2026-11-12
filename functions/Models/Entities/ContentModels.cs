@@ -22,8 +22,18 @@ public sealed class Treatment : ContentItem
     /// <summary>適應症。</summary>
     public string? Indications { get; set; }
 
-    /// <summary>原理。</summary>
+    /// <summary>原理（舊版型：<c>{heading, paragraphs[], image}</c>）。</summary>
     public string? Mechanism { get; set; }
+
+    /// <summary>
+    /// 原理的內文（JSON 區塊陣列，與 <see cref="Article.BodyBlocks"/> 同一套形狀）。
+    /// <para>
+    /// 2026-11-12 起後台以單一編輯器維護原理（Tim 指定），取代上面那一欄的固定版型。
+    /// ⚠️ <see cref="Mechanism"/> <b>保留不刪</b>：這一欄為空時前台與 AiChunker 退回舊版型，
+    /// 而 CI 是先遷移後部署，中間那一段新 schema 配舊程式也要讀得到東西。
+    /// </para>
+    /// </summary>
+    public string? MechanismBlocks { get; set; }
 
     /// <summary>療程時間。</summary>
     public string? DurationText { get; set; }

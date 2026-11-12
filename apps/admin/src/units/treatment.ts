@@ -6,9 +6,10 @@ import {
   treatmentAftercareSchema,
   treatmentContraindicationsSchema,
   treatmentIndicationsSchema,
-  treatmentMechanismSchema,
   treatmentStepsSchema,
 } from './schemas/treatment'
+import { bodyBlocksSchema } from './schemas/article'
+import { treatmentLegacyMechanism } from './schemas/legacy-body'
 
 export const treatmentUnit: UnitDefinition = {
   key: 'treatment',
@@ -44,7 +45,19 @@ export const treatmentUnit: UnitDefinition = {
     //    API 那頭本來就允許 null，這道門檻是後台自己加的。
     //    ⚠️ 提示留著：空著不會擋存檔，但前台那一區整段不渲染。
     { key: 'indications', label: '適應症', type: 'structured', group: '療程內容', hint: '建議填寫：空著的話，療程頁不會出現「適應症」這一區。', structured: treatmentIndicationsSchema },
-    { key: 'mechanism', label: '原理', type: 'structured', group: '療程內容', structured: treatmentMechanismSchema },
+    // 🔴 原理＝單一編輯器（Tim 指定 2026-11-12，與困擾、案例的內文同一套，決策 32），
+    //    取代原本的「區段標題／段落／搭配圖」三格。舊欄位 `mechanism` **不在畫面上、也不再送出**，
+    //    資料庫裡的舊值留著：`mechanismBlocks` 是空的時候前台與 AiChunker 退回舊的左右分欄版型。
+    //    還沒在編輯器存過的那一筆，打開時先帶入舊欄位換算出來的區塊，存檔＋發布後才生效。
+    {
+      key: 'mechanismBlocks',
+      label: '原理',
+      type: 'structured',
+      group: '療程內容',
+      structured: bodyBlocksSchema,
+      legacyValue: treatmentLegacyMechanism,
+      hint: '空著的話，療程頁不會出現「原理」這一區。',
+    },
     // ⚠️ 這兩格**療程頁上不顯示**（頁面上的時間與次數是下方「規格數據列」裡的列），
     //    讀它們的是 AI 問答的語料（functions/Common/AiChunker.cs）。hint 要講清楚，
     //    不然就是「填了、發布了、頁面沒變」（tools/admin-e2e/field-effect.mjs 2026-11-12 查到）。

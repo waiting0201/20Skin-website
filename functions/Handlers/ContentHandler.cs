@@ -1437,7 +1437,7 @@ public sealed class ContentHandler(
     }
 
     /// <summary>
-    /// 區塊內文欄位（<c>Article</c>／<c>Concern</c>／<c>Case</c>／<c>Page</c> 的 <c>BodyBlocks</c>）的讀取。
+    /// 區塊內文欄位（<c>Article</c>／<c>Concern</c>／<c>Case</c>／<c>Page</c> 的 <c>BodyBlocks</c>、<c>Treatment.MechanismBlocks</c>）的讀取。
     ///
     /// <para>
     /// 🔴 <b>這一欄的讀與寫原本不對稱，而那會把內文毀掉。</b>
@@ -1626,6 +1626,7 @@ public sealed class ContentHandler(
         ["subtitle"] = t.Subtitle,
         ["indications"] = t.Indications,
         ["mechanism"] = t.Mechanism,
+        ["mechanismBlocks"] = t.MechanismBlocks,
         ["durationText"] = t.DurationText,
         ["sessionsText"] = t.SessionsText,
         ["aftercare"] = t.Aftercare,
@@ -1651,6 +1652,8 @@ public sealed class ContentHandler(
         if (f.TryGetProperty("subtitle", out _)) t.Subtitle = JStr(f, "subtitle");
         if (f.TryGetProperty("indications", out _)) t.Indications = JStr(f, "indications");
         if (f.TryGetProperty("mechanism", out _)) t.Mechanism = JStr(f, "mechanism");
+        if (f.TryGetProperty("mechanismBlocks", out var mechanismEl))
+            t.MechanismBlocks = ReadBodyBlocks(mechanismEl, JsonValueKind.Array, "療程原理");
         if (f.TryGetProperty("durationText", out _)) t.DurationText = JStr(f, "durationText");
         if (f.TryGetProperty("sessionsText", out _)) t.SessionsText = JStr(f, "sessionsText");
         if (f.TryGetProperty("aftercare", out _)) t.Aftercare = JStr(f, "aftercare");
@@ -2131,6 +2134,9 @@ public sealed class ContentHandler(
             case Treatment t:
                 Add(t.Cover);
                 foreach (var i in t.Images) Add(i.Image);
+                // 原理：新內文與舊版型兩欄都算 —— 新內文是空的時候前台渲染的是舊欄位裡那張搭配圖。
+                CollectBlobPathsFromJson(t.MechanismBlocks, paths);
+                CollectBlobPathsFromJson(t.Mechanism, paths);
                 break;
             case Doctor d:
                 Add(d.Photo);
@@ -2162,7 +2168,7 @@ public sealed class ContentHandler(
         return paths;
     }
 
-    private static void CollectBlobPathsFromJson(string? json, List<string> into)
+    internal static void CollectBlobPathsFromJson(string? json, List<string> into)
     {
         if (string.IsNullOrWhiteSpace(json)) return;
 
@@ -2194,6 +2200,27 @@ public sealed class ContentHandler(
                     break;
                 case JsonValueKind.Array:
                     foreach (var item in el.EnumerateArray()) Walk(item);
+                    break;
+                case JsonValueKind.String:
+                    // 🔴 **字串裡如果是 JSON，要再解開一層**（2026-11-12 修）。版本快照的 `fields` 裡，
+                    //    區塊欄位（bodyBlocks、mechanismBlocks、narrative、mechanism…）是**JSON 字串**，
+                    //    不是巢狀物件 —— 不解開的話，「已發布快照還在用哪些圖」永遠掃不到內文裡的圖：
+                    //    在後台存一份草稿把內文的圖拿掉，線上那一版還在渲染它，檔案卻當場被刪。
+                    //    （本機測試療程原理的還原步驟時實際刪掉了正式儲存體上的一張圖 —— 本機與正式共用儲存體。）
+                    //    多解析只會讓「仍被引用」的集合變大，方向是少刪，不是多刪。
+                    var text = el.GetString();
+                    if (text is { Length: > 1 } && (text[0] == '{' || text[0] == '['))
+                    {
+                        try
+                        {
+                            using var nested = JsonDocument.Parse(text);
+                            Walk(nested.RootElement);
+                        }
+                        catch (JsonException)
+                        {
+                            // 只是長得像 JSON 的一般文字，略過。
+                        }
+                    }
                     break;
             }
         }

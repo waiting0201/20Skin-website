@@ -12,7 +12,7 @@
 //    否則每打開一篇沒動過的文章，表單值都會被換算一次 —— 換算若有任何偏差，
 //    那一篇按下「儲存」（例如只改了 SEO）就會被寫掉。
 
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch, toRaw } from 'vue'
 import { Editor, EditorContent, VueNodeViewRenderer } from '@tiptap/vue-3'
 import { createBodyExtensions } from '../body-editor-extensions'
 import { blocksToDoc, docToBlocks, type DocNode } from '../body-blocks-doc'
@@ -51,8 +51,13 @@ editor.value = new Editor({
   onTransaction: () => { tick.value++ },
 })
 
+// 🔴 **比對一定要 `toRaw`**（2026-11-12 修）。表單是 reactive 的，發出去的陣列存進去之後，
+//    從 props 讀回來的是它的 **proxy** —— `v === lastEmitted` 永遠是 false，於是每打一個字
+//    就 `setContent` 重設整份文件，游標被丟到文件結尾：在段落中間打字，只有第一個字落在原位，
+//    其餘全部接到文章最後面。typecheck、build、兩支 round-trip 都看不到，
+//    由 tools/admin-e2e/check.mjs 的「在段落中間連續打字」把關。
 watch(() => props.modelValue, (v) => {
-  if (v === lastEmitted || !editor.value) return
+  if (toRaw(v) === toRaw(lastEmitted) || !editor.value) return
   editor.value.commands.setContent(blocksToDoc(v), false)
 })
 watch(() => props.disabled, (d) => editor.value?.setEditable(!d))
