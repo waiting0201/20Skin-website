@@ -52,6 +52,9 @@ const canCreateGeneric = computed(() => {
   // ⚠️ term 的新增權限分兩種（標籤／分類），只要其中一種有就給按鈕 ——
   //    對話框裡的「型別」下拉會依權限只列出建得出來的那幾種。
   if (props.unit === 'term') return canCreateTerm(permCtx, true) || canCreateTerm(permCtx, false)
+  // 🔴 頁面不給新增（Tim 指定 2026-11-12）。前台沒有「任意自由頁」的樣板 —— 六個自由頁
+  //    各有自己的路由與版型，新增一筆只會得到一個打開是 404 的網址。API 的建立端點留著。
+  if (props.unit === 'page') return false
   return canEdit.value
 })
 
