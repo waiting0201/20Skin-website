@@ -130,7 +130,7 @@ export interface Clinic {
 //    它們由設計稿決定，不是院方會在後台改的內容（見 _presentation.ts 的分類原則）。
 //    真正的內容（地址、電話、門診時段、交通資訊、照片、介紹）都在資料庫。
 
-import { REL, UNIT, img, loadUnit, parseBlocks, relationsOf, seoOverridesOf, type ContentRecord } from './_content'
+import { REL, TERM, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termsOf, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
 // ⚠️ CLINIC_NAP 已在檔案上方 import 過（2026-09-11 搬遷時這裡多了一份重複的）。
 //    Vite 會把相同的 import 去重，所以前台建置一直是綠的，但在標準 ES module
@@ -206,7 +206,33 @@ const toPhoto = (value: unknown, caption: string, fallbackAlt: string): ClinicPh
   return { src: i?.src ?? '', width: i?.width ?? 0, height: i?.height ?? 0, alt: i?.alt || fallbackAlt, caption }
 }
 
-function toClinic(faqs: ContentRecord[], nap: Awaited<ReturnType<typeof getClinicNap>>, record: ContentRecord): Clinic {
+/**
+ * 據點頁「本院區可提供的療程」：後台據點的「可提供療程」關聯，依療程分類分組。
+ *
+ * 🔴 2026-11-12 前這一區**永遠不會出現** —— 樣板與 JSON-LD 的 `availableService` 都寫好了，
+ *    但沒有任何地方把關聯組成 `treatmentGroups`，後台挑了、發布了，據點頁一個字都不會變。
+ * ⚠️ 分類從關聯目標的網址讀（`/treatments/{分類}/{療程}/`），不另外載整個療程單元 ——
+ *    首頁也會呼叫 getClinics()，SSR 取過的東西全部會進 payload（決策 14）。
+ * ⚠️ 還沒發布的療程沒有網址，不列（列了只會是一個點不進去的標籤）。
+ *    分組順序跟著分類的排序，組內順序跟著後台挑選器裡的順序。
+ */
+function treatmentGroupsOf(categories: ContentRecord[], record: ContentRecord): ClinicTreatmentGroup[] {
+  const groups = new Map<string, ClinicTreatmentGroup>()
+  for (const r of relationsOf(record, REL.clinicToTreatment).slice().sort((a, b) => a.sortOrder - b.sortOrder)) {
+    const m = /^\/treatments\/([^/]+)\/([^/]+)\/$/.exec(r.toUrlPath ?? '')
+    const categorySlug = m?.[1]
+    const slug = m?.[2]
+    if (!categorySlug || !slug || !r.toIsPublished) continue
+    const category = categories.find((t) => t.slug === categorySlug)
+    if (!category) continue
+    const group = groups.get(categorySlug) ?? { categoryLabel: category.title, categorySlug: categorySlug as TreatmentCategorySlug, items: [] }
+    group.items.push({ label: r.toTitle ?? '', slug })
+    groups.set(categorySlug, group)
+  }
+  return categories.map((t) => groups.get(t.slug as string)).filter((g): g is ClinicTreatmentGroup => Boolean(g))
+}
+
+function toClinic(faqs: ContentRecord[], nap: Awaited<ReturnType<typeof getClinicNap>>, categories: ContentRecord[], record: ContentRecord): Clinic {
   const f = record.fields
   const slug = record.slug as ClinicSlug
   const look = PRESENTATION[slug] ?? {
@@ -246,6 +272,7 @@ function toClinic(faqs: ContentRecord[], nap: Awaited<ReturnType<typeof getClini
     longitude: (f.longitude as number) || undefined,
     heroPhoto: toPhoto(photos[0]?.image, photos[0]?.caption ?? '', record.title),
     galleryPhotos: photos.slice(1).map((p) => toPhoto(p.image, p.caption ?? '', record.title)),
+    treatmentGroups: treatmentGroupsOf(categories, record),
     transportInfo: parseBlocks<ClinicTransportStep[]>(f.transportInfo, []),
     businessHours: hours.map((h) => ({
       day: h.dayOfWeek as ClinicBusinessHour['day'],
@@ -288,7 +315,8 @@ export async function getClinicOptions(): Promise<{ slug: ClinicSlug; name: stri
 }
 
 export async function getClinics(): Promise<Clinic[]> {
-  const [clinics, nap] = await Promise.all([loadUnit(UNIT.clinic), getClinicNap()])
+  const [clinics, nap, terms] = await Promise.all([loadUnit(UNIT.clinic), getClinicNap(), loadCategoryTerms()])
+  const categories = termsOf(terms, TERM.treatmentCategory)
   // 🔴 只取被院區關聯到的那幾題 FAQ，不要 `loadUnit(UNIT.faq)`（2026-10-02）——
   //    首頁與據點頁都會呼叫這一支，整個 FAQ 單元（gzip 5 KB）跟著進 hydration payload，
   //    而兩個院區合計只關聯了幾題。
@@ -297,7 +325,7 @@ export async function getClinics(): Promise<Clinic[]> {
   return clinics
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
-    .map((record) => toClinic(faqs, nap, record))
+    .map((record) => toClinic(faqs, nap, categories, record))
 }
 
 export async function findClinic(slug: string): Promise<Clinic | undefined> {

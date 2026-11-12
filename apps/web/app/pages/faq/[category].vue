@@ -32,6 +32,7 @@ usePageHead({
   description: `門診中最常被問到、與「${category.label}」有關的 ${items.length} 則問題，並標註更新月份。`,
   pageCss: '/assets/pages/16-faq.css',
   path: `/faq/${category.slug}/`,
+  seo: category.seo,
   jsonLd: [
     breadcrumbJsonLd([
       { label: '首頁', href: '/' },

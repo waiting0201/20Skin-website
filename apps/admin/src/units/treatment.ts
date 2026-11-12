@@ -45,8 +45,11 @@ export const treatmentUnit: UnitDefinition = {
     //    ⚠️ 提示留著：空著不會擋存檔，但前台那一區整段不渲染。
     { key: 'indications', label: '適應症', type: 'structured', group: '療程內容', hint: '建議填寫：空著的話，療程頁不會出現「適應症」這一區。', structured: treatmentIndicationsSchema },
     { key: 'mechanism', label: '原理', type: 'structured', group: '療程內容', structured: treatmentMechanismSchema },
-    { key: 'durationText', label: '療程時間', type: 'text', group: '療程內容' },
-    { key: 'sessionsText', label: '建議次數', type: 'text', group: '療程內容' },
+    // ⚠️ 這兩格**療程頁上不顯示**（頁面上的時間與次數是下方「規格數據列」裡的列），
+    //    讀它們的是 AI 問答的語料（functions/Common/AiChunker.cs）。hint 要講清楚，
+    //    不然就是「填了、發布了、頁面沒變」（tools/admin-e2e/field-effect.mjs 2026-11-12 查到）。
+    { key: 'durationText', label: '療程時間', type: 'text', group: '療程內容', hint: '給站內 AI 問答引用，療程頁上不顯示。頁面上要出現請填在下方的「規格數據列」。' },
+    { key: 'sessionsText', label: '建議次數', type: 'text', group: '療程內容', hint: '給站內 AI 問答引用，療程頁上不顯示。頁面上要出現請填在下方的「規格數據列」。' },
     { key: 'steps', label: '療程流程', type: 'structured', group: '療程內容', hint: '當天會發生什麼事。與「原理」（為什麼有效）是細節頁上兩個不同的區塊。', structured: treatmentStepsSchema },
     { key: 'aftercare', label: '術後照護', type: 'structured', group: '療程內容', structured: treatmentAftercareSchema },
     {

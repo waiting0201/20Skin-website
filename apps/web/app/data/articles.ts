@@ -31,6 +31,8 @@ export interface ArticleCategory {
   eyebrow: string
   /** 分類 Hero 的一句話說明。目前只有醫美新知有 mockup 原文（06-blog-list.html）。 */
   description: string
+  /** 後台 SEO 區塊的覆寫（2026-11-12 前分類的 SEO 設定前台不讀）。 */
+  seo: ReturnType<typeof seoOverridesOf>
 }
 
 /** 四個分類 slug 為定案值（docs/01-sitemap.md §1、CLAUDE.md）。 */
@@ -52,6 +54,7 @@ export async function getArticleCategories(): Promise<ArticleCategory[]> {
     // 英文小標由設計稿決定（見 _presentation.ts）。
     eyebrow: eyebrowFor(t.slug as string),
     description: termLede(t),
+    seo: seoOverridesOf(t),
   }))
 }
 

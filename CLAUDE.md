@@ -213,6 +213,8 @@ VERIFY_BASE_URL=http://localhost:3000 pnpm --filter web verify:links            
 # 後台端到端（改完後台畫面一定要跑，需要三個服務都起來，說明見 tools/admin-e2e/README.md）
 node tools/admin-e2e/check.mjs         # 🟢 唯讀：畫面、表單、摺疊列、console
 node tools/admin-e2e/publish-flow.mjs  # 🔴 會改資料：改一筆 → 發布 → 驗前台 → 還原
+# 🔴 會改資料、只能對本機：每個文字欄位蓋記號 → 發布 → 爬前台 → 還原（改了後台欄位一定要跑，決策 33 ⑦）
+node --experimental-strip-types --import ./tools/content-roundtrip/register.mjs tools/admin-e2e/field-effect.mjs
 
 # API 煙霧測試（改完 API 或後台資料層一定要跑，說明見 tools/api-smoke/README.md）
 node tools/api-smoke/read.mjs                  # 唯讀，可對任何環境跑
@@ -903,6 +905,15 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    ⑥ **系統選單再收兩項**：「FAQ／語料匯出」不出現在選單（純預覽，網址 `/admin/export` 仍打得開，給工程端用）；
       「sitemap 設定」只有超級管理員看得到（整包技術參數＋robots.txt，改錯會擋掉爬蟲）。
       301 轉址管理照舊（本來就只有超級管理員有權限）。功能與資料都沒動。
+   ⑦ **`tools/admin-e2e/field-effect.mjs` 把關這一整條**（2026-11-12 加）：把九個單元每個文字欄位蓋上唯一記號 →
+      儲存 → 發布 → 爬前台，回報哪些記號沒出現，最後還原。🔴 **會改資料，只能對本機資料庫跑**（腳本自己會擋）。
+      **新增或改動後台欄位之後要跑** —— typecheck、build、round-trip、check.mjs 都看不到「存得進去、前台不讀」。
+      第一次跑查到並修掉的：品牌理念頁與三種分類頁沒有套用後台的 SEO 設定；FAQ 題目與文章標籤的 SEO 區塊無處生效（後台不再顯示）；
+      「AI 摘要」只有困擾與文章的頁面會輸出（其餘單元不再顯示，已有值的照樣顯示）；醫師的「看診時段」表前台不讀（拿掉，
+      時段說明改在據點「駐診醫師」的備註欄，那一欄原本沒開）；據點的「可提供療程」挑了不顯示（前台接上，依療程分類分組）；
+      沒填摘要的內容存檔後由 NULL 變成空字串。
+      ⚠️ 刻意不顯示的欄位列在腳本的 `EXPECTED_HIDDEN`，**加一條之前先確認真的有別的地方在讀它**。
+      ⚠️ 本機 `nuxt dev` 下 `/team/` 可能回 500：那是 `import.meta.dev` 的檢查（寫死的四個專長詞在本機資料裡找不到），正式站不會丟。
    ⚠️ FAQ 沒有摘要欄位是對的：前台不讀 FAQ 的摘要。
 
 ## 待客戶或主機商提供

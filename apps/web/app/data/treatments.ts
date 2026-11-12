@@ -37,6 +37,8 @@ export interface TreatmentCategory {
   lede: string
   /** 分類代表圖，與總覽頁「四大分類」卡片共用同一張（12-treatment-overview.html §2）。 */
   image: ImageRef
+  /** 後台 SEO 區塊的覆寫。分類頁一律傳給 usePageHead（2026-11-12 前分類的 SEO 設定前台不讀）。 */
+  seo: ReturnType<typeof seoOverridesOf>
   /** 實數，見 docs/06-page-inventory.md §3。 */
   count: number
   /** 總覽頁分類卡片下方的代表項目 chips（12-treatment-overview.html §2 原文）。 */
@@ -339,6 +341,7 @@ export async function getTreatmentCategories(): Promise<TreatmentCategory[]> {
       // 英文小標由設計稿決定，不進資料庫（見 _presentation.ts）。
       eyebrow: eyebrowFor(term.slug as string),
       lede: termLede(term),
+      seo: seoOverridesOf(term),
       image: toImage(term.fields.cover, term.title),
       // 數量由查詢算出，不是另存一份會過期的數字。
       count: items.length,

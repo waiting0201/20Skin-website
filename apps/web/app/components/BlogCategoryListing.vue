@@ -104,6 +104,9 @@ usePageHead({
   description: `20SKIN 美醫集團${category.label}——${category.description}`,
   pageCss: '/assets/pages/06-blog-list.css',
   path: hrefFor(paged.page),
+  // ⚠️ 標題與描述的覆寫只套在第 1 頁 —— 第 2 頁以後套同一個標題，搜尋結果會出現一排同名頁面。
+  //    noindex 則每一頁都要跟。
+  seo: props.page === 1 ? category.seo : (category.seo ? { noIndex: category.seo.noIndex } : null),
   jsonLd: [
     {
       '@context': 'https://schema.org',

@@ -147,6 +147,8 @@ export async function getAboutPage() {
     /** 團隊人數。醫師單元取不到東西時是 0／0，樣板據此不輸出那一句。 */
     teamCounts: { total: doctors.length, physicians: physicianCount, others: doctors.length - physicianCount },
     clinics: clinics.length > 0 ? clinics : about.clinics ?? [],
+    /** 後台 SEO 區塊的覆寫。🔴 2026-11-12 前這一頁沒有傳，品牌理念的搜尋結果標題與摘要改了不生效。 */
+    seo: seoOverridesOf(index.get('about')),
   }
 }
 

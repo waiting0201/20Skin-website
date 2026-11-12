@@ -204,7 +204,8 @@ export function fieldsToServer(
     const value = adminFields[field.key]
 
     if (field.key === 'summary') {
-      summary = value === null || value === undefined ? null : String(value)
+      // ⚠️ 空的送 null 不送 ''：沒填過摘要的那幾筆（頁面、多數醫師）存檔後不該從 NULL 變成空字串。
+      summary = value === null || value === undefined || String(value).trim() === '' ? null : String(value)
       continue
     }
 

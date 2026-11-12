@@ -67,32 +67,11 @@ export const doctorUnit: UnitDefinition = {
     //    「著作與演講」）。2026-09-18 之前後台叫「著作」、前台叫「媒體報導與演講授課」
     //    —— 同一份資料兩個名字，院方看不出它會出現在哪裡。**改一邊就要改另一邊。**
     { key: 'publications', label: '著作與演講', type: 'structured', group: '簡介', structured: doctorPublicationsSchema, hint: '顯示在醫師個人頁的「著作與演講」區。' },
-    {
-      key: 'schedules',
-      label: '看診時段',
-      type: 'repeater',
-      group: '看診資訊',
-      hint: '這位醫師在各據點的看診時段。',
-      repeaterFields: [
-        { key: 'clinicId', label: '看診據點', type: 'relation-single', relationUnit: 'clinic' },
-        {
-          key: 'dayOfWeek',
-          label: '星期',
-          type: 'select',
-          options: [
-            { value: '1', label: '週一' },
-            { value: '2', label: '週二' },
-            { value: '3', label: '週三' },
-            { value: '4', label: '週四' },
-            { value: '5', label: '週五' },
-            { value: '6', label: '週六' },
-            { value: '0', label: '週日' },
-          ],
-        },
-        { key: 'startTime', label: '開始時間', type: 'time' },
-        { key: 'endTime', label: '結束時間', type: 'time' },
-      ],
-    },
+    // 🔴 沒有「看診時段」那張表（2026-11-12 拿掉，field-effect.mjs 查到的）。
+    //    前台從來不讀 `DoctorSchedules`：醫師在哪個院區看診、該院區的時段說明，
+    //    讀的是**據點那一端**的「駐診醫師」關聯與它的備註（apps/web/app/data/doctors.ts）。
+    //    在這裡逐列填星期與時間，存得進去，個人頁與據點頁一個字都不會變。正式資料 0 列。
+    //    資料表與 API 欄位留著；不在這裡宣告＝存檔時不送，API 不會動它。
   ],
   relations: [
     // RelationType=1（療程→醫師）從療程端維護；這裡是唯讀的反向顯示，

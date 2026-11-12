@@ -37,7 +37,11 @@ export const clinicUnit: UnitDefinition = {
     { key: 'photos', label: '照片', type: 'gallery', group: '圖片' },
   ],
   relations: [
-    { key: 'doctors', label: '駐診醫師', relationType: 8, targetUnit: 'doctor', sortable: true, editable: true },
+    // 🔴 備註＝這位醫師在這個院區的時段說明，前台顯示在據點頁與醫師個人頁的「本院區時段」。
+    //    2026-11-12 前這裡沒有開備註欄，那句話後台改不到。醫師那一端沒有門診表（見 doctor.ts）。
+    { key: 'doctors', label: '駐診醫師', relationType: 8, targetUnit: 'doctor', sortable: true, editable: true,
+      hasNote: true, noteLabel: '本院區時段（例：週一、三、五 上午）' },
+    // 據點頁「本院區可提供的療程」那一區，依療程分類分組（2026-11-12 接上，之前挑了不會顯示）。
     { key: 'treatments', label: '可提供療程', relationType: 9, targetUnit: 'treatment', sortable: true, editable: true },
     { key: 'faqs', label: '關聯 FAQ', relationType: 10, targetUnit: 'faq', sortable: true, editable: true },
   ],

@@ -99,6 +99,28 @@ const canEditSeo = computed(() => can(permCtx, props.unit, 'seo'))
  *    清空後按儲存，`record` 換新，欄位才收起來，那是預期行為。
  */
 const showStructuredData = computed(() => Boolean(record.value?.seo.structuredDataOverride?.trim()))
+
+/**
+ * 🔴 **SEO 區塊只出現在「有自己的頁面、而且那一頁會讀它」的內容上**（2026-11-12，
+ *    `tools/admin-e2e/field-effect.mjs` 查到的）。兩種內容沒有：
+ *    - FAQ 題目：沒有單獨的頁面，題目只出現在 /faq/ 與各分類頁裡；
+ *    - 文章標籤（分類與標籤的型別 4）：標籤頁的標題與描述是固定句型，而且一律不給搜尋引擎收錄。
+ *    在這兩種上面填搜尋結果標題、摘要、分享縮圖，存得進去，前台一個字都不會變。
+ *    ⚠️ 藏的是入口，`PUT …/seo` 與既有資料都沒動。
+ */
+const showSeoBlock = computed(() => {
+  if (props.unit === 'faq') return false
+  if (props.unit === 'term' && String(record.value?.fields.termType) === '4') return false
+  return true
+})
+
+/**
+ * 🔴 **「AI 摘要」只有肌膚困擾與文章的頁面會輸出**（困擾頁標題下那一段、文章的導言）。
+ *    其餘單元的樣板不讀它，API 與 AI 語料也不讀 —— 填了不會有任何效果。
+ *    ⚠️ 已經有值的那一筆照樣顯示（理由同 showStructuredData：看得到才清得掉）。
+ */
+const showAiSummary = computed(() =>
+  props.unit === 'concern' || props.unit === 'article' || Boolean(record.value?.seo.aiSummary?.trim()))
 const canPublish = computed(() => can(permCtx, props.unit, 'publish'))
 const canDelete = computed(() => {
   if (record.value?.isSystemLocked) return false
@@ -852,7 +874,7 @@ async function removeRecord() {
       </div>
 
       <!-- ============================ 共用 SEO 區塊 ============================ -->
-      <form id="adm-seo-form" class="adm-card" @submit.prevent="saveSeo">
+      <form v-if="showSeoBlock" id="adm-seo-form" class="adm-card" @submit.prevent="saveSeo">
         <p class="adm-fieldset__legend">SEO（共用區塊）</p>
         <div class="adm-field-grid">
           <div class="adm-field adm-field--span2" data-error-key="seoTitle">
@@ -866,12 +888,12 @@ async function removeRecord() {
             <p v-if="seoErrors.metaDescription" class="adm-field__error" role="alert">{{ seoErrors.metaDescription }}</p>
             <p class="adm-field__count">{{ (seoForm.metaDescription ?? '').length }} ／ 400 字</p>
           </div>
-          <div class="adm-field adm-field--span2" data-error-key="aiSummary">
+          <div v-if="showAiSummary" class="adm-field adm-field--span2" data-error-key="aiSummary">
             <label class="adm-field__label">AI 摘要（40–60 字，直接回答問題的一段話）</label>
             <textarea v-model="seoForm.aiSummary" class="adm-textarea" :class="{ 'is-invalid': seoErrors.aiSummary }" :disabled="!canEditSeo" maxlength="300" />
             <p v-if="seoErrors.aiSummary" class="adm-field__error" role="alert">{{ seoErrors.aiSummary }}</p>
             <p class="adm-field__hint">
-              GEO 策略落地欄位；渲染在頁面最上方，同時輸出至結構化資料。
+              顯示在頁面標題下方最前面的那一段，同時輸出至結構化資料。
               <!-- ⚠️ 兩個數字不一樣，不是筆誤：40–60 是 GEO 的建議值（docs/03 §4），
                    20–300 是 API 真的會擋下來的範圍（ContentHandler.UpdateSeoAsync）。 -->
               填了就必須介於 20–300 字，留空則不輸出。
@@ -918,7 +940,7 @@ async function removeRecord() {
       </form>
       <!-- ⚠️ 儲存 SEO 在白底卡片**外面**、靠右，與上方的「儲存本文」同一條規則：
            按鈕是這一段的結尾，不是下一段的開頭。同樣靠 `form=` 綁回表單。 -->
-      <div v-if="canEditSeo" class="adm-form-actions">
+      <div v-if="canEditSeo && showSeoBlock" class="adm-form-actions">
         <span v-if="seoDirty" class="adm-muted">有尚未儲存的變更</span>
         <button type="submit" form="adm-seo-form" class="btn btn--save" :disabled="savingSeo">
           <template v-if="savingSeo">儲存中…</template>

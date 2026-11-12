@@ -3,7 +3,7 @@
 import { getAboutPage } from '~/data/pages'
 
 const { pillars: ABOUT_PILLARS, timeline: ABOUT_TIMELINE,
-  teamPreview: ABOUT_TEAM_PREVIEW, teamCounts: TEAM_COUNTS, clinics: ABOUT_CLINICS } = await getAboutPage()
+  teamPreview: ABOUT_TEAM_PREVIEW, teamCounts: TEAM_COUNTS, clinics: ABOUT_CLINICS, seo: ABOUT_SEO } = await getAboutPage()
 
 usePageHead({
   title: '品牌理念',
@@ -11,6 +11,7 @@ usePageHead({
     '20SKIN 美醫集團的品牌理念——以皮膚科專科為底，結合新中式美學與彩妝式輕醫美，追求整體協調而非單一標準的樣貌。',
   pageCss: '/assets/pages/09-about.css',
   path: '/about/',
+  seo: ABOUT_SEO,
   jsonLd: breadcrumbJsonLd([
     { label: '首頁', href: '/' },
     { label: '品牌理念', href: '/about/' },

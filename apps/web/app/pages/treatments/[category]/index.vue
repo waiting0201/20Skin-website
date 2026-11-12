@@ -30,6 +30,7 @@ usePageHead({
   description: category.lede,
   pageCss: '/assets/pages/03-treatment-category.css',
   path: `/treatments/${category.slug}/`,
+  seo: category.seo,
   jsonLd: breadcrumbJsonLd([
     { label: '首頁', href: '/' },
     { label: '專業服務', href: '/treatments/' },

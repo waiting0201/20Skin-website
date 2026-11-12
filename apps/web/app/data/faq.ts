@@ -23,6 +23,8 @@ export interface FaqCategory {
   slug: string
   /** Terms 顯示名稱（= mockup 的 tab 文案）。 */
   label: string
+  /** 後台 SEO 區塊的覆寫（2026-11-12 前分類的 SEO 設定前台不讀）。 */
+  seo: ReturnType<typeof seoOverridesOf>
 }
 
 export interface FaqItem {
@@ -47,13 +49,14 @@ export interface FaqItem {
 
 // ── 資料來源：content/faqs.json ＋ terms.json（docs/09 §3）────────────────
 
-import { TERM, UNIT, loadCategoryTerms, loadUnit, termsOf, type ContentRecord } from './_content'
+import { TERM, UNIT, loadCategoryTerms, loadUnit, seoOverridesOf, termsOf, type ContentRecord } from './_content'
 
 export async function getFaqCategories(): Promise<FaqCategory[]> {
   const terms = await loadCategoryTerms()
   return termsOf(terms, TERM.faqCategory).map((t) => ({
     slug: t.slug as string,
     label: t.title,
+    seo: seoOverridesOf(t),
   }))
 }
 
