@@ -1003,5 +1003,5 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    （`ContentHandler.BlobCleanupDisabled`，`func start` 的 `AZURE_FUNCTIONS_ENVIRONMENT=Development`），只記一行 log。
    ⚠️ 正式環境的 Function App **不可以設 `AZURE_FUNCTIONS_ENVIRONMENT=Development`** —— 那會讓換圖永遠不清舊檔。
    ⚠️ 連帶：決策 23「首頁版位換圖不會刪舊檔」**已不成立** —— 快照掃描修好之後，首頁重新發布時上一版獨有的輪播圖會被清掉
-   （那時它確實已經沒有人引用）。後台那張圖的欄位仍不顯示刪檔警告，文案待 Tim 決定要不要補。
+   （那時它確實已經沒有人引用）。後台那張圖的欄位說明已加上「換圖或移除之後，按下發布舊的圖片檔就會刪除」（Tim 指定加上，同日）。
 

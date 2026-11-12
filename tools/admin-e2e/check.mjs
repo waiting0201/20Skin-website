@@ -345,16 +345,18 @@ await step('🔴 八大專科入口、醫師與據點沒有挑選器（自動列
   if (await cardOf('品牌理念摘要').locator('.adm-relation').count()) throw new Error('「品牌理念摘要」還有挑選器')
   return '八大專科入口／醫師／據點 0 個，精選療程／最新文章各 1 個'
 })
-await step('🔴 主視覺的圖片欄位不談刪檔，只給建議尺寸', async () => {
-  // 版位設定的圖換掉**不會**被刪（沒走發布那條清 blob 的路），
-  // 顯示 ImageField 那句通用警告等於說謊 —— schema 用 deletesOldFile: false 關掉它。
+await step('🔴 主視覺的圖片欄位：照實說「發布時」刪舊檔，不是通用的「存檔時」', async () => {
+  // 2026-11-12 起首頁重新發布時上一版獨有的輪播圖會被清掉（快照掃描修好之後）。
+  // ImageField 的通用警告寫的是「存檔時」，在這一頁不準確 —— schema 仍用 deletesOldFile: false 關掉它，
+  // 改由 hint 講「按下發布舊的圖片檔就會刪除」。
   const txt = await page.locator('.adm-editor-side--hero').innerText()
   // ⚠️ 比對的字串**要跟著 ImageField 的文案走**。2026-09-18 踩到一次：決策 27 把
   //    「從 Blob 刪除」改成中文說法之後，這裡還在找舊字串 —— 這一條因此變成
   //    「永遠通過」（要找的字本來就不可能出現），下面那一條則變成永遠失敗。
   if (txt.includes(DELETE_WARNING)) throw new Error('顯示了「舊檔會被刪」——那在這一頁是錯的')
   if (!txt.includes('建議橫幅比例')) throw new Error('建議尺寸不見了')
-  return '只剩建議尺寸'
+  if (!txt.includes('按下「發布」舊的圖片檔就會刪除')) throw new Error('發布時刪舊檔的提示不見了')
+  return '建議尺寸＋發布時刪檔的提示'
 })
 await step('🔴 但九個內容模型那邊的刪檔警告還在', async () => {
   // Vue 對 boolean prop 有「缺席即 false」的轉型 —— 用 `!== false` 寫防呆的話，

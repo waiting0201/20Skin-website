@@ -38,13 +38,13 @@ export const heroSlidesSchema: StructuredSchema = {
         {
           key: 'image',
           label: '圖片',
-          // 🔴 `deletesOldFile: false` —— 版位設定的圖**不會**在存檔時被刪掉
-          //    （沒有走內容模型那條「發布時清掉上一版獨有 blob」的路，孤兒檔靠
-          //    tools/blob-reconcile 離線對帳）。少了這個旗標，ImageField 會顯示
-          //    一句與事實相反的警告。
+          // 🔴 **舊圖會刪，但時間點是「首頁重新發布」，不是存檔**（2026-11-12 起）。
+          //    清圖邏輯修好之後（版本快照裡的圖掃得到了），首頁發布時上一版獨有的輪播圖會被清掉。
+          //    所以仍然帶 `deletesOldFile: false` 關掉 ImageField 那句通用警告（它寫的是「存檔時」，
+          //    在這一頁不準確），改在下面的 hint 照實講。舊敘述「版位設定的圖不會被刪」已作廢。
           node: { kind: 'image', shape: 'content-image', deletesOldFile: false },
           required: true,
-          hint: '建議橫幅比例（現有四張是 320×220）。替代文字在圖片下方那一欄填。',
+          hint: '建議橫幅比例（現有四張是 320×220）。替代文字在圖片下方那一欄填。⚠️ 換圖或移除之後，按下「發布」舊的圖片檔就會刪除，救不回來。',
         },
         {
           key: 'caption',

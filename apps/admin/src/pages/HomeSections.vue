@@ -470,11 +470,9 @@ const statusLabel = computed(() => ({ 1: '草稿', 2: '送審中（舊資料）'
               :errors="settingsErrors"
               @update:model-value="(v) => (heroSection!.settingsValue = v)"
             />
-            <!-- ⚠️ **這裡不寫「舊檔會不會被刪」**（Tim 指定 2026-09-18：「不用寫，
-                 只要有建議尺寸就好」）。事實仍然是：版位設定的圖換掉不會刪舊檔，
-                 孤兒檔靠 tools/blob-reconcile 離線對帳 —— 所以 schema 的圖片節點
-                 帶 `deletesOldFile: false`，ImageField 那句「會被刪」的警告不會出現。
-                 建議尺寸留在 schema 的 hint 上。 -->
+            <!-- ⚠️ 刪檔提示寫在 schema 的 hint 上（Tim 指定 2026-11-12 加上）：換圖後**發布**時舊檔會刪。
+                 2026-09-18「不用寫」那次的前提是「這裡的圖換掉不會刪」，清圖邏輯修好之後那個前提不成立了。
+                 ImageField 的通用警告仍然關著（`deletesOldFile: false`）—— 它寫的是「存檔時」，在這一頁不準確。 -->
           </div>
         </div>
       </aside>
