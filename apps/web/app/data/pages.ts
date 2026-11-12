@@ -18,6 +18,7 @@
 
 import { UNIT, bySlug, img, loadUnit, parseBlocks, seoOverridesOf, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
+import { roleText } from '~/utils/role'
 
 /** slug → 那一筆頁面。⚠️ 每個請求只取一次（`loadUnit` 以請求為範圍去重）。 */
 const pageIndex = async () => bySlug(await loadUnit(UNIT.page))
@@ -78,14 +79,49 @@ interface AboutDocument {
   clinics: AboutClinic[]
 }
 
-/** 品牌理念頁的四個區塊。一次取齊，呼叫端解構即可。 */
+/** 品牌頁「執行理念的人」那一區放幾位。mockup/09-about.html 是一列四張（`grid--4`）。 */
+const ABOUT_TEAM_PREVIEW_SIZE = 4
+
+/**
+ * 品牌理念頁的四個區塊。一次取齊，呼叫端解構即可。
+ *
+ * 🔴 **團隊卡片取自「醫師」單元排序的前四位，不讀 `bodyBlocks.teamPreview`**（2026-11-12）。
+ *    那份是手打的姓名／職稱／照片／連結，等於醫師的第二份名單與順序 —— 在後台
+ *    「內容 → 醫師」拖排序、改職稱、換照片，這一區都不會跟，而且兩邊沒有任何徵兆
+ *    （正式站實際分岔：「安喬」vs「安喬老師」、四位裡三位的連結只到 `/team/`）。
+ *    與首頁醫師版位（決策 30）同一條規則，排序也與 `/team/` 相同（sortOrder，同值比 id）。
+ * ⚠️ 舊的 `teamPreview` 留在資料裡不刪，只在醫師單元一筆都沒有時當退路。
+ */
 export async function getAboutPage() {
-  const about = blocksOf<Partial<AboutDocument>>(await pageIndex(), 'about', {})
+  const [index, doctors] = await Promise.all([pageIndex(), loadUnit(UNIT.doctor)])
+  const about = blocksOf<Partial<AboutDocument>>(index, 'about', {})
+
+  const ordered = doctors.slice().sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+  const teamPreview: AboutTeamMember[] = ordered.slice(0, ABOUT_TEAM_PREVIEW_SIZE).map((d) => {
+    const photo = img(d.fields.photo)
+    const role = (d.fields.jobTitle as string) ?? ''
+    return {
+      name: d.title,
+      role,
+      href: d.urlPath ?? '/team/',
+      image: {
+        src: photo?.src ?? '',
+        alt: `${d.title} ${roleText(role)}`.trim(),
+        w: photo?.width,
+        h: photo?.height,
+      },
+    }
+  })
+
+  const physicianCount = doctors.filter((d) => Boolean(d.fields.isPhysician)).length
+
   // ⚠️ 不要在這裡加 `as` —— 上面的介面就是契約，用轉型蓋過去等於把檢查關掉。
   return {
     pillars: about.pillars ?? [],
     timeline: about.timeline ?? [],
-    teamPreview: about.teamPreview ?? [],
+    teamPreview: teamPreview.length > 0 ? teamPreview : about.teamPreview ?? [],
+    /** 團隊人數。醫師單元取不到東西時是 0／0，樣板據此不輸出那一句。 */
+    teamCounts: { total: doctors.length, physicians: physicianCount, others: doctors.length - physicianCount },
     clinics: about.clinics ?? [],
   }
 }

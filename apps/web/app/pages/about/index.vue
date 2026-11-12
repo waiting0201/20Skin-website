@@ -3,7 +3,7 @@
 import { getAboutPage } from '~/data/pages'
 
 const { pillars: ABOUT_PILLARS, timeline: ABOUT_TIMELINE,
-  teamPreview: ABOUT_TEAM_PREVIEW, clinics: ABOUT_CLINICS } = await getAboutPage()
+  teamPreview: ABOUT_TEAM_PREVIEW, teamCounts: TEAM_COUNTS, clinics: ABOUT_CLINICS } = await getAboutPage()
 
 usePageHead({
   title: '品牌理念',
@@ -134,7 +134,7 @@ usePageHead({
           <div class="c-sechead__text">
             <span class="u-eyebrow">OUR TEAM</span>
             <h2>執行理念的人</h2>
-            <p>共 14 位成員，13 位醫師與 1 位藝術總監。</p>
+            <p v-if="TEAM_COUNTS.total > 0">共 {{ TEAM_COUNTS.total }} 位成員，{{ TEAM_COUNTS.physicians }} 位醫師<template v-if="TEAM_COUNTS.others > 0">與 {{ TEAM_COUNTS.others }} 位藝術總監</template>。</p>
           </div>
           <a class="c-sechead__more" href="/team/">查看全部成員 →</a>
         </div>

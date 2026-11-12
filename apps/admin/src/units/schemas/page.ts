@@ -15,11 +15,11 @@ import type { StructuredSchema, StructuredNode } from '../../structured-schema'
 /** about 頁的卡片圖：`{src, alt, w, h}`（注意是 w／h，不是 width／height）。 */
 const cardImage: StructuredNode = { kind: 'image', shape: 'src-wh' }
 
-/** `{pillars[], timeline[], teamPreview[], clinics[]}` —— 品牌理念頁。 */
+/** `{pillars[], timeline[], clinics[]}` —— 品牌理念頁（資料裡另有不再編輯的 `teamPreview`）。 */
 export const pageAboutSchema: StructuredSchema = {
   wire: 'json-value',
   emptyIsNull: true,
-  preview: '品牌理念頁的四個區塊：理念柱、品牌歷程、團隊預覽、院區預覽。',
+  preview: '品牌理念頁的三個區塊：理念柱、品牌歷程、院區預覽。團隊那一區自動顯示「醫師」清單排序的前四位，要調整請到醫師清單拖曳排序。',
   root: {
     kind: 'object',
     fields: [
@@ -59,25 +59,9 @@ export const pageAboutSchema: StructuredSchema = {
           },
         },
       },
-      {
-        key: 'teamPreview',
-        label: '團隊預覽',
-        hint: '⚠️ 這是品牌頁上的預覽卡片，與「醫師」內容模型是兩份資料——改這裡不會動到醫師個人頁。',
-        node: {
-          kind: 'array',
-          itemLabel: '成員',
-          summaryKeys: ['name', 'role'],
-          item: {
-            kind: 'object',
-            fields: [
-              { key: 'name', label: '姓名', node: { kind: 'string' }, required: true },
-              { key: 'role', label: '職稱', node: { kind: 'string' } },
-              { key: 'href', label: '個人頁連結', node: { kind: 'string', placeholder: '/team/huang/' } },
-              { key: 'image', label: '照片', node: cardImage },
-            ],
-          },
-        },
-      },
+      // 🔴 `teamPreview` **刻意不宣告**（2026-11-12）：前台那一區改成取「醫師」單元排序的
+      //    前四位（apps/web/app/data/pages.ts 的 getAboutPage），這裡再給表單就是
+      //    「編了不生效」。既有的值靠「schema 沒描述到的鍵原樣保留」留在資料裡（決策 17）。
       {
         key: 'clinics',
         label: '院區預覽',
