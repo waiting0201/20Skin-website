@@ -7,7 +7,8 @@ const CLINICS = await getClinics()
 usePageHead({
   title: '診所據點',
   description: '20SKIN 美醫集團兩個院區：四季診所（醫學美容為主）與二林四季皮膚科（一般皮膚疾病門診為主），門診時段、位置與就診流程一覽。',
-  pageCss: '/assets/pages/17-clinic-list.css',
+  // 地圖畫布沿用據點介紹頁的樣式（那支檔案只有 `.clinic-*` 的選擇器，不會動到這一頁其他區塊）。
+  pageCss: ['/assets/pages/17-clinic-list.css', '/assets/pages/08-clinic-detail.css'],
   path: '/clinics/',
   jsonLd: [
     {
@@ -22,6 +23,28 @@ usePageHead({
     ]),
   ],
 })
+
+// 地圖等使用者捲到附近才掛上 iframe（理由與寫法同 clinics/[slug].vue：Google 那包程式
+// 不該在首屏跟主圖搶頻寬；畫布有固定高度與底色，晚出現不會造成版面位移）。
+// ⚠️ 不支援 IntersectionObserver 的環境直接載入，不要讓地圖永遠出不來。
+const mapArea = ref<HTMLElement | null>(null)
+const mapVisible = ref(false)
+let mapObserver: IntersectionObserver | null = null
+onMounted(() => {
+  const el = mapArea.value
+  if (!el || typeof IntersectionObserver === 'undefined') {
+    mapVisible.value = true
+    return
+  }
+  mapObserver = new IntersectionObserver((entries) => {
+    if (entries.some((e) => e.isIntersecting)) {
+      mapVisible.value = true
+      mapObserver?.disconnect()
+    }
+  }, { rootMargin: '300px 0px' })
+  mapObserver.observe(el)
+})
+onBeforeUnmount(() => mapObserver?.disconnect())
 
 /** 17-clinic-list.html 自身的頁級 FAQ（非個別院區的內容，與 clinics.ts 中
  *  siji 的 faqs 同一份 mockup 來源，siji 的明細頁沒有專屬 FAQ 素材可用，
@@ -143,20 +166,27 @@ const faqs = [
         </div>
       </div>
 
-      <div class="clist-map" role="img" aria-label="兩院區相對位置地圖示意，正式站將嵌入 Google 地圖">
-        <div class="clist-map__grid" aria-hidden="true"></div>
-        <span class="clist-map__pin clist-map__pin--a" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3" fill="#fff"/></svg>
-          <em>四季診所</em>
-        </span>
-        <span class="clist-map__pin clist-map__pin--b" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3" fill="#fff"/></svg>
-          <em>二林四季皮膚科</em>
-        </span>
-      </div>
-      <div class="clist-map__foot">
-        <p class="clist-map__label">{{ CLINICS.map((c) => c.address).join('．') }}</p>
-        <a class="btn btn--ghost btn--sm" href="#">在 Google 地圖開啟 →</a>
+      <!-- 🔴 2026-11-12 前這裡是設計稿的示意圖（格線上兩個假圖釘），按鈕是 `href="#"`、按了沒反應。
+           兩個院區在不同縣市，一張地圖放不下，所以一個院區一張 —— 與據點介紹頁同一種
+           以地址查詢的免金鑰嵌入（網址由 clinics.ts 推導），樣式沿用 08-clinic-detail.css 的地圖畫布。 -->
+      <div ref="mapArea" class="grid grid--2">
+        <div v-for="clinic in CLINICS" :key="clinic.slug">
+          <h3 class="c-heading-bar">{{ clinic.name }}</h3>
+          <div class="clinic-map__canvas">
+            <iframe
+              v-if="mapVisible"
+              :src="clinic.mapEmbedUrl"
+              :title="`${clinic.name}位置地圖`"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+              allowfullscreen
+            ></iframe>
+          </div>
+          <div class="clinic-map__foot">
+            <p class="clinic-map__label">{{ clinic.address }}</p>
+            <a class="btn btn--ghost btn--sm ext" :href="clinic.mapLinkUrl" target="_blank" rel="noopener external">在 Google 地圖開啟 →</a>
+          </div>
+        </div>
       </div>
 
       <div class="grid grid--3 clist-transport">
