@@ -18,6 +18,7 @@
 
 import { toRaw } from 'vue'
 import { ACCEPTED_EXTENSIONS, extensionOf, MAX_IMAGE_BYTES, uploadApi, type UploadedImage } from './api/upload'
+import { imageToJson, type ImageShape } from './structured-schema'
 
 /**
  * 已經選好、但還沒送上 Blob 的一張圖。
@@ -34,6 +35,13 @@ export interface PendingImage {
   /** 本機讀到的原始尺寸；上傳後會被 API 回報的值取代。 */
   width: number | null
   height: number | null
+  /**
+   * 這張圖所在欄位要的 JSON 形狀，與換圖之前的原值（保留未宣告的鍵用）。
+   * 由 `imageToJson()` 掛上；沒有的話上傳結果維持 API 的形狀（`UploadedImage`）。
+   * 🔴 上傳完成後一定要照它投影 —— 見 `uploadPendingImages()`。
+   */
+  shape?: ImageShape
+  original?: unknown
 }
 
 export type ImageValue = UploadedImage | PendingImage
@@ -160,7 +168,9 @@ export async function uploadPendingImages<T>(value: T, onUploaded?: (done: numbe
       usedPreviewUrls.push(pending.previewUrl)
       done += 1
       onUploaded?.(done)
-      return uploaded
+      // 🔴 換回這個欄位自己的形狀（`{src,w,h}` 之類）。直接回 `uploaded` 的話，
+      //    非標準形狀的欄位會存進一張前台讀不到網址的圖，而且沒有任何錯誤。
+      return pending.shape ? imageToJson(pending.shape, uploaded, pending.original) : uploaded
     }
     if (Array.isArray(node)) {
       const out: unknown[] = []

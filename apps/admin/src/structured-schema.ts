@@ -352,7 +352,17 @@ export function imageFromJson(shape: ImageShape, value: unknown): ImageLike | nu
 export function imageToJson(shape: ImageShape, value: unknown, original: unknown): unknown {
   if (value === null || value === undefined) return null
   const v = value as Record<string, unknown>
-  if (v.pending === true) return value // 還沒上傳，等 uploadPendingImages 換掉它
+  // 還沒上傳，等 uploadPendingImages 換掉它。
+  // 🔴 **把這個欄位的形狀掛在待上傳的圖上**（2026-11-12）：上傳完成拿到的是 API 的
+  //    `{blobPath,url,width,height}`，而 `src-size`／`src-wh` 的欄位前台讀的是 `src`。
+  //    少了這個標記，新上傳的圖就以 API 的形狀原樣存進去 —— 後台預覽正常、存檔成功、
+  //    前台那一張沒有網址（正式站的品牌理念頁踩過：院區照片兩張破圖）。
+  // ⚠️ 連續換圖、或改待上傳那張圖的替代文字時，`original` 本身就是上一張待上傳的圖 ——
+  //    要沿用它記住的那一份，否則 File 與預覽網址會被當成「未宣告的鍵」存進資料庫。
+  if (v.pending === true) {
+    const prior = original as Record<string, unknown> | null | undefined
+    return { ...v, shape, original: prior?.pending === true ? prior.original ?? null : original ?? null }
+  }
   // 未宣告的鍵（例如某些 figure 帶的額外欄位）原樣保留
   const keep = typeof original === 'object' && original !== null ? { ...(original as Record<string, unknown>) } : {}
   switch (shape) {

@@ -18,6 +18,7 @@
 
 import { UNIT, bySlug, img, loadUnit, parseBlocks, seoOverridesOf, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
+import { getClinicNap } from './navigation'
 import { roleText } from '~/utils/role'
 
 /** slug → 那一筆頁面。⚠️ 每個請求只取一次（`loadUnit` 以請求為範圍去重）。 */
@@ -90,10 +91,16 @@ const ABOUT_TEAM_PREVIEW_SIZE = 4
  *    「內容 → 醫師」拖排序、改職稱、換照片，這一區都不會跟，而且兩邊沒有任何徵兆
  *    （正式站實際分岔：「安喬」vs「安喬老師」、四位裡三位的連結只到 `/team/`）。
  *    與首頁醫師版位（決策 30）同一條規則，排序也與 `/team/` 相同（sortOrder，同值比 id）。
- * ⚠️ 舊的 `teamPreview` 留在資料裡不刪，只在醫師單元一筆都沒有時當退路。
+ * 🔴 **院區卡片同理，取自「據點」單元**（名稱、簡述、地址、門診時段、第一張照片、網址）。
+ *    那份手打的 `clinics` 與據點分岔得更明顯：名稱不同（「二林四季皮膚科診所」）、
+ *    四季診所的連結只到 `/clinics/`、門診時段是手打的一行字 —— 而地址與時段是 NAP，
+ *    全站只能有一個來源（`getClinicNap()`，與頁尾、據點頁同一份）。
+ * ⚠️ 舊的 `teamPreview`／`clinics` 留在資料裡不刪，只在對應單元一筆都沒有時當退路。
  */
 export async function getAboutPage() {
-  const [index, doctors] = await Promise.all([pageIndex(), loadUnit(UNIT.doctor)])
+  const [index, doctors, clinicRecords, nap] = await Promise.all([
+    pageIndex(), loadUnit(UNIT.doctor), loadUnit(UNIT.clinic), getClinicNap(),
+  ])
   const about = blocksOf<Partial<AboutDocument>>(index, 'about', {})
 
   const ordered = doctors.slice().sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
@@ -113,6 +120,23 @@ export async function getAboutPage() {
     }
   })
 
+  // 順序、名稱、地址、時段都由 getClinicNap() 給（它已依據點清單的排序排好）；
+  // 簡述與照片從同一批據點紀錄補上。🔴 比 slug 不比名稱（決策 30）。
+  const clinics: AboutClinic[] = nap.map((n) => {
+    const record = clinicRecords.find((c) => c.slug === n.slug)
+    const photos = ((record?.fields.photos ?? []) as { image: unknown; sortOrder: number }[])
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+    const photo = img(photos[0]?.image)
+    return {
+      name: n.name,
+      body: record?.summary ?? '',
+      address: [n.address, n.hours].filter(Boolean).join('｜'),
+      href: n.href,
+      image: { src: photo?.src ?? '', alt: photo?.alt || n.name, w: photo?.width, h: photo?.height },
+    }
+  })
+
   const physicianCount = doctors.filter((d) => Boolean(d.fields.isPhysician)).length
 
   // ⚠️ 不要在這裡加 `as` —— 上面的介面就是契約，用轉型蓋過去等於把檢查關掉。
@@ -122,7 +146,7 @@ export async function getAboutPage() {
     teamPreview: teamPreview.length > 0 ? teamPreview : about.teamPreview ?? [],
     /** 團隊人數。醫師單元取不到東西時是 0／0，樣板據此不輸出那一句。 */
     teamCounts: { total: doctors.length, physicians: physicianCount, others: doctors.length - physicianCount },
-    clinics: about.clinics ?? [],
+    clinics: clinics.length > 0 ? clinics : about.clinics ?? [],
   }
 }
 

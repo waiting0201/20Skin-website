@@ -15,11 +15,11 @@ import type { StructuredSchema, StructuredNode } from '../../structured-schema'
 /** about 頁的卡片圖：`{src, alt, w, h}`（注意是 w／h，不是 width／height）。 */
 const cardImage: StructuredNode = { kind: 'image', shape: 'src-wh' }
 
-/** `{pillars[], timeline[], clinics[]}` —— 品牌理念頁（資料裡另有不再編輯的 `teamPreview`）。 */
+/** `{pillars[], timeline[]}` —— 品牌理念頁（資料裡另有不再編輯的 `teamPreview`／`clinics`）。 */
 export const pageAboutSchema: StructuredSchema = {
   wire: 'json-value',
   emptyIsNull: true,
-  preview: '品牌理念頁的三個區塊：理念柱、品牌歷程、院區預覽。團隊那一區自動顯示「醫師」清單排序的前四位，要調整請到醫師清單拖曳排序。',
+  preview: '品牌理念頁的兩個區塊：理念柱、品牌歷程。團隊那一區自動顯示「醫師」清單排序的前四位，院區那一區自動顯示全部「據點」（名稱、摘要、地址、門診時段、第一張照片）——要調整請到醫師或據點修改。',
   root: {
     kind: 'object',
     fields: [
@@ -62,25 +62,7 @@ export const pageAboutSchema: StructuredSchema = {
       // 🔴 `teamPreview` **刻意不宣告**（2026-11-12）：前台那一區改成取「醫師」單元排序的
       //    前四位（apps/web/app/data/pages.ts 的 getAboutPage），這裡再給表單就是
       //    「編了不生效」。既有的值靠「schema 沒描述到的鍵原樣保留」留在資料裡（決策 17）。
-      {
-        key: 'clinics',
-        label: '院區預覽',
-        node: {
-          kind: 'array',
-          itemLabel: '院區',
-          summaryKeys: ['name'],
-          item: {
-            kind: 'object',
-            fields: [
-              { key: 'name', label: '名稱', node: { kind: 'string' }, required: true },
-              { key: 'address', label: '地址', node: { kind: 'string' } },
-              { key: 'body', label: '說明', node: { kind: 'string', multiline: true } },
-              { key: 'href', label: '據點頁連結', node: { kind: 'string', placeholder: '/clinics/siji/' } },
-              { key: 'image', label: '圖片', node: cardImage },
-            ],
-          },
-        },
-      },
+      // 🔴 `clinics` 同理不宣告（2026-11-12）：前台那一區改讀「據點」單元。
     ],
   },
 }

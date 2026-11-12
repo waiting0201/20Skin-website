@@ -170,7 +170,7 @@ usePageHead({
         <div class="grid grid--2">
           <article v-for="clinic in ABOUT_CLINICS" :key="clinic.name" class="about-clinic">
             <a class="about-clinic__media" :href="clinic.href">
-              <img :src="clinic.image.src" :srcset="srcsetOf(clinic.image.src)" :sizes="IMAGE_SIZES.half" :alt="clinic.image.alt" :width="clinic.image.w" :height="clinic.image.h" loading="lazy">
+              <img v-if="clinic.image.src" :src="clinic.image.src" :srcset="srcsetOf(clinic.image.src)" :sizes="IMAGE_SIZES.half" :alt="clinic.image.alt" :width="clinic.image.w" :height="clinic.image.h" loading="lazy">
             </a>
             <h3 class="about-clinic__name">{{ clinic.name }}</h3>
             <p>{{ clinic.body }}</p>

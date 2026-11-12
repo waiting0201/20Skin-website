@@ -373,6 +373,11 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    **所以衍生圖缺一張就是破圖**，任何繞過 commit 寫進 `media/` 的檔案都要跑 `tools/image-variants --apply`。
    ⚠️ `UploadedImage.Variants` 一律 NULL，不要因為看到欄位就開始寫它。
    ⚠️ 寬度清單兩份：API 的 `ImageVariants.Widths` 與前台的 `VARIANT_WIDTHS`，改一邊要改另一邊。
+   🔴 **上傳完成的圖要投影回那個欄位自己的形狀**（2026-11-12 修）。區塊 JSON 裡的圖有三種形狀
+   （`content-image`／`src-size`／`src-wh`，`structured-schema.ts`），而上傳 API 一律回 `{blobPath,url,width,height}`。
+   `imageToJson()` 因此把形狀掛在 `PendingImage.shape` 上，`uploadPendingImages()` 上傳完照它轉回去。
+   ⚠️ 在此之前後兩種形狀**新上傳的圖一律存錯**：後台預覽正常、存檔成功、前台那張 `<img>` 沒有 `src`
+   （正式站品牌理念頁的院區照片踩到）。typecheck、build、兩支 round-trip 都看不到 —— 它們不經過上傳。
    ✅ **2026-09-16 起全架構沒有明文的 SQL 連線字串了。** 原本唯一那一個是 SWA 上給 `/api/fallback` 用的唯讀字串，那支 function 已刪除；Nuxt 的 SSR function **完全不碰 SQL**，它只打 API。見 [docs/07-deployment.md](docs/07-deployment.md) §3、§6
 10. **前後台同一個 SWA、同一個網域**：`20skin.tw` 前台、**`20skin.tw/admin` 後台**（Nuxt `ssr: false` 的 SPA）。API 則在另一個網域 `api.20skin.tw`，見第 7 條。
    後台路徑 `/admin/` 為客戶指定（2026-08-10），**不要再提案改成非預設路徑** —— 早期文件曾寫 `/manage/`，那是舊版。
@@ -833,7 +838,10 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    那四張卡原本是 `bodyBlocks.teamPreview` 裡手打的姓名／職稱／照片／連結，醫師清單拖排序它不會跟
    （正式站實際分岔：「安喬」vs「安喬老師」、三位的連結只到 `/team/`）。現在取醫師單元排序的前四位
    （`getAboutPage()`），人數那一句也改成實際數；後台 about 的 schema 不再宣告 `teamPreview`，
-   舊值靠決策 17「沒描述到的鍵原樣保留」留著。**同頁的「院區預覽」仍是手打的**（它有自己的說明文字）。
+   舊值靠決策 17「沒描述到的鍵原樣保留」留著。
+   ⚠️ **同頁的「兩個院區」同一天也併入**：改讀據點單元（名稱、摘要、地址＋門診時段、第一張照片、網址），
+   地址與時段走 `getClinicNap()`（NAP 全站一個來源）。後台 about 的 schema 同樣不再宣告 `clinics`。
+   代價：那一區的說明文字不再是品牌頁自己的一句話，而是**據點的摘要**（據點列表卡片也用同一句）。
    🔴 **精選療程（4/28）與最新文章（4/1100）維持手挑**（品牌理念摘要的挑選器 2026-10-01 已拿掉，見決策 23）——
    那兩個是真的策展，順序自己一份是對的。**不要因為「其他版位都自動了」就一起改掉。**
    ⚠️ 自動之後那兩個版位**自存的 `HomeSectionItems` 不刪**（migration 也不必寫，整條 0 支）：
