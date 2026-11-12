@@ -31,12 +31,24 @@ export const SYSTEM_SCREENS: {
   name: string
   label: string
   permission: string
+  /**
+   * 只有超級管理員看得到、進得去（Tim 定案 2026-11-12）。
+   * sitemap 設定是整包的技術參數加 robots.txt —— 院方日常用不到，而 robots.txt 改錯或清空
+   * 會直接影響搜尋引擎與 AI 爬蟲進不進得來。逐筆要不要收錄是在各內容的編輯頁勾的。
+   */
+  superAdminOnly?: boolean
+  /**
+   * 不出現在側邊選單，但網址仍然打得開（Tim 定案 2026-11-12）。
+   * FAQ／語料匯出只是預覽與下載：那三個檔案前台每個請求自動產生，按了也不會改變任何東西。
+   * 留著路由是給工程端查「AI 爬蟲實際拿到什麼」用的。
+   */
+  hidden?: boolean
   component: () => Promise<unknown>
 }[] = [
   { path: '/questions',     name: 'questions',     label: '未命中題目清單', permission: 'content.faq.edit', component: () => import('@/pages/Questions.vue') },
-  { path: '/sitemap',       name: 'sitemap',       label: 'sitemap 設定',   permission: 'settings.edit',    component: () => import('@/pages/SitemapSettings.vue') },
+  { path: '/sitemap',       name: 'sitemap',       label: 'sitemap 設定',   permission: 'settings.edit',    superAdminOnly: true, component: () => import('@/pages/SitemapSettings.vue') },
   { path: '/redirects',     name: 'redirects',     label: '301 轉址管理',   permission: 'redirect.manage',  component: () => import('@/pages/Redirects.vue') },
-  { path: '/export',        name: 'export',        label: 'FAQ／語料匯出',  permission: 'settings.edit',    component: () => import('@/pages/Export.vue') },
+  { path: '/export',        name: 'export',        label: 'FAQ／語料匯出',  permission: 'settings.edit',    hidden: true, component: () => import('@/pages/Export.vue') },
   { path: '/home-sections', name: 'home-sections', label: '首頁版位編排',   permission: 'home.arrange',     component: () => import('@/pages/HomeSections.vue') },
   { path: '/menu',          name: 'menu',          label: '導覽選單與頁尾', permission: 'menu.edit',        component: () => import('@/pages/Menu.vue') },
   { path: '/settings',      name: 'settings',      label: '全站設定',       permission: 'settings.edit',    component: () => import('@/pages/Settings.vue') },
@@ -50,6 +62,8 @@ declare module 'vue-router' {
     layout?: false
     /** 進入這個畫面需要的權限碼。⚠️ 這是體驗層的守門，不是安全邊界（見下方 beforeEach）。 */
     permission?: string
+    /** 只有超級管理員進得去（見 SYSTEM_SCREENS 的同名欄位）。 */
+    superAdminOnly?: boolean
   }
 }
 
@@ -69,7 +83,7 @@ const router = createRouter({
       path: s.path,
       name: s.name,
       component: s.component as never,
-      meta: { permission: s.permission },
+      meta: { permission: s.permission, superAdminOnly: s.superAdminOnly },
     })),
     { path: '/:unit', name: 'unit-list', component: UnitList, beforeEnter: requireValidUnit },
     { path: '/:unit/:id', name: 'unit-edit', component: UnitEdit, beforeEnter: requireValidUnit },
@@ -100,6 +114,7 @@ router.beforeEach((to) => {
     const ctx = u ? { roles: u.roles, isSuperAdmin: u.isSuperAdmin } : null
     if (!hasPermission(ctx, required)) return { path: '/' }
   }
+  if (to.meta.superAdminOnly && !currentUser()?.isSuperAdmin) return { path: '/' }
   return true
 })
 

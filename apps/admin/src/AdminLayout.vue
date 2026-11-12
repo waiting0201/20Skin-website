@@ -43,7 +43,9 @@ const systemNavItems = computed<NavItem[]>(() =>
   SYSTEM_SCREENS.map((screen) => ({
     label: screen.label,
     href: screen.path,
-    visible: hasPermission(permCtx.value, screen.permission),
+    visible: !screen.hidden
+      && hasPermission(permCtx.value, screen.permission)
+      && (!screen.superAdminOnly || Boolean(permCtx.value?.isSuperAdmin)),
   })),
 )
 
