@@ -31,7 +31,8 @@ const jsonLdBlocks = computed(() => {
     '@context': 'https://schema.org',
     '@type': 'MedicalCondition',
     name: concern!.title,
-    description: concern!.aiSummary,
+    // ⚠️ AI 摘要沒填時退回摘要，不輸出空的 description。
+    description: concern!.aiSummary || concern!.lede,
   }
 
   if (concern!.detail) {
@@ -54,7 +55,7 @@ usePageHead({
   // ⚠️ 讀的是已核准的版本快照，所以後台改完要重新發布才會生效。
   seo: concern.seo,
   title: `${concern.title}｜肌膚困擾`,
-  description: concern.detail
+  description: concern.detail?.body.length || concern.detail?.hasLegacyBody
     ? `${concern.title}的成因、自我判斷指引與建議療程方向，由 20SKIN 美醫集團皮膚科專科醫師團隊提供之照護說明。`
     : `${concern.title}的成因與判斷指引，由 20SKIN 美醫集團皮膚科專科醫師團隊提供之照護說明。`,
   // ⚠️ 07 是內文區塊（BodyBlocks）的樣式 —— 困擾改用單一內文編輯器之後與文章共用（2026-11-11）。
@@ -89,7 +90,7 @@ usePageHead({
         <h1>{{ concern.title }}</h1>
 
         <!-- AI 摘要：40–60 字直答式段落，頁面第一段可見文字，同時輸出至 JSON-LD（docs/03-seo-geo.md §4 ②） -->
-        <p class="concern-head__lede">{{ concern.aiSummary }}</p>
+        <p v-if="concern.aiSummary" class="concern-head__lede">{{ concern.aiSummary }}</p>
         <p v-if="concern.lede !== concern.aiSummary">{{ concern.lede }}</p>
 
         <div v-if="concern.relatedConcernSlugs.length" class="concern-head__related">
@@ -128,7 +129,9 @@ usePageHead({
       </div>
     </section>
 
-    <template v-else>
+    <!-- ⚠️ 舊的四個固定版型區：只在舊欄位真的有值時渲染。完整版型現在也可能只因為
+         有關聯而成立（見 data/concerns.ts），那時這裡什麼都沒有。 -->
+    <template v-else-if="concern.detail.hasLegacyBody">
     <!-- =====================================================================
          1. 症狀描述
          ===================================================================== -->
@@ -219,17 +222,17 @@ usePageHead({
     <!-- =====================================================================
          5. 針對此困擾的建議療程（主要轉換出口）
          ===================================================================== -->
-    <section class="section section--alt" id="recommended-treatments">
+    <section v-if="concern.detail.treatments.length" class="section section--alt" id="recommended-treatments">
       <div class="container">
         <div class="c-sechead">
           <div class="c-sechead__text">
             <span class="u-eyebrow">RECOMMENDED TREATMENTS</span>
             <h2>針對此困擾的建議療程</h2>
-            <p class="concern-rx-intro">{{ concern.detail.treatmentsIntro }}</p>
+            <p v-if="concern.detail.treatmentsIntro" class="concern-rx-intro">{{ concern.detail.treatmentsIntro }}</p>
           </div>
         </div>
 
-        <p class="c-note concern-rx-note">{{ concern.detail.treatmentsNote }}</p>
+        <p v-if="concern.detail.treatmentsNote" class="c-note concern-rx-note">{{ concern.detail.treatmentsNote }}</p>
 
         <div class="grid grid--3">
           <article v-for="(t, i) in concern.detail.treatments" :key="t.key" class="c-card c-card--treatment">
@@ -255,13 +258,13 @@ usePageHead({
     <!-- =====================================================================
          6. 相關醫師
          ===================================================================== -->
-    <section class="section">
+    <section v-if="concern.detail.doctors.length" class="section">
       <div class="container">
         <div class="c-sechead">
           <div class="c-sechead__text">
             <span class="u-eyebrow">RELATED DOCTORS</span>
             <h2>相關醫師</h2>
-            <p>{{ concern.detail.doctorsIntro }}</p>
+            <p v-if="concern.detail.doctorsIntro">{{ concern.detail.doctorsIntro }}</p>
           </div>
         </div>
 
@@ -287,7 +290,7 @@ usePageHead({
     <!-- =====================================================================
          7. 常見問題
          ===================================================================== -->
-    <section class="section section--alt">
+    <section v-if="concern.detail.faqs.length" class="section section--alt">
       <div class="container container--narrow">
         <div class="c-sechead">
           <div class="c-sechead__text">
@@ -295,7 +298,7 @@ usePageHead({
             <h2>常見問題</h2>
           </div>
         </div>
-        <p class="concern-faq-updated">{{ concern.detail.faqUpdated }}</p>
+        <p v-if="concern.detail.faqUpdated" class="concern-faq-updated">{{ concern.detail.faqUpdated }}</p>
 
         <div class="c-faq">
           <details v-for="faq in concern.detail.faqs" :key="faq.q" class="c-faq__item">
@@ -311,7 +314,7 @@ usePageHead({
     <!-- =====================================================================
          8. 延伸閱讀
          ===================================================================== -->
-    <section class="section">
+    <section v-if="concern.detail.articles.length" class="section">
       <div class="container">
         <div class="c-sechead">
           <div class="c-sechead__text">
@@ -349,16 +352,19 @@ usePageHead({
   <!-- =====================================================================
        精簡版：後台還沒有這個困擾的完整衛教文案時，只給方向不編內容
        ===================================================================== -->
-  <template v-else>
+  <!-- ⚠️ 條件是「沒有建議療程可列」，不是「沒有內文」：有內文但還沒挑建議療程的困擾，
+       也要有一個往療程走的出口。 -->
+  <template v-if="!concern.detail?.treatments.length">
     <section class="section" id="treatments">
       <div class="container">
         <div class="c-sechead">
           <div class="c-sechead__text">
             <span class="u-eyebrow">TREATMENTS</span>
             <h2>已經知道方向了？</h2>
-            <p>這個困擾的完整衛教內容還在整理中，可以先從療程分類查看各項目的作用方式、恢復期與注意事項，或直接由醫師面診判斷。</p>
+            <p v-if="concern.detail?.body.length || concern.detail?.hasLegacyBody">可以從療程分類查看各項目的作用方式、恢復期與注意事項，或直接由醫師面診判斷。</p>
+            <p v-else>這個困擾的完整衛教內容還在整理中，可以先從療程分類查看各項目的作用方式、恢復期與注意事項，或直接由醫師面診判斷。</p>
           </div>
-          <a class="c-sechead__more" href="/treatments/">查看全部 27 項療程 →</a>
+          <a class="c-sechead__more" href="/treatments/">查看全部療程 →</a>
         </div>
 
         <div class="grid grid--4">

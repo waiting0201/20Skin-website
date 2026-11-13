@@ -8,7 +8,7 @@
 // NAP（名稱／地址／電話）與 app/data/navigation.ts 的 CLINIC_NAP 是同一組事實，
 // 直接從那裡取值以確保逐字一致（docs/03-seo-geo.md §4③：NAP 不一致會降低 AI
 // 對品牌實體的確信度）。navigation.ts 是唯讀檔案，這裡只讀取不改寫。
-import { getClinicNap } from '~/data/navigation'
+import { getClinicNap, telHref } from '~/data/navigation'
 
 export type ClinicSlug = 'siji' | 'erlin'
 export type TreatmentCategorySlug = 'laser' | 'microneedle' | 'photoelectric' | 'skincare'
@@ -113,7 +113,10 @@ export interface Clinic {
   transportInfo: ClinicTransportStep[]
   businessHours: ClinicBusinessHour[]
   hoursTable: ClinicHoursTableRow[]
+  /** 表格下方那句休診說明，由 businessHours 推導（`closuresOf`）。沒有任何休診時段時是空字串。 */
   hoursFootnote: string
+  /** 一週裡出現過的診次（上午／下午／晚間），依時間先後。 */
+  hoursPeriods: string[]
   /** 僅二林四季皮膚科的 mockup 有「本院區可提供的療程」段落；四季診所雖然是
    *  醫學美容主力院區，但 mockup 沒有給出逐項對應清單，寧可留空也不杜撰
    *  哪些療程實際在哪個院區施作。 */
@@ -139,7 +142,6 @@ import { eyebrowFor } from './_presentation'
 /** 版面字串：與內容無關，改版面才會動。 */
 const PRESENTATION: Record<string, {
   eyebrow: string
-  hoursFootnote: string
   jsonLdDescription: string
   roleLabel: string
   medicalSpecialty: string[]
@@ -148,7 +150,6 @@ const PRESENTATION: Record<string, {
 }> = {
   siji: {
     eyebrow: 'SIJI CLINIC',
-    hoursFootnote: '週三上午、週六晚間、週日休診。',
     jsonLdDescription: '四季診所位於台中市南屯區公益路二段，提供醫學美容與光電雷射療程，並設有皮膚科健保門診。',
     roleLabel: 'MEDICAL AESTHETICS',
     // ⚠️ 牙科（允赫齒科）是二林的另一家診所，不是四季診所的科別 ——
@@ -159,7 +160,6 @@ const PRESENTATION: Record<string, {
   },
   erlin: {
     eyebrow: 'ERLIN CLINIC',
-    hoursFootnote: '週三、週六晚間休診，週日全日休診。',
     jsonLdDescription: '二林四季皮膚科位於彰化縣二林鎮儒林路二段，提供皮膚科一般診療與醫學美容療程。',
     roleLabel: 'DERMATOLOGY',
     medicalSpecialty: ['Dermatology'],
@@ -170,10 +170,6 @@ const PRESENTATION: Record<string, {
 
 /** `04-23103389` → `tel:+886423103389`。由電話推導，不另存一份 ——
  *  兩者分岔時使用者會撥到一支不存在的號碼，而畫面上顯示的號碼看起來完全正確。 */
-function telHref(phone: string): string {
-  const digits = phone.replace(/[^0-9]/g, '')
-  return digits ? `tel:+886${digits.replace(/^0/, '')}` : ''
-}
 
 /** 地圖網址：兩支都以地址查詢，**不需要 API 金鑰**，院方不必開 GCP 專案。
  *  `output=embed` 是 Google 地圖的免金鑰嵌入形式（官方的 Maps Embed API 要金鑰，
@@ -199,6 +195,41 @@ function hoursTableOf(hours: { dayOfWeek: number; startTime: string; endTime: st
     rows.set(label, row)
   }
   return [...rows.values()]
+}
+
+/** 診次名稱：依開始時間分成上午／下午／晚間。 */
+const periodOf = (startTime: string) => {
+  const hour = Number(startTime.slice(0, 2))
+  return hour < 12 ? '上午' : hour < 17 ? '下午' : '晚間'
+}
+const PERIOD_ORDER = ['上午', '下午', '晚間']
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]
+const WEEK_LABEL = ['日', '一', '二', '三', '四', '五', '六']
+
+/**
+ * 表格下方的休診說明（「週三上午、週六晚間、週日休診。」）與診次清單，**由 businessHours 推導**。
+ *
+ * 🔴 2026-11-13 前這句話依 slug 寫死在 PRESENTATION：後台把週三上午改成看診，表格打勾了，
+ *    表格正下方（據點頁、據點列表、首頁、醫師頁共五處）仍寫「週三上午休診」。
+ * ⚠️ 以「診次」而不是表格的列來判斷 —— 週六短診是另一列（起訖時間不同），
+ *    照列算會把週六上午說成休診。
+ * ⚠️ 沒有時段資料、或沒有任何休診時段時回空字串，不編造。
+ */
+function closuresOf(hours: { dayOfWeek: number; startTime: string }[]): { footnote: string; periods: string[] } {
+  const open = new Map<number, Set<string>>()
+  for (const h of hours) open.set(h.dayOfWeek, (open.get(h.dayOfWeek) ?? new Set()).add(periodOf(h.startTime)))
+  const periods = PERIOD_ORDER.filter((p) => [...open.values()].some((s) => s.has(p)))
+  if (!periods.length) return { footnote: '', periods }
+
+  const partial: string[] = []
+  const full: string[] = []
+  for (const day of WEEK_ORDER) {
+    const closed = periods.filter((p) => !open.get(day)?.has(p))
+    if (closed.length === periods.length) full.push(`週${WEEK_LABEL[day]}`)
+    else if (closed.length) partial.push(`週${WEEK_LABEL[day]}${closed.join('、')}`)
+  }
+  const parts = [...partial, ...full]
+  return { footnote: parts.length ? `${parts.join('、')}休診。` : '', periods }
 }
 
 const toPhoto = (value: unknown, caption: string, fallbackAlt: string): ClinicPhoto => {
@@ -236,12 +267,13 @@ function toClinic(faqs: ContentRecord[], nap: Awaited<ReturnType<typeof getClini
   const f = record.fields
   const slug = record.slug as ClinicSlug
   const look = PRESENTATION[slug] ?? {
-    eyebrow: '', hoursFootnote: '', jsonLdDescription: '', roleLabel: '', medicalSpecialty: [],
+    eyebrow: '', jsonLdDescription: '', roleLabel: '', medicalSpecialty: [],
   }
   const napRow = nap.find((n) => n.slug === record.slug)
   const hours = ((f.businessHours ?? []) as { dayOfWeek: number; startTime: string; endTime: string; sortOrder: number }[])
     .slice()
     .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.sortOrder - b.sortOrder)
+  const closures = closuresOf(hours)
   const photos = (f.photos ?? []) as { image: unknown; caption: string | null; sortOrder: number }[]
   const intro = parseBlocks<{ lede: string | null } | null>(f.intro, null)
 
@@ -284,7 +316,8 @@ function toClinic(faqs: ContentRecord[], nap: Awaited<ReturnType<typeof getClini
     //    09:00–13:00，而 businessHours 是 09:00–12:30；二林的 15:00–21:00 也被拆成兩段。
     //    頁面上的時間與實際門診時間不一樣，是這個專案裡最不該發生的錯。
     hoursTable: hoursTableOf(hours),
-    hoursFootnote: PRESENTATION[slug]?.hoursFootnote ?? '',
+    hoursFootnote: closures.footnote,
+    hoursPeriods: closures.periods,
     faqs: relationsOf(record, REL.clinicToFaq).map((r) => {
       const faq = faqs.find((x) => x.slug === r.toSlug)
       return {

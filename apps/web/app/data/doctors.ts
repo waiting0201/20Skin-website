@@ -43,6 +43,8 @@ export interface DoctorArticleRef {
   category: string
   title: string
   excerpt: string
+  /** 那一篇文章的網址。 */
+  href: string
   /** 「作者：」或「審閱：」開頭，取自 mockup 原文。 */
   byline: string
   date: string

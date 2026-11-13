@@ -25,7 +25,7 @@ export const treatmentUnit: UnitDefinition = {
     { key: 'updatedAt', label: '更新時間', render: 'date' },
   ],
   fields: [
-    { key: 'summary', label: '摘要', type: 'textarea', group: '基本資料', hint: '療程卡片上的那句簡述（療程總覽、困擾頁與案例頁的相關療程）。' },
+    { key: 'summary', label: '摘要', type: 'textarea', group: '基本資料', hint: '療程卡片上的那句簡述（療程分類頁、困擾頁與案例頁的相關療程）。🔴 這一欄與下方的「規格數據列」都有填，療程頁才會顯示完整內容並被搜尋引擎收錄；少一個就是「內容建置中」。' },
     {
       key: 'categoryTermId',
       label: '療程分類',
@@ -70,7 +70,7 @@ export const treatmentUnit: UnitDefinition = {
       label: '禁忌症與注意事項',
       type: 'structured',
       group: '療程內容',
-      hint: '建議填寫：空著的話，療程頁不會出現「禁忌症」這一區，頁內的目錄也不會有它。⚠️ 這一欄與本文都會即時提示高風險字詞，但系統不會擋下——送出前請自行確認文案。',
+      hint: '建議填寫：空著的話，療程頁不會出現「禁忌症」這一區，頁內的目錄也不會有它。',
       structured: treatmentContraindicationsSchema,
     },
     // ⚠️ 原本是**單行 text**，但實際存的是 `{label,value}[]`（27/28 筆）——
@@ -82,7 +82,7 @@ export const treatmentUnit: UnitDefinition = {
       label: '規格數據列',
       type: 'structured',
       group: '療程內容',
-      hint: '⚠️ 與上面的「療程時間」「建議次數」重複是刻意的：那兩欄給列表與搜尋引擎單獨取用，這一欄是療程頁上的完整清單。🔴 這一欄也是「這個療程算不算寫完了」的判斷依據——空著的話整頁不會被搜尋引擎收錄。',
+      hint: '療程頁上的完整規格清單（上面的「療程時間」「建議次數」只給站內 AI 問答用）。🔴 這一欄與最上面的「摘要」都有填，療程頁才會顯示完整內容並被搜尋引擎收錄。',
       structured: labelValueSchema('規格', '細節頁「規格數據」那張兩欄表格，照順序整列渲染。'),
     },
     { key: 'cover', label: '封面圖', type: 'image', group: '圖片', hint: '建議尺寸 1200×900（4:3）。' },

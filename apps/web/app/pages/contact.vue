@@ -408,10 +408,9 @@ async function handleSubmit() {
           <div v-for="clinic in CLINIC_NAP" :key="clinic.name" class="contact-nap">
             <h3>{{ clinic.name }}</h3>
             <address>
-              <!-- CLINIC_NAP.phone 目前是佔位值（04-XXX-XXXX，見 ~/data/navigation.ts），
-                   不是合法電話號碼，無法組成 tel: 連結；沿用 mockup 的佔位 tel 號碼，
-                   等院方提供正式電話後兩處要一起換掉。 -->
-              電話：<a href="tel:+886400000000">{{ clinic.phone }}</a><br>
+              <!-- 🔴 tel: 由據點的電話推導（navigation.ts 的 telHref）。2026-11-13 前這裡是
+                   mockup 的佔位號碼 +886400000000：畫面上的電話是對的，點下去撥的是錯的。 -->
+              電話：<a v-if="clinic.phoneHref" :href="clinic.phoneHref">{{ clinic.phone }}</a><template v-else>{{ clinic.phone }}</template><br>
               地址：{{ clinic.address }}<br>
               門診：{{ clinic.hours }}
             </address>

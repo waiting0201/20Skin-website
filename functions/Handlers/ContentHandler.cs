@@ -39,7 +39,7 @@ namespace Skin20.Api.Handlers;
 /// <item>
 /// <b>「編輯已發布內容 → 回草稿」</b：docs/11 §7 規則 2 的狀態圖明確畫出
 /// <c>已發布 ──edit──▶ 草稿</c> 這條邊，本檔逐字照此實作：<see cref="UpdateAsync"/> 與
-/// <see cref="UpdateRelationsAsync"/> 若目標原本是「已發布」，儲存後改回「草稿」，
+/// <see cref="UpdateRelationsAsync"/>、<see cref="UpdateSeoAsync"/> 若目標原本是「已發布」，儲存後改回「草稿」，
 /// <c>PublishedVersionId</c> 保持不動 —— 公開端點讀的是那一版已發布快照（決策 14），
 /// 所以頁面<b>不會</b>從網站上消失，前台照樣看到舊版，直到再按一次發布。
 /// ⚠️ 原本這裡寫的「下一次重建會讓該頁暫時消失」是靜態建置時代的行為，已不成立。
@@ -444,6 +444,13 @@ public sealed class ContentHandler(
         entity.Seo.AiSummary = string.IsNullOrWhiteSpace(body.AiSummary) ? null : body.AiSummary;
         entity.Seo.UpdatedByUserId = userId;
         entity.Seo.UpdatedAt = now;
+
+        // 🔴 與本文、關聯同一條規則：已發布的內容被編輯，工作副本回到草稿（2026-11-13 補上）。
+        //    SEO 在已發布快照裡，要重新發布才上線；少了這一行，狀態停在「已發布」，
+        //    後台的標題列只有「取消發布」，院方改了搜尋標題、分享縮圖或「不要收錄」
+        //    卻沒有任何入口能讓它生效（除非順手再改一次本文）。
+        //    ⚠️ 不動 ContentItems.UpdatedAt —— 那是 sitemap 的 lastmod 與文章「最後更新」讀的即時值。
+        if (entity.Status == ContentStatus.Published) entity.Status = ContentStatus.Draft;
 
         var strategy = db.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>

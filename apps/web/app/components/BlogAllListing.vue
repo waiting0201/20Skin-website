@@ -112,7 +112,7 @@ usePageHead({
               <div class="c-card__meta">
                 <span><a v-if="article.author.doctorSlug" :href="`/team/${article.author.doctorSlug}/`">{{ article.author.name }}</a><template v-else>{{ article.author.name }}</template></span>
                 <span>{{ formatDisplayDate(article.displayDate) }}</span>
-                <span>{{ article.readingMinutes }} 分鐘閱讀</span>
+                <span v-if="article.readingMinutes">{{ article.readingMinutes }} 分鐘閱讀</span>
               </div>
             </div>
           </article>

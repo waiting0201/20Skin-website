@@ -92,13 +92,14 @@ export interface CaseDetail {
   hasWrittenConsent: true
   /** 同意書編號／存放位置（docs/08 §C-5 ConsentReference）。只存索引，同意書本身不進系統。 */
   consentReference: string
+  /** 「醫師的話」。後台整組留空時是 null，頁面那一區不渲染。 */
   doctorQuote: {
     name: string
     role: string
     href: string | null
-    avatar: Image
+    avatar: Image | null
     quote: string
-  }
+  } | null
   treatmentsUsed: CaseTreatmentRef[]
   moreCaseSlugs: string[]
 }
@@ -234,7 +235,11 @@ export async function getCaseDetails(): Promise<CaseDetail[]> {
     individualVarianceStatement: (f.individualVarianceStatement as string) ?? '',
     hasWrittenConsent: Boolean(f.hasWrittenConsent) as true,
     consentReference: (f.consentReference as string) ?? '',
-    doctorQuote: n.doctorQuote ?? ({} as CaseDetail['doctorQuote']),
+    // 🔴 整組留空（後台明寫可以）時回 null。原本回 `{}`，模板無條件讀 `avatar.src`，
+    //    沒填醫師的話的案例整頁 500（2026-11-13 稽核查到）。
+    doctorQuote: n.doctorQuote && (n.doctorQuote.name || n.doctorQuote.quote)
+      ? { ...n.doctorQuote, avatar: n.doctorQuote.avatar?.src ? n.doctorQuote.avatar : null }
+      : null,
     treatmentsUsed: treatment
       ? [{
           name: treatment.title,

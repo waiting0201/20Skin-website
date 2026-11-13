@@ -51,7 +51,10 @@ export const articleUnit: UnitDefinition = {
     },
   ],
   relations: [
-    { key: 'treatments', label: '關聯療程', relationType: 3, targetUnit: 'treatment', sortable: true, editable: true },
+    // 🔴 RelationType=3（療程→文章）只能從療程端維護（API 的 RelationFromType），這裡是唯讀的反向顯示。
+    //    2026-11-13 前標成可編輯：畫面上永遠是空的（正向那幾筆不存在），挑一個按儲存就被 400 退回，
+    //    而文章頁「本文提到的療程」讀的正是療程那一端的關聯。要增減請到「療程 → 關聯文章」。
+    { key: 'treatments', label: '關聯療程', relationType: 3, targetUnit: 'treatment', sortable: false, editable: false },
     // RelationType=7（困擾→文章）從困擾端維護，這裡唯讀反向顯示。
     { key: 'concerns', label: '關聯困擾', relationType: 7, targetUnit: 'concern', sortable: false, editable: false },
     { key: 'tags', label: '標籤', relationType: 11, targetUnit: 'term', sortable: true, editable: true },

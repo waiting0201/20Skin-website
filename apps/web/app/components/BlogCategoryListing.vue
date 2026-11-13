@@ -186,7 +186,7 @@ usePageHead({
               <div class="c-card__meta">
                 <span><a v-if="featured.author.doctorSlug" :href="`/team/${featured.author.doctorSlug}/`">{{ featured.author.name }}</a><template v-else>{{ featured.author.name }}</template></span>
                 <span>{{ formatDisplayDate(featured.displayDate) }}</span>
-                <span>{{ featured.readingMinutes }} 分鐘閱讀</span>
+                <span v-if="featured.readingMinutes">{{ featured.readingMinutes }} 分鐘閱讀</span>
               </div>
             </div>
           </article>
@@ -202,7 +202,7 @@ usePageHead({
                 <div class="c-card__meta">
                   <span><a v-if="article.author.doctorSlug" :href="`/team/${article.author.doctorSlug}/`">{{ article.author.name }}</a><template v-else>{{ article.author.name }}</template></span>
                   <span>{{ formatDisplayDate(article.displayDate) }}</span>
-                  <span>{{ article.readingMinutes }} 分鐘閱讀</span>
+                  <span v-if="article.readingMinutes">{{ article.readingMinutes }} 分鐘閱讀</span>
                 </div>
               </div>
             </article>

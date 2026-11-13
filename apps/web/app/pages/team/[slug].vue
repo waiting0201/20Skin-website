@@ -284,8 +284,7 @@ usePageHead({
           </div>
           <div class="c-card__body">
             <span class="c-tag c-card__tag">{{ article.category }}</span>
-            <!-- ⚠️ 正式站的文章 slug 尚未確定（見 app/data/doctors.ts 註解），暫連到列表頁 -->
-            <h3 class="c-card__title"><a href="/blog/">{{ article.title }}</a></h3>
+            <h3 class="c-card__title"><a :href="article.href">{{ article.title }}</a></h3>
             <p class="c-card__excerpt">{{ article.excerpt }}</p>
             <div class="c-card__meta">
               <span>{{ article.byline }}</span>
@@ -389,7 +388,7 @@ usePageHead({
           <span class="u-eyebrow">OUR TEAM</span>
           <h2>同院區其他醫師</h2>
         </div>
-        <a class="c-sechead__more" href="/team/">查看全部 {{ DOCTORS.length }} 位醫師 →</a>
+        <a class="c-sechead__more" href="/team/">查看全部 {{ DOCTORS.length }} 位團隊成員 →</a>
       </div>
 
       <div class="grid grid--4">

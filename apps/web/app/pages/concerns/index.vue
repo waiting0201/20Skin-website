@@ -123,7 +123,7 @@ usePageHead({
           <h2>已經知道方向了？</h2>
           <p>直接從療程分類進入，查看各項目的作用方式、恢復期與注意事項。</p>
         </div>
-        <a class="c-sechead__more" href="/treatments/">查看全部 27 項療程 →</a>
+        <a class="c-sechead__more" href="/treatments/">查看全部療程 →</a>
       </div>
 
       <div class="grid grid--4">

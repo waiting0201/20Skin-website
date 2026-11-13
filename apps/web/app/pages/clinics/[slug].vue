@@ -227,7 +227,7 @@ onMounted(() => {
         <div class="c-sechead__text">
           <span class="u-eyebrow">OPENING HOURS</span>
           <h2>門診時段</h2>
-          <p>上午、下午兩個診次，午休時段不看診。</p>
+          <p v-if="clinic.hoursPeriods.length > 1">分為{{ clinic.hoursPeriods.join('、') }}診次，診次之間的時段不看診。</p>
         </div>
       </div>
 

@@ -114,6 +114,12 @@ function hoursSummary(hours: BusinessHourRow[]): string {
   return out.join('／')
 }
 
+/** 電話 → `tel:` 連結。沒有數字就回空字串，呼叫端不輸出連結。 */
+export function telHref(phone: string): string {
+  const digits = phone.replace(/[^0-9]/g, '')
+  return digits ? `tel:+886${digits.replace(/^0/, '')}` : ''
+}
+
 export async function getClinicNap() {
   const clinics = await loadUnit(UNIT.clinic)
   return clinics
@@ -126,6 +132,7 @@ export async function getClinicNap() {
     slug: c.slug as string,
     href: c.urlPath ?? `/clinics/${c.slug}/`,
     phone: (c.fields.phone as string) ?? '',
+    phoneHref: telHref((c.fields.phone as string) ?? ''),
     address: (c.fields.address as string) ?? '',
     hours: hoursSummary((c.fields.businessHours ?? []) as BusinessHourRow[]),
   }))

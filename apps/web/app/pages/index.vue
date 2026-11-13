@@ -221,7 +221,7 @@ usePageHead({
               <div class="c-card__meta">
                 <span>{{ item.authorLabel }}</span>
                 <span>{{ item.displayDate }}</span>
-                <span>{{ item.readingMinutes }} 分鐘閱讀</span>
+                <span v-if="item.readingMinutes">{{ item.readingMinutes }} 分鐘閱讀</span>
               </div>
             </div>
           </article>

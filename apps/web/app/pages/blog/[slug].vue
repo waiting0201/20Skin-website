@@ -197,7 +197,7 @@ usePageHead({
           <div class="article-byline__meta">
             <span>發布日期 {{ displayDateText }}</span>
             <span v-if="dateModifiedText && dateModifiedText !== displayDateText">最後更新 {{ dateModifiedText }}</span>
-            <span>閱讀時間 約 {{ article.readingMinutes }} 分鐘</span>
+            <span v-if="article.readingMinutes">閱讀時間 約 {{ article.readingMinutes }} 分鐘</span>
           </div>
         </div>
       </div>
@@ -252,7 +252,6 @@ usePageHead({
         <div class="c-sechead__text">
           <span class="u-eyebrow">RELATED TREATMENTS</span>
           <h2>本文提到的療程</h2>
-          <p>依文章內容自動帶出的關聯療程，由後台「關聯療程」欄位設定，工程端不需在內文手動插入連結。</p>
         </div>
       </div>
 
@@ -333,7 +332,7 @@ usePageHead({
             <div class="c-card__meta">
               <span>{{ related.author.name }}</span>
               <span>{{ formatDisplayDate(related.displayDate) }}</span>
-              <span>{{ related.readingMinutes }} 分鐘閱讀</span>
+              <span v-if="related.readingMinutes">{{ related.readingMinutes }} 分鐘閱讀</span>
             </div>
           </div>
         </article>

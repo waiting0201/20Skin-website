@@ -29,7 +29,9 @@ export const REDIRECT_SOURCE_LABEL: Record<RedirectSource, string> = {
 }
 
 /** docs/08-database.md §H 允許的狀態碼；欄位本身是 smallint，不限死 301。 */
-export const REDIRECT_STATUS_CODES = [301, 302, 410] as const
+// 🔴 只列資料庫收、前台也處理得了的兩種。原本還有 410：資料庫的 CK_Redirects_StatusCode
+//    只收 301／302／307／308，選了一定存不進去；前台的 catch-all 也沒有 410 這條路。
+export const REDIRECT_STATUS_CODES = [301, 302] as const
 export type RedirectStatusCode = (typeof REDIRECT_STATUS_CODES)[number]
 
 export interface RedirectRecord {
@@ -233,7 +235,7 @@ function evaluateRows(
       issues.push({ level: 'error', code: 'INVALID_ROW', message: '來源路徑與目標路徑都不能是空的。' })
     }
     if (input.statusCode !== undefined && !isValidStatusCode(input.statusCode)) {
-      issues.push({ level: 'error', code: 'INVALID_ROW', message: `狀態碼 ${input.statusCode} 不支援，僅接受 301／302／410。` })
+      issues.push({ level: 'error', code: 'INVALID_ROW', message: `狀態碼 ${input.statusCode} 不支援，僅接受 301／302。` })
     }
 
     let conflictsWithId: number | undefined

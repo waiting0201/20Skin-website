@@ -60,8 +60,8 @@ public static class Indexability
         return (ContentType)contentType switch
         {
             // 療程：要有簡述**與**「事實一覽」才算寫完。
-            // ⚠️ 與前台 `treatments/[category]/[slug].vue` 的 hasFullContent 同一條：
-            //    `Boolean(treatment.summary && treatment.facts?.length)`。
+            // ⚠️ 與前台 `data/treatments.ts` 的 `hasFullContent` 同一條：頂層摘要 ＋ facts 有列。
+            //    （2026-11-13 前前台看的其實是副標，兩邊會給出相反的答案。）
             //    28 項裡目前只有 1 項通過 —— 其餘的療程時間／術後照護／禁忌症
             //    舊站一項都沒有，仍待醫師撰寫（CLAUDE.md 關鍵數字）。
             ContentType.Treatment =>

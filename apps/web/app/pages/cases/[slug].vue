@@ -30,7 +30,8 @@ usePageHead({
   // ⚠️ 讀的是已核准的版本快照，所以後台改完要重新發布才會生效。
   seo: item.seo,
   title: `${item.title}｜案例分享`,
-  description: `${item.facts.condition}${item.title}紀錄，${item.facts.sessions}、${item.facts.period}。反應因個人體質與膚況而異，需經醫師面診評估。`,
+  // ⚠️ 個案條件那幾格可以留空 —— 留空的不要拼進去（原本會輸出「undefined紀錄，undefined、undefined」）。
+  description: `${item.facts.condition ?? ''}${item.title}紀錄${[item.facts.sessions, item.facts.period].filter(Boolean).map((s, i) => (i ? '、' : '，') + s).join('')}。反應因個人體質與膚況而異，需經醫師面診評估。`,
   // ⚠️ 07 是內文區塊（BodyBlocks）的樣式 —— 案例改用單一內文編輯器之後與文章共用（2026-11-11）。
   pageCss: ['/assets/pages/15-case-detail.css', '/assets/pages/07-article-detail.css'],
   path: `/cases/${item.slug}/`,
@@ -61,7 +62,7 @@ usePageHead({
        ===================================================================== -->
   <header class="case-head">
     <div class="container--narrow">
-      <a class="c-tag" :href="item.concernHref">{{ item.concernLabel }}</a>
+      <a v-if="item.concernLabel" class="c-tag" :href="item.concernHref">{{ item.concernLabel }}</a>
       <h1>{{ item.title }}</h1>
       <p class="case-head__lede">{{ item.lede }}</p>
     </div>
@@ -148,8 +149,9 @@ usePageHead({
     <!-- =====================================================================
          5. 醫師說明
          ===================================================================== -->
-    <div class="case-doctor">
+    <div v-if="item.doctorQuote" class="case-doctor">
       <img
+        v-if="item.doctorQuote.avatar"
         class="case-doctor__avatar"
         :src="item.doctorQuote.avatar.src"
         :alt="item.doctorQuote.avatar.alt"
@@ -175,7 +177,6 @@ usePageHead({
         <div class="c-sechead__text">
           <span class="u-eyebrow">TREATMENTS USED</span>
           <h2>本案例使用的療程</h2>
-          <p>由後台「案例」模組的關聯療程欄位帶出，不在內文手動插入連結。</p>
         </div>
         <a class="c-sechead__more" href="/treatments/">查看全部療程 →</a>
       </div>

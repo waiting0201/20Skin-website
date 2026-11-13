@@ -137,6 +137,13 @@ export interface Treatment {
   /** Treatments.Subtitle，同時作為 AI 摘要的 40–60 字直答式段落
    *  （docs/03-seo-geo.md §4 ②），渲染於細節頁 Hero 副標。 */
   summary?: string
+  /**
+   * 「這一頁寫完了沒」：**摘要與規格數據列都有值**。完整版型與「內容建置中」精簡版靠它分。
+   * 🔴 與 `functions/Common/Indexability.cs` 的療程那一條是同一個判斷（都看頂層的摘要，
+   *    不是上面那個其實是副標的 `summary`）。2026-11-13 前前台看副標、API 看摘要：
+   *    填了摘要沒填副標 → 頁面顯示建置中卻被收錄；反過來 → 整頁正常卻 noindex。
+   */
+  hasFullContent: boolean
   facts?: TreatmentFact[]
   indicationsHeading?: string
   indications?: TreatmentIndication[]
@@ -253,6 +260,7 @@ function toTreatment(ctx: TreatmentContext, record: ContentRecord): Treatment {
   const mechanism = parseBlocks<{ heading: string | null; paragraphs: string[]; image: unknown } | null>(f.mechanism, null)
   const precautions = parseBlocks<{ items: string[]; note: string | null } | null>(f.contraindications, null)
   const gallery = (f.images ?? []) as { image: unknown; caption: string | null; sortOrder: number }[]
+  const facts = parseBlocks<TreatmentFact[]>(f.facts, [])
 
   // 「此療程可改善的困擾」是關聯（型別 2），不是一組字串欄位。
   const concernTags = relationsOf(record, REL.treatmentToConcern).map((r) => r.toTitle as string)
@@ -270,7 +278,8 @@ function toTreatment(ctx: TreatmentContext, record: ContentRecord): Treatment {
     cardTags: concernTags.length ? concernTags : undefined,
     cardImage: f.cover ? toImage(f.cover, record.title) : undefined,
     summary: (f.subtitle as string) ?? undefined,
-    facts: parseBlocks<TreatmentFact[]>(f.facts, []),
+    hasFullContent: Boolean(record.summary?.trim()) && facts.length > 0,
+    facts,
     indicationsHeading: indications?.heading ?? undefined,
     indications: indications?.items,
     mechanismBody: mechanismBodyOf(record),

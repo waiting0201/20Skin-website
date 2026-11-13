@@ -216,6 +216,10 @@ node tools/admin-e2e/publish-flow.mjs  # 🔴 會改資料：改一筆 → 發�
 # 🔴 會改資料、只能對本機：每個文字欄位蓋記號 → 發布 → 爬前台 → 還原（改了後台欄位一定要跑，決策 33 ⑦）
 node --experimental-strip-types --import ./tools/content-roundtrip/register.mjs tools/admin-e2e/field-effect.mjs
 
+# 🔴 會改資料、只能對本機：已發布的內容只改 SEO → 狀態回草稿 → 發布 → 前台換了 → 還原（2026-11-13）
+#    存 SEO 與存本文、改關聯同一條規則：已發布的回草稿，要再按發布才上線。
+node tools/admin-e2e/seo-only.mjs --web http://localhost:3000
+
 # API 煙霧測試（改完 API 或後台資料層一定要跑，說明見 tools/api-smoke/README.md）
 node tools/api-smoke/read.mjs                  # 唯讀，可對任何環境跑
 node tools/api-smoke/write.mjs                 # 🔴 會真的改資料，只能對用完即丟的資料庫跑

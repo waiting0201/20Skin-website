@@ -366,7 +366,7 @@ async function saveSeo(): Promise<boolean> {
     record.value = await adminApi.content.updateSeo(props.unit, props.id, payload, user!.id)
     resetForms('seo') // ⚠️ 只重設 SEO：本文那邊可能有還沒存的修改
     seoErrors.value = {}
-    actionNotice.value = 'SEO 設定已儲存。'
+    actionNotice.value = 'SEO 設定已儲存。按上方的「發布」之後前台才會套用。'
     actionNoticeKind.value = 'success'
     return true
   } catch (e) {

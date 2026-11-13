@@ -69,6 +69,8 @@ export interface ConcernDetail {
    * ⚠️ 空陣列＝這一筆還沒在新編輯器存過，退回舊的四區。判斷要與 `AiChunker.ConcernSections` 一致。
    */
   body: ArticleBodyBlock[]
+  /** 舊的四個固定版型欄位（症狀／成因／自我判斷／何時就醫）有沒有任何一個有值。 */
+  hasLegacyBody: boolean
   symptomHeading: string
   symptomMedia: Image
   symptomParagraphs: string[]
@@ -180,9 +182,19 @@ function toConcern(ctx: ConcernContext, record: ContentRecord): Concern {
       image: toImage(d.fields.photo, d.title),
     }))
 
-  const detail: ConcernDetail | undefined = body.length || symptoms || causes || selfCheck || warn
+  const faqRelations = relationsOf(record, REL.concernToFaq)
+  const articleRelations = relationsOf(record, REL.concernToArticle)
+  const hasLegacyBody = Boolean(symptoms || causes || selfCheck || warn)
+
+  // 🔴 **有內文，或有任何一組關聯，就走完整版型**（2026-11-13）。
+  //    原本只看內文：8 筆裡 7 筆的內文是空的，於是那 7 筆在後台挑的建議療程、推薦理由、
+  //    FAQ、延伸閱讀與區段引言整批不顯示 —— 存得進去、發布了、頁面一個字都沒變。
+  //    各區自己看有沒有東西可列（模板的 v-if），沒有的那一區不渲染。
+  const detail: ConcernDetail | undefined = body.length || hasLegacyBody
+    || treatments.length || doctors.length || faqRelations.length || articleRelations.length
     ? {
         body,
+        hasLegacyBody,
         symptomHeading: symptoms?.heading ?? '',
         symptomMedia: toImage(symptoms?.media),
         symptomParagraphs: symptoms?.paragraphs ?? [],
@@ -200,12 +212,12 @@ function toConcern(ctx: ConcernContext, record: ContentRecord): Concern {
         doctorsIntro: intro.doctorsIntro ?? '',
         doctors,
         // 「最後更新」取這一頁引用到的 FAQ 裡最新的一筆審閱日，不另存一份會過期的字串。
-        faqUpdated: relationsOf(record, REL.concernToFaq)
+        faqUpdated: faqRelations
           .map((r) => (ctx.faqs.find((x) => x.slug === r.toSlug)?.fields.lastReviewedOn as string) ?? '')
           .filter(Boolean)
           .sort()
           .at(-1)?.slice(0, 7) ?? '',
-        faqs: relationsOf(record, REL.concernToFaq).map((r) => {
+        faqs: faqRelations.map((r) => {
           const faq = ctx.faqs.find((x) => x.slug === r.toSlug)
           return { q: faq?.title ?? (r.toTitle as string), a: (faq?.fields.webAnswer as string) ?? '' }
         }),
@@ -213,7 +225,7 @@ function toConcern(ctx: ConcernContext, record: ContentRecord): Concern {
         //    （`{{ article.tag }}` 與 `v-for="m in article.meta"`）。
         //    2026-09-16 由 `nuxt typecheck` 抓到它們從來沒有被產生過：
         //    Vue 讀不存在的屬性不會報錯，只是把那個位置渲染成空白。
-        articles: relationsOf(record, REL.concernToArticle).map((r) => {
+        articles: articleRelations.map((r) => {
           const a = ctx.articles.find((x) => x.slug === r.toSlug)
           const category = ctx.terms.find((t) => t.id === a?.fields.categoryTermId)
           const displayDate = String(a?.fields.displayDate ?? '').slice(0, 10)

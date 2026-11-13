@@ -164,7 +164,7 @@ usePageHead({
           <h2>{{ category.name }}醫師團隊</h2>
           <p>執行{{ category.name }}項目的皮膚科專科醫師，依膚況規劃療程並全程把關。</p>
         </div>
-        <a class="c-sechead__more" href="/team/">查看全部 14 位團隊成員 →</a>
+        <a class="c-sechead__more" href="/team/">查看全部團隊成員 →</a>
       </div>
 
       <div class="grid grid--4">

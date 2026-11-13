@@ -28,7 +28,7 @@ if (!category || !treatment) {
 
 // 是否有可用的細節內容（facts／indications／mechanism 等）。
 // 只有這些欄位有值時才顯示完整版型，否則顯示「內容建置中」的精簡版。
-const hasFullContent = Boolean(treatment.summary && treatment.facts?.length)
+const hasFullContent = treatment.hasFullContent
 
 const tocItems = computed(() => {
   const items: { href: string; label: string }[] = []
