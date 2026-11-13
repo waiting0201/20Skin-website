@@ -42,7 +42,7 @@ usePageHead({
         <div class="about-hero__media">
           <div class="c-ring c-ring--gold about-hero__ring" aria-hidden="true"></div>
           <div class="about-hero__frame">
-            <img src="/assets/img/photo-glass-facade-wide.jpg" alt="四季診所玻璃立面與 20SKIN 蝕刻標誌" width="1800" height="1200">
+            <img src="/assets/img/photo-about-hero.jpg" alt="診所外牆上的 20SKIN 立體標誌，前景是綠葉" width="1800" height="1200">
           </div>
         </div>
       </div>
