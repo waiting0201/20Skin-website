@@ -952,9 +952,12 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    ⑦ **地圖與兩個據點頁同一種做法**（Tim 選定）：以地址查詢的 Google 地圖 iframe，捲到附近才掛上。沒有座標欄位。
    ⑧ **照片沒上傳時顯示建置產物裡的四張舊站院內照**（`pages.ts` 的 `DENTAL_DEFAULT_*`，750×450，是硬上限、不要放大）；
       後台傳了就換掉 —— 頁首與院內環境各自判斷。
-   🔴 **部署之後要對正式環境跑一次 `node tools/legacy-import/import-dental.mjs --api https://api.20skin.tw/api/v1`**。
-      migration 只換了頁面的身分與標題，內文是空的；沒跑的話 `/dental/` 只有標題與預設照片，而且不會有任何錯誤訊息。
-      腳本只在內文還是空的時候寫入（院方改過之後再跑會被跳過，要蓋掉加 `--force`）。
+   🔴 **初始內容由 migration `SeedDentalPageContent` 寫入**（工作副本＋已發布快照＋`SearchText`，只在內文是空的時候寫）。
+      原本是部署後跑匯入腳本走 API —— **對正式環境登不進去**：`POST /auth/login` 有 reCAPTCHA v3，腳本拿不到 token
+      （`BOT_CHECK_FAILED`）。那支腳本已刪除。**任何「部署後對正式環境跑一支要登入的腳本」的計畫都會撞到同一件事**；
+      要寫正式資料只有兩條路：後台畫面，或 migration。
+   ⚠️ 正式站實際打的 API 是 **`https://func-20skin-web-api-prod.azurewebsites.net/api/v1`**（GitHub 變數 `API_BASE_URL`），
+      不是 `api.20skin.tw` —— 那個主機名稱 DNS 還沒切、解析不到（2026-11-13 實查）。站台網域目前是 `20skin.4webdemo.com`。
    ⚠️ CI 是先遷移後部署：遷移跑完、新前台還沒上去的那幾分鐘，選單那一項已指向 `/dental/`，舊前台會回 404。
    ⚠️ **待院方確認**：主治項目的四個分組名稱與頁首那句介紹是設計時加的（舊站只有一串十項）；
       門診時段照舊站那張被塗改過的時段圖（一晚、二早、三午、五晚、六早）。

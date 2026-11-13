@@ -16,7 +16,7 @@ namespace Skin20.Api.Data.Migrations
     /// <para>
     /// ② <b>已發布快照的標題一併改掉</b>。選單名稱與前台標題讀的是快照、不是 <c>ContentItems.Title</c>
     /// （決策 14、29）—— 只改工作副本的話，選單會一直寫「案例分享」到有人按下發布為止。
-    /// 內文不在這裡補：頁面內容由 <c>tools/legacy-import/import-dental.mjs</c> 走真正的 API 寫入並發布。
+    /// 內文不在這裡補：由下一支 migration <c>SeedDentalPageContent</c> 寫入。
     /// </para>
     /// <para>
     /// ③ <b>所有案例下架</b>（<c>Status = 4</c>，資料一筆都不刪）。下架之後它們從 sitemap、站內搜尋、

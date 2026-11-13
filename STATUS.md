@@ -556,7 +556,7 @@ Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/ad
   後台「案例」入口拿掉、允赫齒科的表單與「據點」同一套輸入元件
 - 本機驗過：`typecheck`（前後台）、`verify:css`、`verify:seo-head`、content-roundtrip、`local-db.sh rehearse`／`rehearse-data 1`、
   `admin-e2e/check.mjs`（41 項）、`field-effect.mjs`（64 個欄位改了前台都有反應，0 個沒出現）
-- 🔴 **部署後要做**：對正式環境跑 `tools/legacy-import/import-dental.mjs`（內文靠它寫入，見決策 34）
+- 內文由 migration `SeedDentalPageContent` 寫入（匯入腳本對正式環境登不進去：登入有 reCAPTCHA，已刪除，見決策 34）
 - ⚠️ 待院方確認：主治項目分組名稱、頁首介紹、門診時段；待院方提供：解析度夠的院內照片（現有四張只有 750×450）
 - ⚠️ 還沒動：客戶版 PDF（`output/`）與 docs/02、docs/08 裡描述案例模型的段落 —— 模型還在，只是前台與後台入口拿掉
 
