@@ -39,14 +39,15 @@ public class AiChunkerTests
     public void 內容未寫完的療程_有什麼就收什麼()
     {
         // 決策 28（2026-10-02）：AI 用 IsAiEligible，不是 IsIndexable。
-        // 青萃光沒有簡述與事實一覽（搜尋引擎那一份判它 noindex），但適應症與許可證字號是真的資料。
+        // 青萃光沒有簡述與事實一覽，但適應症與許可證字號是真的資料。
+        // ⚠️ 2026-11-13 起搜尋引擎那一份也收這種療程了（任何一區有內容就收），下面的斷言跟著反過來。
         const string json = """
             {"title":"DermaV 青萃光","summary":null,"fields":{
               "indications":"{\"heading\":\"青萃光可以處理哪些問題？\",\"items\":[{\"title\":\"精準處理不同型態血管\",\"desc\":\"雙波長血管雷射\"}]}",
               "deviceInfo":"[{\"label\":\"醫療器材許可字號\",\"value\":\"衛署醫器輸字第021691號\"}]",
               "facts":null}}
             """;
-        Assert.False(Indexability.IsIndexable((byte)ContentType.Treatment,
+        Assert.True(Indexability.IsIndexable((byte)ContentType.Treatment,
             (System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(json)!));
 
         var chunks = Chunk(ContentType.Treatment, json);

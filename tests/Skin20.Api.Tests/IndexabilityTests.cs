@@ -12,31 +12,36 @@ public class IndexabilityTests
     private static byte T(ContentType t) => (byte)t;
     private static JsonObject Obj(string json) => (JsonObject)JsonNode.Parse(json)!;
 
-    // ── 療程：要有 summary 與 facts ──────────────────────────────────
-
-    [Fact]
-    public void 療程有簡述與事實一覽_可收錄()
-        => Assert.True(Indexability.IsIndexable(T(ContentType.Treatment),
-            Obj("""{"summary":"簡述","fields":{"facts":[{"label":"時間","value":"30 分鐘"}]}}""")));
-
-    [Fact]
-    public void 療程的區塊欄位是_JSON_字串_也要能判斷()
-        // 區塊欄位在快照裡是「一個 JSON 字串」（API 存 GetRawText()），不是物件。
-        => Assert.True(Indexability.IsIndexable(T(ContentType.Treatment),
-            Obj("""{"summary":"簡述","fields":{"facts":"[{\"label\":\"時間\"}]"}}""")));
+    // ── 療程：任何一區有內容就收（2026-11-13 放寬，原本要 summary 與 facts 都有）──
 
     [Theory]
-    [InlineData("""{"summary":"簡述","fields":{"facts":[]}}""")]
+    [InlineData("""{"summary":"簡述","fields":{"facts":[{"label":"時間","value":"30 分鐘"}]}}""")]
+    // 區塊欄位在快照裡是「一個 JSON 字串」（API 存 GetRawText()），不是物件。
+    [InlineData("""{"summary":"簡述","fields":{"facts":"[{\"label\":\"時間\"}]"}}""")]
+    // 沒有摘要也收 —— 正式站 28 筆就是這個形狀：只有適應症與儀器資訊。
+    [InlineData("""{"summary":null,"fields":{"indications":"{\"heading\":null,\"items\":[{\"title\":\"x\"}]}"}}""")]
+    [InlineData("""{"fields":{"deviceInfo":"[{\"label\":\"許可證\",\"value\":\"x\"}]"}}""")]
+    [InlineData("""{"summary":"","fields":{"facts":[{"label":"x"}]}}""")]
+    [InlineData("""{"fields":{"steps":[{"num":1}]}}""")]
+    [InlineData("""{"fields":{"aftercare":[{"when":"當天"}]}}""")]
+    [InlineData("""{"fields":{"mechanismBlocks":[{"type":"paragraph","text":"x"}]}}""")]
+    [InlineData("""{"fields":{"mechanism":{"heading":"h","paragraphs":["p"]}}}""")]
+    [InlineData("""{"fields":{"contraindications":{"items":["孕婦"],"note":null}}}""")]
+    public void 療程任何一區有內容_可收錄(string snapshot)
+        => Assert.True(Indexability.IsIndexable(T(ContentType.Treatment), Obj(snapshot)));
+
+    [Theory]
+    [InlineData("""{"summary":"簡述","fields":{"facts":[]}}""")]               // 只有摘要不算：頁面上仍是「內容建置中」
     [InlineData("""{"summary":"簡述","fields":{"facts":"[]"}}""")]
     [InlineData("""{"summary":"簡述","fields":{}}""")]
     [InlineData("""{"summary":"簡述"}""")]
     [InlineData("""{"summary":"簡述","fields":{"facts":null}}""")]
     [InlineData("""{"summary":"簡述","fields":{"facts":"不是 JSON {"}}""")]
     [InlineData("""{"summary":"簡述","fields":{"facts":"{\"a\":1}"}}""")]       // 物件不是陣列
-    [InlineData("""{"summary":"","fields":{"facts":[{"label":"x"}]}}""")]
-    [InlineData("""{"summary":"   ","fields":{"facts":[{"label":"x"}]}}""")]
-    [InlineData("""{"fields":{"facts":[{"label":"x"}]}}""")]
-    public void 療程缺簡述或缺事實一覽_不收錄(string snapshot)
+    [InlineData("""{"fields":{"indications":"{\"heading\":\"h\",\"items\":[]}"}}""")]   // 只有標題、沒有項目
+    [InlineData("""{"fields":{"mechanism":{"heading":"h","paragraphs":[]}}}""")]
+    [InlineData("""{"fields":{"images":[{"caption":"x"}],"nameEn":"X"}}""")]    // 圖庫與名稱不算療程說明
+    public void 療程每一區都是空的_不收錄(string snapshot)
         => Assert.False(Indexability.IsIndexable(T(ContentType.Treatment), Obj(snapshot)));
 
     // ── 頁面：sections 存在但為空 → 只有骨架 ─────────────────────────
