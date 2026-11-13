@@ -26,8 +26,11 @@ if (!category || !treatment) {
   throw await notFoundUnlessRedirected({ statusMessage: '找不到這個療程' })
 }
 
-// 是否有可用的細節內容（facts／indications／mechanism 等）。
-// 只有這些欄位有值時才顯示完整版型，否則顯示「內容建置中」的精簡版。
+// 「這一頁寫完了沒」（摘要＋規格數據列）—— 只決定要不要輸出 MedicalProcedure，
+// 與 API 的收錄判斷（`indexable`）同一條。
+// 🔴 **不再拿它決定版面**（2026-11-13）。原本是「寫完才顯示整頁，否則只有一句建置中」：
+//    正式站 28/29 筆在後台有適應症、儀器資訊與關聯，前台一個字都沒出現。
+//    現在每一區各自看有沒有資料（下面的 tocItems），整頁都空才顯示「建置中」。
 const hasFullContent = treatment.hasFullContent
 
 const tocItems = computed(() => {
@@ -47,9 +50,17 @@ const tocItems = computed(() => {
   if (treatment.articles?.length) items.push({ href: '#articles', label: '相關文章' })
   return items
 })
+/** 至少有一區有東西可以顯示。目錄與樣板的 v-if 是同一組條件，所以直接數目錄。 */
+const hasAnyContent = computed(() => tocItems.value.length > 0)
 
-const description = treatment.summary
-  ?? `${treatment.title}（${treatment.nameEn}）屬於${category.name}分類，詳細療程內容規劃中，實際適用性需經醫師面診評估。`
+// 副標 → 摘要 → 預設句。⚠️ 「詳細療程內容規劃中」只在整頁都沒有內容時才說，
+//    否則會跟下面已經顯示出來的適應症、儀器資訊互相矛盾。
+const fallbackName = `${treatment.title}${treatment.nameEn ? `（${treatment.nameEn}）` : ''}`
+const description = treatment.summary?.trim()
+  || treatment.cardExcerpt?.trim()
+  || (hasAnyContent.value
+    ? `${fallbackName}屬於${category.name}分類，實際適用性需經醫師面診評估。`
+    : `${fallbackName}屬於${category.name}分類，詳細療程內容規劃中，實際適用性需經醫師面診評估。`)
 
 // MedicalProcedure（docs/03-seo-geo.md §2）—— 欄位缺什麼就不寫什麼，不補內容。
 const procedureJsonLd: Record<string, unknown> = {
@@ -163,7 +174,7 @@ usePageHead({
   <!-- =====================================================================
        內容建置中（stub）——沒有站內細節內容的療程，不編造醫療內容
        ===================================================================== -->
-  <section v-if="!hasFullContent" class="section section--tight">
+  <section v-if="!hasAnyContent" class="section section--tight">
     <div class="container">
       <p class="c-note">
         <span class="c-note__icon" aria-hidden="true">&#9432;</span>
