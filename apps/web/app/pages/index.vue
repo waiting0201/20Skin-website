@@ -89,7 +89,7 @@ usePageHead({
         <p class="home-hero__lede">人生最大的快樂，來自對美的欣賞，而「藝術」是美的最高境界。</p>
         <p class="home-hero__desc">20SKIN 結合皮膚科專科醫療與個人化精準評估，以「新中式美學」的節制手法，為每一位求美者規劃屬於自己的自然樣貌，而非單一標準的臉孔。</p>
         <div class="home-hero__cta">
-          <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+          <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
         </div>
       </div>
 

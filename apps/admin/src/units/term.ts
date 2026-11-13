@@ -34,9 +34,12 @@ export const termUnit: UnitDefinition = {
         { value: '4', label: '文章標籤' },
       ],
     },
-    { key: 'intro', label: '介紹文案', type: 'structured', group: '基本資料',
+    // 🔴 前台只有療程分類頁與文章分類頁讀介紹文案（`termLede()`），只有療程分類讀封面圖。
+    //    FAQ 分類與文章標籤填了、傳了，前台一個字一張圖都不會變，所以不顯示（2026-11-13）。
+    { key: 'intro', label: '介紹文案', type: 'structured', group: '基本資料', termTypes: [1, 2],
       structured: ledeSchema('分類頁頂端的一句介紹。') },
-    { key: 'cover', label: '封面圖', type: 'image', group: '圖片' },
+    { key: 'cover', label: '封面圖', type: 'image', group: '圖片', termTypes: [1],
+      hint: '療程總覽與療程分類頁的主圖。' },
     {
       key: 'usageCount',
       label: '使用筆數',

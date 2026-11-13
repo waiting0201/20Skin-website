@@ -77,5 +77,8 @@ export const doctorUnit: UnitDefinition = {
     // RelationType=1（療程→醫師）從療程端維護；這裡是唯讀的反向顯示，
     // 「雙向關聯一律單向存」（docs/08 §D）。
     { key: 'treatments', label: '關聯療程', relationType: 1, targetUnit: 'treatment', sortable: false, editable: false },
+    // 🔴 困擾頁「相關醫師」那一區的名單就是這個關聯（RelationType=13，存在醫師這一端）。
+    //    2026-11-13 前後台沒有任何入口：困擾那邊改得到那一區的開場白，卻增減不了醫師。
+    { key: 'concerns', label: '相關肌膚困擾（這位醫師會列在該困擾頁的「相關醫師」）', relationType: 13, targetUnit: 'concern', sortable: true, editable: true },
   ],
 }

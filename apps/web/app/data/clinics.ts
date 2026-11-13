@@ -142,7 +142,6 @@ import { eyebrowFor } from './_presentation'
 /** 版面字串：與內容無關，改版面才會動。 */
 const PRESENTATION: Record<string, {
   eyebrow: string
-  jsonLdDescription: string
   roleLabel: string
   medicalSpecialty: string[]
   facebookUrl?: string
@@ -150,7 +149,6 @@ const PRESENTATION: Record<string, {
 }> = {
   siji: {
     eyebrow: 'SIJI CLINIC',
-    jsonLdDescription: '四季診所位於台中市南屯區公益路二段，提供醫學美容與光電雷射療程，並設有皮膚科健保門診。',
     roleLabel: 'MEDICAL AESTHETICS',
     // ⚠️ 牙科（允赫齒科）是二林的另一家診所，不是四季診所的科別 ——
     //    這裡原本掛著 CosmeticDentistry，等於在 JSON-LD 裡對 Google 宣稱一件不存在的事。
@@ -160,7 +158,6 @@ const PRESENTATION: Record<string, {
   },
   erlin: {
     eyebrow: 'ERLIN CLINIC',
-    jsonLdDescription: '二林四季皮膚科位於彰化縣二林鎮儒林路二段，提供皮膚科一般診療與醫學美容療程。',
     roleLabel: 'DERMATOLOGY',
     medicalSpecialty: ['Dermatology'],
     facebookUrl: 'https://www.facebook.com/20skin.tw',
@@ -267,7 +264,7 @@ function toClinic(faqs: ContentRecord[], nap: Awaited<ReturnType<typeof getClini
   const f = record.fields
   const slug = record.slug as ClinicSlug
   const look = PRESENTATION[slug] ?? {
-    eyebrow: '', jsonLdDescription: '', roleLabel: '', medicalSpecialty: [],
+    eyebrow: '', roleLabel: '', medicalSpecialty: [],
   }
   const napRow = nap.find((n) => n.slug === record.slug)
   const hours = ((f.businessHours ?? []) as { dayOfWeek: number; startTime: string; endTime: string; sortOrder: number }[])
@@ -292,7 +289,9 @@ function toClinic(faqs: ContentRecord[], nap: Awaited<ReturnType<typeof getClini
     hoursSummary: napRow?.hours ?? '',
     pageDescription: (record.seo?.metaDescription as string) ?? record.summary ?? '',
     seo: seoOverridesOf(record),
-    jsonLdDescription: look.jsonLdDescription,
+    // 結構化資料的描述＝這個據點的摘要（後台改得到）。原本是依 slug 寫死、內含路名的一句話，
+    // 院區搬遷時 JSON-LD 的 address 會換、description 不會。
+    jsonLdDescription: record.summary ?? '',
     medicalSpecialty: look.medicalSpecialty,
     facebookUrl: look.facebookUrl,
     lineUrl: (f.lineUrl as string) || undefined,

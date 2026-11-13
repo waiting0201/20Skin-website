@@ -40,7 +40,7 @@ export const CHANGE_FREQ_OPTIONS: ChangeFreq[] = ['always', 'hourly', 'daily', '
 function defaultSitemapFiles(): SitemapFileConfig[] {
   return [
     { key: 'pages', label: '固定頁面', fileName: 'sitemap-pages.xml', sourceUnits: ['page', 'clinic', 'case', 'faq'], enabled: true, defaultChangeFreq: 'monthly', defaultPriority: 0.5 },
-    { key: 'treatments', label: '療程', fileName: 'sitemap-treatments.xml', sourceUnits: ['treatment', 'term'], enabled: true, defaultChangeFreq: 'weekly', defaultPriority: 0.8 },
+    { key: 'treatments', label: '療程', fileName: 'sitemap-treatments.xml', sourceUnits: ['treatment'], enabled: true, defaultChangeFreq: 'weekly', defaultPriority: 0.8 },
     { key: 'concerns', label: '困擾', fileName: 'sitemap-concerns.xml', sourceUnits: ['concern'], enabled: true, defaultChangeFreq: 'weekly', defaultPriority: 0.7 },
     { key: 'doctors', label: '醫師', fileName: 'sitemap-doctors.xml', sourceUnits: ['doctor'], enabled: true, defaultChangeFreq: 'monthly', defaultPriority: 0.6 },
     { key: 'blog', label: '文章', fileName: 'sitemap-blog.xml', sourceUnits: ['article', 'term'], enabled: true, defaultChangeFreq: 'weekly', defaultPriority: 0.6 },
@@ -61,7 +61,7 @@ Disallow: /search/
 # AI 爬蟲：本站刻意放行——讀得到內容是 GEO 策略的先決條件。
 # 不要在這裡加 Disallow 擋 GPTBot／ClaudeBot／PerplexityBot 等。
 
-Sitemap: https://www.20skin.tw/sitemap.xml
+Sitemap: https://20skin.tw/sitemap.xml
 `
 
 

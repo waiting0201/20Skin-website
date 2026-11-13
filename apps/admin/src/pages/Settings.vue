@@ -193,7 +193,7 @@ async function save() {
             <div class="adm-field">
               <label class="adm-field__label">「聯絡我們」表單的收件信箱</label>
               <input v-model="form.contactEmail" class="adm-input" type="email" :disabled="!canEdit">
-              <p class="adm-field__hint">表單只寄通知信，後台不留存收件紀錄。</p>
+              <p class="adm-field__hint">訪客送出表單時寄通知信到這個信箱；留空就不會寄。留言內容另外會進「問題收件匣」，姓名與電話不留存。</p>
             </div>
             <div class="adm-field adm-field--span2">
               <label class="adm-field__label">分析追蹤 ID</label>
@@ -246,8 +246,9 @@ async function save() {
               <textarea v-model="form.aiFaq.welcomeMessage" class="adm-textarea" :disabled="!canEdit" />
             </div>
             <div class="adm-field">
-              <label class="adm-field__label">轉接真人：預約網址</label>
+              <label class="adm-field__label">線上預約網址</label>
               <input v-model="form.aiFaq.bookingUrl" class="adm-input" type="text" :disabled="!canEdit">
+              <p class="adm-field__hint">全站每一顆「立即預約」按鈕（頁首、各頁、線上諮詢面板）都連到這裡。留空則用預設的預約系統網址。</p>
             </div>
             <div class="adm-field">
               <label class="adm-field__label">轉接真人：LINE</label>

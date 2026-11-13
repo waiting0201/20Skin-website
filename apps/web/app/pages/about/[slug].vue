@@ -273,7 +273,7 @@ usePageHead({
         <p>歡迎預約門診，由醫師與美學團隊一起看過之後，再談需不需要做、要做什麼。</p>
       </div>
       <div class="story-cta__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
         <a class="btn btn--line" href="/team/">認識醫療團隊</a>
       </div>
     </div>

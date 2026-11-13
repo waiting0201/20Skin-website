@@ -108,6 +108,10 @@ const showStructuredData = computed(() => Boolean(record.value?.seo.structuredDa
  *    在這兩種上面填搜尋結果標題、摘要、分享縮圖，存得進去，前台一個字都不會變。
  *    ⚠️ 藏的是入口，`PUT …/seo` 與既有資料都沒動。
  */
+/** 這一筆要顯示的欄位：標了 `termTypes` 的只在那幾種分類型別出現（值仍照送）。 */
+const visibleFields = computed(() => def.value.fields.filter((f) =>
+  !f.termTypes || f.termTypes.includes(Number(record.value?.fields.termType))))
+
 const showSeoBlock = computed(() => {
   if (props.unit === 'faq') return false
   if (props.unit === 'term' && String(record.value?.fields.termType) === '4') return false
@@ -630,7 +634,7 @@ async function removeRecord() {
                 <input v-model="bodyForm.slug" class="adm-input" :class="{ 'is-invalid': bodyErrors.slug }" type="text" :disabled="!canEditBody || slugLocked" maxlength="160">
                 <p v-if="bodyErrors.slug" class="adm-field__error" role="alert">{{ bodyErrors.slug }}</p>
                 <p v-if="slugLocked" class="adm-field__hint">這是系統內建的項目，網址不能更動。</p>
-                <p v-else-if="!def.producesUrl" class="adm-field__hint">FAQ 沒有自己的獨立網頁，這一格是常見問題頁上的定位用代稱，但仍是必填。</p>
+                <p v-else-if="!def.producesUrl" class="adm-field__hint">FAQ 沒有自己的獨立網頁，這一格不會出現在網址上，只是系統內部辨識這一題用的代稱，但仍是必填。</p>
                 <p v-else class="adm-field__hint">這一頁網址的最後一段，只能用小寫英文、數字與連字號（-）。</p>
               </div>
               <div class="adm-field">
@@ -638,14 +642,16 @@ async function removeRecord() {
                 <input v-model.number="bodyForm.sortOrder" class="adm-input" type="number" :disabled="!canEditBody">
                 <p class="adm-field__hint">數字小的排前面。填的號碼已經有其他項目在用時，這一筆會插在它前面，後面的自動往後挪。</p>
               </div>
-              <div class="adm-field">
+              <!-- ⚠️ 沒有自己網頁的內容（FAQ 題目）與一律不收錄的文章標籤不顯示這一格：勾不勾結果都一樣。
+                   值仍原樣送回。 -->
+              <div v-if="showSeoBlock" class="adm-field">
                 <label class="adm-checkbox">
                   <input v-model="bodyForm.includeInSitemap" type="checkbox" :disabled="!canEditBody">
                   列入網站地圖
                 </label>
                 <p class="adm-field__hint">
-                  網站地圖是主動送給搜尋引擎的網址清單。
-                  這一格與下方 SEO 區塊的「不要被搜尋引擎收錄」是兩件事，兩格要一致才不會自相矛盾。
+                  網站地圖是主動送給搜尋引擎的網址清單，取消勾選後存檔就生效。
+                  下方 SEO 區塊勾了「不要被搜尋引擎收錄」的頁面，系統會自動不列入，不必兩格都改。
                 </p>
               </div>
             </div>
@@ -653,7 +659,7 @@ async function removeRecord() {
         </div>
 
         <div
-          v-for="group in [...new Set(def.fields.map((f) => f.group || '內容'))]"
+          v-for="group in [...new Set(visibleFields.map((f) => f.group || '內容'))]"
           :key="group"
           class="adm-card"
         >
@@ -666,7 +672,7 @@ async function removeRecord() {
                    ② 原生驗證擋下來時 submit 事件根本不會發生，`saveBody()`
                       的驗證與訊息就全部不會跑。驗證只留 validateBody 一條路。 -->
               <div
-                v-for="field in def.fields.filter((f) => (f.group || '內容') === group)"
+                v-for="field in visibleFields.filter((f) => (f.group || '內容') === group)"
                 :key="field.key"
                 class="adm-field"
                 :data-error-key="field.key"
@@ -899,6 +905,7 @@ async function removeRecord() {
             <label class="adm-field__label">搜尋結果標題</label>
             <input v-model="seoForm.seoTitle" class="adm-input" :class="{ 'is-invalid': seoErrors.seoTitle }" type="text" :disabled="!canEditSeo" placeholder="留空則由內容自動組出" maxlength="200">
             <p v-if="seoErrors.seoTitle" class="adm-field__error" role="alert">{{ seoErrors.seoTitle }}</p>
+            <p class="adm-field__hint">只填這一頁自己的標題即可，網站會自動在後面加上「｜站名」，不要自己再打一次。</p>
           </div>
           <div class="adm-field adm-field--span2" data-error-key="metaDescription">
             <label class="adm-field__label">搜尋結果摘要（Meta Description）</label>
@@ -911,10 +918,10 @@ async function removeRecord() {
             <textarea v-model="seoForm.aiSummary" class="adm-textarea" :class="{ 'is-invalid': seoErrors.aiSummary }" :disabled="!canEditSeo" maxlength="300" />
             <p v-if="seoErrors.aiSummary" class="adm-field__error" role="alert">{{ seoErrors.aiSummary }}</p>
             <p class="adm-field__hint">
-              顯示在頁面標題下方最前面的那一段，同時輸出至結構化資料。
+顯示在頁面標題下方最前面的那一段（困擾頁同時寫進結構化資料）。
               <!-- ⚠️ 兩個數字不一樣，不是筆誤：40–60 是 GEO 的建議值（docs/03 §4），
                    20–300 是 API 真的會擋下來的範圍（ContentHandler.UpdateSeoAsync）。 -->
-              填了就必須介於 20–300 字，留空則不輸出。
+              填了就必須介於 20–300 字。留空時困擾頁不顯示這一段，文章改用摘要。
             </p>
             <p class="adm-field__count" :class="{ 'is-out-of-range': (seoForm.aiSummary ?? '').length > 0 && ((seoForm.aiSummary ?? '').length < 40 || (seoForm.aiSummary ?? '').length > 60) }">
               {{ (seoForm.aiSummary ?? '').length }} 字（建議 40–60 字）
@@ -987,7 +994,10 @@ async function removeRecord() {
               <input v-model="scheduleForm.publishAt" class="adm-input" type="datetime-local">
               <!-- ⚠️ 2026-09-16 改：原本寫「不是精確發布時間——到點後仍需一次全站重建才會上線」。
                    那是靜態版的事實，SSR 之後已經不對，而且是**低估**了實際行為。 -->
-              <p class="adm-field__hint">到這個時間點，前台就會看得到（不需要重新建置）。留空＝按下「發布」就立即上線。</p>
+              <p class="adm-field__hint">
+                🔴 要先按過「發布」，排程才有作用：到這個時間點前台才看得到。只設時間、沒發布過的草稿到點不會上線。
+                已經上線的內容填一個未來的時間，會先從前台消失，到點才再出現。留空＝按下「發布」就立即上線。
+              </p>
             </div>
             <div class="adm-field" data-error-key="unpublishAt">
               <label class="adm-field__label">下架時間</label>

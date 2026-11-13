@@ -218,7 +218,7 @@ usePageHead({
       <div class="article-aside__cta">
         <p class="article-aside__cta-title">想進一步了解適合自己的規劃？</p>
         <p class="article-aside__cta-desc">實際適合的保養與療程方向因人而異，建議先與醫師面診評估後再規劃。</p>
-        <a class="btn btn--primary btn--sm ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary btn--sm ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
       </div>
     </aside>
 
@@ -351,7 +351,7 @@ usePageHead({
         <p>實際適合的保養與療程方向因人而異，建議先與醫師面診評估後再規劃。</p>
       </div>
       <div class="article-cta__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
       </div>
     </div>
   </section>

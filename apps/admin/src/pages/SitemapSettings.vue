@@ -10,6 +10,7 @@
 // 這裡逐筆勾選哪些內容要收錄，那件事在各單元編輯畫面的 SEO 區塊裡做。
 import { computed, onMounted, reactive, ref } from 'vue'
 import { adminApi, ApiError } from '@/api/client'
+import { API_BASE } from '@/api/http'
 import { currentUser } from '@/auth'
 import { hasPermission } from '@/permissions'
 import { UNIT_KEYS } from '@/types'
@@ -73,8 +74,20 @@ async function loadSnapshot() {
   }
 }
 
-function eligibleCountFor(sourceUnits: string[]): number {
-  return snapshot.value.filter((r) => sourceUnits.includes(r.unit) && r.status === 3 && r.includeInSitemap && r.urlPath).length
+// 🔴 「目前收錄筆數」讀**實際產出的那一份分檔**，不在這裡自己算（2026-11-13）。
+//    原本用上面那份快照估：每個單元只抓前 100 筆、也沒套用「內容夠不夠實在」的判斷，
+//    文章最多顯示兩百（實際一千多）、療程顯示二十幾（實際只有寫完的那幾項）。
+const realCounts = ref<Record<string, number | null>>({})
+async function loadRealCounts() {
+  for (const key of ['pages', 'treatments', 'concerns', 'doctors', 'blog']) {
+    try {
+      const res = await fetch(`${API_BASE}/seo/sitemap/${key}`)
+      // 關掉「送給搜尋引擎」的分檔會回 404，那一格顯示「—」。
+      realCounts.value[key] = res.ok ? ((await res.text()).match(/<url>/g) ?? []).length : null
+    } catch {
+      realCounts.value[key] = null
+    }
+  }
 }
 
 const consistencyIssues = computed<SeoConsistencyIssue[]>(() =>
@@ -204,7 +217,7 @@ async function resetRobots() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadFiles(), loadSnapshot(), loadRobots()])
+  await Promise.all([loadFiles(), loadSnapshot(), loadRobots(), loadRealCounts()])
 })
 
 const changeFreqLabel: Record<ChangeFreq, string> = {
@@ -255,7 +268,7 @@ const changeFreqLabel: Record<ChangeFreq, string> = {
                 <td>{{ file.label }}</td>
                 <td><code>{{ file.fileName }}</code></td>
                 <td class="is-wrap">{{ file.sourceUnits.map((u) => UNIT_REGISTRY[u]?.label ?? u).join('、') }}</td>
-                <td>{{ snapshotLoading ? '…' : eligibleCountFor(file.sourceUnits) }}</td>
+                <td>{{ file.key in realCounts ? (realCounts[file.key] ?? '—') : '…' }}</td>
                 <td>
                   <label class="adm-checkbox">
                     <input type="checkbox" :checked="file.enabled" :disabled="!canEdit || savingFile === file.key" @change="onEnabledChange(file, $event)">

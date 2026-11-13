@@ -22,9 +22,9 @@ export const articleUnit: UnitDefinition = {
   fields: [
     { key: 'categoryTermId', label: '文章分類', type: 'relation-single', required: true, optionsFromTermType: 2, group: '基本資料', requiredOnCreate: true },
     { key: 'authorDoctorId', label: '作者（醫師）', type: 'relation-single', optionsFromUnit: 'doctor', group: '基本資料', hint: '作者為團隊成員時選這一欄。' },
-    { key: 'authorName', label: '作者署名', type: 'text', group: '基本資料', hint: '作者非團隊成員時填寫；與「作者（醫師）」擇一。' },
+    { key: 'authorName', label: '作者署名', type: 'text', group: '基本資料', hint: '作者非團隊成員時填寫。上面有選「作者（醫師）」時以醫師為準，這一格不會顯示。' },
     { key: 'reviewerDoctorId', label: '審閱醫師', type: 'relation-single', optionsFromUnit: 'doctor', group: '基本資料' },
-    { key: 'reviewedOn', label: '審閱日期', type: 'date', group: '基本資料' },
+    { key: 'reviewedOn', label: '審閱日期', type: 'date', group: '基本資料', hint: '要同時選了「審閱醫師」才會顯示。' },
     {
       key: 'displayDate',
       label: '對外顯示日期',
@@ -36,7 +36,7 @@ export const articleUnit: UnitDefinition = {
     { key: 'cover', label: '封面圖', type: 'image', group: '圖片', hint: '建議尺寸 1600×1000（16:10）。' },
     { key: 'summary', label: '摘要', type: 'textarea', required: true, group: '內容' },
     { key: 'bodyBlocks', label: '內文', type: 'structured', required: true, group: '內容', structured: articleBodySchema },
-    { key: 'readingMinutes', label: '閱讀時間（分鐘）', type: 'number', group: '內容', hint: '可由字數自動估算，此輪先手動填。' },
+    { key: 'readingMinutes', label: '閱讀時間（分鐘）', type: 'number', group: '內容', hint: '留空就不顯示閱讀時間。' },
     {
       key: 'sourceSite',
       label: '來源網站',

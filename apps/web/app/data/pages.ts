@@ -113,7 +113,7 @@ export async function getAboutPage() {
       href: d.urlPath ?? '/team/',
       image: {
         src: photo?.src ?? '',
-        alt: `${d.title} ${roleText(role)}`.trim(),
+        alt: photo?.alt || `${d.title} ${roleText(role)}`.trim(),
         w: photo?.width,
         h: photo?.height,
       },
@@ -141,6 +141,8 @@ export async function getAboutPage() {
 
   // ⚠️ 不要在這裡加 `as` —— 上面的介面就是契約，用轉型蓋過去等於把檢查關掉。
   return {
+    /** 這一頁的標題（後台改得到）。查不到那一筆時退回原本的字。 */
+    title: index.get('about')?.title || '品牌理念',
     pillars: about.pillars ?? [],
     timeline: about.timeline ?? [],
     teamPreview: teamPreview.length > 0 ? teamPreview : about.teamPreview ?? [],

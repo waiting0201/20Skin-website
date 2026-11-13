@@ -53,5 +53,7 @@ export const concernUnit: UnitDefinition = {
     },
     { key: 'faqs', label: '關聯 FAQ', relationType: 6, targetUnit: 'faq', sortable: true, editable: true },
     { key: 'articles', label: '關聯文章', relationType: 7, targetUnit: 'article', sortable: true, editable: true },
+    // 困擾頁標題下「此困擾相關：」那一排標籤（RelationType=14）。2026-11-13 前後台沒有入口。
+    { key: 'relatedConcerns', label: '相關困擾（困擾頁標題下的「此困擾相關」）', relationType: 14, targetUnit: 'concern', sortable: true, editable: true },
   ],
 }

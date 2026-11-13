@@ -6,7 +6,7 @@
 // 🔴 **失敗一定要顯示失敗。** 這是一個信件黑洞最容易出現的地方：使用者以為送出了、
 // 院方其實永遠收不到。所以送出結果一律照 API 回的錯誤碼顯示，不吞錯、不假裝成功，
 // 並在錯誤訊息裡給出替代路徑（致電、線上預約）。
-import { getClinicNap } from '~/data/navigation'
+import { getClinicNap, EXTERNAL } from '~/data/navigation'
 
 const CLINIC_NAP = await getClinicNap()
 
@@ -322,8 +322,8 @@ async function handleSubmit() {
             <label class="contact-field__label" for="cfSite">希望聯絡的院區</label>
             <select class="contact-select" id="cfSite" v-model="form.site" name="site">
               <option value="">不指定</option>
-              <option value="siji">四季診所</option>
-              <option value="erlin">二林四季皮膚科</option>
+              <!-- 院區跟著據點單元走（名稱、順序），不在這裡再寫一份。 -->
+              <option v-for="clinic in CLINIC_NAP" :key="clinic.slug" :value="clinic.slug">{{ clinic.name }}</option>
             </select>
           </div>
 
@@ -422,8 +422,8 @@ async function handleSubmit() {
           <h2>其他入口</h2>
           <p>預約看診、線上購物與據點資訊都有各自的入口，走對地方會比較快。</p>
           <div class="contact-aside__actions">
-            <a class="btn btn--primary btn--block ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">線上預約看診</a>
-            <a class="btn btn--line btn--block ext" href="https://www.20skinshop.com/" target="_blank" rel="noopener external">線上購物</a>
+            <a class="btn btn--primary btn--block ext" :href="bookingUrl()" target="_blank" rel="noopener external">線上預約看診</a>
+            <a class="btn btn--line btn--block ext" :href="EXTERNAL.shop" target="_blank" rel="noopener external">線上購物</a>
             <a class="btn btn--ghost btn--block" href="/clinics/">查看據點與時段</a>
           </div>
         </div>

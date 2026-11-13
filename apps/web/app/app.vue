@@ -17,7 +17,7 @@ const site = await getSiteSettings()
 // 🔴 放進 useState 讓 usePageHead **同步**讀得到（2026-11-12）：站名與預設分享縮圖在後台改得動，
 //    而 usePageHead 是每一頁 setup 裡的同步呼叫，不能在裡面再 await 一次設定。
 //    app.vue 的 setup 先於任何頁面跑完，所以頁面呼叫 usePageHead 時這裡已經有值。
-useState('site-head', () => ({ siteName: site.siteName, defaultOgImageUrl: site.defaultOgImageUrl ?? '' }))
+useState('site-head', () => ({ siteName: site.siteName, defaultOgImageUrl: site.defaultOgImageUrl ?? '', bookingUrl: site.aiFaqHandoffBookingUrl ?? '' }))
 
 /**
  * 後台填的是**識別碼**（`G-XXXXXXXX`／`GTM-XXXXXXX`），不是程式碼片段。
@@ -37,7 +37,10 @@ const trackingIds = (site.trackingIds ?? '')
   .map((id: string) => id.trim())
   .filter((id: string) => /^(G-[A-Z0-9]{4,20}|GTM-[A-Z0-9]{4,10})$/i.test(id))
 
-const gtagId = trackingIds.find((id: string) => id.toUpperCase().startsWith('G-'))
+// 🔴 GA4 也可以多組（後台說明寫「多組以逗號分隔」）：gtag.js 只載一次，每一組各 config 一次。
+//    2026-11-13 前這裡用 find 只取第一個，第二組以後填了沒有任何數據。
+const gtagIds = trackingIds.filter((id: string) => id.toUpperCase().startsWith('G-'))
+const gtagId = gtagIds[0]
 const gtmIds = trackingIds.filter((id: string) => id.toUpperCase().startsWith('GTM-'))
 
 useHead({
@@ -50,7 +53,7 @@ useHead({
           {
             innerHTML:
               `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}` +
-              `gtag('js',new Date());gtag('config','${gtagId}');`,
+              `gtag('js',new Date());${gtagIds.map((id: string) => `gtag('config','${id}');`).join('')}`,
           },
         ]
       : []),

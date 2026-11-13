@@ -224,7 +224,7 @@ usePageHead({
         <p>案例是別人的起點與結果，你的規劃需要醫師依實際膚況評估後才能給。</p>
       </div>
       <div class="cases-cta__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
         <a class="btn btn--line" href="/concerns/">先看肌膚困擾</a>
       </div>
     </div>

@@ -229,7 +229,7 @@ usePageHead({
         <p>由醫師依個人膚況評估後規劃，歡迎預約門診諮詢。</p>
       </div>
       <div class="blog-cta__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
       </div>
     </div>
   </section>

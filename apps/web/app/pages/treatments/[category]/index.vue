@@ -9,7 +9,7 @@
 // （四張療程卡片、可改善困擾、醫師團隊、相關文章）。其餘三個分類 mockup
 // 沒有對應頁面可抄，這裡不編內容 —— 資料沒有的區塊（concernTags／doctors／
 // articles）就整節不渲染，理由與細節頁一致：不要自己編療程內容。
-import { getTreatmentCategories, getTreatments, getCategory, concernHref } from '~/data/treatments'
+import { getTreatmentCategories, getTreatments, getCategory } from '~/data/treatments'
 
 const route = useRoute()
 const categorySlug = route.params.category as string
@@ -146,7 +146,7 @@ usePageHead({
 
       <div class="tcat-concerns">
         <template v-for="tag in category.concernTags" :key="tag">
-          <a v-if="concernHref(tag)" class="c-tag" :href="concernHref(tag)!">{{ tag }}</a>
+          <a v-if="category.concernLinks[tag]" class="c-tag" :href="category.concernLinks[tag]">{{ tag }}</a>
           <span v-else class="c-tag">{{ tag }}</span>
         </template>
       </div>
@@ -227,7 +227,7 @@ usePageHead({
         <p>療程適用性需經醫師面診評估，歡迎預約門診，由醫師依實際膚況規劃合適的組合。</p>
       </div>
       <div class="tcat-cta__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
       </div>
     </div>
   </section>

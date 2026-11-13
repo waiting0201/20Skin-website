@@ -37,7 +37,7 @@ const displayTags = doctor.expertiseTags ?? doctor.tags
 
 /** 同院區其他醫師：至少共用一個看診據點、排除自己，最多列 4 位（對齊 grid--4）。 */
 const colleagues = DOCTORS.filter(
-  (d) => d.slug !== doctor.slug && d.clinics.some((c) => doctor.clinics.some((dc) => dc.clinicSlug === c.clinicSlug)),
+  (d) => d.slug !== doctor.slug && d.isPhysician && d.clinics.some((c) => doctor.clinics.some((dc) => dc.clinicSlug === c.clinicSlug)),
 ).slice(0, 4)
 
 const jsonLd = (() => {
@@ -108,7 +108,7 @@ usePageHead({
       <div class="doc-hero__frame">
         <img fetchpriority="high"
           :src="doctor.photo.src" :srcset="srcsetOf(doctor.photo.src)" :sizes="IMAGE_SIZES.half"
-          :alt="`${doctor.name} ${doctor.isPhysician ? '診間人像照' : '人像照'}`"
+          :alt="doctor.photo.alt || `${doctor.name} ${doctor.isPhysician ? '診間人像照' : '人像照'}`"
           :width="doctor.photo.width"
           :height="doctor.photo.height"
         >
@@ -137,7 +137,7 @@ usePageHead({
         </table>
 
         <div class="doc-hero__cta">
-          <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+          <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
         </div>
       </div>
     </div>
@@ -396,7 +396,7 @@ usePageHead({
           <div class="c-card__media">
             <img
               :src="colleague.photo.src" :srcset="srcsetOf(colleague.photo.src)" :sizes="IMAGE_SIZES.grid4"
-              :alt="`${colleague.name} ${roleText(colleague.jobTitle)}`"
+              :alt="colleague.photo.alt || `${colleague.name} ${roleText(colleague.jobTitle)}`"
               :width="colleague.photo.width"
               :height="colleague.photo.height"
               loading="lazy"
@@ -422,9 +422,10 @@ usePageHead({
       <h2 v-if="doctor.isPhysician">與{{ doctor.name }}醫師預約諮詢</h2>
       <h2 v-else>認識{{ doctor.name }}與新中式美學</h2>
       <p v-if="doctor.isPhysician">由醫師親自評估膚況，規劃合適的治療方向。</p>
-      <p v-else>安喬是 20SKIN 美醫集團藝術總監兼執行長，也是「新中式美學」的創始人。</p>
+      <!-- 這位成員自己的職稱（後台「職稱」），不寫死某一個人的介紹。 -->
+      <p v-else>{{ doctor.name }}：{{ roleText(doctor.jobTitle) }}。</p>
       <div class="doc-cta__actions">
-        <a v-if="doctor.isPhysician" class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a v-if="doctor.isPhysician" class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
         <a v-else class="btn btn--primary" href="/about/new-chinese-aesthetics/">認識新中式美學</a>
       </div>
     </div>

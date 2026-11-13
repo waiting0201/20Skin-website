@@ -391,7 +391,7 @@ usePageHead({
       <h2>還不確定哪一項療程適合自己？</h2>
       <p>每一位求美者的膚況與需求都不同，建議先與醫師面診討論，再規劃合適的照護方向。</p>
       <div class="concern-cta__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
       </div>
     </div>
   </section>

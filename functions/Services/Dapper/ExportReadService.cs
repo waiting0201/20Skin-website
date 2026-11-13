@@ -50,11 +50,21 @@ public sealed class ExportReadService(ISqlConnectionFactory factory) : IExportRe
         using var connection = factory.Create();
 
         var sql = $"""
-            SELECT ci.Title AS Question, f.AiAnswer, f.LastReviewedOn,
-                   catCi.Title AS CategoryTitle, catCi.Slug AS CategorySlug
+            -- 🔴 題目、AI 答案、更新日、分類都取**已發布快照**（2026-11-13），壞掉或缺鍵時才退回即時值。
+            --    原本直接讀 Faqs 與 ContentItems.Title（工作副本）：改一題已上線的 FAQ、只存草稿，
+            --    faq.json 與 llms-full.txt 當下就換成新內容，而網頁上還是舊的（決策 14 的同一類）。
+            --    排序仍用即時值（結構性欄位）。
+            SELECT COALESCE(NULLIF(JSON_VALUE(cv.Snapshot, '$.title'), ''), ci.Title) AS Question,
+                   COALESCE(NULLIF(JSON_VALUE(cv.Snapshot, '$.fields.aiAnswer'), ''), f.AiAnswer) AS AiAnswer,
+                   COALESCE(TRY_CONVERT(date, LEFT(JSON_VALUE(cv.Snapshot, '$.fields.lastReviewedOn'), 10)), f.LastReviewedOn) AS LastReviewedOn,
+                   COALESCE(NULLIF(JSON_VALUE(catCv.Snapshot, '$.title'), ''), catCi.Title) AS CategoryTitle,
+                   catCi.Slug AS CategorySlug
             FROM ContentItems ci
             INNER JOIN Faqs f ON f.Id = ci.Id
-            INNER JOIN ContentItems catCi ON catCi.Id = f.CategoryTermId
+            INNER JOIN ContentVersions cv ON cv.Id = ci.PublishedVersionId
+            INNER JOIN ContentItems catCi
+                ON catCi.Id = COALESCE(TRY_CONVERT(int, JSON_VALUE(cv.Snapshot, '$.fields.categoryTermId')), f.CategoryTermId)
+            LEFT JOIN ContentVersions catCv ON catCv.Id = catCi.PublishedVersionId
             WHERE {Visibility.PublicFilter}
             ORDER BY catCi.SortOrder, ci.SortOrder
             """;

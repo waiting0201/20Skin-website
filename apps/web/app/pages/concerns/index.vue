@@ -188,7 +188,7 @@ usePageHead({
         <p>症狀不典型、或同時有多個困擾，都建議直接由醫師看診判斷。</p>
       </div>
       <div class="cov-cta__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
         <a class="btn btn--line" href="/faq/">看常見問題</a>
       </div>
     </div>

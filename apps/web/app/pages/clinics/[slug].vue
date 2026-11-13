@@ -162,7 +162,7 @@ onMounted(() => {
         </div>
 
         <div class="clinic-hero__cta">
-          <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+          <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
         </div>
       </div>
 
@@ -338,7 +338,7 @@ onMounted(() => {
           <div class="c-card__media">
             <img
               :src="doctor.photo.src" :srcset="srcsetOf(doctor.photo.src)" :sizes="IMAGE_SIZES.grid4"
-              :alt="`${doctor.name} ${roleText(doctor.jobTitle)}`"
+              :alt="doctor.photo.alt || `${doctor.name} ${roleText(doctor.jobTitle)}`"
               :width="doctor.photo.width"
               :height="doctor.photo.height"
               loading="lazy"
@@ -505,7 +505,7 @@ onMounted(() => {
       <h2>安排你的{{ clinic.name }}門診</h2>
       <p>歡迎線上預約，我們會盡快回覆您的看診需求。</p>
       <div class="clinic-cta__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
       </div>
     </div>
   </section>

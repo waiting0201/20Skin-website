@@ -252,7 +252,7 @@ usePageHead({
       <h2>你的狀況會是怎麼規劃？</h2>
       <p>案例只能參考，實際的次數、間隔與可行性需由醫師依你的膚況評估。</p>
       <div class="case-cta__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
         <a class="btn btn--ghost" :href="item.facts.treatmentHref">查看療程說明</a>
       </div>
     </div>

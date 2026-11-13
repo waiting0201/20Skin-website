@@ -12,6 +12,9 @@ export const pageUnit: UnitDefinition = {
   labelSingular: '頁面',
   producesUrl: true,
   systemAware: true,
+  // 頁面不給拖曳排序：六頁各有自己的路由，前台不讀它們的順序；
+  // 拖了只會改到更新時間（長版故事頁的「最後更新」讀它）。
+  listSortable: false,
   listColumns: [
     { key: 'title', label: '標題' },
     { key: 'status', label: '狀態', render: 'status' },

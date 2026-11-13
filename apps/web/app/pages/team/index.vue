@@ -192,7 +192,7 @@ function siteLabel(doctor: (typeof ALL_DOCTORS)[number]) {
           <div class="c-card__media">
             <img
               :src="doctor.photo.src" :srcset="srcsetOf(doctor.photo.src)" :sizes="IMAGE_SIZES.grid4"
-              :alt="`${doctor.name} ${roleText(doctor.jobTitle)}`"
+              :alt="doctor.photo.alt || `${doctor.name} ${roleText(doctor.jobTitle)}`"
               :width="doctor.photo.width"
               :height="doctor.photo.height"
               loading="lazy"
@@ -268,7 +268,7 @@ function siteLabel(doctor: (typeof ALL_DOCTORS)[number]) {
       <h2>想指定醫師看診？</h2>
       <p>各醫師的看診院區與時段不同，預約時可指定；若不確定該找誰，也可先由門診安排。</p>
       <div class="team-cta__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
         <a class="btn btn--ghost" href="/clinics/">查看據點與時段</a>
       </div>
     </div>

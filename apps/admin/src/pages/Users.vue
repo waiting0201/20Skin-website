@@ -73,17 +73,6 @@ async function load() {
 }
 onMounted(load)
 
-// ── 醫師綁定：doctorId 選項，走 taxonomy.unitOptions（不直接碰 client.ts 的 Db，
-// 這裡透過已經對外開放的門面查詢，跟 EditPage 的關聯選單走同一支）──────────
-const doctorOptions = ref<{ value: string; label: string }[]>([])
-onMounted(async () => {
-  try {
-    doctorOptions.value = await adminApi.taxonomy.unitOptions('doctor')
-  } catch (e) {
-    // 醫師綁定是選填，取不到不該擋住整個帳號管理畫面。
-    console.error('載入醫師選項失敗', e)
-  }
-})
 
 // ── 新增／編輯表單（同一份表單模型，用 mode 分流）──────────────────────
 type FormMode = 'create' | 'edit'
@@ -316,8 +305,6 @@ function fmtDate(iso: string | null): string {
             <th>帳號（登入用，非 email）</th>
             <th>顯示名稱</th>
             <th>角色</th>
-            <th>通知信箱（選填）</th>
-            <th>醫師綁定</th>
             <th>狀態</th>
             <th></th>
           </tr>
@@ -327,8 +314,6 @@ function fmtDate(iso: string | null): string {
             <td><code>{{ a.userName }}</code></td>
             <td>{{ a.displayName }}</td>
             <td>{{ a.roles.map((r) => ROLE_LABEL[r]).join('、') }}</td>
-            <td>{{ a.notifyEmail || '（未填）' }}</td>
-            <td>{{ a.doctorId ? `#${a.doctorId}` : '—' }}</td>
             <td>
               <span class="adm-badge" :class="a.isActive ? 'adm-badge--published' : 'adm-badge--draft'">
                 {{ a.isActive ? '啟用中' : '已停用' }}
@@ -370,20 +355,9 @@ function fmtDate(iso: string | null): string {
             <input v-model="form.displayName" class="adm-input" :class="{ 'is-invalid': fieldErrors.displayName }" placeholder="後台顯示用" maxlength="100">
             <p v-if="fieldErrors.displayName" class="adm-field__error" role="alert">{{ fieldErrors.displayName }}</p>
           </div>
-          <div class="adm-field" data-error-key="notifyEmail">
-            <label class="adm-field__label">通知信箱</label>
-            <input v-model="form.notifyEmail" class="adm-input" :class="{ 'is-invalid': fieldErrors.notifyEmail }" type="email" placeholder="選填，僅供通知，非登入用途">
-            <p v-if="fieldErrors.notifyEmail" class="adm-field__error" role="alert">{{ fieldErrors.notifyEmail }}</p>
-            <p class="adm-field__hint">選填、不唯一、可留空——不是登入識別，也不用來寄送登入相關通知。</p>
-          </div>
-          <div class="adm-field" v-if="form.roles.includes('Doctor')">
-            <label class="adm-field__label">醫師綁定</label>
-            <select v-model="form.doctorId" class="adm-select">
-              <option value="">（未綁定——僅能靠人工比對姓名）</option>
-              <option v-for="opt in doctorOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-            </select>
-            <p class="adm-field__hint">「醫師」角色要對上自己的個人頁，才能判斷「自己的內容」。</p>
-          </div>
+          <!-- 🔴 「通知信箱」與「醫師綁定」兩格 2026-11-13 拿掉：兩者都存得進去，但沒有任何程式讀 ——
+               系統不寄信給帳號，「自己的內容」看的是誰建立的（OwnerUserId），綁不綁定效果一樣。
+               既有的值原樣送回（form 裡還在），不會被清掉。 -->
           <div class="adm-field adm-field--span2" data-error-key="roles">
             <label class="adm-field__label">角色<span class="adm-field__required">＊</span></label>
             <div class="users-role-checks">

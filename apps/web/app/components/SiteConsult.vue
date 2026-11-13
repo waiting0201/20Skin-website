@@ -13,7 +13,6 @@
 //
 // ⚠️ **不存對話**：訊息只在元件的記憶體裡，不寫 localStorage／sessionStorage。
 //    醫療提問屬敏感，而且 docs/08 §I 明列不建 AI 對話紀錄表。重新整理就清空是預期行為。
-import { EXTERNAL } from '~/data/navigation'
 
 const props = withDefaults(
   defineProps<{
@@ -36,7 +35,7 @@ const MAX_HISTORY = 4
 
 const { public: { apiBaseUrl } } = useRuntimeConfig()
 
-const bookingHref = computed(() => props.bookingUrl || EXTERNAL.booking)
+const bookingHref = computed(() => props.bookingUrl || bookingUrl())
 
 // 轉 LINE 諮詢：**依院區分流**（Tim 定案 2026-10-01），名單來自據點單元的「LINE 連結」。
 // ⚠️ 全站設定原本有一格「填了就統一用那一個」的覆寫，2026-10-02 拿掉（留空時看不出作用）。

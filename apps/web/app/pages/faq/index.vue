@@ -147,7 +147,7 @@ usePageHead({
           <div class="faq-help__item">
             <h3 class="faq-help__title">預約門診</h3>
             <p class="faq-help__desc">涉及個人膚況與病史的問題，需由醫師面診後才能回答。</p>
-            <a class="btn btn--ghost btn--sm ext faq-help__action" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+            <a class="btn btn--ghost btn--sm ext faq-help__action" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
           </div>
         </div>
 
@@ -165,7 +165,7 @@ usePageHead({
       <h2>問題問完了，剩下的交給門診</h2>
       <p>個人化的建議需要醫師實際看過膚況才能給。歡迎預約門診。</p>
       <div class="faq-cta__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
         <a class="btn btn--ghost" href="/treatments/">查看療程項目</a>
       </div>
     </div>

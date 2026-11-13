@@ -11,7 +11,7 @@
 // 渲染 —— mockup/04-treatment-detail.html 原始碼裡「資料不足的療程請整節
 // 移除本區塊」的註記就是這樣要求的。沒有內容的療程一律顯示「內容建置中」
 // 提示＋預約 CTA，不編造適應症、原理或術後照護等醫療內容。
-import { getTreatment, getCategory, concernHref, bodyBlocksText } from '~/data/treatments'
+import { getTreatment, getCategory, bodyBlocksText } from '~/data/treatments'
 
 const route = useRoute()
 const categorySlug = route.params.category as string
@@ -145,7 +145,7 @@ usePageHead({
           <a class="c-tag" :href="`/treatments/${category.slug}/`">{{ category.name }}</a>
         </div>
         <div class="tdetail-hero__cta">
-          <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+          <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
         </div>
       </div>
 
@@ -206,7 +206,7 @@ usePageHead({
         <section v-if="treatment.indications?.length" class="tdetail-block" id="indications">
           <div class="c-sechead">
             <div class="c-sechead__text">
-              <h2>{{ treatment.indicationsHeading }}</h2>
+              <h2>{{ treatment.indicationsHeading || '適應症' }}</h2>
             </div>
           </div>
           <ul class="tdetail-checklist">
@@ -317,7 +317,7 @@ usePageHead({
         <section v-if="treatment.gallery?.length" class="tdetail-block tdetail-block--band" id="gallery">
           <div class="c-sechead">
             <div class="c-sechead__text">
-              <h2>院區情境</h2>
+              <h2>圖庫</h2>
             </div>
           </div>
           <div class="tdetail-gallery">
@@ -361,7 +361,7 @@ usePageHead({
           </div>
           <div class="tdetail-tags">
             <template v-for="tag in treatment.detailTags" :key="tag">
-              <a v-if="concernHref(tag)" class="c-tag" :href="concernHref(tag)!">{{ tag }}</a>
+              <a v-if="treatment.concernLinks[tag]" class="c-tag" :href="treatment.concernLinks[tag]">{{ tag }}</a>
               <span v-else class="c-tag">{{ tag }}</span>
             </template>
           </div>
@@ -447,7 +447,7 @@ usePageHead({
       <h2>想進一步了解是否適合自己？</h2>
       <p>實際治療方案需由醫師依現場評估膚況後規劃，歡迎預約門診諮詢，由醫師為你說明適合的方向。</p>
       <div class="tdetail-cta-band__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
       </div>
     </div>
   </section>

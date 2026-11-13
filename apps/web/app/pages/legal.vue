@@ -108,7 +108,7 @@ usePageHead({
         <section class="legal-section">
           <div class="c-note c-note--warn">
             <span class="c-note__icon" aria-hidden="true">&#9888;</span>
-            <p>本頁條文尚待院方法務提供，目前僅為版面骨架。上線前必須補齊，否則須自 sitemap 中移除本頁的索引。如有疑問請透過<a href="/contact/">聯絡我們</a>頁面與本院聯繫。</p>
+            <p>本頁內容整理中。如有疑問請透過<a href="/contact/">聯絡我們</a>頁面與本院聯繫。</p>
           </div>
         </section>
       </div>

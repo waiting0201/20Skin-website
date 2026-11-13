@@ -26,6 +26,8 @@ export interface DoctorClinicAssignment {
   /** DoctorSchedules 的簡化呈現。僅 mockup/08-clinic-detail.html 有列出的 5 位醫師
    *  帶有明確時段簡述，其餘留空，個人頁與院區頁一律改顯示該院區的一般門診時段。 */
   scheduleNote?: string
+  /** 這位醫師在該院區「駐診醫師」清單裡的位置（後台據點那一端拖曳排出來的）。 */
+  sortOrder: number
 }
 
 export interface DoctorTreatmentRef {
@@ -70,7 +72,8 @@ export interface Doctor {
   heroRole?: string
   /** 僅在 mockup 明確標示專科時才填，不臆測。 */
   specialty?: string
-  photo: { src: string; width: number; height: number }
+  /** `alt` 是後台大頭照欄位填的替代文字；沒填是空字串，模板退回「姓名＋職稱」。 */
+  photo: { src: string; width: number; height: number; alt: string }
   /** DoctorTags —— 專長標籤，用於列表頁卡片與篩選。 */
   tags: string[]
   yearsInPractice?: string
@@ -141,7 +144,7 @@ function toDoctor(ctx: DoctorContext, record: ContentRecord): Doctor {
     jobTitle: (f.jobTitle as string) ?? '',
     heroRole: bio.heroRole ?? undefined,
     specialty: (f.specialty as string) ?? undefined,
-    photo: { src: photo?.src ?? '', width: photo?.width ?? 0, height: photo?.height ?? 0 },
+    photo: { src: photo?.src ?? '', width: photo?.width ?? 0, height: photo?.height ?? 0, alt: photo?.alt ?? '' },
     tags: tags.filter((t) => t.type === 1).map((t) => t.tag),
     // ⚠️ 沒有專長領域（後台的「專長領域」欄）時要回 undefined 而不是空陣列 —— 個人頁的 displayTags 用
     //    `expertiseTags ?? tags` 退回專長標籤，空陣列不會觸發 ?? ，整個「專長領域」區塊就消失了。
@@ -201,6 +204,7 @@ function toDoctor(ctx: DoctorContext, record: ContentRecord): Doctor {
         .filter((r) => r.toSlug === record.slug)
         .map((r) => ({
           clinicSlug: c.slug as ClinicSlug,
+          sortOrder: r.sortOrder,
           ...(r.note ? { scheduleNote: r.note } : {}),
         })),
     ),
@@ -246,7 +250,10 @@ export async function findDoctor(slug: string): Promise<Doctor | undefined> {
 }
 
 export async function doctorsByClinic(clinicSlug: ClinicSlug, physiciansOnly = false): Promise<Doctor[]> {
-  return (await getDoctors()).filter(
-    (d) => d.clinics.some((c) => c.clinicSlug === clinicSlug) && (!physiciansOnly || d.isPhysician),
-  )
+  // 🔴 順序跟著據點「駐診醫師」的拖曳排序（2026-11-13）。原本只是對全體醫師做 filter，
+  //    順序是醫師單元的 —— 在據點那一端拖了、發布了，據點頁的卡片順序不會變。
+  const orderAt = (d: Doctor) => d.clinics.find((c) => c.clinicSlug === clinicSlug)?.sortOrder ?? 0
+  return (await getDoctors())
+    .filter((d) => d.clinics.some((c) => c.clinicSlug === clinicSlug) && (!physiciansOnly || d.isPhysician))
+    .sort((a, b) => orderAt(a) - orderAt(b))
 }

@@ -72,6 +72,11 @@ export interface UnitField {
   galleryItemFields?: RepeaterSubField[]
   /** 編輯畫面分組，對應 EditPage 的 fieldset。 */
   group?: string
+  /**
+   * 「分類與標籤」專用：這一欄只在這幾種型別顯示（1 療程分類／2 文章分類／3 FAQ 分類／4 文章標籤）。
+   * 沒標＝四種都顯示。⚠️ 藏的是輸入框，值仍原樣送回，不會被清掉。
+   */
+  termTypes?: number[]
   /** 唯讀欄位：僅顯示，不可編輯（例如 Pages.SystemKey、Terms 的使用筆數）。 */
   readOnly?: boolean
   /**
@@ -123,7 +128,7 @@ export interface UnitField {
 }
 
 /** docs/08-database.md §D `ContentRelations.RelationType` 對照表。 */
-export type RelationType = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12
+export type RelationType = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14
 
 export interface RelationField {
   key: string

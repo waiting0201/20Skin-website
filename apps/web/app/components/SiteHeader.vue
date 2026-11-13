@@ -49,7 +49,8 @@ const isActive = (href: string) =>
 
               <ul v-if="item.children" class="c-nav__submenu">
                 <li v-for="child in item.children" :key="child.href" class="c-nav__subitem">
-                  <a :href="child.href">{{ child.label }}</a>
+                  <a v-if="child.external" class="ext" :href="child.href" target="_blank" rel="noopener external">{{ child.label }}</a>
+                  <a v-else :href="child.href">{{ child.label }}</a>
                 </li>
               </ul>
             </li>
@@ -57,7 +58,7 @@ const isActive = (href: string) =>
         </nav>
 
         <div class="c-header__cta">
-          <a class="btn btn--primary btn--sm ext" :href="EXTERNAL.booking" target="_blank" rel="noopener external">立即預約</a>
+          <a class="btn btn--primary btn--sm ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
           <a class="btn btn--line btn--sm ext" :href="EXTERNAL.shop" target="_blank" rel="noopener external">線上購物</a>
         </div>
 
@@ -74,7 +75,7 @@ const isActive = (href: string) =>
       </div>
 
       <div class="c-header__ctabar">
-        <a class="ext" :href="EXTERNAL.booking" target="_blank" rel="noopener external">立即預約</a>
+        <a class="ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
       </div>
     </div>
   </header>

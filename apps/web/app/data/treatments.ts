@@ -47,6 +47,8 @@ export interface TreatmentCategory {
    *  （03-treatment-category.html），其餘三個分類沒有對應內頁可抄，留白時
    *  分類頁樣板整節不渲染，不替換分類編造困擾清單。 */
   concernTags?: string[]
+  /** 困擾名稱 → 困擾頁網址（取自關聯目標）。查不到＝那個困擾沒有上線的頁面，標籤顯示純文字。 */
+  concernLinks: Record<string, string>
   /** 分類頁「本分類醫師團隊」。僅 laser 有 mockup 原文，理由同上。 */
   doctors?: RelatedDoctor[]
   /** 分類頁「相關文章」。僅 laser 有 mockup 原文，理由同上。 */
@@ -131,6 +133,8 @@ export interface Treatment {
   // ── 分類頁卡片（僅 laser 分類 4 項有 mockup 原文：03-treatment-category.html）──
   cardExcerpt?: string
   cardTags?: string[]
+  /** 困擾名稱 → 困擾頁網址（取自關聯目標，不查寫死的對照表）。 */
+  concernLinks: Record<string, string>
   cardImage?: ImageRef
 
   // ── 細節頁（僅 picosure-pro 有 mockup 原文：04-treatment-detail.html）──
@@ -263,7 +267,14 @@ function toTreatment(ctx: TreatmentContext, record: ContentRecord): Treatment {
   const facts = parseBlocks<TreatmentFact[]>(f.facts, [])
 
   // 「此療程可改善的困擾」是關聯（型別 2），不是一組字串欄位。
-  const concernTags = relationsOf(record, REL.treatmentToConcern).map((r) => r.toTitle as string)
+  const concernRelations = relationsOf(record, REL.treatmentToConcern)
+  const concernTags = concernRelations.map((r) => r.toTitle as string)
+  // 🔴 連結取關聯目標自己的網址（2026-11-13）。原本用一張寫死的「標題 → slug」對照表：
+  //    困擾在後台改個名字（去掉「・」）或新增第九個，標籤就靜默變成不能點的純文字。
+  //    ⚠️ 還沒發布的困擾沒有可以連的頁面，不列進來。
+  const concernLinks = Object.fromEntries(
+    concernRelations.filter((r) => r.toUrlPath && r.toIsPublished).map((r) => [r.toTitle as string, r.toUrlPath as string]),
+  )
 
   return {
     indexable,
@@ -276,6 +287,7 @@ function toTreatment(ctx: TreatmentContext, record: ContentRecord): Treatment {
     needsContentFromScratch: false,
     cardExcerpt: record.summary ?? undefined,
     cardTags: concernTags.length ? concernTags : undefined,
+    concernLinks,
     cardImage: f.cover ? toImage(f.cover, record.title) : undefined,
     summary: (f.subtitle as string) ?? undefined,
     hasFullContent: Boolean(record.summary?.trim()) && facts.length > 0,
@@ -378,6 +390,7 @@ export async function getTreatmentCategories(): Promise<TreatmentCategory[]> {
       count: items.length,
       sampleTags: items.slice(0, 4).map((t) => t.title),
       concernTags: [...new Set(items.flatMap((t) => t.cardTags ?? []))],
+      concernLinks: Object.assign({}, ...items.map((t) => t.concernLinks)),
       doctors: [...new Map(items.flatMap((t) => t.doctors ?? []).map((d) => [d.slug, d])).values()],
       articles: items.flatMap((t) => t.articles ?? []).slice(0, 3),
     }
@@ -396,25 +409,3 @@ export async function getTreatment(categorySlug: string, slug: string): Promise<
   return (await getTreatments()).find((t) => t.categorySlug === categorySlug && t.slug === slug)
 }
 
-/** 8 個困擾 slug 已定案（docs/01-sitemap.md §1）。用於把療程／分類頁上的
- *  困擾標籤盡量連到正式網址；找不到對應困擾分類的標籤（例如「毛孔粗大」
- *  不在 8 大困擾之列）維持純文字，不猜一個可能是錯的連結。 */
-const CONCERN_SLUG_MAP: Record<string, string> = {
-  '痘痘・粉刺': 'acne',
-  '痘疤': 'acne',
-  '痘疤・粉刺': 'acne',
-  '敏感肌': 'sensitive-skin',
-  '斑點・色素沉澱': 'pigmentation',
-  '膚色不均': 'pigmentation',
-  '抗老・緊緻': 'anti-aging',
-  '細紋': 'anti-aging',
-  '生髮・落髮': 'hair-loss',
-  '除毛': 'hair-removal',
-  '多汗・狐臭': 'hyperhidrosis',
-  '一般皮膚疾病': 'dermatology',
-}
-
-export function concernHref(label: string): string | null {
-  const slug = CONCERN_SLUG_MAP[label]
-  return slug ? `/concerns/${slug}/` : null
-}

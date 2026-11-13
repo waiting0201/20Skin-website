@@ -2,11 +2,11 @@
 // 模板 2 —— 品牌理念（mockup/09-about.html）
 import { getAboutPage } from '~/data/pages'
 
-const { pillars: ABOUT_PILLARS, timeline: ABOUT_TIMELINE,
+const { title: ABOUT_TITLE, pillars: ABOUT_PILLARS, timeline: ABOUT_TIMELINE,
   teamPreview: ABOUT_TEAM_PREVIEW, teamCounts: TEAM_COUNTS, clinics: ABOUT_CLINICS, seo: ABOUT_SEO } = await getAboutPage()
 
 usePageHead({
-  title: '品牌理念',
+  title: ABOUT_TITLE,
   description:
     '20SKIN 美醫集團的品牌理念——以皮膚科專科為底，結合新中式美學與彩妝式輕醫美，追求整體協調而非單一標準的樣貌。',
   pageCss: '/assets/pages/09-about.css',
@@ -14,7 +14,7 @@ usePageHead({
   seo: ABOUT_SEO,
   jsonLd: breadcrumbJsonLd([
     { label: '首頁', href: '/' },
-    { label: '品牌理念', href: '/about/' },
+    { label: ABOUT_TITLE, href: '/about/' },
   ]),
 })
 </script>
@@ -25,7 +25,7 @@ usePageHead({
       <div class="container">
         <ol class="c-breadcrumb__list">
           <li><a href="/">首頁</a></li>
-          <li><span class="c-breadcrumb__current" aria-current="page">品牌理念</span></li>
+          <li><span class="c-breadcrumb__current" aria-current="page">{{ ABOUT_TITLE }}</span></li>
         </ol>
       </div>
     </nav>
@@ -35,7 +35,7 @@ usePageHead({
       <div class="container about-hero__layout">
         <div class="about-hero__copy">
           <span class="u-eyebrow">OUR PHILOSOPHY</span>
-          <h1 class="about-hero__title">品牌理念</h1>
+          <h1 class="about-hero__title">{{ ABOUT_TITLE }}</h1>
           <p class="about-hero__lede">自然不是一個固定的樣板，以東方骨架整體規劃，保留自己原本自然年輕的樣子，透過美學規劃，保留整體的協調感。</p>
         </div>
 
@@ -190,7 +190,7 @@ usePageHead({
           <p>理念要落到自己的臉上，還是需要醫師實際看過。</p>
         </div>
         <div class="about-cta__actions">
-          <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+          <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
           <a class="btn btn--line" href="/contact/">聯絡我們</a>
         </div>
       </div>

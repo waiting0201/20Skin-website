@@ -146,7 +146,7 @@ const faqs = [
 
           <div class="clist-site__actions">
             <a class="btn btn--ghost btn--sm" :href="`/clinics/${clinic.slug}/`">查看診所介紹</a>
-            <a class="btn btn--primary btn--sm ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">預約此院區</a>
+            <a class="btn btn--primary btn--sm ext" :href="bookingUrl()" target="_blank" rel="noopener external">預約此院區</a>
           </div>
         </article>
       </div>
@@ -282,7 +282,7 @@ const faqs = [
         <p>預約時可同時指定院區與醫師。若不確定該掛哪一科，也可先預約後由門診協助分流。</p>
       </div>
       <div class="clist-cta__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
         <a class="btn btn--line" href="/contact/">聯絡我們</a>
       </div>
     </div>

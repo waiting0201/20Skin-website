@@ -25,17 +25,14 @@ usePageHead({
   ]),
 })
 
-// 8 個困擾 slug 已定案（docs/01-sitemap.md §1）
-const concerns = [
-  { label: '痘痘・粉刺', href: '/concerns/acne/' },
-  { label: '敏感肌', href: '/concerns/sensitive-skin/' },
-  { label: '斑點・色素沉澱', href: '/concerns/pigmentation/' },
-  { label: '抗老・緊緻', href: '/concerns/anti-aging/' },
-  { label: '生髮・落髮', href: '/concerns/hair-loss/' },
-  { label: '除毛', href: '/concerns/hair-removal/' },
-  { label: '多汗・狐臭', href: '/concerns/hyperhidrosis/' },
-  { label: '一般皮膚疾病', href: '/concerns/dermatology/' },
-]
+// 🔴 困擾清單跟著困擾單元走（2026-11-13）：名稱取已發布的標題、網址取實際網址、順序取排序值。
+//    原本是手打的八筆名稱與網址 —— 困擾改名、下架或新增第九個，這一區都不會跟。
+//    ⚠️ 只要名稱與連結，用精簡清單（決策 14：頁面只用到一點就不要載整包）。
+const concerns = (await unitIndex('concern'))
+  .filter((c) => c.urlPath)
+  .slice()
+  .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+  .map((c) => ({ label: c.title, href: c.urlPath as string }))
 
 const processSteps = [
   { no: 'STEP 01', title: '預約與諮詢', desc: '線上預約後，由諮詢人員了解需求、生活型態與可接受的恢復期。' },
@@ -237,7 +234,7 @@ const faqs = [
         <p>療程適用性需經醫師面診評估。歡迎預約門診，由醫師依實際膚況規劃合適的組合與節奏。</p>
       </div>
       <div class="tov-cta__actions">
-        <a class="btn btn--primary ext" href="https://booking.20skin.tw/MainMs/Login" target="_blank" rel="noopener external">立即預約</a>
+        <a class="btn btn--primary ext" :href="bookingUrl()" target="_blank" rel="noopener external">立即預約</a>
         <a class="btn btn--line" href="/faq/">看常見問題</a>
       </div>
     </div>
