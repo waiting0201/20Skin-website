@@ -26,11 +26,10 @@ if (!category || !treatment) {
   throw await notFoundUnlessRedirected({ statusMessage: '找不到這個療程' })
 }
 
-// 「這一頁寫完了沒」（摘要＋規格數據列）—— 只決定要不要輸出 MedicalProcedure，
-// 與 API 的收錄判斷（`indexable`）同一條。
-// 🔴 **不再拿它決定版面**（2026-11-13）。原本是「寫完才顯示整頁，否則只有一句建置中」：
-//    正式站 28/29 筆在後台有適應症、儀器資訊與關聯，前台一個字都沒出現。
-//    現在每一區各自看有沒有資料（下面的 tocItems），整頁都空才顯示「建置中」。
+// 「這一頁有沒有自己的療程說明」—— 只決定要不要輸出 MedicalProcedure，
+// 與 API 的收錄判斷（`indexable`）同一條（2026-11-13 放寬成任何一區有內容）。
+// 🔴 **不拿它決定版面**：每一區各自看有沒有資料（下面的 tocItems），整頁都空才顯示「建置中」。
+//    原本是「摘要＋規格數據列都有才顯示整頁」，正式站 28/29 筆因此前台一個字都沒出現。
 const hasFullContent = treatment.hasFullContent
 
 const tocItems = computed(() => {

@@ -25,7 +25,7 @@ export const treatmentUnit: UnitDefinition = {
     { key: 'updatedAt', label: '更新時間', render: 'date' },
   ],
   fields: [
-    { key: 'summary', label: '摘要', type: 'textarea', group: '基本資料', hint: '療程卡片上的那句簡述（療程分類頁、困擾頁與案例頁的相關療程）。⚠️ 這一欄與下方的「規格數據列」都有填，療程頁才會被搜尋引擎收錄。' },
+    { key: 'summary', label: '摘要', type: 'textarea', group: '基本資料', hint: '療程卡片上的那句簡述（療程分類頁、困擾頁與案例頁的相關療程）。' },
     {
       key: 'categoryTermId',
       label: '療程分類',
@@ -82,7 +82,7 @@ export const treatmentUnit: UnitDefinition = {
       label: '規格數據列',
       type: 'structured',
       group: '療程內容',
-      hint: '療程頁上的完整規格清單（上面的「療程時間」「建議次數」只給站內 AI 問答用）。⚠️ 這一欄與最上面的「摘要」都有填，療程頁才會被搜尋引擎收錄。',
+      hint: '療程頁上的完整規格清單（上面的「療程時間」「建議次數」只給站內 AI 問答用）。',
       structured: labelValueSchema('規格', '細節頁「規格數據」那張兩欄表格，照順序整列渲染。'),
     },
     { key: 'cover', label: '封面圖', type: 'image', group: '圖片', hint: '建議尺寸 1200×900（4:3）。' },

@@ -142,11 +142,10 @@ export interface Treatment {
    *  （docs/03-seo-geo.md §4 ②），渲染於細節頁 Hero 副標。 */
   summary?: string
   /**
-   * 「這一頁寫完了沒」：**摘要與規格數據列都有值**。只決定要不要輸出 MedicalProcedure 結構化資料。
-   * ⚠️ 2026-11-13 起**不決定版面**：細節頁每一區各自看有沒有資料，有填就顯示。
-   * 🔴 與 `functions/Common/Indexability.cs` 的療程那一條是同一個判斷（都看頂層的摘要，
-   *    不是上面那個其實是副標的 `summary`）。2026-11-13 前前台看副標、API 看摘要：
-   *    填了摘要沒填副標 → 頁面顯示建置中卻被收錄；反過來 → 整頁正常卻 noindex。
+   * 「這一頁有沒有自己的療程說明」：規格／適應症／原理／流程／照護／禁忌症／儀器，任何一區有內容。
+   * 只決定要不要輸出 MedicalProcedure 結構化資料；版面由各區自己判斷。
+   * 🔴 與 `functions/Common/Indexability.cs` 的療程那一條是同一個判斷（2026-11-13 放寬：
+   *    原本要摘要＋規格數據列都有）。改一邊要改另一邊。
    */
   hasFullContent: boolean
   facts?: TreatmentFact[]
@@ -291,7 +290,11 @@ function toTreatment(ctx: TreatmentContext, record: ContentRecord): Treatment {
     concernLinks,
     cardImage: f.cover ? toImage(f.cover, record.title) : undefined,
     summary: (f.subtitle as string) ?? undefined,
-    hasFullContent: Boolean(record.summary?.trim()) && facts.length > 0,
+    hasFullContent: [
+      facts, indications?.items, mechanismBodyOf(record), mechanism?.paragraphs,
+      parseBlocks<unknown[]>(f.steps, []), parseBlocks<unknown[]>(f.aftercare, []),
+      precautions?.items, parseBlocks<unknown[]>(f.deviceInfo, []),
+    ].some((x) => Array.isArray(x) && x.length > 0),
     facts,
     indicationsHeading: indications?.heading ?? undefined,
     indications: indications?.items,

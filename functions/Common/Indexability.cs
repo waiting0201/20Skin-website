@@ -59,15 +59,13 @@ public static class Indexability
 
         return (ContentType)contentType switch
         {
-            // 療程：要有簡述**與**「事實一覽」才算寫完。
-            // ⚠️ 與前台 `data/treatments.ts` 的 `hasFullContent` 同一條：頂層摘要 ＋ facts 有列。
-            //    2026-11-13 起那個旗標不再決定版面（有填的區塊就顯示），只剩收錄與結構化資料看它。
-            //    （2026-11-13 前前台看的其實是副標，兩邊會給出相反的答案。）
-            //    28 項裡目前只有 1 項通過 —— 其餘的療程時間／術後照護／禁忌症
-            //    舊站一項都沒有，仍待醫師撰寫（CLAUDE.md 關鍵數字）。
-            ContentType.Treatment =>
-                !string.IsNullOrWhiteSpace(snapshot["summary"]?.GetValue<string>())
-                && HasItems(fields?["facts"]),
+            // 療程：**任何一區有內容就收**（Tim 定案 2026-11-13：「可以 index 了」）。
+            // 原本要頂層摘要 ＋ 規格數據列都有才算數，29 筆裡只有 1 筆通過；
+            // 同日前台改成「有填的區塊就顯示」之後，那 28 頁已經是有適應症、儀器資訊的實頁。
+            // ⚠️ 與前台 `data/treatments.ts` 的 `hasFullContent` 同一條（它決定要不要輸出
+            //    MedicalProcedure）：下面這八個欄位任何一個有東西。改一邊要改另一邊。
+            // ⚠️ 只有名稱與分類的空殼仍然不收 —— 那一頁前台顯示的是「內容建置中」。
+            ContentType.Treatment => HasTreatmentContent(fields),
 
             // 頁面：內文區塊裡有 `sections` 這個鍵、但它是空的 → 只有骨架。
             // ⚠️ 對應的是法務三頁（服務條款、隱私權、醫療免責聲明）——
@@ -124,6 +122,23 @@ public static class Indexability
         var parsed = ParseBlocks(value);
         return parsed is JsonArray array && array.Count > 0;
     }
+
+    /// <summary>療程頁的內容區塊有沒有任何一區有東西（圖庫與關聯不算，它們不是這一頁自己的說明）。</summary>
+    private static bool HasTreatmentContent(JsonObject? fields)
+    {
+        if (fields is null) return false;
+        return HasItems(fields["facts"])
+            || HasItems(fields["steps"])
+            || HasItems(fields["aftercare"])
+            || HasItems(fields["deviceInfo"])
+            || HasItems(fields["mechanismBlocks"])
+            || HasItemsIn(fields["indications"], "items")
+            || HasItemsIn(fields["contraindications"], "items")
+            || HasItemsIn(fields["mechanism"], "paragraphs");
+    }
+
+    private static bool HasItemsIn(JsonNode? value, string key) =>
+        ParseBlocks(value) is JsonObject obj && obj[key] is JsonArray array && array.Count > 0;
 
     private static bool HasEmptySections(JsonNode? bodyBlocks)
     {
