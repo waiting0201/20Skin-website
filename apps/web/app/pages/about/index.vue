@@ -90,7 +90,7 @@ usePageHead({
     <section class="section section--alt" id="view">
       <div class="container about-view__layout">
         <div class="about-view__media">
-          <img src="/assets/img/stock-zen-garden.jpg" alt="枯山水庭園的留白與配置意象" width="1800" height="1199" loading="lazy">
+          <img src="/assets/img/photo-calligraphy-frame.jpg" alt="木桌上的裱框書法，寫著「自然」二字" width="427" height="320" loading="lazy">
         </div>
 
         <div class="about-view__copy">
