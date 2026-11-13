@@ -52,7 +52,7 @@ usePageHead({
     <section class="section section--alt about-quote">
       <div class="container about-quote__layout">
         <div class="about-quote__media">
-          <img src="/assets/img/stock-bamboo-wall.jpg" alt="白牆上的竹影" width="1350" height="1800" loading="lazy">
+          <img src="/assets/img/photo-calligraphy.jpg" alt="低頭執筆、在宣紙上書寫書法" width="742" height="928" loading="lazy">
         </div>
         <blockquote class="about-quote__body">
           <p class="about-quote__text">以古為師，<br>將東方的美學藝術，<br>與「醫美微整形」創新結合。</p>

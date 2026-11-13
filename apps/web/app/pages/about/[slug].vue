@@ -151,7 +151,7 @@ usePageHead({
         <div class="story-split__media">
           <figure class="story-figure">
             <div class="story-figure__frame">
-              <img src="/assets/img/stock-bamboo-corridor.jpg" alt="木格柵長廊與竹，光影間隔的留白意象" width="1800" height="1199" loading="lazy">
+              <img src="/assets/img/photo-calligraphy-desk.jpg" alt="宣紙上的行草墨跡，一旁擱著毛筆與墨碟" width="1800" height="1125" loading="lazy">
             </div>
             <figcaption>留白不是空無一物，而是刻意保留的呼吸空間。</figcaption>
           </figure>
@@ -195,7 +195,7 @@ usePageHead({
         <div class="story-split__media">
           <figure class="story-figure">
             <div class="story-figure__frame">
-              <img src="/assets/img/stock-corridor.jpg" alt="明亮候診空間，等候看診情境示意" width="1237" height="1800" loading="lazy">
+              <img src="/assets/img/photo-consult-doctor.jpg" alt="醫師在診間指著說明單張，向來診者解說" width="1800" height="1125" loading="lazy">
             </div>
             <figcaption>從評估到施作，每一步都在同一套流程裡進行。</figcaption>
           </figure>
