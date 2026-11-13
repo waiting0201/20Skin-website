@@ -39,7 +39,7 @@ export const CHANGE_FREQ_OPTIONS: ChangeFreq[] = ['always', 'hourly', 'daily', '
 
 function defaultSitemapFiles(): SitemapFileConfig[] {
   return [
-    { key: 'pages', label: '固定頁面', fileName: 'sitemap-pages.xml', sourceUnits: ['page', 'clinic', 'case', 'faq'], enabled: true, defaultChangeFreq: 'monthly', defaultPriority: 0.5 },
+    { key: 'pages', label: '固定頁面', fileName: 'sitemap-pages.xml', sourceUnits: ['page', 'clinic', 'faq'], enabled: true, defaultChangeFreq: 'monthly', defaultPriority: 0.5 },
     { key: 'treatments', label: '療程', fileName: 'sitemap-treatments.xml', sourceUnits: ['treatment'], enabled: true, defaultChangeFreq: 'weekly', defaultPriority: 0.8 },
     { key: 'concerns', label: '困擾', fileName: 'sitemap-concerns.xml', sourceUnits: ['concern'], enabled: true, defaultChangeFreq: 'weekly', defaultPriority: 0.7 },
     { key: 'doctors', label: '醫師', fileName: 'sitemap-doctors.xml', sourceUnits: ['doctor'], enabled: true, defaultChangeFreq: 'monthly', defaultPriority: 0.6 },

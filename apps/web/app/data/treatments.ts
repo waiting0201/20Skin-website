@@ -90,12 +90,6 @@ export interface RelatedDoctor {
   photo: ImageRef
 }
 
-export interface RelatedCase {
-  title: string
-  excerpt: string
-  photo: ImageRef
-}
-
 export interface TreatmentFaqItem {
   q: string
   a: string
@@ -169,7 +163,6 @@ export interface Treatment {
   doctors?: RelatedDoctor[]
   /** 「此療程可改善的困擾」標籤列 */
   detailTags?: string[]
-  cases?: RelatedCase[]
   faqLastUpdated?: string
   faqs?: TreatmentFaqItem[]
   articles?: RelatedArticle[]
@@ -323,7 +316,6 @@ function toTreatment(ctx: TreatmentContext, record: ContentRecord): Treatment {
         }
       }),
     detailTags: concernTags.length ? concernTags : undefined,
-    cases: [],
     faqLastUpdated: relationsOf(record, REL.treatmentToFaq)
       .map((r) => (ctx.faqs.find((x) => x.slug === r.toSlug)?.fields.lastReviewedOn as string) ?? '')
       .filter(Boolean)

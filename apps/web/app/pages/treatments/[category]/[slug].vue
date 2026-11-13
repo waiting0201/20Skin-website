@@ -44,7 +44,6 @@ const tocItems = computed(() => {
   if (treatment.gallery?.length) items.push({ href: '#gallery', label: '圖庫' })
   if (treatment.doctors?.length) items.push({ href: '#doctors', label: '醫師團隊' })
   if (treatment.detailTags?.length) items.push({ href: '#tags', label: '可改善困擾' })
-  if (treatment.cases?.length) items.push({ href: '#cases', label: '相關案例' })
   if (treatment.faqs?.length) items.push({ href: '#faq', label: '常見問題' })
   if (treatment.articles?.length) items.push({ href: '#articles', label: '相關文章' })
   return items
@@ -374,31 +373,6 @@ usePageHead({
               <a v-if="treatment.concernLinks[tag]" class="c-tag" :href="treatment.concernLinks[tag]">{{ tag }}</a>
               <span v-else class="c-tag">{{ tag }}</span>
             </template>
-          </div>
-        </section>
-
-        <!-- -- 相關案例 ------------------------------------------------------------------
-             一律使用情境示意圖，不放實際治療前後對比照。 -->
-        <section v-if="treatment.cases?.length" class="tdetail-block" id="cases">
-          <div class="c-sechead">
-            <div class="c-sechead__text">
-              <h2>相關案例分享</h2>
-            </div>
-          </div>
-          <div class="grid grid--3">
-            <article v-for="c in treatment.cases" :key="c.title" class="c-card">
-              <div class="c-card__media">
-                <img :src="c.photo.src" :srcset="srcsetOf(c.photo.src)" :sizes="IMAGE_SIZES.grid3" :alt="c.photo.alt" :width="c.photo.width" :height="c.photo.height" loading="lazy">
-              </div>
-              <div class="c-card__body">
-                <h3 class="c-card__title"><a href="/cases/">{{ c.title }}</a></h3>
-                <p class="c-card__excerpt">{{ c.excerpt }}</p>
-                <div class="tdetail-case__disclosure">
-                  <p>療程效果因人而異，本案例不代表所有人之療程效果。</p>
-                  <p>已取得當事人書面同意刊登；圖像拍攝條件（光線、角度、妝容）可能影響呈現效果。</p>
-                </div>
-              </div>
-            </article>
           </div>
         </section>
 
