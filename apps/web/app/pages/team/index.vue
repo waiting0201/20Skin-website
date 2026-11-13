@@ -234,7 +234,7 @@ function siteLabel(doctor: (typeof ALL_DOCTORS)[number]) {
       <div class="grid grid--3">
         <article class="team-role">
           <span class="team-role__media">
-            <img src="/assets/img/stock-reception.jpg" alt="接待空間情境" width="1200" height="1800" loading="lazy">
+            <img src="/assets/img/photo-team-consult.jpg" alt="醫師與來診者在諮詢桌前對照說明單討論" width="1800" height="1350" loading="lazy">
           </span>
           <span class="team-role__no">01</span>
           <h3>諮詢人員</h3>
@@ -242,7 +242,7 @@ function siteLabel(doctor: (typeof ALL_DOCTORS)[number]) {
         </article>
         <article class="team-role">
           <span class="team-role__media">
-            <img src="/assets/img/stock-clinical-hands.jpg" alt="戴手套進行療程操作情境" width="1800" height="1197" loading="lazy">
+            <img src="/assets/img/photo-team-doctors.jpg" alt="20SKIN 醫師團隊合照" width="1800" height="1350" loading="lazy">
           </span>
           <span class="team-role__no">02</span>
           <h3>主治醫師</h3>
@@ -250,7 +250,7 @@ function siteLabel(doctor: (typeof ALL_DOCTORS)[number]) {
         </article>
         <article class="team-role">
           <span class="team-role__media">
-            <img src="/assets/img/stock-skincare-smile.jpg" alt="日常保養情境" width="1800" height="1199" loading="lazy">
+            <img src="/assets/img/photo-team-aesthetic.jpg" alt="藝術總監安喬為來診者說明臉部比例，來診者手持鏡子" width="1800" height="1350" loading="lazy">
           </span>
           <span class="team-role__no">03</span>
           <h3>美學團隊</h3>
