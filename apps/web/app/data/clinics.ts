@@ -175,13 +175,14 @@ const PRESENTATION: Record<string, {
  *  ⚠️ 地址錯了，地圖就會指到別的地方，而畫面上不會有任何異常。地址的單一來源是
  *  資料庫（經 CLINIC_NAP 對齊頁尾），不要在這裡另外寫死一份。 */
 const mapQuery = (address: string) => encodeURIComponent(address)
-const mapEmbedUrlOf = (address: string) =>
+export const mapEmbedUrlOf = (address: string) =>
   address ? `https://www.google.com/maps?q=${mapQuery(address)}&hl=zh-TW&z=16&output=embed` : ''
 /** 官方文件化的 Maps URLs 形式（api=1），比 output=embed 穩定，適合給人點。 */
-const mapLinkUrlOf = (address: string) =>
+export const mapLinkUrlOf = (address: string) =>
   address ? `https://www.google.com/maps/search/?api=1&query=${mapQuery(address)}` : ''
 
-function hoursTableOf(hours: { dayOfWeek: number; startTime: string; endTime: string }[]): ClinicHoursTableRow[] {
+/** ⚠️ 允赫齒科頁（data/pages.ts 的 getDentalPage）也用這一支 —— 時段表的推導全站只有一份。 */
+export function hoursTableOf(hours: { dayOfWeek: number; startTime: string; endTime: string }[]): ClinicHoursTableRow[] {
   const rows = new Map<string, ClinicHoursTableRow>()
   for (const h of hours) {
     const label = `${h.startTime.slice(0, 5)}–${h.endTime.slice(0, 5)}`

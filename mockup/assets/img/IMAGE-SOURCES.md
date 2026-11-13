@@ -95,3 +95,21 @@ b2.crop((2400, 3200, 6000, 5277)) # photo-brand-detail
 ```
 
 ⚠️ 裁圖不要用 `sips --cropOffset`（相對中心偏移，超界會靜默失效），用 PIL 的 `crop((l,u,r,lo))`。
+
+---
+
+## 允赫齒科頁（22-dental.html，2026-11-13）
+
+四張都來自舊站 `https://www.20skin.tw/images/contact/`，**原樣複製、沒有裁切也沒有放大**，一律 750×450（5:3）。
+
+| 檔名 | 舊站檔名 | 用在 |
+|---|---|---|
+| `photo-dental-treatment.jpg` | `dental-space-p03.jpg` | 頁首（醫師治療中） |
+| `photo-dental-reception.jpg` | `dental-space-p.jpg` | 院內環境：櫃檯與候診區 |
+| `photo-dental-room.jpg` | `dental-space-p02.jpg` | 院內環境：診間與設備 |
+| `photo-dental-room-single.jpg` | `dental-space-p04.jpg` | 院內環境：獨立診間 |
+
+⚠️ 750px 是硬上限：頁首的框約 540px 寬（1.4 倍取樣）、院內環境三欄各約 370px（2 倍）。拿到院方原檔之前不要放大任何一張。
+⚠️ 頁首那張認得出醫師本人（戴口罩、制服上有繡字）。
+⚠️ 舊站要帶 cookie `humans_21909=1` 才抓得到（2026-11-13 起多了一道 JS 挑戰，只帶瀏覽器 UA 會回 409）。
+路線圖不是圖檔：照舊站 `dental-map.png`（606×448）重畫成頁面內的 SVG。

@@ -6,7 +6,7 @@ import { computed, onMounted, ref } from 'vue'
 import { adminApi, type DashboardSummary } from '@/api/client'
 import { currentUser } from '@/auth'
 import { hasPermission } from '@/permissions'
-import { UNIT_REGISTRY } from '@/units'
+import { NAV_UNIT_KEYS, UNIT_REGISTRY } from '@/units'
 import type { UnitKey } from '@/types'
 
 // layout 與登入守門改由 src/router.ts 的路由表 meta 與全域 beforeEach 處理
@@ -27,7 +27,8 @@ onMounted(async () => {
   loading.value = false
 })
 
-const unitKeys = Object.keys(UNIT_REGISTRY) as UnitKey[]
+// 案例不列（決策 34）：入口已拿掉，列在這裡只會多一列點得進去卻沒有用處的數字。
+const unitKeys = NAV_UNIT_KEYS
 </script>
 
 <template>

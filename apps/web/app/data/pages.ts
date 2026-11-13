@@ -18,7 +18,8 @@
 
 import { UNIT, bySlug, img, loadUnit, parseBlocks, seoOverridesOf, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
-import { getClinicNap } from './navigation'
+import { getClinicNap, telHref } from './navigation'
+import { hoursTableOf, mapEmbedUrlOf, mapLinkUrlOf, type ClinicHoursTableRow } from './clinics'
 import { roleText } from '~/utils/role'
 
 /** slug → 那一筆頁面。⚠️ 每個請求只取一次（`loadUnit` 以請求為範圍去重）。 */
@@ -229,6 +230,130 @@ export async function getStoryPages(): Promise<Record<string, StoryPage>> {
     } satisfies StoryPage]
   }),
   )
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// /dental/ 允赫齒科（mockup/22-dental.html）
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * 允赫齒科頁 `bodyBlocks` 的形狀。
+ *
+ * 🔴 **後台表單是照這一份抄的** ——
+ *    後台是 `apps/admin/src/units/page.ts` 的 `fieldsBySlug.dental`，一個鍵一格輸入。
+ *    改了欄位要跑 `tools/admin-e2e/field-effect.mjs`（決策 33 ⑦）。
+ * ⚠️ 允赫齒科是集團在二林的**另一家診所**，不是「據點」單元的第三筆（Tim 定案 2026-11-13：
+ *    做成固定頁）。所以電話、地址、時段存在這一頁自己身上，**不經 `getClinicNap()`**，
+ *    頁尾與據點列表也不會出現它。
+ */
+interface DentalDocument {
+  phone?: string | null
+  address?: string | null
+  registration?: string | null
+  lineUrl?: string | null
+  facebookUrl?: string | null
+  heroImage?: unknown
+  heroCaption?: string | null
+  servicesNote?: string | null
+  services?: { kind?: string | null; items?: string[] | null }[]
+  // 🔴 以下三個鍵的名稱與形狀**刻意與「據點」相同**（businessHours／transportInfo／photos）：
+  //    後台這一頁用的是據點那一套輸入元件（Tim 指定 2026-11-13），元件吐什麼形狀這裡就收什麼。
+  /** dayOfWeek：0＝星期日。 */
+  businessHours?: { dayOfWeek: number; startTime: string; endTime: string; sortOrder?: number }[]
+  hoursNotes?: string[]
+  transportInfo?: { icon?: string | null; title?: string | null; points?: string[] | null }[]
+  photos?: { image?: unknown; caption?: string | null; sortOrder?: number }[]
+}
+
+export interface DentalImage { src: string; alt: string; width: number; height: number }
+
+export interface DentalPage {
+  title: string
+  lede: string
+  phone: string
+  phoneHref: string
+  address: string
+  registration: string
+  lineUrl: string
+  facebookUrl: string
+  heroImage: DentalImage
+  heroCaption: string
+  servicesNote: string
+  services: { kind: string; items: string[] }[]
+  hours: { day: number; start: string; end: string }[]
+  hoursTable: ClinicHoursTableRow[]
+  hoursNotes: string[]
+  mapEmbedUrl: string
+  mapLinkUrl: string
+  /** 交通方式。`parking` 的那幾段在版面上是路線下方的提示，其餘是編號的步驟清單。 */
+  transport: { icon: string; title: string; points: string[] }[]
+  gallery: (DentalImage & { caption: string })[]
+  seo: ReturnType<typeof seoOverridesOf>
+}
+
+/**
+ * 院方還沒在後台上傳照片時用的預設圖（舊站的四張院內照，建置產物，來源見
+ * mockup/assets/img/IMAGE-SOURCES.md）。
+ * ⚠️ **只要後台傳了一張，那一區就整個改用後台的** —— 主視覺與院內環境各自判斷，不混用。
+ */
+const DENTAL_DEFAULT_HERO: DentalImage = {
+  src: '/assets/img/photo-dental-treatment.jpg', alt: '允赫齒科醫師為患者進行治療', width: 750, height: 450,
+}
+const DENTAL_DEFAULT_GALLERY: DentalPage['gallery'] = [
+  { src: '/assets/img/photo-dental-reception.jpg', alt: '允赫齒科櫃檯與候診區，牆面有 20 DENTAL 標誌', width: 750, height: 450, caption: '櫃檯與候診區' },
+  { src: '/assets/img/photo-dental-room.jpg', alt: '允赫齒科診間，治療椅、顯微鏡與雷射設備', width: 750, height: 450, caption: '診間與設備' },
+  { src: '/assets/img/photo-dental-room-single.jpg', alt: '允赫齒科獨立診間', width: 750, height: 450, caption: '獨立診間' },
+]
+
+const clean = (list: (string | null | undefined)[] | null | undefined): string[] =>
+  (list ?? []).map((x) => (x ?? '').trim()).filter(Boolean)
+
+/** 查不到那一筆（或 API 回的不是這一頁）時回 `undefined`，由頁面決定 404。 */
+export async function getDentalPage(): Promise<DentalPage | undefined> {
+  const index = await pageIndex()
+  const record = index.get('dental')
+  if (!record) return undefined
+  const doc = blocksOf<DentalDocument>(index, 'dental', {})
+
+  const hours = (doc.businessHours ?? [])
+    .filter((h) => h && h.startTime && h.endTime)
+    .map((h) => ({ dayOfWeek: Number(h.dayOfWeek), startTime: h.startTime, endTime: h.endTime }))
+  const address = (doc.address ?? '').trim()
+  const phone = (doc.phone ?? '').trim()
+  const hero = img(doc.heroImage)
+  const gallery = (doc.photos ?? []).slice().sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)).flatMap((g) => {
+    const photo = img(g.image)
+    return photo ? [{ ...photo, alt: photo.alt || g.caption || '允赫齒科院內環境', caption: (g.caption ?? '').trim() }] : []
+  })
+
+  return {
+    title: record.title || '允赫齒科',
+    lede: record.summary ?? '',
+    phone,
+    phoneHref: telHref(phone),
+    address,
+    registration: (doc.registration ?? '').trim(),
+    lineUrl: (doc.lineUrl ?? '').trim(),
+    facebookUrl: (doc.facebookUrl ?? '').trim(),
+    heroImage: hero ? { ...hero, alt: hero.alt || '允赫齒科' } : DENTAL_DEFAULT_HERO,
+    heroCaption: (doc.heroCaption ?? '').trim(),
+    servicesNote: (doc.servicesNote ?? '').trim(),
+    services: (doc.services ?? [])
+      .map((g) => ({ kind: (g.kind ?? '').trim(), items: clean(g.items) }))
+      .filter((g) => g.items.length > 0),
+    hours: hours.map((h) => ({ day: h.dayOfWeek, start: h.startTime.slice(0, 5), end: h.endTime.slice(0, 5) })),
+    // ⚠️ 依開始時間排：後台是逐列新增的，輸入順序不一定是早到晚。
+    hoursTable: hoursTableOf(hours).sort((a, b) => a.label.localeCompare(b.label)),
+    hoursNotes: clean(doc.hoursNotes),
+    // 地圖與兩個據點頁同一種做法：以地址查詢的 Google 地圖，網址由地址推導、不另存。
+    mapEmbedUrl: mapEmbedUrlOf(address),
+    mapLinkUrl: mapLinkUrlOf(address),
+    transport: (doc.transportInfo ?? [])
+      .map((t) => ({ icon: t.icon ?? '', title: (t.title ?? '').trim(), points: clean(t.points) }))
+      .filter((t) => t.points.length > 0),
+    gallery: gallery.length > 0 ? gallery : DENTAL_DEFAULT_GALLERY,
+    seo: seoOverridesOf(record),
+  }
 }
 
 export interface LegalSection {

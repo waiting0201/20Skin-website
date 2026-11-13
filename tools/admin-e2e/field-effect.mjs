@@ -29,7 +29,7 @@ import { api, apiLogin, API, WEB } from './_shared.mjs'
 const here = dirname(fileURLToPath(import.meta.url))
 const adminSrc = resolve(here, '../../apps/admin/src')
 const { UNIT_REGISTRY } = await import(join(adminSrc, 'units/index.ts'))
-const { fieldsFromServer, fieldsToServer } = await import(join(adminSrc, 'api/content-fields.ts'))
+const { fieldsFor, fieldsFromServer, fieldsToServer } = await import(join(adminSrc, 'api/content-fields.ts'))
 
 const argOf = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`)
@@ -44,7 +44,8 @@ if (!/127\.0\.0\.1|localhost/.test(API)) {
   process.exit(1)
 }
 
-const UNITS = ['clinic', 'doctor', 'treatment', 'concern', 'case', 'faq', 'term', 'page', 'article']
+// ⚠️ 案例不測（2026-11-13，決策 34）：案例分享由允赫齒科頁取代，案例全部下架、後台入口拿掉，前台沒有任何地方會顯示它。
+const UNITS = ['clinic', 'doctor', 'treatment', 'concern', 'faq', 'term', 'page', 'article']
 const PER_UNIT_DETAILS = 25
 const MAX_RECORDS_PER_UNIT = 4
 
@@ -57,8 +58,6 @@ const EXPECTED_HIDDEN = [
   { key: 'doctor.tags', why: '不顯示文字，用來驅動 /team/ 的專長篩選（按鈕是寫死的四個詞）' },
   { key: 'treatment.durationText', why: '只給 AI 問答的語料用（AiChunker），頁面上的時間在「規格數據列」' },
   { key: 'treatment.sessionsText', why: '同上' },
-  { key: 'case.consentReference', why: '內部留存紀錄，不對外顯示' },
-  { key: 'case.narrative', path: /^(sections|timeline|testimonial)/, why: '已由內文取代、後台不再顯示的舊鍵（決策 32），原樣往返' },
   { key: 'page.bodyBlocks', path: /^(teamPreview|clinics)/, why: '品牌理念頁改讀醫師與據點單元後留下的舊鍵（決策 30），原樣往返' },
   { key: 'page.bodyBlocks', path: /^meta\[0\]$/, onlyTitles: ['新中式美學'], why: '「最後更新 …」那一項的日期由前台自動帶，手打的字不顯示' },
   { key: 'page.summary', onlyTitles: ['品牌理念', '隱私權政策', '服務條款', '醫療免責聲明'], why: '導言只有兩個長版故事頁會顯示（欄位說明已寫明）' },
@@ -231,14 +230,15 @@ console.log(`備份已寫到 ${BACKUP}\n`)
 
 const seenFilled = new Map() // `${unit}.${field}` → 有沒有任何一筆有值
 const writeErrors = []
-const urls = new Set(['/', '/about/', '/team/', '/treatments/', '/concerns/', '/blog/', '/cases/', '/faq/', '/clinics/', '/contact/'])
+const urls = new Set(['/', '/about/', '/team/', '/treatments/', '/concerns/', '/blog/', '/dental/', '/faq/', '/clinics/', '/contact/'])
 
 for (const { unit, detail } of plan) {
   const def = UNIT_REGISTRY[unit]
   const base = { unit, unitLabel: def.label, id: detail.id, title: detail.title, url: detail.urlPath }
   const admin = fieldsFromServer(unit, detail.fields, detail.summary, { slug: detail.slug })
   const next = { ...admin }
-  for (const f of def.fields) {
+  // ⚠️ fieldsFor：允赫齒科頁用的是另一組欄位（fieldsBySlug），讀 def.fields 會漏掉整張表單。
+  for (const f of fieldsFor(unit, { slug: detail.slug })) {
     if (f.readOnly) continue
     const key = `${unit}.${f.key}`
     const meta = { ...base, field: f.key, label: f.label }

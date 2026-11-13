@@ -6,7 +6,7 @@
 // 🔴 **依 slug 分派，不是 systemKey。** 這六頁的 `SystemKey` 都是 null
 //    （它們是 `PageKind.Free`），前台 `pageIndex()` 查的也是 slug。
 //
-// ⚠️ 17 個頁面裡只有這 6 個有內文，其餘（列表頁、聯絡、搜尋、404…）的
+// ⚠️ 17 個頁面裡只有這 7 個有內文（2026-11-13 多了允赫齒科），其餘（列表頁、聯絡、搜尋、404…）的
 //    `bodyBlocks` 前台根本不讀。那些頁面**刻意不給 schema** —— 硬套一份的結果是
 //    「表單看起來正常、填了、前台什麼都沒變」，比一個坦白的 JSON 框糟得多。
 
@@ -172,6 +172,40 @@ export const pageLegalSchema: StructuredSchema = {
   },
 }
 
+// ── 允赫齒科頁（`/dental/`，2026-11-13 取代案例分享，決策 34）─────────────────────
+//
+// 🔴 這一頁**沒有**整包的 bodyBlocks schema：它的表單長得跟「據點」一樣（units/page.ts 的
+//    `fieldsBySlug.dental`），地址、電話、營業時間、照片各是一格，值存在 bodyBlocks 的同名鍵裡。
+//    下面兩份只負責據點沒有、允赫齒科才有的兩個區塊。
+//    形狀來源：`apps/web/app/data/pages.ts` 的 `DentalDocument`。
+
+/** `{kind, items[]}[]` —— 主治項目，一組是前台的一欄。 */
+export const dentalServicesSchema: StructuredSchema = {
+  wire: 'json-value',
+  emptyIsNull: true,
+  preview: '主治項目。一組是一欄，桌機一列排四欄。',
+  root: {
+    kind: 'array',
+    itemLabel: '分組',
+    summaryKeys: ['kind'],
+    item: {
+      kind: 'object',
+      fields: [
+        { key: 'kind', label: '分組名稱', node: { kind: 'string', placeholder: '日常診療' }, required: true },
+        { key: 'items', label: '項目', node: { kind: 'array', itemLabel: '項目', item: { kind: 'string' } } },
+      ],
+    },
+  },
+}
+
+/** `string[]` —— 時段表下方的條列提醒。 */
+export const dentalHoursNotesSchema: StructuredSchema = {
+  wire: 'json-value',
+  emptyIsNull: true,
+  preview: '時段表下方的條列，例如「實際門診時間請以來電確認為主」。',
+  root: { kind: 'array', itemLabel: '提醒', item: { kind: 'string' } },
+}
+
 /** slug → schema。查不到就沒有表單（原始 JSON 模式）。 */
 export const PAGE_BODY_SCHEMAS: Record<string, StructuredSchema> = {
   about: pageAboutSchema,
@@ -180,4 +214,5 @@ export const PAGE_BODY_SCHEMAS: Record<string, StructuredSchema> = {
   privacy: pageLegalSchema,
   terms: pageLegalSchema,
   'medical-disclaimer': pageLegalSchema,
+  // ⚠️ dental 不在這裡：它不用整包的內文表單，見上方「允赫齒科頁」的說明。
 }

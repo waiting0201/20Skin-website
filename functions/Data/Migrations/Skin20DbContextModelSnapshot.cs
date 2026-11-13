@@ -2576,16 +2576,15 @@ namespace Skin20.Api.Data.Migrations
                             ContentType = (byte)8,
                             CreatedAt = new DateTime(2026, 9, 11, 0, 0, 0, 0, DateTimeKind.Utc),
                             IncludeInSitemap = true,
-                            IsSystemLocked = true,
-                            Slug = "cases",
+                            IsSystemLocked = false,
+                            Slug = "dental",
                             SortOrder = 6,
                             Status = (byte)3,
-                            Title = "案例分享",
+                            Title = "允赫齒科",
                             UpdatedAt = new DateTime(2026, 9, 11, 0, 0, 0, 0, DateTimeKind.Utc),
-                            UrlPath = "/cases/",
-                            PageKind = (byte)2,
-                            SuperAdminOnly = false,
-                            SystemKey = "cases-index"
+                            UrlPath = "/dental/",
+                            PageKind = (byte)1,
+                            SuperAdminOnly = false
                         },
                         new
                         {

@@ -15,7 +15,7 @@
 //    只會讓那一頁的結構化資料整段失效（docs/03 §4）。
 
 import type { UnitDefinition, UnitField } from './unit-schema'
-import { resolveSchema } from './api/content-fields'
+import { fieldsFor, resolveSchema } from './api/content-fields'
 import {
   isEmptyValue,
   isRawMode,
@@ -297,7 +297,7 @@ export function validateBody(
     errors.slug = def.producesUrl ? '網址代稱為必填——它決定這一頁的網址。' : '網址代稱為必填——它是常見問題頁上的定位用代稱。'
   }
 
-  for (const field of def.fields) {
+  for (const field of fieldsFor(def.key, context)) {
     // 文章的「摘要」送出時是頂層的 summary，長度上限與其他欄位不同（docs/08 §B-1）。
     if (field.key === 'summary') {
       const summary = text(form.fields[field.key])

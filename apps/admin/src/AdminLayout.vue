@@ -8,7 +8,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { currentUser, logout } from '@/auth'
 import { can, hasPermission } from '@/permissions'
 import { SYSTEM_SCREENS } from '@/router'
-import { UNIT_REGISTRY } from '@/units'
+import { NAV_UNIT_KEYS, UNIT_REGISTRY } from '@/units'
 import { ROLE_LABEL, type UnitKey } from '@/types'
 
 const route = useRoute()
@@ -23,7 +23,7 @@ interface NavItem {
 }
 
 const unitNavItems = computed<NavItem[]>(() =>
-  (Object.keys(UNIT_REGISTRY) as UnitKey[]).map((key) => ({
+  NAV_UNIT_KEYS.map((key) => ({
     label: UNIT_REGISTRY[key].label,
     href: `/${key}`,
     visible: can(permCtx.value, key, 'view'),

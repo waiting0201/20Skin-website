@@ -343,7 +343,11 @@ public static class SeedData
         AddPage(1103, PageKind.System, "treatments-index", "treatments", "/treatments/", "專業服務", 3);
         AddPage(1104, PageKind.System, "concerns-index", "concerns", "/concerns/", "肌膚困擾", 4);
         AddPage(1105, PageKind.System, "blog-index", "blog", "/blog/", "臻美分享", 5);
-        AddPage(1106, PageKind.System, "cases-index", "cases", "/cases/", "案例分享", 6);
+        // 🔴 1106 原本是系統頁「案例分享」（cases-index，/cases/）。2026-11-13 案例分享由允赫齒科取代，
+        //    這一筆改成自由頁 dental（migration CasesBecomeDental）—— 沿用同一筆是為了讓主選單那一項
+        //    （MenuItems 以 ContentItemId 指著它）與 sitemap 自動跟著換，不必另外搬。
+        //    ⚠️ 所以系統頁現在是 10 個、自由頁 7 個；Id 仍落在系統頁的號段裡，不要因此把它當系統頁。
+        AddPage(1106, PageKind.Free, null, "dental", "/dental/", "允赫齒科", 6);
         AddPage(1107, PageKind.System, "faq-index", "faq", "/faq/", "常見問題", 7);
         AddPage(1108, PageKind.System, "clinics-index", "clinics", "/clinics/", "診所據點", 8);
         AddPage(1109, PageKind.System, "contact", "contact", "/contact/", "聯絡我們", 9);

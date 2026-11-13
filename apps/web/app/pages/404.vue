@@ -25,7 +25,7 @@ const entries = [
   { href: '/treatments/', label: '專業服務', desc: '全部療程的完整索引，依分類排列。' },
   { href: '/team/', label: '醫療團隊', desc: '團隊成員的專長、看診院區與具名文章。' },
   { href: '/blog/', label: '臻美分享', desc: '醫美新知、皮膚新知、媒體報導與演講授課。' },
-  { href: '/cases/', label: '案例分享', desc: '個案紀錄，含條件、次數與時間區間。' },
+  { href: '/dental/', label: '允赫齒科', desc: '集團在二林的牙科診所：主治項目、門診時段與交通方式。' },
   { href: '/faq/', label: '常見問題', desc: '門診最常被問到的問題，依主題分類。' },
   { href: '/clinics/', label: '診所據點', desc: '兩個院區的門診時段、位置與就診流程。' },
   { href: '/about/', label: '品牌理念', desc: '新中式美學與彩妝式輕醫美的完整說明。' },

@@ -32,7 +32,7 @@ import Repeater from './Repeater.vue'
 import HoursEditor from './HoursEditor.vue'
 import ImageField from './ImageField.vue'
 import StructuredField from './StructuredField.vue'
-import { resolveSchema } from '@/api/content-fields'
+import { fieldsFor, resolveSchema } from '@/api/content-fields'
 import { listPathFor } from '@/list-state'
 import { useStickyHead } from '@/sticky-head'
 
@@ -109,7 +109,8 @@ const showStructuredData = computed(() => Boolean(record.value?.seo.structuredDa
  *    ⚠️ 藏的是入口，`PUT …/seo` 與既有資料都沒動。
  */
 /** 這一筆要顯示的欄位：標了 `termTypes` 的只在那幾種分類型別出現（值仍照送）。 */
-const visibleFields = computed(() => def.value.fields.filter((f) =>
+// 🔴 欄位清單走 fieldsFor()：頁面的允赫齒科用的是長得跟「據點」一樣的另一組欄位（fieldsBySlug）。
+const visibleFields = computed(() => fieldsFor(props.unit, { slug: record.value?.slug ?? null }).filter((f) =>
   !f.termTypes || f.termTypes.includes(Number(record.value?.fields.termType))))
 
 const showSeoBlock = computed(() => {

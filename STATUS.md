@@ -550,6 +550,16 @@ Vite ＋ Vue 3 的 SPA，`base=/admin/`，build 產物寫進 `apps/web/public/ad
 - 困擾頁：有任何一組關聯就走完整版型，各區沒有東西就不渲染；沒有建議療程時保留療程分類的出口
 - 據點休診說明與診次敘述由門診時段推導（`closuresOf`），不再依 slug 寫死；推導結果與原本手寫的兩句相同
 
+### 🟡 2026-11-13：案例分享換成允赫齒科（決策 34）——尚未部署、尚未 commit
+
+- 設計稿 `mockup/22-dental.html`、前台 `/dental/`、migration `CasesBecomeDental`（頁面 1106 改成 dental、案例下架、`/cases/*` 301）、
+  後台「案例」入口拿掉、允赫齒科的表單與「據點」同一套輸入元件
+- 本機驗過：`typecheck`（前後台）、`verify:css`、`verify:seo-head`、content-roundtrip、`local-db.sh rehearse`／`rehearse-data 1`、
+  `admin-e2e/check.mjs`（41 項）、`field-effect.mjs`（64 個欄位改了前台都有反應，0 個沒出現）
+- 🔴 **部署後要做**：對正式環境跑 `tools/legacy-import/import-dental.mjs`（內文靠它寫入，見決策 34）
+- ⚠️ 待院方確認：主治項目分組名稱、頁首介紹、門診時段；待院方提供：解析度夠的院內照片（現有四張只有 750×450）
+- ⚠️ 還沒動：客戶版 PDF（`output/`）與 docs/02、docs/08 裡描述案例模型的段落 —— 模型還在，只是前台與後台入口拿掉
+
 第三批（同日，Tim：「案例分享不要管，整個會換掉；其他的可以改」）——🟡 尚未部署：
 
 - **預約網址只有一個來源**：全站設定的「線上預約網址」（鍵仍是 `aifaq.handoffBookingUrl`）→ `utils/booking.ts` 的 `bookingUrl()`，

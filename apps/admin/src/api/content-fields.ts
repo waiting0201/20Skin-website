@@ -37,6 +37,26 @@ export function resolveSchema(field: UnitField, context: FieldContext): Structur
   return field.structured
 }
 
+/**
+ * 這一筆內容要用哪一組欄位。絕大多數是單元宣告的 `fields`；
+ * 頁面的允赫齒科（slug=dental）另有一組長得跟「據點」一樣的（`fieldsBySlug`）。
+ *
+ * 🔴 **編輯畫面、驗證、收放都要走這一支**，不要直接讀 `UNIT_REGISTRY[unit].fields`。
+ */
+export function fieldsFor(unit: UnitKey, context: FieldContext = { slug: null }): UnitField[] {
+  const def = UNIT_REGISTRY[unit]
+  return (context.slug && def.fieldsBySlug?.[context.slug]) || def.fields
+}
+
+/** 宿主 JSON 欄位（`storedIn` 指的那一欄）→ 物件。API 可能回字串也可能回物件。 */
+function hostObject(value: unknown): Record<string, unknown> {
+  let parsed = value
+  if (typeof parsed === 'string') {
+    try { parsed = JSON.parse(parsed) } catch { return {} }
+  }
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...(parsed as Record<string, unknown>) } : {}
+}
+
 /** 解析 schema 需要的上下文。目前只有 page 用得到 slug。 */
 export interface FieldContext {
   slug: string | null
@@ -126,7 +146,14 @@ export function fieldsFromServer(
   summary: string | null,
   context: FieldContext = { slug: null },
 ): AdminFields {
-  const source = serverFields ?? {}
+  const raw = serverFields ?? {}
+  const fields = fieldsFor(unit, context)
+  // 存在別的 JSON 欄位裡的值（`storedIn`）先攤平到頂層，後面就能與一般欄位走同一條路。
+  // ⚠️ 宿主欄位本身原樣留在 out 裡（畫面不顯示）：存檔時要拿它當底，沒被認領的鍵才不會掉。
+  const source: ServerFields = { ...raw }
+  for (const field of fields) {
+    if (field.storedIn) source[field.key] = hostObject(raw[field.storedIn])[field.key]
+  }
   const out: AdminFields = { ...source }
 
   if (unit === 'doctor') {
@@ -139,16 +166,20 @@ export function fieldsFromServer(
   //    2026-11-12 前只有文章接了這一欄，其餘單元前台照樣讀它（據點卡片的說明、
   //    醫師頁導言、療程卡片簡述…），後台卻沒有任何地方能改。
   //    現在凡是單元宣告了 `summary` 欄位就接上。
-  if (hasSummaryField(unit)) {
+  if (fields.some((f) => f.key === 'summary')) {
     out.summary = summary ?? ''
   }
 
   // 畫面上每一種集合型欄位都預期是陣列。API 對「沒有任何一列」回的是空陣列，
   // 但欄位本身可能根本不在字典裡（例如剛建立、還沒存過任何圖）——補成 []，
   // 讓 `v-for` 不必到處寫 `?? []`。
-  for (const field of UNIT_REGISTRY[unit].fields) {
+  for (const field of fields) {
     if (isCollectionField(field) && !Array.isArray(out[field.key])) {
       out[field.key] = []
+    }
+    // 存在宿主欄位裡的文字：鍵不存在時補空字串，輸入框才不會顯示 undefined。
+    if (field.storedIn && (field.type === 'text' || field.type === 'textarea') && out[field.key] == null) {
+      out[field.key] = ''
     }
     // 區塊 JSON → 已 parse 的 JS 值（parse 不了就保持字串＝原始 JSON 模式）。
     if (field.type === 'structured') {
@@ -162,10 +193,6 @@ export function fieldsFromServer(
   }
 
   return out
-}
-
-function hasSummaryField(unit: UnitKey): boolean {
-  return UNIT_REGISTRY[unit].fields.some((f) => f.key === 'summary')
 }
 
 function isCollectionField(field: UnitField): boolean {
@@ -190,11 +217,10 @@ export function fieldsToServer(
   isCreate = false,
   context: FieldContext = { slug: null },
 ): ServerBodyFields {
-  const def = UNIT_REGISTRY[unit]
   const out: ServerFields = {}
   let summary: string | null | undefined
 
-  for (const field of def.fields) {
+  for (const field of fieldsFor(unit, context)) {
     // 唯讀欄位一律不回送。usageCount 是伺服器算出來的衍生值，
     // sourceSite／systemKey 是遷移與系統資料 —— 回送它們最好的情況是被忽略，
     // 最壞的情況是把正確的值覆蓋掉。
@@ -239,6 +265,23 @@ export function fieldsToServer(
 
     out[field.key] = value ?? null
   }
+
+  // 存在別的 JSON 欄位裡的值收回宿主：以原本那一份為底，只蓋掉有欄位認領的鍵。
+  // 🔴 宿主一律送**物件**（目前只有頁面的 bodyBlocks，那是 json-value 的寫入路徑）。
+  //    內嵌的區塊欄位 `toWire` 可能吐 JSON 字串，要解回來 —— 否則宿主裡會出現雙重編碼的字串。
+  const hosts = new Map<string, Record<string, unknown>>()
+  for (const field of fieldsFor(unit, context)) {
+    if (!field.storedIn || !(field.key in out)) continue
+    const host = hosts.get(field.storedIn) ?? hostObject(adminFields[field.storedIn])
+    let value = out[field.key]
+    if (field.type === 'structured' && typeof value === 'string') {
+      try { value = JSON.parse(value) } catch { /* 原始模式的字串照送 */ }
+    }
+    host[field.key] = value
+    hosts.set(field.storedIn, host)
+    delete out[field.key]
+  }
+  for (const [key, host] of hosts) out[key] = host
 
   if (unit === 'doctor') {
     out.tags = mergeDoctorTags(adminFields.tags, adminFields.expertiseTags)

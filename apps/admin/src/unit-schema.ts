@@ -121,6 +121,11 @@ export interface UnitField {
    */
   structuredWire?: StructuredSchema['wire']
   /**
+   * 這一欄的值不是 API 的頂層欄位，而是存在另一個 JSON 欄位（例如 `bodyBlocks`）裡的同名鍵。
+   * 收放在 `content-fields.ts`；宿主欄位裡沒有被任何欄位認領的鍵原樣保留（決策 17）。
+   */
+  storedIn?: string
+  /**
    * 這一欄還是空的時候，用舊欄位換算出一份起始值（困擾與案例的 `bodyBlocks`，
    * 見 units/schemas/legacy-body.ts）。只影響編輯畫面帶入的值，存檔才會寫進資料庫。
    */
@@ -175,6 +180,16 @@ export interface UnitDefinition {
   /** 這個單元本身是否輸出獨立網址（FAQ 不輸出，08 §C-6）。 */
   producesUrl: boolean
   fields: UnitField[]
+  /**
+   * 特定 slug 的那一筆改用另一組欄位（取代 `fields`）。目前只有頁面的允赫齒科（`dental`）。
+   *
+   * 🔴 用途是「讓某一張固定頁的表單長得跟另一個單元一樣」：允赫齒科頁的地址、電話、
+   *    營業時間、照片用的是與「據點」同一批輸入元件（Tim 指定 2026-11-13：「免得客戶又要學另一套」）。
+   *    那些值實際上存在這一頁的 `bodyBlocks` 裡，靠欄位的 `storedIn` 收放。
+   * ⚠️ 讀欄位清單一律走 `content-fields.ts` 的 `fieldsFor()`，不要直接讀 `def.fields` ——
+   *    直接讀的話這一筆會退回一般頁面的表單，存檔時把內文蓋成空的。
+   */
+  fieldsBySlug?: Record<string, UnitField[]>
   relations?: RelationField[]
   listColumns: UnitListColumn[]
 }

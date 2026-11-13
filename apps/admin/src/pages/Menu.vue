@@ -33,8 +33,7 @@ import DragHandle from '@/components/DragHandle.vue'
 import { useDragSort } from '@/drag-sort'
 import { hasPermission } from '@/permissions'
 import type { UnitKey } from '@/types'
-import { UNIT_KEYS } from '@/types'
-import { UNIT_REGISTRY } from '@/units'
+import { NAV_UNIT_KEYS, UNIT_REGISTRY } from '@/units'
 
 const user = currentUser()
 const permCtx = user ? { roles: user.roles, isSuperAdmin: user.isSuperAdmin } : null
@@ -410,7 +409,7 @@ function removeSocialLink(index: number) {
                   <label class="adm-field__label">單元</label>
                   <select class="adm-select" v-model="rowBuffers[top.id].contentUnit" :disabled="!canEdit" @change="rowBuffers[top.id].contentItemId = ''; ensureContentOptions(rowBuffers[top.id].contentUnit)">
                     <option value="">請選擇…</option>
-                    <option v-for="u in UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
+                    <option v-for="u in NAV_UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
                   </select>
                 </div>
                 <div class="adm-field">
@@ -491,7 +490,7 @@ function removeSocialLink(index: number) {
                   <label class="adm-field__label">單元</label>
                   <select class="adm-select" v-model="rowBuffers[child.id].contentUnit" :disabled="!canEdit" @change="rowBuffers[child.id].contentItemId = ''; ensureContentOptions(rowBuffers[child.id].contentUnit)">
                     <option value="">請選擇…</option>
-                    <option v-for="u in UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
+                    <option v-for="u in NAV_UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
                   </select>
                 </div>
                 <div class="adm-field">
@@ -537,7 +536,7 @@ function removeSocialLink(index: number) {
                   <label class="adm-field__label">單元</label>
                   <select class="adm-select" v-model="childDrafts[top.id].contentUnit" @change="childDrafts[top.id].contentItemId = ''; ensureContentOptions(childDrafts[top.id].contentUnit)">
                     <option value="">選擇單元…</option>
-                    <option v-for="u in UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
+                    <option v-for="u in NAV_UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
                   </select>
                 </div>
                 <div class="adm-field">
@@ -577,7 +576,7 @@ function removeSocialLink(index: number) {
                 <label class="adm-field__label">單元</label>
                 <select class="adm-select" v-model="topDrafts[menuKey as MenuKey].contentUnit" :disabled="!canEdit" @change="topDrafts[menuKey as MenuKey].contentItemId = ''; ensureContentOptions(topDrafts[menuKey as MenuKey].contentUnit)">
                   <option value="">選擇單元…</option>
-                  <option v-for="u in UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
+                  <option v-for="u in NAV_UNIT_KEYS" :key="u" :value="u">{{ UNIT_REGISTRY[u].label }}</option>
                 </select>
               </div>
               <div class="adm-field">

@@ -83,7 +83,7 @@
 | `/blog/{category}/` | 4 | 分類與標籤（文章分類） |
 | `/blog/{slug}/` | 約 800 | 文章 Article |
 | `/blog/tag/{tag}/` | 30–60 | 分類與標籤（文章標籤） |
-| `/cases/{slug}/` | 20–30 | 案例 Case |
+| `/cases/{slug}/` | 20–30 | 案例 Case（⚠️ 2026-11-13 起前台與後台入口都拿掉，由允赫齒科頁 `/dental/` 取代；該頁在後台是「頁面」裡的一筆，表單與據點同一套，CLAUDE.md 決策 34） |
 | `/faq/{category}/` | 5 | 分類與標籤（FAQ 分類） |
 | `/clinics/{slug}/` | 2 | 據點 Clinic |
 | `/sitemap.xml`、`/robots.txt` | — | SEO 群組畫面 |

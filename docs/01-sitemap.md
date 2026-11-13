@@ -45,8 +45,8 @@
 │   ├─ /blog/{slug}/                    文章內頁（約 800 篇）
 │   └─ /blog/tag/{tag}/                 標籤彙整頁
 │
-├─ /cases/                           案例分享  【新增・須符合醫療廣告規範】
-│   └─ /cases/{slug}/
+├─ /dental/                          允赫齒科  【2026-11-13 取代案例分享，CLAUDE.md 決策 34】
+│                                    （原 /cases/ 與 /cases/{slug}/ 一律 301 到這裡）
 │
 ├─ /faq/                             常見問題  【新增・AI FAQ 主體】
 │   └─ /faq/{category}/
