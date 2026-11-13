@@ -299,13 +299,9 @@ AND (UnpublishAt IS NULL OR UnpublishAt >  @now)
 - 每張圖必須有明確的 `width`／`height`，這是 CLS 的主要來源
 - 首屏外一律 lazy load
 
-**繁中字型必須子集化**（未子集化一套 5–15 MB，在 250 MB 的預算裡不可忽略）。改了 mockup 或前台的文案之後要重跑：
-
-```bash
-./scripts/build-mockup-fonts.sh
-```
-
-⚠️ 子集化的字元集要涵蓋**資料庫裡的內容**，不只是 mockup 的樣稿文案。950 頁的實際用字遠多於樣稿 —— 子集少了字，前台會出現豆腐字，而這是建置期檢查不出來的。建議由 `content/*.json` 產生字元集。
+**不自帶字型**（2026-11-13 定案，CLAUDE.md 決策 35）：標題與內文都是系統黑體（Windows 微軟正黑體、macOS／iOS 蘋方）。
+原本自帶子集化的 Noto Serif TC 當標題字，但子集只收得到設計稿的字，資料庫來的標題會掉字、同一行粗細不一；
+`scripts/build-mockup-fonts.sh` 已刪除。
 
 ---
 
@@ -490,4 +486,4 @@ apps/admin/src/router.ts               # /、/login、/:unit、/:unit/:id（base
 | ~~**圖片衍生尺寸由誰產**~~ | ✅ 2026-10-02 定案：Function 端，依檔名慣例（見 §上方 `srcset` 一條） |
 | **站內搜尋索引的大小** | 800 篇文章的索引檔實測後才知道能不能接受。壓不下來要另案評估 |
 | **build 時間與產物大小** | 950 頁 ＋ 950 份 `_payload.json`，[07](07-deployment.md) §8 列為切 DNS 前必測項 |
-| **字型子集的字元集來源** | 由 `content/*.json` 產生（§7 建議），需在建置腳本定案 |
+| ~~字型子集的字元集來源~~ | 2026-11-13 起不自帶字型，不再需要 |

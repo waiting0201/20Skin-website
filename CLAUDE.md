@@ -105,7 +105,6 @@ mockup3/               （落選）設計方向 C —— 只有首頁，滿版�
 reference/             設計樣板與院方提供的原始照片
 scripts/
   build-pdf.sh         HTML → PDF
-  build-mockup-fonts.sh   中文襯線字型子集
   build-mockup3-hero.py   mockup3 Hero 底圖（只裁切，不調色）
   local-db.sh          本機 docker SQL Server：建庫＋遷移、拋棄式庫、遷移回滾演練
                        🔴 drop 只收 Skin20_ 開頭 —— 同一台上的 `20Skin` 是別的專案
@@ -233,9 +232,6 @@ node tools/api-smoke/write.mjs                 # 🔴 會真的改資料，只�
 # 重新產出 PDF（改完 output/*.html 之後）
 ./scripts/build-pdf.sh
 
-# 重新產出中文襯線字型子集（改完 mockup/ 或 mockup2/ 的文案之後一定要跑）
-./scripts/build-mockup-fonts.sh
-
 # 重新產出 mockup3 的 Hero 底圖（調色參數改了才需要跑）
 python3 scripts/build-mockup3-hero.py
 ```
@@ -266,7 +262,7 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
 | 小標 | — | 直排兩字中文 | **uppercase 英文 eyebrow** |
 | Footer | 一般 | 滿版＋上緣大圓弧 | **內縮的圓角深藍卡片** |
 
-三份共用同一支字型子集與 `app.js` 的動效系統（`.js-anim` 載入序列 ＋ `IntersectionObserver` 顯影）——
+三份共用 `app.js` 的動效系統（字型子集只剩落選的 B／C 還帶著，方向 A 見決策 35）（`.js-anim` 載入序列 ＋ `IntersectionObserver` 顯影）——
 動效是客戶指定保留的部分（2026-08-19），改版時不要動它。
 
 產出後**務必目視確認 PDF**：Chrome headless 若 CJK 字型 fallback 失敗會出現空白或豆腐字，這是唯一無法靠指令驗證的風險點。用 Read 工具帶 `pages` 參數看幾頁即可。
@@ -963,6 +959,15 @@ A 是**版面裡的裱框輪播**（左右分欄、有邊框），C 是**滿版�
    ⚠️ **待院方確認**：主治項目的四個分組名稱與頁首那句介紹是設計時加的（舊站只有一串十項）；
       門診時段照舊站那張被塗改過的時段圖（一晚、二早、三午、五晚、六早）。
    ⚠️ 舊站 2026-11-13 起多了一道 JS 挑戰：`curl` 除了瀏覽器 UA 還要帶 cookie `humans_21909=1`，否則回 409。
+
+35. **前台不再自帶字型，標題與內文都是系統黑體**（Tim 定案 2026-11-13）。Windows 是微軟正黑體、macOS／iOS 是蘋方。
+   起因：自帶的 Noto Serif TC 是子集（只收設計稿與樣板裡出現過的字），資料庫來的標題用到子集以外的字
+   就落回系統字型，同一行裡粗細不一（療程卡片「麗芙」「素妍針」的「芙」「妍」）。
+   做法是 `mockup/assets/base.css` 的 `--font-serif: var(--font-base)` ＋ 拿掉三段 `@font-face`；
+   `mockup/assets/fonts/` 與 `scripts/build-mockup-fonts.sh` 一併刪除。後台吃同一份 base.css，標題也跟著變黑體。
+   ⚠️ `--font-serif` 這個名字留著只是因為各頁樣式都引用它，**它現在就是黑體**；base.css 與 admin.css 裡還有不少寫「宋體」的舊註解。
+   ⚠️ 連帶：每頁首屏少載兩支各約 270 KB 的字型（STATUS.md 記的那個 LCP 單項）。
+   **不要因為設計稿原本是宋體標題就把字型加回來** —— 要加就得先解決「資料庫的字不在子集裡」。
 
 ## 待客戶或主機商提供
 

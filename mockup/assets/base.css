@@ -40,9 +40,9 @@
    ---------------------------------------------------------------------
    目錄（Table of contents）
    ---------------------------------------------------------------------
-   0.  Fonts              @font-face（Noto Serif TC，本地託管，400/600/700）
+   0.  Fonts              不自帶字型，全站系統黑體
    1.  Tokens             :root 自訂屬性（色彩／間距／字級／陰影／圓角）
-   2.  Reset / Base        box-sizing、body、標題（全站宋體）、連結、圖片
+   2.  Reset / Base        box-sizing、body、標題（系統黑體）、連結、圖片
    3.  Utilities           .visually-hidden、.skip-link、.u-eyebrow、.ext…
    4.  Layout              .container / .container--narrow / .section
    5.  Grid                .grid、.grid--2/3/4、.grid--icons
@@ -72,27 +72,10 @@
 /* =========================================================================
    0. Fonts
    ========================================================================= */
-@font-face {
-  font-family: "Noto Serif TC";
-  src: url("fonts/noto-serif-tc-400.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Noto Serif TC";
-  src: url("fonts/noto-serif-tc-600.woff2") format("woff2");
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Noto Serif TC";
-  src: url("fonts/noto-serif-tc-700.woff2") format("woff2");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
+/* 2026-11-13 起不再自帶字型（Tim 定案）：標題改用系統黑體，與內文同一組 ——
+   Windows 是微軟正黑體，macOS／iOS 是蘋方。
+   原本自帶的 Noto Serif TC 是子集（只有設計稿裡出現過的字），資料庫來的標題
+   用到子集以外的字就落回系統字型，同一行裡粗細不一（「麗芙」「素妍針」）。 */
 
 
 /* =========================================================================
@@ -145,10 +128,11 @@
   --shadow-md: 0 16px 40px rgba(18, 54, 92, .09);
 
   /* -- 字體 --------------------------------------------------------------
-     這是本次改版的核心：宋體（serif）標題 × 黑體（sans）內文的對比，
-     是「新中式編輯感」的主要來源，而非裝飾圖案。 ------------------------ */
-  --font-serif: "Noto Serif TC", "Songti TC", "Noto Serif CJK TC", serif;
+     全站系統黑體，標題與內文同一組（2026-11-13，見檔頭 0. Fonts）。
+     ⚠️ --font-serif 這個名字留著只是因為各頁樣式都引用它，它現在就是黑體；
+        要換標題字體改這一行即可。 ---------------------------------------- */
   --font-base:  "PingFang TC", "Heiti TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  --font-serif: var(--font-base);
 
   /* -- 字級尺度（拉開展示級與內文級的對比，強化雜誌感）------------------- */
   --fs-eyebrow: .75rem;                                     /* 12px */
@@ -204,8 +188,7 @@ body {
 
 img, picture, svg { display: block; max-width: 100%; }
 
-/* 標題一律宋體：這是「編輯感」的主要來源。內文（p、li、button…）維持
-   黑體（沿用 body 的 --font-base），形成明確的字體階層對比。
+/* 標題與內文同為系統黑體（2026-11-13 起，原本標題是宋體），階層靠字級與字重拉開。
    CJK 不套用 Latin 慣用的負字距，避免中文字擠壓。 */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-serif);
