@@ -97,12 +97,23 @@ public static class SearchTextBuilder
             case JsonObject obj:
                 if (obj.ContainsKey("blobPath") && obj.ContainsKey("url"))
                     return obj["alt"]?.GetValue<string>() ?? "";
-                return string.Join(' ', obj.Select(kv => Flatten(kv.Value, depth + 1)));
+                return string.Join(' ', obj.Where(kv => !InlineFormatKeys.Contains(kv.Key))
+                                           .Select(kv => Flatten(kv.Value, depth + 1)));
 
             default:
                 return "";
         }
     }
+
+    /// <summary>
+    /// 內文的行內格式（粗體／斜體／連結／顏色，2026-11-18）。
+    /// <para>
+    /// ⚠️ 它們是旁邊 <c>text</c>／<c>items</c>／<c>rows</c> 的<b>同一份文字</b>再切一次，外加網址與色碼 ——
+    /// 攤進來等於整段重複兩次，而 <see cref="MaxLength"/> 是 4000 字，重複的部分直接吃掉可搜尋的長度
+    /// （舊站匯入的 560 篇文章本來就帶著 <c>runs</c>）。
+    /// </para>
+    /// </summary>
+    private static readonly HashSet<string> InlineFormatKeys = ["runs", "itemRuns", "headerRuns", "rowRuns"];
 
     /// <summary>去掉 HTML 標記與多餘空白。</summary>
     public static string Collapse(string text) =>

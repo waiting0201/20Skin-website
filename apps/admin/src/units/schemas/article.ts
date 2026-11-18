@@ -8,9 +8,9 @@
 // 形狀來源：`apps/web/app/data/articles.ts:112-119` 的 `ArticleBodyBlock`，
 // 渲染在 `apps/web/app/pages/blog/[slug].vue:211-246`（`v-for` ＋ `v-if` 鏈）。
 //
-// 🔴 **段落是純文字**（前台是 `{{ block.text }}`）。不支援行內粗體與連結 ——
-//    Tim 定案 2026-09-17，2026-11-11 改成單一編輯器時再確認一次「維持純文字」。
-//    所以編輯器不要放任何「格式」按鈕，要強調就另起一個「提示框」區塊。
+// 🔴 **行內格式（粗體、斜體、連結、文字顏色）2026-11-18 起開放**（Tim 定案，翻掉 09-17／11-11 的「維持純文字」）。
+//    存在各區塊的 `runs`／`itemRuns`／`headerRuns`／`rowRuns`，換算見 `body-blocks-doc.ts`，
+//    前台見 `apps/web/app/components/InlineText.ts`。標題不收行內格式。
 //
 // 🔴 **`wire` 是 `json-value`**：`ApplyArticleFields` 走 `ReadBodyBlocks`，
 //    最外層必須是**陣列**。這一欄與 page 的 bodyBlocks 是全部 21 欄裡唯二不送字串的。
@@ -24,7 +24,7 @@ export const articleBodySchema: StructuredSchema = {
   wire: 'json-value',
   emptyIsNull: true,
   editor: 'body-blocks',
-  preview: '用工具列切換段落、標題、清單，插入圖片與表格。文字不支援粗體與連結；要強調請改用「提示框」。',
+  preview: '用工具列切換段落、標題、清單，插入圖片與表格。選取文字後可以加粗體、斜體、連結與文字顏色（標題除外）。',
   root: {
     kind: 'array',
     itemLabel: '區塊',

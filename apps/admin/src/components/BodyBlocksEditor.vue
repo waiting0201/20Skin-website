@@ -5,8 +5,9 @@
 // 🔴 **存進去的仍然是原本的區塊陣列**，編輯器只是另一種看法 —— 換算在 body-blocks-doc.ts，
 //    由 `tools/content-roundtrip/editor-check.mjs` 拿正式資料整批驗。
 //
-// 🔴 **沒有開啟任何文字格式**（粗體、斜體、連結）：前台的段落是純文字（決策 17）。
-//    工具列只放前台渲染得出來的東西。
+// 🔴 **行內格式只有四種：粗體、斜體、連結、文字顏色**（Tim 定案 2026-11-18，翻掉決策 17 的純文字）。
+//    工具列只放前台渲染得出來的東西（前台 `components/InlineText.ts`）。
+//    標題不收行內格式，游標在標題裡時這四顆按鈕是灰的。
 //
 // 🔴 **載入時不發 update**：只有使用者真的動過才把換算結果寫回表單。
 //    否則每打開一篇沒動過的文章，表單值都會被換算一次 —— 換算若有任何偏差，
@@ -15,7 +16,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch, toRaw } from 'vue'
 import { Editor, EditorContent, VueNodeViewRenderer } from '@tiptap/vue-3'
 import { createBodyExtensions } from '../body-editor-extensions'
-import { blocksToDoc, docToBlocks, type DocNode } from '../body-blocks-doc'
+import { blocksToDoc, docToBlocks, normalizeColor, normalizeHref, type DocNode } from '../body-blocks-doc'
 import { createPendingImage, isPendingImage, releasePendingImage, validateImageFile } from '../image-value'
 import { imageToJson } from '../structured-schema'
 import { ACCEPTED_IMAGE_TYPES } from '../api/upload'
@@ -116,6 +117,89 @@ function setAnchorId(v: string) {
   editor.value?.chain().updateAttributes('heading', { anchorId: v.trim() || null }).run()
 }
 
+// ── 行內格式 ──────────────────────────────────────────────────────────
+
+/** 游標在標題或圖片上時不能加行內格式。 */
+const marksDisabled = computed(() => ['h2', 'h3', 'figure'].includes(current.value))
+const isMark = (name: string) => { void tick.value; return !!editor.value?.isActive(name) }
+
+/**
+ * 色票。第一排是網站本身的顏色（base.css 的 token），其餘是一般編輯器常見的那一組。
+ * ⚠️ 白色與淺色在白底上幾乎看不見 —— 留著是因為「自訂」本來就擋不住，與其藏起來不如讓人看得到結果。
+ */
+const BRAND_COLORS = [
+  { value: '#1a5490', label: '品牌藍' },
+  { value: '#2c5f8a', label: '中介藍' },
+  { value: '#12365c', label: '墨藍' },
+  { value: '#b08a4f', label: '暖金' },
+  { value: '#22262b', label: '墨色' },
+  { value: '#6b747c', label: '淺墨' },
+]
+const PALETTE = [
+  '#000000', '#993300', '#333300', '#003300', '#003366', '#000080', '#333399', '#333333',
+  '#800000', '#ff6600', '#808000', '#008000', '#008080', '#0000ff', '#666699', '#808080',
+  '#ff0000', '#ff9900', '#99cc00', '#339966', '#33cccc', '#3366ff', '#800080', '#999999',
+  '#ff00ff', '#ffcc00', '#ffff00', '#00ff00', '#00ffff', '#00ccff', '#993366', '#ffffff',
+]
+const colorOpen = ref(false)
+const currentColor = computed(() => {
+  void tick.value
+  return normalizeColor(editor.value?.getAttributes('textStyle').color) ?? ''
+})
+// 點色票外面就收起來。
+const colorRoot = ref<HTMLElement | null>(null)
+function onDocDown(ev: MouseEvent) {
+  if (colorOpen.value && colorRoot.value && !colorRoot.value.contains(ev.target as globalThis.Node)) colorOpen.value = false
+}
+document.addEventListener('mousedown', onDocDown)
+onBeforeUnmount(() => document.removeEventListener('mousedown', onDocDown))
+
+function pickColor(c: string | null) {
+  const v = c ? normalizeColor(c) : null
+  if (v) e().setColor(v).run()
+  else e().unsetColor().run()
+  colorOpen.value = false
+}
+
+const linkOpen = ref(false)
+const linkDraft = ref('')
+const linkError = ref('')
+const currentHref = computed(() => {
+  void tick.value
+  return (editor.value?.getAttributes('link').href as string | undefined) ?? ''
+})
+// 游標移進一個連結時，輸入框帶出它的網址。
+watch(currentHref, (h) => { linkDraft.value = h; linkError.value = '' })
+const showLinkBar = computed(() => !marksDisabled.value && (linkOpen.value || !!currentHref.value))
+
+function openLink() {
+  linkOpen.value = true
+  linkDraft.value = currentHref.value
+  linkError.value = ''
+}
+function applyLink() {
+  const ed = editor.value
+  if (!ed) return
+  const href = normalizeHref(linkDraft.value)
+  if (!href) {
+    linkError.value = '網址要以 https://、http:// 或 / 開頭（站內頁面可以只填路徑，例如 /blog/ultherapy-prime/）'
+    return
+  }
+  if (ed.state.selection.empty && !ed.isActive('link')) {
+    linkError.value = '請先選取要加上連結的文字'
+    return
+  }
+  e().extendMarkRange('link').setLink({ href }).run()
+  linkOpen.value = false
+  linkError.value = ''
+}
+function removeLink() {
+  e().extendMarkRange('link').unsetLink().run()
+  linkOpen.value = false
+  linkDraft.value = ''
+  linkError.value = ''
+}
+
 const imageInput = ref<HTMLInputElement | null>(null)
 const imageError = ref('')
 async function insertImage(event: Event) {
@@ -165,6 +249,31 @@ const nestedErrors = computed(() =>
       </select>
 
       <span class="adm-rte__sep" />
+      <button type="button" class="adm-rte__btn adm-rte__btn--bold" :class="{ 'is-active': isMark('bold') }" :disabled="marksDisabled" title="粗體（⌘B）" @click="e().toggleBold().run()">B</button>
+      <button type="button" class="adm-rte__btn adm-rte__btn--italic" :class="{ 'is-active': isMark('italic') }" :disabled="marksDisabled" title="斜體（⌘I）" @click="e().toggleItalic().run()">I</button>
+      <button type="button" class="adm-rte__btn" :class="{ 'is-active': isMark('link') }" :disabled="marksDisabled" title="連結" @click="openLink">連結</button>
+      <span ref="colorRoot" class="adm-rte__color">
+        <button type="button" class="adm-rte__btn" :class="{ 'is-active': colorOpen }" :disabled="marksDisabled" title="文字顏色" :aria-expanded="colorOpen" @click="colorOpen = !colorOpen">
+          <span class="adm-rte__color-a" :style="{ borderBottomColor: currentColor || 'var(--ink)' }">A</span> ▾
+        </button>
+        <div v-if="colorOpen && !marksDisabled" class="adm-rte__palette" role="dialog" aria-label="文字顏色">
+          <p class="adm-rte__palette-label">網站色</p>
+          <div class="adm-rte__swatches">
+            <button v-for="c in BRAND_COLORS" :key="c.value" type="button" class="adm-rte__swatch" :class="{ 'is-active': currentColor === c.value }" :style="{ background: c.value }" :title="c.label" :aria-label="c.label" @click="pickColor(c.value)" />
+          </div>
+          <p class="adm-rte__palette-label">其他顏色</p>
+          <div class="adm-rte__swatches">
+            <button v-for="c in PALETTE" :key="c" type="button" class="adm-rte__swatch" :class="{ 'is-active': currentColor === c }" :style="{ background: c }" :title="c" :aria-label="c" @click="pickColor(c)" />
+          </div>
+          <div class="adm-rte__palette-foot">
+            <label class="adm-rte__custom">自訂 <input type="color" :value="currentColor || '#000000'" @change="pickColor(($event.target as HTMLInputElement).value)"></label>
+            <button type="button" class="adm-rte__btn" @click="pickColor(null)">清除顏色</button>
+            <button type="button" class="adm-rte__btn" @click="colorOpen = false">關閉</button>
+          </div>
+        </div>
+      </span>
+
+      <span class="adm-rte__sep" />
       <button type="button" class="adm-rte__btn" :class="{ 'is-active': current === 'bulletList' }" title="項目清單" @click="e().toggleBulletList().run()">• 清單</button>
       <button type="button" class="adm-rte__btn" :class="{ 'is-active': current === 'orderedList' }" title="編號清單" @click="e().toggleOrderedList().run()">1. 編號</button>
 
@@ -191,6 +300,17 @@ const nestedErrors = computed(() =>
       <label>錨點 id（選填）</label>
       <input class="adm-input" type="text" placeholder="例如 why-ages-faster" :value="anchorId" @change="setAnchorId(($event.target as HTMLInputElement).value)">
       <span class="adm-field__hint">填了這個大標題才會出現在文章目錄裡；改掉既有的 id 會讓別人連過來的錨點失效。</span>
+    </div>
+
+    <!-- 連結：按了「連結」或游標停在既有的連結上時出現。 -->
+    <div v-if="editor && !disabled && showLinkBar" class="adm-rte__anchor">
+      <label>連結網址</label>
+      <input class="adm-input" type="text" placeholder="https://… 或 /blog/…" :value="linkDraft" @input="linkDraft = ($event.target as HTMLInputElement).value" @keydown.enter.prevent="applyLink">
+      <button type="button" class="adm-rte__btn" @click="applyLink">套用</button>
+      <button v-if="currentHref" type="button" class="adm-rte__btn adm-rte__btn--danger" @click="removeLink">移除連結</button>
+      <button v-else type="button" class="adm-rte__btn" @click="linkOpen = false">取消</button>
+      <span class="adm-field__hint">站外網址在前台會開新分頁；站內頁面填路徑即可。</span>
+      <span v-if="linkError" class="adm-field__error" role="alert">{{ linkError }}</span>
     </div>
 
     <EditorContent v-if="editor" :editor="editor" class="adm-rte__content" />

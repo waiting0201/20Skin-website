@@ -10,6 +10,10 @@
 //
 // 通過條件：每一篇都與原值深度相等。
 //
+// 第二道（2026-11-18，行內格式）：把每一段的「原本長怎樣」記號拿掉，等於假裝每一段都被改過，
+// 驗「舊站匯入的 runs → 編輯器的粗體／連結 → 規整的 runs」沒有掉任何格式：
+// 結果必須等於 `alignRuns(原 runs)`（同一段文字、同一組格式，只是相鄰片段合併、去掉多的空白）。
+//
 // 用法（從 repo 根目錄）：
 //   node --experimental-strip-types --import ./tools/content-roundtrip/register.mjs \
 //        tools/content-roundtrip/editor-check.mjs [apps/web/content]
@@ -25,7 +29,7 @@ const adminSrc = resolve(here, '../../apps/admin/src')
 const requireAdmin = createRequire(join(adminSrc, '../package.json'))
 const { getSchema } = await import(requireAdmin.resolve('@tiptap/core'))
 
-const { blocksToDoc, docToBlocks } = await import(join(adminSrc, 'body-blocks-doc.ts'))
+const { blocksToDoc, docToBlocks, alignRuns } = await import(join(adminSrc, 'body-blocks-doc.ts'))
 const { createBodyExtensions } = await import(join(adminSrc, 'body-editor-extensions.ts'))
 
 const schema = getSchema(createBodyExtensions())
@@ -45,6 +49,34 @@ function deepEqual(a, b) {
 
 let checked = 0
 let failed = 0
+let rebuilt = 0
+let rebuildFailed = 0
+
+/** 第二道：拿掉 origText／origSig，逼每一段走「動過」那條路。 */
+function forget(node) {
+  if (node.attrs && 'origSig' in node.attrs) node.attrs = { ...node.attrs, origText: null, origSig: null }
+  for (const c of node.content ?? []) forget(c)
+  return node
+}
+
+function checkRebuild(label, blocks) {
+  const after = docToBlocks(forget(schema.nodeFromJSON(blocksToDoc(blocks)).toJSON()))
+  const before = blocks.filter((b) => !(b?.type === 'paragraph' && !String(b.text ?? '').trim()))
+  for (let i = 0; i < before.length; i++) {
+    const b = before[i]
+    if (!b || !Array.isArray(b.runs)) continue
+    rebuilt += 1
+    const want = alignRuns(b.runs, String(b.text ?? ''))
+    const wantRuns = want && want.some((r) => Object.keys(r).length > 1) ? want : undefined
+    if (deepEqual(after[i]?.runs ?? null, wantRuns ?? null) && after[i]?.text === b.text) continue
+    rebuildFailed += 1
+    if (rebuildFailed <= 5) {
+      console.log(`  ✗ ${label}：第 ${i + 1} 段改過之後格式不同`)
+      console.log(`      應為：${JSON.stringify(wantRuns ?? null).slice(0, 200)}`)
+      console.log(`      實際：${JSON.stringify(after[i]?.runs ?? null).slice(0, 200)}`)
+    }
+  }
+}
 
 function check(label, blocks) {
   if (!Array.isArray(blocks) || !blocks.length) return
@@ -59,7 +91,7 @@ function check(label, blocks) {
     console.log(`  ✗ ${label}：編輯器載入失敗 —— ${e.message}`)
     return
   }
-  if (deepEqual(blocks, after)) return
+  if (deepEqual(blocks, after)) { checkRebuild(label, blocks); return }
   failed += 1
   const i = blocks.findIndex((b, n) => !deepEqual(b, after[n]))
   console.log(`  ✗ ${label}：第 ${i + 1} 個區塊往返後不同（原 ${blocks.length} 個、後 ${after.length} 個）`)
@@ -84,4 +116,5 @@ for (const [unit, file] of [['concern', 'concerns.json'], ['case', 'cases.json']
 }
 
 console.log(`\n${checked} 份內文，${failed} 份失敗`)
-process.exit(failed ? 1 : 0)
+console.log(`帶格式的段落 ${rebuilt} 段（假裝改過再換算），${rebuildFailed} 段格式不同`)
+process.exit(failed || rebuildFailed ? 1 : 0)

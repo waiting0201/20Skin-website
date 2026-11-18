@@ -208,6 +208,18 @@
 }
 .article-content h3 { margin-top: var(--sp-7); }
 .article-content p { margin-top: var(--sp-4); }
+/* 行內格式（後台內文編輯器的粗體／斜體／連結／文字顏色，2026-11-18）。
+   base.css 把 a 設成 color: inherit、無底線 —— 內文的連結不另外標出來就讀不出是連結。
+   顏色由院方在後台挑，走 inline style，這裡不管。 */
+.article-content strong { font-weight: 700; color: var(--ink); }
+.article-content a {
+  color: var(--brand-600);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: .2em;
+  transition: color var(--dur) var(--ease);
+}
+.article-content a:hover { color: var(--brand); }
 .article-content p:first-child,
 .article-content h2 + p,
 .article-content h3 + p { margin-top: var(--sp-4); }

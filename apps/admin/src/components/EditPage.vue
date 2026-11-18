@@ -704,8 +704,8 @@ async function removeRecord() {
                   {{ field.hint ? '' : '是' }}
                 </label>
 
-                <!-- textarea / longtext：純文字長文。⚠️ 這裡沒有、也不會有富文本 ——
-                     段落在前台是 `{{ }}` 純文字輸出（Tim 定案 2026-09-17）。 -->
+                <!-- textarea / longtext：純文字長文。⚠️ 這裡沒有富文本 —— 這些欄位在前台是 `{{ }}` 純文字輸出。
+                     行內格式只有內文編輯器有（BodyBlocksEditor，2026-11-18）。 -->
                 <textarea
                   v-else-if="field.type === 'textarea' || field.type === 'longtext'"
                   class="adm-textarea"

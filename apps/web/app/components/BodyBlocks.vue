@@ -5,7 +5,8 @@
 //
 // ⚠️ 2026-11-11 由 `pages/blog/[slug].vue` 原樣抽出來 —— 困擾與案例改成單一內文編輯器之後
 //    要渲染同一套區塊（Tim 指定）。三頁共用這一份，改了要三頁都看。
-// 🔴 段落是純文字（`{{ }}`，決策 17）。區塊裡的 `runs` 等其他鍵前台不讀。
+// 🔴 行內格式（粗體、斜體、連結、顏色）一律交給 `<InlineText>`（2026-11-18，翻掉決策 17 的純文字）。
+//    標題沒有行內格式。⚠️ 不要改用 v-html —— 那等於要另外寫一套 HTML 淨化。
 import type { ArticleBodyBlock } from '~/data/articles'
 
 defineProps<{ blocks: ArticleBodyBlock[] }>()
@@ -13,10 +14,10 @@ defineProps<{ blocks: ArticleBodyBlock[] }>()
 
 <template>
   <template v-for="(block, i) in blocks" :key="i">
-    <p v-if="block.type === 'lead'" class="article-lead">{{ block.text }}</p>
+    <p v-if="block.type === 'lead'" class="article-lead"><InlineText :text="block.text" :runs="block.runs" /></p>
     <h2 v-else-if="block.type === 'heading' && block.level === 2" :id="block.id">{{ block.text }}</h2>
     <h3 v-else-if="block.type === 'heading' && block.level === 3">{{ block.text }}</h3>
-    <p v-else-if="block.type === 'paragraph'">{{ block.text }}</p>
+    <p v-else-if="block.type === 'paragraph'"><InlineText :text="block.text" :runs="block.runs" /></p>
     <figure v-else-if="block.type === 'figure'" class="article-figure" :class="{ 'article-figure--wide': block.wide }">
       <div class="article-figure__frame">
         <img :src="block.image.src" :srcset="srcsetOf(block.image.src)" :sizes="IMAGE_SIZES.full" :alt="block.image.alt" :width="block.image.width" :height="block.image.height" loading="lazy">
@@ -27,25 +28,25 @@ defineProps<{ blocks: ArticleBodyBlock[] }>()
       <table class="article-table">
         <thead>
           <tr>
-            <th v-for="h in block.headers" :key="h" scope="col">{{ h }}</th>
+            <th v-for="(h, hi) in block.headers" :key="hi" scope="col"><InlineText :text="h" :runs="block.headerRuns?.[hi]" /></th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="(row, r) in block.rows" :key="r">
-            <td v-for="(cell, c) in row" :key="c">{{ cell }}</td>
+            <td v-for="(cell, c) in row" :key="c"><InlineText :text="cell" :runs="block.rowRuns?.[r]?.[c]" /></td>
           </tr>
         </tbody>
       </table>
     </div>
     <ol v-else-if="block.type === 'list' && block.ordered" class="article-list">
-      <li v-for="(item, li) in block.items" :key="li">{{ item }}</li>
+      <li v-for="(item, li) in block.items" :key="li"><InlineText :text="item" :runs="block.itemRuns?.[li]" /></li>
     </ol>
     <ul v-else-if="block.type === 'list' && !block.ordered" class="article-list">
-      <li v-for="(item, li) in block.items" :key="li">{{ item }}</li>
+      <li v-for="(item, li) in block.items" :key="li"><InlineText :text="item" :runs="block.itemRuns?.[li]" /></li>
     </ul>
     <div v-else-if="block.type === 'note'" class="c-note" :class="{ 'c-note--warn': block.variant === 'warn' }">
       <span class="c-note__icon" aria-hidden="true">{{ block.variant === 'warn' ? '⚠' : 'ⓘ' }}</span>
-      <p>{{ block.text }}</p>
+      <p><InlineText :text="block.text" :runs="block.runs" /></p>
     </div>
   </template>
 </template>

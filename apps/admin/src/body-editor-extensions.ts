@@ -1,9 +1,11 @@
 // 內文編輯器的 TipTap schema。對應 `body-blocks-doc.ts` 的換算 —— **兩邊的節點名稱要一致**。
 //
 // 🔴 **只開放前台渲染得出來的東西**（`apps/web/app/components/BodyBlocks.vue`）：
-//    前言、H2／H3、段落、圖片、項目／編號清單、表格、提示框。
-//    沒有 mark（粗體、斜體、連結，決策 17）、沒有 H1／H4、沒有引言區塊、程式碼區塊、
-//    分隔線、行內換行 —— 開了就是「編輯器裡看得到、前台什麼都沒有」。
+//    前言、H2／H3、段落、圖片、項目／編號清單、表格、提示框，
+//    以及行內的粗體、斜體、連結、文字顏色（2026-11-18 起，前台 `InlineText.ts`）。
+//    沒有 H1／H4、底線、刪除線、引言區塊、程式碼區塊、分隔線、行內換行 ——
+//    開了就是「編輯器裡看得到、前台什麼都沒有」。
+//    ⚠️ 標題不收行內格式（`marks: ''`）：標題的樣式由前台統一決定。
 //
 // ⚠️ 這支**不 import 任何 .vue**：圖片的 NodeView 由呼叫端注入（`figureView`），
 //    這樣 `tools/content-roundtrip` 才能在 Node 裡拿同一份 schema 驗換算。
@@ -24,6 +26,11 @@ import TableRow from '@tiptap/extension-table-row'
 import TableHeader from '@tiptap/extension-table-header'
 import TableCell from '@tiptap/extension-table-cell'
 import Placeholder from '@tiptap/extension-placeholder'
+import Bold from '@tiptap/extension-bold'
+import Italic from '@tiptap/extension-italic'
+import Link from '@tiptap/extension-link'
+import TextStyle from '@tiptap/extension-text-style'
+import Color from '@tiptap/extension-color'
 
 /**
  * 換算時用來放「這個區塊的其他鍵」與「原始文字」的屬性。
@@ -39,7 +46,7 @@ const BlockMeta = Extension.create({
   addGlobalAttributes() {
     return [
       { types: ['paragraph', 'heading', 'bulletList', 'orderedList', 'table'], attributes: { extra: hidden() } },
-      { types: ['paragraph'], attributes: { origText: hidden() } },
+      { types: ['paragraph', 'lead', 'note'], attributes: { origText: hidden(), origSig: hidden('') } },
       { types: ['table'], attributes: { hadHeaders: hidden(false) } },
     ]
   },
@@ -140,6 +147,7 @@ export function createBodyExtensions(options: BodyEditorOptions = {}): AnyExtens
     Paragraph,
     // ⚠️ 只有 2／3：前台只渲染 H2（會進文章目錄）與 H3，H1 是頁面標題。
     Heading.configure({ levels: [2, 3] }).extend({
+      marks: '',
       addAttributes() {
         return {
           ...this.parent?.(),
@@ -152,7 +160,7 @@ export function createBodyExtensions(options: BodyEditorOptions = {}): AnyExtens
     OrderedList,
     // ⚠️ 清單項目只能是一個段落：前台的 `items` 是字串陣列，沒有巢狀清單。
     ListItem.extend({ content: 'paragraph' }),
-    // ⚠️ 儲存格同理：前台是 `{{ cell }}`，一格一段純文字。
+    // ⚠️ 儲存格同理：前台一格一段（可以帶行內格式，`rowRuns`），沒有巢狀區塊。
     Table.configure({ resizable: false }),
     TableRow,
     TableHeader.extend({ content: 'paragraph' }),
@@ -162,6 +170,13 @@ export function createBodyExtensions(options: BodyEditorOptions = {}): AnyExtens
     createFigure(options.figureView),
     createRawBlock(),
     BlockMeta,
+    Bold,
+    Italic,
+    // ⚠️ 不自動把打出來的網址變連結、也不點了就開：編輯中點一下連結是要改它，不是離開後台。
+    //    target／rel 不存進資料（前台依站內／站外自己決定），這裡只影響編輯器裡的顯示。
+    Link.configure({ autolink: false, linkOnPaste: false, openOnClick: false, HTMLAttributes: { target: null, rel: null } }),
+    TextStyle,
+    Color,
     History,
     Dropcursor,
     Gapcursor,

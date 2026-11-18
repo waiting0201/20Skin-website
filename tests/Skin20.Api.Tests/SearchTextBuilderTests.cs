@@ -82,4 +82,21 @@ public class SearchTextBuilderTests
     [Fact]
     public void Flatten_數字與布林也會變成文字()
         => Assert.Equal("12 true", SearchTextBuilder.Flatten(new JsonArray(12, true)));
+
+    [Fact]
+    public void Flatten_行內格式的runs不重複收進搜尋文字()
+    {
+        // 內文段落：text 是整段，runs 是同一段字切開再帶格式（2026-11-18）。
+        var blocks = JsonNode.Parse("""
+            [{"type":"paragraph","text":"音波拉提","runs":[{"text":"音波","bold":true,"href":"https://example.com/"},{"text":"拉提","color":"#ff0000"}]},
+             {"type":"list","items":["甲"],"itemRuns":[[{"text":"甲","italic":true}]]},
+             {"type":"table","headers":["乙"],"rows":[["丙"]],"headerRuns":[null],"rowRuns":[[[{"text":"丙","bold":true}]]]}]
+            """);
+        var text = SearchTextBuilder.Collapse(SearchTextBuilder.Flatten(blocks));
+        Assert.Equal(1, text.Split("音波拉提").Length - 1);
+        Assert.DoesNotContain("example.com", text);
+        Assert.DoesNotContain("#ff0000", text);
+        Assert.Contains("甲", text);
+        Assert.Equal(1, text.Split("丙").Length - 1);
+    }
 }

@@ -126,9 +126,14 @@ API 只收 `^[a-z0-9]+(-[a-z0-9]+)*$`，而 WP 有 68 篇用底線、
 
 ---
 
-## 行內連結沒有丟，只是還沒渲染
+## 行內連結沒有丟 —— 2026-11-18 起前台照 `runs` 渲染
 
-前台的 `ArticleBodyBlock` 用 `{{ }}` 逸出渲染，沒有行內格式 ——
+✅ **2026-11-18 起前台渲染行內格式**（Tim 定案，`apps/web/app/components/InlineText.ts`），
+這一節講的連結與粗體現在看得到了。上面 ② 說的「死連結被攤平」因此**部分回來了**：
+`goo.gl` 與 `20skinmicroshaping.blogspot.com` 在前台改成只顯示文字（`utils/inlineRuns.ts` 的 `DEAD_HOSTS`），
+`wp-admin` 連結也拿掉；Facebook hashtag 與另外兩個 blogspot 實測還活著，照樣是連結。
+
+以下是當時的記錄。前台的 `ArticleBodyBlock` 用 `{{ }}` 逸出渲染，沒有行內格式 ——
 連結與粗體在畫面上看不到。但解析器**在每個文字區塊上多存了一份 `runs`**
 （`{ text, href?, bold? }[]`），blog 站那 3290 條站內互連也已經改寫成
 `/blog/{slug}/` 的新網址。

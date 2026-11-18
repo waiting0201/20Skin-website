@@ -92,11 +92,25 @@ await step('🔴 在段落中間連續打字，字都落在游標所在的那一
   if (!(await p.innerText()).includes('ABCDEF測試')) throw new Error('打的字沒有連續落在同一段——游標跳走了')
   return '連續'
 })
-await step('🔴 工具列沒有粗體／斜體／連結（前台的段落是純文字，決策 17）', async () => {
-  const bar = fieldByLabel(page, '內文').locator('.adm-rte__toolbar')
-  const bad = await bar.locator('button', { hasText: /粗體|斜體|連結|^B$|^I$/ }).count()
-  if (bad) throw new Error(`有 ${bad} 顆前台渲染不出來的格式按鈕`)
-  return '沒有'
+// 行內格式（2026-11-18）：選取 → 粗體 → 編輯器裡出現 <strong>。不儲存，打完就離開。
+await step('選取文字按「粗體」，編輯器裡變粗體；色票打得開', async () => {
+  const field = fieldByLabel(page, '內文')
+  const bar = field.locator('.adm-rte__toolbar')
+  for (const title of ['粗體', '斜體', '連結', '文字顏色']) {
+    if (!(await bar.locator(`button[title^="${title}"]`).count())) throw new Error(`工具列少了「${title}」`)
+  }
+  const p = field.locator('.ProseMirror > p').first()
+  await p.click()
+  await page.keyboard.press('Home')
+  for (let i = 0; i < 3; i++) await page.keyboard.press('Shift+ArrowRight')
+  await bar.locator('button[title^="粗體"]').click()
+  if (!(await p.locator('strong').count())) throw new Error('按了粗體，段落裡沒有 <strong>')
+  await bar.locator('button[title="文字顏色"]').click()
+  if (!(await field.locator('.adm-rte__palette .adm-rte__swatch').count())) throw new Error('色票沒有打開')
+  await page.mouse.click(5, 5) // 點外面要收起來
+  await page.waitForTimeout(200)
+  if (await field.locator('.adm-rte__palette').count()) throw new Error('點色票外面沒有收起來')
+  return '粗體、色票都正常'
 })
 await step('游標停在大標題（H2）時出現錨點 id 欄位', async () => {
   const field = fieldByLabel(page, '內文')
@@ -105,7 +119,9 @@ await step('游標停在大標題（H2）時出現錨點 id 欄位', async () =>
   await h2.click()
   await page.waitForTimeout(300)
   if (!(await field.locator('.adm-rte__anchor input').count())) throw new Error('沒有出現錨點 id 欄位')
-  return '有'
+  // 標題不收行內格式：游標在 H2 時格式按鈕要是灰的。
+  if (!(await field.locator('.adm-rte__toolbar button[title^="粗體"]').isDisabled())) throw new Error('游標在標題裡，粗體按鈕卻還能按')
+  return '有，且格式按鈕是灰的'
 })
 
 section('困擾與據點')

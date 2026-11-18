@@ -38,6 +38,7 @@ export interface ArticleCategory {
 /** 四個分類 slug 為定案值（docs/01-sitemap.md §1、CLAUDE.md）。 */
 // ── 資料來源：content/articles.json ＋ terms.json（docs/09 §3）───────────
 
+import type { InlineRun } from '~/utils/inlineRuns'
 import { REL, TERM, UNIT, img, loadCategoryTerms, loadUnit, parseBlocks, relationsOf, seoOverridesOf, termLede, termsOf, type ContentRecord } from './_content'
 import { eyebrowFor } from './_presentation'
 
@@ -123,14 +124,19 @@ export interface ArticleImage {
   height: number
 }
 
+/**
+ * ⚠️ `runs`／`itemRuns`／`headerRuns`／`rowRuns` 是行內格式（粗體、斜體、連結、顏色，2026-11-18），
+ *    只在有格式時才出現；`text`／`items`／`headers`／`rows` 永遠是完整的純文字。見 `utils/inlineRuns.ts`。
+ */
+type Runs = InlineRun[] | null
 export type ArticleBodyBlock =
-  | { type: 'lead'; text: string }
+  | { type: 'lead'; text: string; runs?: Runs }
   | { type: 'heading'; level: 2 | 3; id?: string; text: string }
-  | { type: 'paragraph'; text: string }
+  | { type: 'paragraph'; text: string; runs?: Runs }
   | { type: 'figure'; image: ArticleImage; caption: string; wide?: boolean }
-  | { type: 'table'; headers: string[]; rows: string[][] }
-  | { type: 'list'; ordered: boolean; items: string[] }
-  | { type: 'note'; variant: 'info' | 'warn'; text: string }
+  | { type: 'table'; headers: string[]; rows: string[][]; headerRuns?: Runs[]; rowRuns?: Runs[][] }
+  | { type: 'list'; ordered: boolean; items: string[]; itemRuns?: Runs[] }
+  | { type: 'note'; variant: 'info' | 'warn'; text: string; runs?: Runs }
 
 export interface RelatedTreatmentRef {
   slug: string
