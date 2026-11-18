@@ -141,6 +141,14 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
               """
             : "CAST(NULL AS int)";
 
+        // 文章依顯示日期新到舊排（Tim 指定 2026-11-18），與前台 /blog/ 的 sort=latest 同一條
+        // （PublicContentReadService 的 latestFirst）。文章不給拖曳排序（決策 21），SortOrder
+        // 在清單上沒有意義；其餘單元維持 SortOrder —— 那是拖曳排序的前提。
+        // ⚠️ 只能是常數字串，理由同 PublicContentReadService：排序子句是拼進 SQL 的。
+        var orderBy = unit == UnitCodes.Article
+            ? "u.DisplayDate DESC, ci.Id DESC"
+            : "ci.SortOrder, ci.Id";
+
         var sql = $"""
             SELECT ci.Id, ci.Title, ci.Slug, ci.UrlPath, ci.Status, ci.PublishAt, ci.UnpublishAt,
                    ci.SortOrder, ci.IncludeInSitemap, ci.IsSystemLocked, ci.OwnerUserId, ci.UpdatedAt,
@@ -157,7 +165,7 @@ public sealed class ContentReadService(ISqlConnectionFactory factory)
               AND {pageKindFilter}
               AND (@OwnerUserId IS NULL OR ci.OwnerUserId = @OwnerUserId)
               AND (@Keyword IS NULL OR ci.Title LIKE @KeywordPattern ESCAPE '\')
-            ORDER BY ci.SortOrder, ci.Id
+            ORDER BY {orderBy}
             OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
 
             SELECT COUNT(*)
